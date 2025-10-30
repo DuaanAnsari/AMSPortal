@@ -1,0 +1,15 @@
+{
+  "name": "minimal_javascript_v5.7.0",
+  "version": "1.0.0",
+  "description": "**This package will include directories:**",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "vite": "^7.1.2"
+  }
+}
