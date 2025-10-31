@@ -20,6 +20,8 @@ import {
   Paper,
   IconButton,
   Checkbox,
+  LinearProgress,
+  TablePagination,
 } from '@mui/material';
 import { History } from '@mui/icons-material';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -62,39 +64,25 @@ export default function MilestoneView() {
   const [printQaList, setPrintQaList] = useState([]);
   const [shippingList, setShippingList] = useState([]);
   const [productionList, setProductionList] = useState([]);
+  const [rows, setRows] = useState([]);
 
-  // ✅ Fetch QA List
-  useEffect(() => {
-    const fetchQAList = async () => {
-      try {
-        const token = localStorage.getItem('accessToken');
+  // ✅ Pagination States
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
-        const response = await axios.get('http://192.168.0.71/api/Milestone/GetQA', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        console.log('✅ QA List:', response.data);
-        setQaList(response.data || []);
-      } catch (err) {
-        console.error('❌ Error fetching QA list:', err);
-      }
-    };
-
-    fetchQAList();
-  }, []);
-
+  // ✅ Fetch Process Data
   useEffect(() => {
     const fetchProcessData = async () => {
       try {
+        setLoading(true);
         const token = localStorage.getItem('accessToken');
         if (!token) {
           console.error('❌ Token not found in localStorage!');
+          setLoading(false);
           return;
         }
 
-        console.log('🔑 Using token:', token);
+        console.log('🔑 Fetching process data for POID:', id);
 
         const response = await axios.get(
           `http://192.168.0.71/api/Milestone/GetProcessByTNAChartIdChange1?POID=${id}`,
@@ -106,79 +94,46 @@ export default function MilestoneView() {
           }
         );
 
-        console.log('✅ API Response:', response.data);
-        setRows(response.data);
+        console.log('✅ API Response DATA:', response.data);
+
+        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+          console.log('✅ First item keys:', Object.keys(response.data[0]));
+
+          // Transform API data to include all required fields
+          const formattedData = response.data.map((item, index) => ({
+            id: item.id || index + 1,
+            processRoute: item.processRoute || item.process || item.route || '',
+            targetDate: item.idealDateee || '', // ✅ idealDateee used for Target Date
+            factoryCommitmentDate: item.idealDateee ? dayjs(item.idealDateee) : null, // ✅ idealDateee used for Factory Commitment Date
+            submissionDate: item.submissionDate ? dayjs(item.submissionDate) : null,
+            approvalDate: null, // ✅ Default data removed from Approval Date
+            quantityCompleted: item.quantityCompleted || item.quantity || '',
+            unit: item.unit || '',
+            status: item.status || '',
+            remarks: item.remarks || '',
+          }));
+
+          setRows(formattedData);
+          console.log('✅ Rows set successfully, length:', formattedData.length);
+        } else {
+          console.log('❌ No data or empty array received');
+          setRows([]);
+        }
       } catch (error) {
-        console.error('❌ Error fetching process data:', {
-          status: error.response?.status,
-          data: error.response?.data,
-          message: error.message,
-        });
+        console.error('❌ Error fetching process data:', error);
+        console.error('❌ Error details:', error.response?.data);
+        setRows([]);
+      } finally {
+        setLoading(false);
       }
     };
 
-    if (id) fetchProcessData();
+    if (id) {
+      fetchProcessData();
+    } else {
+      setLoading(false);
+    }
   }, [id]);
-
-  useEffect(() => {
-    const fetchProductionList = async () => {
-      try {
-        const token = localStorage.getItem('accessToken');
-        const response = await axios.get('http://192.168.0.71/api/Milestone/GetProductionPerson', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        console.log('✅ Production Followup List:', response.data);
-        setProductionList(response.data || []);
-      } catch (err) {
-        console.error('❌ Error fetching Production Followup list:', err);
-      }
-    };
-
-    fetchProductionList();
-  }, []);
-
-  useEffect(() => {
-    const fetchShippingList = async () => {
-      try {
-        const token = localStorage.getItem('accessToken');
-        const response = await axios.get('http://192.168.0.71/api/Milestone/GetShipPerson', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        console.log('✅ Shipping List:', response.data);
-        setShippingList(response.data || []);
-      } catch (err) {
-        console.error('❌ Error fetching Shipping list:', err);
-      }
-    };
-
-    fetchShippingList();
-  }, []);
-
-  useEffect(() => {
-    const fetchPrintQAList = async () => {
-      try {
-        const token = localStorage.getItem('accessToken');
-        const response = await axios.get('http://192.168.0.71/api/Milestone/GetPrintQA', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        console.log('✅ Print QA List:', response.data);
-        setPrintQaList(response.data || []);
-      } catch (err) {
-        console.error('❌ Error fetching Print QA list:', err);
-      }
-    };
-
-    fetchPrintQAList();
-  }, []);
 
   // ✅ Fetch PO Data API
   const getApiResponse = async () => {
@@ -218,71 +173,95 @@ export default function MilestoneView() {
       }));
     } catch (error) {
       console.error('❌ Error fetching PO data:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
-  // ✅ Fetch Merchandiser Assistant options API
-  const getMerchAssistantOptions = async () => {
-    try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch('http://192.168.0.71/api/Milestone/GetMerchandiserAssistant', {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-      });
-      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-      const data = await response.json();
-
-      if (Array.isArray(data)) {
-        setMerchAssistantOptions(data);
-      } else if (data.userId && data.userName) {
-        setMerchAssistantOptions([data]);
+  // ✅ Other API calls (QA, Production, Shipping, PrintQA)
+  useEffect(() => {
+    const fetchQAList = async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const response = await axios.get('http://192.168.0.71/api/Milestone/GetQA', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setQaList(response.data || []);
+      } catch (err) {
+        console.error('❌ Error fetching QA list:', err);
       }
-    } catch (error) {
-      console.error('❌ Error fetching merchandiser assistant options:', error);
-    }
-  };
+    };
+
+    const fetchProductionList = async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const response = await axios.get('http://192.168.0.71/api/Milestone/GetProductionPerson', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setProductionList(response.data || []);
+      } catch (err) {
+        console.error('❌ Error fetching Production list:', err);
+      }
+    };
+
+    const fetchShippingList = async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const response = await axios.get('http://192.168.0.71/api/Milestone/GetShipPerson', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setShippingList(response.data || []);
+      } catch (err) {
+        console.error('❌ Error fetching Shipping list:', err);
+      }
+    };
+
+    const fetchPrintQAList = async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const response = await axios.get('http://192.168.0.71/api/Milestone/GetPrintQA', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setPrintQaList(response.data || []);
+      } catch (err) {
+        console.error('❌ Error fetching Print QA list:', err);
+      }
+    };
+
+    const getMerchAssistantOptions = async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const response = await fetch('http://192.168.0.71/api/Milestone/GetMerchandiserAssistant', {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+        });
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setMerchAssistantOptions(data);
+        } else if (data.userId && data.userName) {
+          setMerchAssistantOptions([data]);
+        }
+      } catch (error) {
+        console.error('❌ Error fetching merchandiser assistant:', error);
+      }
+    };
+
+    // Run all API calls
+    fetchQAList();
+    fetchProductionList();
+    fetchShippingList();
+    fetchPrintQAList();
+    getMerchAssistantOptions();
+  }, []);
 
   useEffect(() => {
     if (id) getApiResponse();
-    getMerchAssistantOptions();
   }, [id]);
 
   // ✅ Dropdown handler
   const handleDropdownChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
-
-  // ✅ Table demo data
-  const [rows, setRows] = useState([
-    {
-      id: 1,
-      route: 'TP/ART Sent To Factory',
-      target: 'May 21, 2025',
-      factoryCommit: dayjs('2025-05-21'),
-      submission: null,
-      approval: null,
-      quantity: 0,
-      unit: 'N/A',
-      status: '',
-      remarks: '',
-    },
-    {
-      id: 2,
-      route: 'Yarn Booking',
-      target: 'May 24, 2025',
-      factoryCommit: dayjs('2025-05-24'),
-      submission: null,
-      approval: null,
-      quantity: 0,
-      unit: '%',
-      status: '',
-      remarks: '',
-    },
-  ]);
 
   const handleDateChange = (id, field, value) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
@@ -292,9 +271,27 @@ export default function MilestoneView() {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   };
 
-  if (loading) return <Typography sx={{ p: 3 }}>⏳ Loading data...</Typography>;
+  // ✅ Pagination handlers
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
 
-  // ✅ Rest of your return JSX below this line (unchanged)
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  // ✅ Paginated data
+  const paginatedRows = rows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
+  if (loading) {
+    return (
+      <Box sx={{ width: '100%', p: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2, textAlign: 'center' }}></Typography>
+        <LinearProgress color="primary" />
+      </Box>
+    );
+  }
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
@@ -457,7 +454,7 @@ export default function MilestoneView() {
                   value={form.tnaFirstUpdate}
                   InputProps={{
                     readOnly: true,
-                    style: { color: 'green' }, // text color
+                    style: { color: 'green' },
                   }}
                 />
               </Grid>
@@ -533,9 +530,7 @@ export default function MilestoneView() {
                   fullWidth
                   label="Production Status"
                   value="N/A"
-                  InputProps={{
-                    readOnly: true,
-                  }}
+                  InputProps={{ readOnly: true }}
                 />
               </Grid>
 
@@ -582,39 +577,162 @@ export default function MilestoneView() {
           </CardContent>
         </Card>
 
-        {/* 🔹 Table Section */}
+        {/* 🔹 Table Section with Pagination */}
         <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
           <CardContent sx={{ p: 0 }}>
             <TableContainer component={Paper}>
               <Table>
                 <TableHead>
-                  <TableRow sx={{ backgroundColor: '#56a2d4ff' }}>
-                    {['Process Route', 'Target Date', 'Remarks'].map((head) => (
-                      <TableCell key={head} sx={{ fontWeight: 'bold', textAlign: 'center' }}>
+                  <TableRow sx={{ backgroundColor: 'primary.main' }}>
+                    {[
+                      'Process Route',
+                      'Target Date',
+                      'Factory Commitment Date',
+                      'Submission Date',
+                      'Approval Date',
+                      'Quantity Completed',
+                      'Unit',
+                      'Status',
+                      'Remarks',
+                      'Select',
+                      'History',
+                    ].map((head, i) => (
+                      <TableCell
+                        key={i}
+                        sx={{
+                          fontWeight: 'bold',
+                          fontSize: '14px',
+                          textAlign: 'center',
+                          color: 'white',
+                        }}
+                      >
                         {head}
                       </TableCell>
                     ))}
                   </TableRow>
                 </TableHead>
+
                 <TableBody>
-                  {rows.length > 0 ? (
-                    rows.map((row, i) => (
-                      <TableRow key={i}>
-                        <TableCell>{row.process}</TableCell>
-                        <TableCell sx={{ textAlign: 'center' }}>{row.idealDateee}</TableCell>
-                        <TableCell sx={{ textAlign: 'center' }}>{row.remarks}</TableCell>
+                  {paginatedRows.length > 0 ? (
+                    paginatedRows.map((row) => (
+                      <TableRow key={row.id} hover>
+                        <TableCell>{row.processRoute}</TableCell>
+                        <TableCell sx={{ textAlign: 'center' }}>{row.targetDate}</TableCell>
+
+                        {/* ✅ Factory Commitment Date - Shows idealDateee from API */}
+                        <TableCell sx={{ textAlign: 'center', minWidth: '180px' }}>
+                          <DatePicker
+                            value={row.factoryCommitmentDate}
+                            onChange={(val) =>
+                              handleDateChange(row.id, 'factoryCommitmentDate', val)
+                            }
+                            slotProps={{
+                              textField: {
+                                size: 'small',
+                                sx: { width: '160px' },
+                              },
+                            }}
+                          />
+                        </TableCell>
+
+                        {/* ✅ Submission Date - Larger Field */}
+                        <TableCell sx={{ textAlign: 'center', minWidth: '180px' }}>
+                          <DatePicker
+                            value={row.submissionDate}
+                            onChange={(val) => handleDateChange(row.id, 'submissionDate', val)}
+                            slotProps={{
+                              textField: {
+                                size: 'small',
+                                sx: { width: '160px' },
+                              },
+                            }}
+                          />
+                        </TableCell>
+
+                        {/* ✅ Approval Date - Larger Field & Default Data Removed */}
+                        <TableCell sx={{ textAlign: 'center', minWidth: '180px' }}>
+                          <DatePicker
+                            value={row.approvalDate}
+                            onChange={(val) => handleDateChange(row.id, 'approvalDate', val)}
+                            slotProps={{
+                              textField: {
+                                size: 'small',
+                                sx: { width: '160px' },
+                              },
+                            }}
+                          />
+                        </TableCell>
+
+                        <TableCell sx={{ textAlign: 'center' }}>
+                          <TextField
+                            value={row.quantityCompleted}
+                            size="small"
+                            onChange={(e) =>
+                              handleChange(row.id, 'quantityCompleted', e.target.value)
+                            }
+                            sx={{ width: '80px' }}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ textAlign: 'center' }}>{row.unit}</TableCell>
+                        <TableCell sx={{ textAlign: 'center' }}>
+                          <FormControl fullWidth size="small">
+                            <Select
+                              value={row.status}
+                              onChange={(e) => handleChange(row.id, 'status', e.target.value)}
+                              displayEmpty
+                            >
+                              <MenuItem value="">
+                                <em>Select</em>
+                              </MenuItem>
+                              <MenuItem value="Pending">Pending</MenuItem>
+                              <MenuItem value="In Progress">In Progress</MenuItem>
+                              <MenuItem value="Completed">Completed</MenuItem>
+                            </Select>
+                          </FormControl>
+                        </TableCell>
+                        <TableCell>
+                          <TextField
+                            value={row.remarks}
+                            size="small"
+                            onChange={(e) => handleChange(row.id, 'remarks', e.target.value)}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ textAlign: 'center' }}>
+                          <Checkbox color="secondary" />
+                        </TableCell>
+                        <TableCell sx={{ textAlign: 'center' }}>
+                          <IconButton color="primary">
+                            <History fontSize="small" />
+                          </IconButton>
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={3} align="center">
-                        No data found
+                      <TableCell colSpan={11} align="center" sx={{ py: 3 }}>
+                        <Typography variant="h6" color="textSecondary">
+                          📭 No data found
+                        </Typography>
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
             </TableContainer>
+
+            {/* ✅ Pagination Component */}
+            <TablePagination
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              component="div"
+              count={rows.length}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={handleChangePage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+              sx={{
+                borderTop: '1px solid #e0e0e0',
+              }}
+            />
           </CardContent>
         </Card>
       </Box>
