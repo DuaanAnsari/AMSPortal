@@ -22,6 +22,10 @@ import {
   Checkbox,
   LinearProgress,
   TablePagination,
+  Button,
+  Stack,
+  OutlinedInput,
+  ListItemText,
 } from '@mui/material';
 import { History } from '@mui/icons-material';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -54,11 +58,10 @@ export default function MilestoneView() {
     shipping: '',
     productionStatus: '',
     masterPo: '',
-    dropdown1: '',
-    dropdown2: '',
+    dropdown1: [],
+    dropdown2: [],
   });
 
-  // ✅ States
   const [merchAssistantOptions, setMerchAssistantOptions] = useState([]);
   const [qaList, setQaList] = useState([]);
   const [printQaList, setPrintQaList] = useState([]);
@@ -66,9 +69,9 @@ export default function MilestoneView() {
   const [productionList, setProductionList] = useState([]);
   const [rows, setRows] = useState([]);
 
-  // ✅ Pagination States
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
   // ✅ Fetch Process Data
   useEffect(() => {
@@ -85,7 +88,7 @@ export default function MilestoneView() {
         console.log('🔑 Fetching process data for POID:', id);
 
         const response = await axios.get(
-          `http://192.168.0.71/api/Milestone/GetProcessByTNAChartIdChange1?POID=${id}`,
+          `${API_BASE_URL}/api/Milestone/GetProcessByTNAChartIdChange1?POID=${id}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -99,19 +102,22 @@ export default function MilestoneView() {
         if (response.data && Array.isArray(response.data) && response.data.length > 0) {
           console.log('✅ First item keys:', Object.keys(response.data[0]));
 
-          // Transform API data to include all required fields
-          const formattedData = response.data.map((item, index) => ({
-            id: item.id || index + 1,
-            processRoute: item.processRoute || item.process || item.route || '',
-            targetDate: item.idealDateee || '', // ✅ idealDateee used for Target Date
-            factoryCommitmentDate: item.idealDateee ? dayjs(item.idealDateee) : null, // ✅ idealDateee used for Factory Commitment Date
-            submissionDate: item.submissionDate ? dayjs(item.submissionDate) : null,
-            approvalDate: null, // ✅ Default data removed from Approval Date
-            quantityCompleted: item.quantityCompleted || item.quantity || '',
-            unit: item.unit || '',
-            status: item.status || '',
-            remarks: item.remarks || '',
-          }));
+          // ✅ Fix: Use correct field name 'idealDate' instead of 'idealDateee'
+          const formattedData = response.data.map((item, index) => {
+            const targetDateValue = item.idealDate || ''; // ✅ Correct key
+            return {
+              id: item.id || index + 1,
+              processRoute: item.processRoute || item.process || item.route || '',
+              targetDate: targetDateValue,
+              factoryCommitmentDate: targetDateValue ? dayjs(targetDateValue) : null, // ✅ Copy from Target Date
+              submissionDate: item.submissionDate ? dayjs(item.submissionDate) : null,
+              approvalDate: null,
+              quantityCompleted: item.quantityCompleted || item.quantity || '',
+              unit: item.unit || '',
+              status: item.status || '',
+              remarks: item.remarks || '',
+            };
+          });
 
           setRows(formattedData);
           console.log('✅ Rows set successfully, length:', formattedData.length);
@@ -135,18 +141,17 @@ export default function MilestoneView() {
     }
   }, [id]);
 
-  // ✅ Fetch PO Data API
+  // ✅ Fetch PO Data
   const getApiResponse = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`http://192.168.0.71/api/Milestone/GetPOData/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/Milestone/GetPOData/${id}`, {
         headers: {
           'Content-Type': 'application/json',
           ...(token && { Authorization: `Bearer ${token}` }),
         },
       });
       if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-
       const result = await response.json();
 
       setForm((prev) => ({
@@ -170,18 +175,20 @@ export default function MilestoneView() {
         shipping: '',
         productionStatus: '',
         masterPo: result.masterPO || '',
+        dropdown1: [],
+        dropdown2: [],
       }));
     } catch (error) {
       console.error('❌ Error fetching PO data:', error);
     }
   };
 
-  // ✅ Other API calls (QA, Production, Shipping, PrintQA)
+  // ✅ Other API Calls
   useEffect(() => {
     const fetchQAList = async () => {
       try {
         const token = localStorage.getItem('accessToken');
-        const response = await axios.get('http://192.168.0.71/api/Milestone/GetQA', {
+        const response = await axios.get(`${API_BASE_URL}/api/Milestone/GetQA`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setQaList(response.data || []);
@@ -193,7 +200,7 @@ export default function MilestoneView() {
     const fetchProductionList = async () => {
       try {
         const token = localStorage.getItem('accessToken');
-        const response = await axios.get('http://192.168.0.71/api/Milestone/GetProductionPerson', {
+        const response = await axios.get(`${API_BASE_URL}/api/Milestone/GetProductionPerson`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setProductionList(response.data || []);
@@ -205,7 +212,7 @@ export default function MilestoneView() {
     const fetchShippingList = async () => {
       try {
         const token = localStorage.getItem('accessToken');
-        const response = await axios.get('http://192.168.0.71/api/Milestone/GetShipPerson', {
+        const response = await axios.get(`${API_BASE_URL}/api/Milestone/GetShipPerson`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setShippingList(response.data || []);
@@ -217,7 +224,7 @@ export default function MilestoneView() {
     const fetchPrintQAList = async () => {
       try {
         const token = localStorage.getItem('accessToken');
-        const response = await axios.get('http://192.168.0.71/api/Milestone/GetPrintQA', {
+        const response = await axios.get(`${API_BASE_URL}/api/Milestone/GetPrintQA`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setPrintQaList(response.data || []);
@@ -229,7 +236,7 @@ export default function MilestoneView() {
     const getMerchAssistantOptions = async () => {
       try {
         const token = localStorage.getItem('accessToken');
-        const response = await fetch('http://192.168.0.71/api/Milestone/GetMerchandiserAssistant', {
+        const response = await fetch(`${API_BASE_URL}/api/Milestone/GetMerchandiserAssistant`, {
           headers: {
             'Content-Type': 'application/json',
             ...(token && { Authorization: `Bearer ${token}` }),
@@ -246,7 +253,6 @@ export default function MilestoneView() {
       }
     };
 
-    // Run all API calls
     fetchQAList();
     fetchProductionList();
     fetchShippingList();
@@ -258,7 +264,6 @@ export default function MilestoneView() {
     if (id) getApiResponse();
   }, [id]);
 
-  // ✅ Dropdown handler
   const handleDropdownChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
@@ -271,34 +276,89 @@ export default function MilestoneView() {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   };
 
-  // ✅ Pagination handlers
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
-
+  const handleChangePage = (event, newPage) => setPage(newPage);
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
 
-  // ✅ Paginated data
   const paginatedRows = rows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   if (loading) {
     return (
       <Box sx={{ width: '100%', p: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2, textAlign: 'center' }}></Typography>
         <LinearProgress color="primary" />
       </Box>
     );
   }
-
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
       <Box sx={{ p: 3 }}>
-        <Typography variant="h5" sx={{ mb: 3, fontWeight: 'bold' }}>
+        {/* 🔹 Page Heading */}
+        <Typography variant="h4" sx={{ mb: 0.5, fontWeight: 'bold' }}>
           Milestone View
         </Typography>
+
+        {/* 🔹 Breadcrumb Path */}
+        <Typography
+          variant="body1"
+          sx={{
+            color: 'text.secondary',
+            mb: 3,
+          }}
+        >
+          Dashboard   .   Supply Chain
+        </Typography>
+
+        {/* 🔹 Excel Links Section */}
+        <Card sx={{ mb: 3, borderRadius: 2, boxShadow: 3, p: 2 }}>
+          <Stack direction="row" spacing={7} justifyContent="flex-start" alignItems="center">
+            <Typography 
+              variant="body1" 
+              color="primary" 
+              sx={{ 
+                cursor: 'pointer',
+              
+                '&:hover': { textDecoration: 'underline' }
+              }}
+            >
+              Print Milestone | Excel
+            </Typography>
+            <Typography 
+              variant="body1" 
+              color="primary" 
+              sx={{ 
+                cursor: 'pointer',
+               
+                '&:hover': { textDecoration: 'underline' }
+              }}
+            >
+              View Milestone | Excel
+            </Typography>
+            <Typography 
+              variant="body1" 
+              color="primary" 
+              sx={{ 
+                cursor: 'pointer',
+          
+                '&:hover': { textDecoration: 'underline' }
+              }}
+            >
+              Print Milestone History | Excel
+            </Typography>
+            <Typography 
+              variant="body1" 
+              color="primary" 
+              sx={{ 
+                cursor: 'pointer',
+               
+                '&:hover': { textDecoration: 'underline' }
+              }}
+            >
+              PrintAnnexure | Excel
+            </Typography>
+          </Stack>
+        </Card>
 
         {/* 🔹 Form Section */}
         <Card sx={{ mb: 3, borderRadius: 2, boxShadow: 3 }}>
@@ -543,38 +603,142 @@ export default function MilestoneView() {
                   InputProps={{ readOnly: true }}
                 />
               </Grid>
+
+              {/* ✅ Updated Dropdown 1 - Multiple Selection */}
               <Grid item xs={12} md={4}>
                 <FormControl fullWidth>
+                 
                   <Select
+                    multiple
                     displayEmpty
-                    value={form.dropdown1}
+                    value={form.dropdown1 || []}
                     onChange={(e) => handleDropdownChange('dropdown1', e.target.value)}
+                    input={<OutlinedInput label="Select Options" />}
+                    renderValue={(selected) =>
+                      selected.length === 0 ? <em>37522-SS-RED</em> : selected.join(', ')
+                    }
+                    MenuProps={{
+                      PaperProps: {
+                        style: {
+                          maxHeight: 250,
+                          width: 250,
+                        },
+                      },
+                    }}
                   >
-                    <MenuItem value="">
-                      <em>Select</em>
-                    </MenuItem>
-                    <MenuItem value="Option A">Option A</MenuItem>
-                    <MenuItem value="Option B">Option B</MenuItem>
+                    {['37522-SS-RED', '37522-SS-BLUSH', '37522-SS-CREAM', '37522-SS-NAVY','37522-SS-SAGE','37522-SS-RED'].map((option) => (
+                      <MenuItem key={option} value={option}>
+                        <Checkbox checked={form.dropdown1?.includes(option)} />
+                        <ListItemText primary={option} />
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>
+
+              {/* ✅ Updated Dropdown 2 - Multiple Selection */}
               <Grid item xs={12} md={4}>
                 <FormControl fullWidth>
+              
                   <Select
+                    multiple
                     displayEmpty
-                    value={form.dropdown2}
+                    value={form.dropdown2 || []}
                     onChange={(e) => handleDropdownChange('dropdown2', e.target.value)}
+                    input={<OutlinedInput label="Select Options 2" />}
+                    renderValue={(selected) =>
+                      selected.length === 0 ? <em>37522-SS-RED</em> : selected.join(', ')
+                    }
+                    MenuProps={{
+                      PaperProps: {
+                        style: {
+                          maxHeight: 250,
+                          width: 250,
+                        },
+                      },
+                    }}
                   >
-                    <MenuItem value="">
-                      <em>Select</em>
-                    </MenuItem>
-                    <MenuItem value="Option X">Option X</MenuItem>
-                    <MenuItem value="Option Y">Option Y</MenuItem>
+                    {['37522-SS-RED'].map((option) => (
+                      <MenuItem key={option} value={option}>
+        
+                        <ListItemText primary={option} />
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>
+
+              <Stack direction="row" spacing={2} alignItems="flex-start">
+                {/* Annexure Button */}
+                <Typography variant="h6" color="primary"  onClick={() => window.open('#', '_blank')} sx={{ cursor: 'pointer',mt:8 ,marginLeft:4}}>
+                  Annexure
+                </Typography>
+                
+                {/* Link text */}
+                <Typography 
+                  variant="body2" 
+                  color="primary" 
+                  sx={{ 
+                    cursor: 'pointer',
+                    mt: 8.5 // Align with button
+                  }}
+                >
+                  For detailed briefing on order's supply chain click here
+                </Typography>
+              </Stack>
             </Grid>
           </CardContent>
+        </Card>
+
+        {/* 🔹 Buttons Section - Updated Layout */}
+        <Card sx={{ mb: 3, borderRadius: 2, boxShadow: 3, p: 2 }}>
+          <Stack direction="column" spacing={2}>
+            {/* 🔹 Bottom Row: 4 buttons on left, Show Not Applicable Process on right */}
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              flexWrap="wrap"
+              rowGap={2}
+            >
+              <Button
+                variant="outlined"
+                color="primary"
+                sx={{
+                  minWidth: 250,
+                  py: 1,
+                  fontWeight: 600,
+                  borderWidth: 2,
+                  textAlign:'right',
+                  '&:hover': {
+                    borderWidth: 2,
+                  },
+                }}
+              >
+                Show Not Applicable Process
+              </Button>
+              {/* Left: 4 Buttons */}
+              <Stack
+                direction="row"
+                spacing={2.5}
+                flexWrap="wrap"
+                useFlexGap
+              >
+                <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1,mt:2 }}>
+                  Not Applicable
+                </Button>
+                <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1,mt:2 }}>
+                  Save This PO
+                </Button>
+                <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1,mt:2 }}>
+                  Save All Child PO
+                </Button>
+                <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1,mt:2 }}>
+                  Select All
+                </Button>
+              </Stack>
+            </Stack>
+          </Stack>
         </Card>
 
         {/* 🔹 Table Section with Pagination */}
