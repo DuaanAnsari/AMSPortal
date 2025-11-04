@@ -36,6 +36,7 @@ import {
 import LoadingButton from '@mui/lab/LoadingButton';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
+import CalculateIcon from '@mui/icons-material/Calculate';
 
 // -------------------- Image Upload Component --------------------
 function SimpleImageUploadField({ name }) {
@@ -158,7 +159,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
     };
     
     onSaveData(savedData);
-    alert('Items saved successfully!');
+    
   };
 
   const handleSaveAndClose = () => {
@@ -425,6 +426,10 @@ const Schema = Yup.object().shape({
   bankName: Yup.string(),
   routingNo: Yup.string(),
   bankBranch: Yup.string(),
+
+  // Calculation Fields
+  calculationField1: Yup.string(),
+  calculationField2: Yup.string(),
 });
 
 // -------------------- Default Values --------------------
@@ -510,6 +515,10 @@ const defaultValues = {
   bankName: '',
   routingNo: '',
   bankBranch: '',
+
+  // Calculation Fields
+  calculationField1: '',
+  calculationField2: '',
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -534,6 +543,7 @@ export default function CompletePurchaseOrderForm() {
   const [openItemDialog, setOpenItemDialog] = useState(false);
   const [savedItemData, setSavedItemData] = useState(null);
   const [showSelections, setShowSelections] = useState(false);
+  const [showCalculationFields, setShowCalculationFields] = useState(false);
 
   // API States
   const [costingOptions, setCostingOptions] = useState([]);
@@ -579,6 +589,8 @@ export default function CompletePurchaseOrderForm() {
   const [bankError, setBankError] = useState(null);
 
   const selectedCustomer = watch('customer');
+  const calculationField1 = watch('calculationField1');
+  const calculationField2 = watch('calculationField2');
 
   // Fetch APIs
   useEffect(() => {
@@ -922,6 +934,19 @@ export default function CompletePurchaseOrderForm() {
 
     const handleShowSelections = () => {
       setShowSelections(!showSelections);
+    };
+
+    const handleShowCalculationFields = () => {
+      setShowCalculationFields(!showCalculationFields);
+    };
+
+    const handleCalculate = () => {
+      // Perform calculation logic here
+      const field1 = parseFloat(calculationField1) || 0;
+      const field2 = parseFloat(calculationField2) || 0;
+      const result = field1 + field2; // Example calculation
+      
+      alert(`Calculation Result: ${field1} + ${field2} = ${result}`);
     };
 
     const onSubmit = (data) => {
@@ -1499,129 +1524,167 @@ export default function CompletePurchaseOrderForm() {
             </Box>
 
             {/* ----------------- Product Specific Information ----------------- */}
-            <Card sx={{ p: 3, mb: 4 }}>
-              <CardContent>
-                <Typography variant="h6" sx={{ fontWeight: "bold", mb: 2 }}>
-                  PRODUCT SPECIFIC INFORMATION
-                </Typography>
+           <Card sx={{ p: 3, mb: 4 }}>
+  <CardContent>
+    <Typography variant="h6" sx={{ fontWeight: "bold", mb: 2 }}>
+      PRODUCT SPECIFIC INFORMATION
+    </Typography>
 
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={4}>
-                    <Controller
-                      name="currency"
-                      render={({ field }) => (
-                        <FormControl fullWidth>
-                          <InputLabel>Currency</InputLabel>
-                          <Select {...field} label="Currency">
-                            <MenuItem value="Dollar">Dollar</MenuItem>
-                            <MenuItem value="PKR">PKR</MenuItem>
-                            <MenuItem value="Euro">Euro</MenuItem>
-                          </Select>
-                        </FormControl>
-                      )}
-                    />
-                  </Grid>
+    <Grid container spacing={2}>
+      <Grid item xs={12} sm={4}>
+        <Controller
+          name="currency"
+          render={({ field }) => (
+            <FormControl fullWidth>
+              <InputLabel>Currency</InputLabel>
+              <Select {...field} label="Currency">
+                <MenuItem value="Dollar">Dollar</MenuItem>
+                <MenuItem value="PKR">PKR</MenuItem>
+                <MenuItem value="Euro">Euro</MenuItem>
+              </Select>
+            </FormControl>
+          )}
+        />
+      </Grid>
 
-                  <Grid item xs={12} sm={4}>
-                    <Controller
-                      name="exchangeRate"
-                      render={({ field }) => (
-                        <TextField {...field} fullWidth label="Exchange Rate (to USD)" />
-                      )}
-                    />
-                  </Grid>
+      <Grid item xs={12} sm={4}>
+        <Controller
+          name="exchangeRate"
+          render={({ field }) => (
+            <TextField {...field} fullWidth label="Exchange Rate (to USD)" />
+          )}
+        />
+      </Grid>
 
-                  <Grid item xs={12} sm={4}>
-                    <Controller
-                      name="style"
-                      render={({ field }) => <TextField {...field} fullWidth label="Style" />}
-                    />
-                  </Grid>
-                </Grid>
+      <Grid item xs={12} sm={4}>
+        <Controller
+          name="style"
+          render={({ field }) => <TextField {...field} fullWidth label="Style" />}
+        />
+      </Grid>
+    </Grid>
 
-                <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 3 }}>
-                  <Button variant="contained" color="primary" onClick={handleOpenItemDialog}>
-                    Add Item Details
-                  </Button>
-                  <Button variant="contained" color="primary" onClick={handleShowSelections}>
-                    {showSelections ? 'Hide Selections' : 'Show Selections'}
-                  </Button>
-                    {/* <Button variant="contained" color="primary" onClick={handleOpenItemDialog}>
-                    Calculate
-                  </Button> */}
-                </Stack>
+    <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 3 }}>
+      <Button variant="contained" color="primary" onClick={handleOpenItemDialog}>
+        Add Item Details
+      </Button>
+      <Button variant="contained" color="primary" onClick={handleShowSelections}>
+        {showSelections ? 'Hide Selections' : 'Show Selections'}
+      </Button>
+    </Stack>
 
-                {/* Saved Item Data Grid */}
-                {showSelections && savedItemData && (
-                  <Box sx={{ mt: 3 }}>
-                    <Typography variant="h6" sx={{ mb: 2 }}>
-                      SAVED ITEM DETAILS
-                    </Typography>
-                    <TableContainer component={Paper}>
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Style No</TableCell>
-                            <TableCell>Colorway</TableCell>
-                            <TableCell>Product Code</TableCell>
-                            <TableCell>Size Range</TableCell>
-                            <TableCell>Sizes</TableCell>
-                            <TableCell>Quantity</TableCell>
-                            <TableCell>Item Price</TableCell>
-                            <TableCell>Value</TableCell>
-                            <TableCell>LDP Price</TableCell>
-                            <TableCell>LDP Value</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {savedItemData.rows.map((row, index) => (
-                            <TableRow key={index}>
-                              <TableCell>{row.styleNo}</TableCell>
-                              <TableCell>{row.colorway}</TableCell>
-                              <TableCell>{row.productCode}</TableCell>
-                              <TableCell>{row.sizeRange}</TableCell>
-                              <TableCell>{row.size}</TableCell>
-                              <TableCell>{row.quantity}</TableCell>
-                              <TableCell>{row.itemPrice}</TableCell>
-                              <TableCell>{row.value.toFixed(2)}</TableCell>
-                              <TableCell>{row.ldpPrice}</TableCell>
-                              <TableCell>{row.ldpValue.toFixed(2)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
+    {/* Saved Item Data Grid */}
+    {showSelections && savedItemData && (
+      <Box sx={{ mt: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          SAVED ITEM DETAILS
+        </Typography>
+        <TableContainer component={Paper}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Style No</TableCell>
+                <TableCell>Colorway</TableCell>
+                <TableCell>Product Code</TableCell>
+                <TableCell>Size Range</TableCell>
+                <TableCell>Sizes</TableCell>
+                <TableCell>Quantity</TableCell>
+                <TableCell>Item Price</TableCell>
+                <TableCell>Value</TableCell>
+                <TableCell>LDP Price</TableCell>
+                <TableCell>LDP Value</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {savedItemData.rows.map((row, index) => (
+                <TableRow key={index}>
+                  <TableCell>{row.styleNo}</TableCell>
+                  <TableCell>{row.colorway}</TableCell>
+                  <TableCell>{row.productCode}</TableCell>
+                  <TableCell>{row.sizeRange}</TableCell>
+                  <TableCell>{row.size}</TableCell>
+                  <TableCell>{row.quantity}</TableCell>
+                  <TableCell>{row.itemPrice}</TableCell>
+                  <TableCell>{row.value.toFixed(2)}</TableCell>
+                  <TableCell>{row.ldpPrice}</TableCell>
+                  <TableCell>{row.ldpValue.toFixed(2)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
 
-                    <Box sx={{ mt: 2, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
-                      <Grid container spacing={3}>
-                        <Grid item xs={4}>
-                          <Typography variant="subtitle1" fontWeight="bold">
-                            Total Qty: {savedItemData.totals.totalQuantity}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={4}>
-                          <Typography variant="subtitle1" fontWeight="bold">
-                            Total Value: {savedItemData.totals.totalValue.toFixed(2)}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={4}>
-                          <Typography variant="subtitle1" fontWeight="bold">
-                            Total LDP Value: {savedItemData.totals.totalLdpValue.toFixed(2)}
-                          </Typography>
-                        </Grid>
-                      </Grid>
-                    </Box>
-                  </Box>
+        <Box sx={{ mt: 2, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+          <Grid container spacing={3}>
+            <Grid item xs={4}>
+              <Typography variant="subtitle1" fontWeight="bold">
+                Total Qty: {savedItemData.totals.totalQuantity}
+              </Typography>
+            </Grid>
+            <Grid item xs={4}>
+              <Typography variant="subtitle1" fontWeight="bold">
+                Total Value: {savedItemData.totals.totalValue.toFixed(2)}
+              </Typography>
+            </Grid>
+            <Grid item xs={4}>
+              <Typography variant="subtitle1" fontWeight="bold">
+                Total LDP Value: {savedItemData.totals.totalLdpValue.toFixed(2)}
+              </Typography>
+            </Grid>
+          </Grid>
+        </Box>
+
+        {/* Calculate button moved here - below the grid */}
+        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+          <Button 
+            variant="contained" 
+            color="secondary" 
+            startIcon={<CalculateIcon />}
+            onClick={handleShowCalculationFields}
+          >
+            Calculate
+          </Button>
+        </Box>
+
+        {/* Only 2 Text Boxes for Calculation */}
+        {showCalculationFields && (
+          <Grid container spacing={2} sx={{ mt: 2 }}>
+            <Grid item xs={12} sm={6}>
+              <Controller
+                name="calculationField1"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="0"
+                    type="number"
+                    placeholder="Enter value for calculation"
+                  />
                 )}
-
-                <Stack direction="row" justifyContent="flex-end" sx={{ mt: 3 }}>
-                  <Button variant="contained" color="primary" onClick={handleOpenItemDialog}>
-                    Calculate
-                  </Button>
-                </Stack>
-              </CardContent>
-            </Card>
-
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Controller
+                name="calculationField2"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="0"
+                    type="number"
+                    placeholder="Enter value for calculation"
+                  />
+                )}
+              />
+            </Grid>
+          </Grid>
+        )}
+      </Box>
+    )}
+  </CardContent>
+</Card>
             {/* ----------------- Shipping and Payment Terms ----------------- */}
             <Card sx={{ p: 3, mb: 4 }}>
               <CardContent>
