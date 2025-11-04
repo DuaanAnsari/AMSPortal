@@ -706,16 +706,18 @@ export default function PurchaseOrderView() {
                 rowCount={dataFiltered.length}
                 numSelected={table.selected.length}
                 onSort={table.onSort}
-                sx={{
-                  '& .MuiTableRow-root': {
-                    backgroundColor: 'blue',
-                  },
-                  '& .MuiTableCell-root': {
-                    backgroundColor: '#87CEEB',
-                    color: 'black', // Use contrasting color for text
-                  },
-                  '& .MuiTableSortLabel-root': {},
-                }}
+             sx={{
+  '& .MuiTableRow-root': {
+    backgroundColor: (theme) => theme.palette.primary.main, // primary color use karo
+  },
+  '& .MuiTableCell-root': {
+    backgroundColor: (theme) => theme.palette.primary.main, // halka primary color
+    color: (theme) => theme.palette.primary.contrastText, // readable text color
+  },
+  '& .MuiTableSortLabel-root': {
+    color: (theme) => theme.palette.primary.contrastText,
+  },
+}}
               />
 
               <TableBody>
@@ -746,13 +748,14 @@ export default function PurchaseOrderView() {
 
           {/* Fixed Pagination */}
           <TablePaginationCustom
-            count={dataFiltered.length}
-            page={table.page}
-            rowsPerPage={table.rowsPerPage}
-            onPageChange={table.onChangePage}
-            onRowsPerPageChange={table.onChangeRowsPerPage}
-            dense={table.dense}
-            onChangeDense={table.onChangeDense}
+          count={dataFiltered.length}
+  page={table.page}
+  rowsPerPage={table.rowsPerPage}
+  onPageChange={table.onChangePage}
+  onRowsPerPageChange={table.onChangeRowsPerPage}
+  rowsPerPageOptions={[5, 10, 25, 60]} // ✅ custom options add kiye
+  dense={table.dense}
+  onChangeDense={table.onChangeDense}
           />
         </Card>
       )}
@@ -806,7 +809,7 @@ function PurchaseOrderTableRow({
             fontWeight: 600,
             fontSize: '12px',
             padding: '4px 10px',
-            borderRadius: '16px',
+            borderRadius: '10px',
             display: 'inline-block',
             cursor: 'pointer',
             textTransform: 'capitalize',
@@ -836,7 +839,7 @@ function PurchaseOrderTableRow({
             fontWeight: 600,
             fontSize: '12px',
             padding: '4px 10px',
-            borderRadius: '16px',
+            borderRadius: '10px',
             display: 'inline-block',
             cursor: 'pointer',
             textTransform: 'capitalize',
@@ -875,7 +878,7 @@ function PurchaseOrderTableRow({
             fontWeight: 600,
             fontSize: '12px',
             padding: '4px 10px',
-            borderRadius: '16px',
+            borderRadius: '10px',
             display: 'inline-block',
             cursor: 'pointer',
             textTransform: 'capitalize',
@@ -905,7 +908,7 @@ function PurchaseOrderTableRow({
             fontWeight: 600,
             fontSize: '12px',
             padding: '4px 10px',
-            borderRadius: '16px',
+            borderRadius: '10px',
             display: 'inline-block',
             cursor: 'pointer',
             textTransform: 'capitalize',
@@ -934,7 +937,7 @@ function PurchaseOrderTableRow({
             fontWeight: 600,
             fontSize: '12px',
             padding: '4px 10px',
-            borderRadius: '16px',
+            borderRadius: '10px',
             display: 'inline-block',
             cursor: 'pointer',
             textTransform: 'capitalize',

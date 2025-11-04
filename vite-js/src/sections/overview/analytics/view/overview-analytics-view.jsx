@@ -12,18 +12,10 @@ import Container from '@mui/material/Container';
 import TableBody from '@mui/material/TableBody';
 import IconButton from '@mui/material/IconButton';
 import TableContainer from '@mui/material/TableContainer';
+import TextField from '@mui/material/TextField';
+import Stack from '@mui/material/Stack';
+import Box from '@mui/material/Box';
 
-import { paths } from 'src/routes/paths';
-import { useRouter } from 'src/routes/hooks';
-import { RouterLink } from 'src/routes/components';
-
-import { useBoolean } from 'src/hooks/use-boolean';
-
-import { _userList } from 'src/_mock'; // _roles remove kiya
-
-import Label from 'src/components/label';
-import Iconify from 'src/components/iconify';
-import Scrollbar from 'src/components/scrollbar';
 import { useSnackbar } from 'src/components/snackbar';
 import { ConfirmDialog } from 'src/components/custom-dialog';
 import { useSettingsContext } from 'src/components/settings';
@@ -43,9 +35,14 @@ import UserTableRow from 'src/sections/Supply-Chain/user-table-row';
 import UserTableToolbar from 'src/sections/Supply-Chain/user-table-toolbar';
 import UserTableFiltersResult from 'src/sections/Supply-Chain/user-table-filters-result';
 
+import Label from 'src/components/label';
+import Iconify from 'src/components/iconify';
+import Scrollbar from 'src/components/scrollbar';
+
+import { _userList } from 'src/_mock';
+
 // ----------------------------------------------------------------------
 
-// SIRF 'All' OPTION RAKHEN
 const STATUS_OPTIONS = [{ value: 'all', label: 'All' }];
 
 const TABLE_HEAD = [
@@ -59,25 +56,30 @@ const TABLE_HEAD = [
 
 const defaultFilters = {
   name: '',
-  status: 'all', // role remove kiya
+  status: 'all',
 };
 
 // ----------------------------------------------------------------------
 
 export default function OverviewEcommerceView() {
   const { enqueueSnackbar } = useSnackbar();
-
   const table = useTable();
-
   const settings = useSettingsContext();
 
-  const router = useRouter();
-
-  const confirm = useBoolean();
-
   const [tableData, setTableData] = useState(_userList);
-
   const [filters, setFilters] = useState(defaultFilters);
+
+  // 👇 New state for Add Customer form toggle
+  const [showForm, setShowForm] = useState(false);
+
+  // 👇 New state for form values
+  const [newCustomer, setNewCustomer] = useState({
+    name: '',
+    phoneNumber: '',
+    company: '',
+    role: '',
+    status: 'active',
+  });
 
   const dataFiltered = applyFilter({
     inputData: tableData,
@@ -95,6 +97,8 @@ export default function OverviewEcommerceView() {
   const canReset = !isEqual(defaultFilters, filters);
 
   const notFound = (!dataFiltered.length && canReset) || !dataFiltered.length;
+
+  // ----------------------------------------------------------------------
 
   const handleFilters = useCallback(
     (name, value) => {
@@ -114,72 +118,83 @@ export default function OverviewEcommerceView() {
   const handleDeleteRow = useCallback(
     (id) => {
       const deleteRow = tableData.filter((row) => row.id !== id);
-
       enqueueSnackbar('Delete success!');
-
       setTableData(deleteRow);
-
       table.onUpdatePageDeleteRow(dataInPage.length);
     },
     [dataInPage.length, enqueueSnackbar, table, tableData]
   );
 
-  const handleDeleteRows = useCallback(() => {
-    const deleteRows = tableData.filter((row) => !table.selected.includes(row.id));
+  // 👇 Handle Add Customer submit
+  const handleAddCustomer = () => {
+    const newEntry = {
+      id: Date.now(), // temporary ID
+      ...newCustomer,
+    };
+    setTableData([newEntry, ...tableData]);
+    enqueueSnackbar('Customer added successfully!');
+    setShowForm(false);
+    setNewCustomer({ name: '', phoneNumber: '', company: '', role: '', status: 'active' });
+  };
 
-    enqueueSnackbar('Delete success!');
-
-    setTableData(deleteRows);
-
-    table.onUpdatePageDeleteRows({
-      totalRowsInPage: dataInPage.length,
-      totalRowsFiltered: dataFiltered.length,
-    });
-  }, [dataFiltered.length, dataInPage.length, enqueueSnackbar, table, tableData]);
-
-  const handleEditRow = useCallback(
-    (id) => {
-      router.push(paths.dashboard.user.edit(id));
-    },
-    [router]
-  );
-
-  const handleFilterStatus = useCallback(
-    (event, newValue) => {
-      handleFilters('status', newValue);
-    },
-    [handleFilters]
-  );
+  // ----------------------------------------------------------------------
 
   return (
     <>
       <Container maxWidth={settings.themeStretch ? false : 'lg'}>
         <CustomBreadcrumbs
-          heading="Customers List"
-          links={[
-            { name: 'Dashboard', href: paths.dashboard.root },
-            { name: 'Customers', href: paths.dashboard.general.customers },
-          ]}
+          heading="Supplier List"
+          links={[{ name: 'Dashboard' }, { name: 'Customers' }]}
           action={
             <Button
-              component={RouterLink}
-              href={paths.dashboard.user.new}
               variant="contained"
               startIcon={<Iconify icon="mingcute:add-line" />}
+              onClick={() => setShowForm(!showForm)}
             >
-              Add Supplier
+              {showForm ? 'Close Form' : 'Add Customer'}
             </Button>
           }
-          sx={{
-            mb: { xs: 3, md: 5 },
-          }}
+          sx={{ mb: { xs: 3, md: 5 } }}
         />
 
+        {/* ✅ Add Customer Form (inline card) */}
+        {showForm && (
+          <Card sx={{ p: 3, mb: 3 }}>
+            <Stack spacing={2}>
+              <TextField
+                label="Name"
+                value={newCustomer.name}
+                onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
+              />
+              <TextField
+                label="Phone Number"
+                value={newCustomer.phoneNumber}
+                onChange={(e) => setNewCustomer({ ...newCustomer, phoneNumber: e.target.value })}
+              />
+              <TextField
+                label="Company"
+                value={newCustomer.company}
+                onChange={(e) => setNewCustomer({ ...newCustomer, company: e.target.value })}
+              />
+              <TextField
+                label="Role"
+                value={newCustomer.role}
+                onChange={(e) => setNewCustomer({ ...newCustomer, role: e.target.value })}
+              />
+              <Box>
+                <Button variant="contained" onClick={handleAddCustomer}>
+                  Save
+                </Button>
+              </Box>
+            </Stack>
+          </Card>
+        )}
+
         <Card>
-          {/* SIMPLIFIED TABS WITH ONLY "ALL" OPTION */}
+          {/* Tabs */}
           <Tabs
             value={filters.status}
-            onChange={handleFilterStatus}
+            onChange={(event, newValue) => handleFilters('status', newValue)}
             sx={{
               px: 2.5,
               boxShadow: (theme) => `inset 0 -2px 0 0 ${alpha(theme.palette.grey[500], 0.08)}`,
@@ -188,24 +203,24 @@ export default function OverviewEcommerceView() {
             {STATUS_OPTIONS.map((tab) => (
               <Tab
                 key={tab.value}
-                iconPosition="end"
                 value={tab.value}
-                label={tab.label}
-                icon={
-                  <Label
-                    variant={
-                      ((tab.value === 'all' || tab.value === filters.status) && 'filled') || 'soft'
-                    }
-                    color={'default'}
-                  >
-                    {tableData.length}
-                  </Label>
+                label={
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <span>{tab.label}</span>
+                    <Label
+                      variant={
+                        tab.value === 'all' || tab.value === filters.status ? 'filled' : 'soft'
+                      }
+                      color="default"
+                    >
+                      {tableData.length}
+                    </Label>
+                  </Stack>
                 }
               />
             ))}
           </Tabs>
 
-          {/* ROLE OPTIONS REMOVED FROM HERE */}
           <UserTableToolbar filters={filters} onFilters={handleFilters} />
 
           {canReset && (
@@ -218,7 +233,7 @@ export default function OverviewEcommerceView() {
             />
           )}
 
-          {/* BAKI KA CODE SAME RAHEGA */}
+          {/* Table */}
           <TableContainer sx={{ position: 'relative', overflow: 'unset' }}>
             <TableSelectedAction
               dense={table.dense}
@@ -232,7 +247,7 @@ export default function OverviewEcommerceView() {
               }
               action={
                 <Tooltip title="Delete">
-                  <IconButton color="primary" onClick={confirm.onTrue}>
+                  <IconButton color="primary">
                     <Iconify icon="solar:trash-bin-trash-bold" />
                   </IconButton>
                 </Tooltip>
@@ -269,7 +284,6 @@ export default function OverviewEcommerceView() {
                         selected={table.selected.includes(row.id)}
                         onSelectRow={() => table.onSelectRow(row.id)}
                         onDeleteRow={() => handleDeleteRow(row.id)}
-                        onEditRow={() => handleEditRow(row.id)}
                       />
                     ))}
 
@@ -295,29 +309,6 @@ export default function OverviewEcommerceView() {
           />
         </Card>
       </Container>
-
-      <ConfirmDialog
-        open={confirm.value}
-        onClose={confirm.onFalse}
-        title="Delete"
-        content={
-          <>
-            Are you sure want to delete <strong> {table.selected.length} </strong> items?
-          </>
-        }
-        action={
-          <Button
-            variant="contained"
-            color="error"
-            onClick={() => {
-              handleDeleteRows();
-              confirm.onFalse();
-            }}
-          >
-            Delete
-          </Button>
-        }
-      />
     </>
   );
 }
@@ -325,8 +316,7 @@ export default function OverviewEcommerceView() {
 // ----------------------------------------------------------------------
 
 function applyFilter({ inputData, comparator, filters }) {
-  const { name, status } = filters; // role remove kiya
-
+  const { name, status } = filters;
   const stabilizedThis = inputData.map((el, index) => [el, index]);
 
   stabilizedThis.sort((a, b) => {
@@ -346,8 +336,6 @@ function applyFilter({ inputData, comparator, filters }) {
   if (status !== 'all') {
     inputData = inputData.filter((user) => user.status === status);
   }
-
-  // Role filter logic remove kar diya
 
   return inputData;
 }
