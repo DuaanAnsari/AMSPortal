@@ -18,6 +18,7 @@ import {
   TableSortLabel,
   TablePagination,
   IconButton,
+  Container,
 } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -26,8 +27,9 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import BuildIcon from '@mui/icons-material/Build';
 import { format } from 'date-fns';
+import CustomBreadcrumbs from 'src/components/custom-breadcrumbs'; // ✅ make sure this import path matches your project
 
-export default function POSearchEngine() {
+export default function POSearchEngine({ settings }) {
   const [buyer, setBuyer] = useState('');
   const [vendor, setVendor] = useState('');
   const [searchBy, setSearchBy] = useState('PO No');
@@ -124,7 +126,7 @@ export default function POSearchEngine() {
     setPage(0);
   };
 
-  // ✅ Fixed Search Function (final version)
+  // ✅ Search Function
   const handleSearch = async () => {
     setSearchTriggered(true);
     setLoading(true);
@@ -141,20 +143,14 @@ export default function POSearchEngine() {
       if (searchBy === 'PO No') {
         url += `&type=pono`;
         if (poNo.trim() !== '') url += `&pono=${poNo.trim()}`;
-      }
-
-      // ✅ Fixed STYLE filter
-      else if (searchBy === 'Style') {
+      } else if (searchBy === 'Style') {
         if (!styleNo.trim()) {
           setResults([]);
           setLoading(false);
           return;
         }
         url += `&type=style&style=${encodeURIComponent(styleNo.trim())}`;
-      }
-
-      // ✅ Fixed DATE filter
-      else if (searchBy === 'Date') {
+      } else if (searchBy === 'Date') {
         if (!fromDate && !toDate) {
           setResults([]);
           setLoading(false);
@@ -171,8 +167,6 @@ export default function POSearchEngine() {
         if (dateFrom) url += `&dateFrom=${dateFrom}`;
         if (dateTo) url += `&dateTo=${dateTo}`;
       }
-
-      console.log('API URL:', url); // 👀 Debugging ke liye
 
       const res = await axios.get(url, { headers });
       setResults(Array.isArray(res.data) ? res.data : []);
@@ -199,269 +193,365 @@ export default function POSearchEngine() {
   const handleWipClick = (row) => alert('WIP clicked for ' + row.poNo);
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns}>
-      <Box sx={{ p: 3, border: '1px solid #ddd', borderRadius: 1, background: '#fff' }}>
-        <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-          PO SEARCH ENGINE
-        </Typography>
+    <Container maxWidth={settings?.themeStretch ? false : 'xl'} sx={{ py: 2 }}>
+      <CustomBreadcrumbs
+        heading="PO SEARCH ENGINE"
+        links={[{ name: 'Dashboard', href: '/dashboard' }, { name: 'PO SEARCH ' }]}
+        sx={{ mb: { xs: 2, md: 3 } }}
+      />
 
-        {/* Filters Section */}
-        <Box sx={{ mb: 3 }}>
-          <Grid container spacing={3} alignItems="center">
-            <Grid item xs={12} md={6}>
-              <TextField
-                select
-                label="All Customer"
-                fullWidth
-                value={buyer}
-                onChange={(e) => setBuyer(e.target.value)}
-              >
-                <MenuItem value="">All Customers</MenuItem>
-                {customerOptions.map((c) => (
-                  <MenuItem key={c.customerID} value={c.customerID}>
-                    {c.customerName}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
+      <LocalizationProvider dateAdapter={AdapterDateFns}>
+        <Box
+          sx={{
+            p: 3,
+            border: '1px solid #ddd',
+            borderRadius: 1,
+            background: '#fff',
+            boxShadow: 1,
+          }}
+        >
+          {/* <Typography
+            variant="subtitle1"
+            fontWeight="bold"
+            gutterBottom
+            sx={{ color: 'text.primary' }}
+          >
+            PO SEARCH ENGINE
+          </Typography> */}
 
-            <Grid item xs={12} md={6}>
-              <TextField
-                select
-                label="All Vendor"
-                fullWidth
-                value={vendor}
-                onChange={(e) => setVendor(e.target.value)}
-              >
-                <MenuItem value="">All Vendor</MenuItem>
-                {vendorOptions.map((v) => (
-                  <MenuItem key={v.supplierID} value={v.supplierID}>
-                    {v.venderName}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                select
-                label="Search By"
-                fullWidth
-                value={searchBy}
-                onChange={(e) => setSearchBy(e.target.value)}
-              >
-                <MenuItem value="PO No">PO No</MenuItem>
-                <MenuItem value="Date">Date</MenuItem>
-                <MenuItem value="Style">Style</MenuItem>
-              </TextField>
-            </Grid>
-
-            {searchBy === 'PO No' && (
+          {/* Filters Section */}
+          <Box sx={{ mb: 3 }}>
+            <Grid container spacing={3} alignItems="center">
               <Grid item xs={12} md={6}>
                 <TextField
-                  label="PO No"
+                  select
+                  label="All Customer"
                   fullWidth
-                  value={poNo}
-                  onChange={(e) => setPoNo(e.target.value)}
-                />
+                  value={buyer}
+                  onChange={(e) => setBuyer(e.target.value)}
+                >
+                  <MenuItem value="">All Customers</MenuItem>
+                  {customerOptions.map((c) => (
+                    <MenuItem key={c.customerID} value={c.customerID}>
+                      {c.customerName}
+                    </MenuItem>
+                  ))}
+                </TextField>
               </Grid>
-            )}
 
-            {searchBy === 'Style' && (
               <Grid item xs={12} md={6}>
                 <TextField
-                  label="Style No"
+                  select
+                  label="All Vendor"
                   fullWidth
-                  value={styleNo}
-                  onChange={(e) => setStyleNo(e.target.value)}
-                />
+                  value={vendor}
+                  onChange={(e) => setVendor(e.target.value)}
+                >
+                  <MenuItem value="">All Vendor</MenuItem>
+                  {vendorOptions.map((v) => (
+                    <MenuItem key={v.supplierID} value={v.supplierID}>
+                      {v.venderName}
+                    </MenuItem>
+                  ))}
+                </TextField>
               </Grid>
-            )}
 
-            {searchBy === 'Date' && (
-              <>
-                <Grid item xs={12} md={3}>
-                  <DatePicker
-                    label="From Date"
-                    value={fromDate}
-                    onChange={(newValue) => setFromDate(newValue)}
-                    slotProps={{ textField: { fullWidth: true } }}
+              <Grid item xs={12} md={6}>
+                <TextField
+                  select
+                  label="Search By"
+                  fullWidth
+                  value={searchBy}
+                  onChange={(e) => setSearchBy(e.target.value)}
+                >
+                  <MenuItem value="PO No">PO No</MenuItem>
+                  <MenuItem value="Date">Date</MenuItem>
+                  <MenuItem value="Style">Style</MenuItem>
+                </TextField>
+              </Grid>
+
+              {searchBy === 'PO No' && (
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    label="PO No"
+                    fullWidth
+                    value={poNo}
+                    onChange={(e) => setPoNo(e.target.value)}
                   />
                 </Grid>
-                <Grid item xs={12} md={3}>
-                  <DatePicker
-                    label="To Date"
-                    value={toDate}
-                    onChange={(newValue) => setToDate(newValue)}
-                    slotProps={{ textField: { fullWidth: true } }}
+              )}
+
+              {searchBy === 'Style' && (
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    label="Style No"
+                    fullWidth
+                    value={styleNo}
+                    onChange={(e) => setStyleNo(e.target.value)}
                   />
                 </Grid>
-              </>
-            )}
+              )}
 
-            <Grid item xs={12} display="flex" justifyContent="flex-end">
-              <Button
-                variant="contained"
-                sx={{ backgroundColor: '#3b2c6d', '&:hover': { backgroundColor: '#2c2152' } }}
-                onClick={handleSearch}
-              >
-                Search
-              </Button>
+              {searchBy === 'Date' && (
+                <>
+                  <Grid item xs={12} md={3}>
+                    <DatePicker
+                      label="From Date"
+                      value={fromDate}
+                      onChange={(newValue) => setFromDate(newValue)}
+                      slotProps={{ textField: { fullWidth: true } }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <DatePicker
+                      label="To Date"
+                      value={toDate}
+                      onChange={(newValue) => setToDate(newValue)}
+                      slotProps={{ textField: { fullWidth: true } }}
+                    />
+                  </Grid>
+                </>
+              )}
+
+              <Grid item xs={12} display="flex" justifyContent="flex-end">
+                <Button
+                  variant="contained"
+                  sx={{ backgroundColor: '#3b2c6d', '&:hover': { backgroundColor: '#2c2152' } }}
+                  onClick={handleSearch}
+                >
+                  Search
+                </Button>
+              </Grid>
             </Grid>
-          </Grid>
-        </Box>
+          </Box>
 
-        {/* Table Section */}
-        {searchTriggered &&
-          (loading ? (
-            <Box display="flex" justifyContent="center" mt={2}>
-              <CircularProgress />
-            </Box>
-          ) : error ? (
-            <Typography color="error" align="center" mt={2}>
-              {error}
-            </Typography>
-          ) : (
-            <Card sx={{ mt: 3 }}>
-              <TableContainer sx={{ maxHeight: 500 }}>
-                <Table stickyHeader size="small">
-                  <TableHead>
-                    <TableRow>
-                      {[
-                        { id: 'poNo', label: 'PO No' },
-                        { id: 'style', label: 'Style' },
-                        { id: 'customer', label: 'Customer' },
-                        { id: 'vendor', label: 'Supplier' },
-                        { id: 'placementDate', label: 'Placement' },
-                        { id: 'customershipdate', label: 'Cust Ship Date' },
-                        { id: 'shipmentDate', label: 'Shipment' },
-                        { id: 'etaNewJerseyDate', label: 'ETA NJ' },
-                        { id: 'etaWarehouseDate', label: 'ETA WH' },
-                        { id: 'pdf', label: 'PDF' },
-                        { id: 'milestone', label: 'Milestone' },
-                        { id: 'view', label: 'View' },
-                        { id: 'copy', label: 'Copy' },
-                        { id: 'status', label: 'Status' },
-                        { id: 'wip', label: 'WIP' },
-                        { id: 'inspection', label: 'Inspection' },
-                        { id: 'sizeSpecs', label: 'Size Specs' },
-                      ].map((head) => (
-                        <TableCell
-                          key={head.id}
-                          align="center"
-                          sx={{ fontWeight: 'bold', fontSize: '0.75rem', px: 1 }}
-                        >
-                          <TableSortLabel
-                            active={orderBy === head.id}
-                            direction={orderBy === head.id ? order : 'asc'}
-                            onClick={() => handleSort(head.id)}
+          {/* Table Section */}
+          {searchTriggered &&
+            (loading ? (
+              <Box display="flex" justifyContent="center" mt={2}>
+                <CircularProgress />
+              </Box>
+            ) : error ? (
+              <Typography color="error" align="center" mt={2}>
+                {error}
+              </Typography>
+            ) : (
+              <Card sx={{ mt: 3 }}>
+                <TableContainer sx={{ maxHeight: 500 }}>
+                  <Table stickyHeader size="small">
+                    <TableHead>
+                      <TableRow>
+                        {[
+                          { id: 'poNo', label: 'PO No' },
+                          { id: 'style', label: 'Style' },
+                          { id: 'customer', label: 'Customer' },
+                          { id: 'vendor', label: 'Supplier' },
+                          { id: 'placementDate', label: 'Placement' },
+                          { id: 'customershipdate', label: 'Cust Ship Date' },
+                          { id: 'shipmentDate', label: 'Shipment' },
+                          { id: 'etaNewJerseyDate', label: 'ETA NJ' },
+                          { id: 'etaWarehouseDate', label: 'ETA WH' },
+                          { id: 'pdf', label: 'PDF' },
+                          { id: 'milestone', label: 'Milestone' },
+                          { id: 'view', label: 'View' },
+                          { id: 'copy', label: 'Copy' },
+                          { id: 'status', label: 'Status' },
+                          { id: 'wip', label: 'WIP' },
+                          { id: 'inspection', label: 'Inspection' },
+                          { id: 'sizeSpecs', label: 'Size Specs' },
+                        ].map((head) => (
+                          <TableCell
+                            key={head.id}
+                            align="center"
+                            sx={{ fontWeight: 'bold', fontSize: '0.75rem', px: 1 }}
                           >
-                            {head.label}
-                          </TableSortLabel>
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  </TableHead>
+                            <TableSortLabel
+                              active={orderBy === head.id}
+                              direction={orderBy === head.id ? order : 'asc'}
+                              onClick={() => handleSort(head.id)}
+                            >
+                              {head.label}
+                            </TableSortLabel>
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    </TableHead>
 
-                  <TableBody>
-                    {paginatedResults.length > 0 ? (
-                      paginatedResults.map((row, index) => (
-                        <TableRow key={index} hover>
-                          <TableCell align="center">{row.poNo}</TableCell>
-                          <TableCell align="center">{row.style}</TableCell>
-                          <TableCell align="center">{row.customer}</TableCell>
-                          <TableCell align="center">{row.vendor}</TableCell>
-                          <TableCell align="center">{row.placementDate}</TableCell>
-                          <TableCell align="center">{row.buyerExIndiaTolerance || '-'}</TableCell>
-                          <TableCell align="center">{row.shipmentDate}</TableCell>
-                          <TableCell align="center">{row.etaNewJerseyDate}</TableCell>
-                          <TableCell align="center">{row.etaWarehouseDate}</TableCell>
-                          <TableCell align="center">
-                            <IconButton size="small">
-                              <img
-                                src="/assets/icons/files/ic_pdf.svg"
-                                alt="PDF"
-                                width={16}
-                                height={16}
-                              />
-                            </IconButton>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              sx={{ minWidth: 50, fontSize: '0.7rem', py: 0.3, px: 1 }}
-                            >
-                              Milestone
-                            </Button>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              sx={{ minWidth: 50, fontSize: '0.7rem', py: 0.3, px: 1 }}
-                            >
-                              View
-                            </Button>
-                          </TableCell>
-                          <TableCell align="center">
-                            <IconButton size="small" onClick={() => handleCopyClick(row)}>
-                              <ContentCopyIcon fontSize="small" />
-                            </IconButton>
-                          </TableCell>
-                          <TableCell align="center">
-                            <IconButton size="small" onClick={() => handleStatusClick(row)}>
-                              <AssignmentTurnedInIcon fontSize="small" />
-                            </IconButton>
-                          </TableCell>
-                          <TableCell align="center">
-                            <IconButton size="small" onClick={() => handleWipClick(row)}>
-                              <BuildIcon fontSize="small" />
-                            </IconButton>
-                          </TableCell>
-                          <TableCell>
-                            <img
-                              src="/assets/icons/files/inspection1.png"
-                              alt="Inspection"
-                              width={17}
-                              height={17}
-                              style={{ display: 'block', margin: '13px auto 0' }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              size="medium"
-                              variant="outlined"
-                              sx={{ minWidth: 70, fontSize: '0.7rem', py: 0.3, px: 1 }}
-                            >
-                              Size Specs
-                            </Button>
+                    <TableBody>
+                      {paginatedResults.length > 0 ? (
+                        paginatedResults.map((row, index) => (
+                          <TableRow key={index} hover>
+                            <TableCell align="center">{row.poNo}</TableCell>
+                            <TableCell align="center">{row.style}</TableCell>
+                            <TableCell align="center">{row.customer}</TableCell>
+                            <TableCell align="center">{row.vendor}</TableCell>
+                            <TableCell align="center">{row.placementDate}</TableCell>
+                            <TableCell align="center">{row.buyerExIndiaTolerance || '-'}</TableCell>
+                            <TableCell align="center">{row.shipmentDate}</TableCell>
+                            <TableCell align="center">{row.etaNewJerseyDate}</TableCell>
+                            <TableCell align="center">{row.etaWarehouseDate}</TableCell>
+                            <TableCell align="center">
+                                 <IconButton size="small" onClick={() => onPdfClick(row.id, field)} sx={{ p: 0.5 }}>
+          <img src="/assets/icons/files/pdf.png" alt="PDF" width={16} height={16} />
+        </IconButton>
+                            </TableCell>
+                                 {/* Milestone - Capsule Tag */}
+      <TableCell align="center">
+        <span
+          style={{
+            backgroundColor: '#FFF4E5',
+            color: '#FB8C00',
+            border: '1px solid #FB8C00',
+            fontWeight: 600,
+            fontSize: '12px',
+            padding: '4px 10px',
+            borderRadius: '10px',
+            display: 'inline-block',
+            cursor: 'pointer',
+            textTransform: 'capitalize',
+            transition: 'all 0.2s ease-in-out',
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = '#FFE0B2';
+            e.target.style.boxShadow = '0 0 6px rgba(251,140,0,0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = '#FFF4E5';
+            e.target.style.boxShadow = 'none';
+          }}
+          onClick={() => onMilestoneClick(row.id)}
+        >
+          Milestone
+        </span>
+      </TableCell>
+                             {/* View - Capsule Tag */}
+      <TableCell align="center">
+        <span
+          style={{
+            backgroundColor: '#E8F0FE',
+            color: '#1A73E8',
+            border: '1px solid #1A73E8',
+            fontWeight: 600,
+            fontSize: '12px',
+            padding: '4px 10px',
+            borderRadius: '10px',
+            display: 'inline-block',
+            cursor: 'pointer',
+            textTransform: 'capitalize',
+            transition: 'all 0.2s ease-in-out',
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = '#D2E3FC';
+            e.target.style.boxShadow = '0 0 6px rgba(26,115,232,0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = '#E8F0FE';
+            e.target.style.boxShadow = 'none';
+          }}
+          onClick={() => onViewOrder(row.id)}
+        >
+          View
+        </span>
+      </TableCell>
+                            <TableCell align="center">
+                              <IconButton size="small" onClick={() => handleCopyClick(row)}>
+                                <ContentCopyIcon fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                            <TableCell align="center">
+                              <IconButton size="small" onClick={() => handleStatusClick(row)}>
+                                <AssignmentTurnedInIcon fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                            <TableCell align="center">
+                              <IconButton size="small" onClick={() => handleWipClick(row)}>
+                                <BuildIcon fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                               {/* Inspection - Green Capsule Tag */}
+      <TableCell align="center">
+        <span
+          style={{
+            backgroundColor: '#E8F5E9',
+            color: '#43A047',
+            border: '1px solid #43A047',
+            fontWeight: 600,
+            fontSize: '12px',
+            padding: '4px 10px',
+            borderRadius: '10px',
+            display: 'inline-block',
+            cursor: 'pointer',
+            textTransform: 'capitalize',
+            transition: 'all 0.2s ease-in-out',
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = '#C8E6C9';
+            e.target.style.boxShadow = '0 0 6px rgba(67,160,71,0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = '#E8F5E9';
+            e.target.style.boxShadow = 'none';
+          }}
+        >
+          Inspection
+        </span>
+      </TableCell>
+    {/* Size Specs - Capsule Tag */}
+<TableCell align="center">
+  <span
+    style={{
+      backgroundColor: '#FDECEA', // Light red background
+      color: '#D32F2F', // Red text
+      border: '1px solid #D32F2F', // Red border
+      fontWeight: 600,
+      fontSize: '12px',
+      padding: '4px 10px',
+      borderRadius: '10px',
+      display: 'inline-block',
+      cursor: 'pointer',
+      textTransform: 'capitalize',
+      transition: 'all 0.2s ease-in-out',
+    }}
+    onMouseEnter={(e) => {
+      e.target.style.backgroundColor = '#F9D6D5'; // Slightly darker on hover
+      e.target.style.boxShadow = '0 0 6px rgba(211,47,47,0.4)'; // Red glow
+    }}
+    onMouseLeave={(e) => {
+      e.target.style.backgroundColor = '#FDECEA';
+      e.target.style.boxShadow = 'none';
+    }}
+    onClick={() => onViewOrder(row.id)}
+  >
+    Size Specs
+  </span>
+</TableCell>
+
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={17} align="center" sx={{ py: 3 }}>
+                            {notFound ? 'No records found' : null}
                           </TableCell>
                         </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={17} align="center" sx={{ py: 3 }}>
-                          {notFound ? 'No records found' : null}
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
 
-              <TablePagination
-                rowsPerPageOptions={[10, 25, 50]}
-                component="div"
-                count={results.length}
-                rowsPerPage={rowsPerPage}
-                page={page}
-                onPageChange={handleChangePage}
-                onRowsPerPageChange={handleChangeRowsPerPage}
-              />
-            </Card>
-          ))}
-      </Box>
-    </LocalizationProvider>
+                <TablePagination
+                  rowsPerPageOptions={[10, 25, 50]}
+                  component="div"
+                  count={results.length}
+                  rowsPerPage={rowsPerPage}
+                  page={page}
+                  onPageChange={handleChangePage}
+                  onRowsPerPageChange={handleChangeRowsPerPage}
+                />
+              </Card>
+            ))}
+        </Box>
+      </LocalizationProvider>
+    </Container>
   );
 }
