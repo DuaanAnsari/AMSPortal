@@ -1778,6 +1778,12 @@ export default function CompletePurchaseOrderForm() {
                       )}
                     />
                   </Grid>
+                  <Grid item xs={12} sm={4}>
+        <Controller
+          name="Shipment Mode"
+          render={({ field }) => <TextField {...field} fullWidth label="Shipment Mode" />}
+        />
+      </Grid>
                 </Grid>
               </CardContent>
             </Card>
