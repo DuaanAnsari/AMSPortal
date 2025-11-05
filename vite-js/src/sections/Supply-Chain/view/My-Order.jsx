@@ -428,11 +428,6 @@ export default function PurchaseOrderView() {
         sx={{ mb: { xs: 2, md: 3 } }}
       />
 
-      {/* Style/Colorway/Product Code Heading */}
-      <Typography variant="h6" sx={{ mb: 2, color: 'text.secondary' }}>
-        Style / Colorway / Product Code :
-      </Typography>
-
       {/* Top Search and Action Bar - 2 Rows Layout */}
       <Card sx={{ mb: 3 }}>
         <Box sx={{ p: 2.5 }}>
@@ -693,58 +688,70 @@ export default function PurchaseOrderView() {
       {/* Main Table Card */}
       {!loading && !error && (
         <Card>
-          <TableContainer sx={{ maxHeight: 600 }}>
-            <Table
-              size={table.dense ? 'small' : 'medium'}
-              sx={{ minWidth: 1200, tableLayout: 'fixed' }}
-              stickyHeader
-            >
-              <TableHeadCustom
-                order={table.order}
-                orderBy={table.orderBy}
-                headLabel={TABLE_HEAD}
-                rowCount={dataFiltered.length}
-                numSelected={table.selected.length}
-                onSort={table.onSort}
-             sx={{
-  '& .MuiTableRow-root': {
-    backgroundColor: (theme) => theme.palette.primary.main, // primary color use karo
-  },
-  '& .MuiTableCell-root': {
-    backgroundColor: (theme) => theme.palette.primary.main, // halka primary color
-    color: (theme) => theme.palette.primary.contrastText, // readable text color
-  },
-  '& .MuiTableSortLabel-root': {
-    color: (theme) => theme.palette.primary.contrastText,
-  },
-}}
-              />
+<TableContainer sx={{ maxHeight: 600 }}>
+  <Table
+    stickyHeader
+    sx={{ minWidth: 1200, tableLayout: 'fixed' }}
+  >
+    {/* Header same rahega */}
+    <TableHeadCustom
+      order={table.order}
+      orderBy={table.orderBy}
+      headLabel={TABLE_HEAD}
+      rowCount={dataFiltered.length}
+      numSelected={table.selected.length}
+      onSort={table.onSort}
+      sx={{
+        '& .MuiTableRow-root': {
+          backgroundColor: (theme) => theme.palette.primary.main,
+        },
+        '& .MuiTableCell-root': {
+          backgroundColor: (theme) => theme.palette.primary.main,
+          color: (theme) => theme.palette.primary.contrastText,
+        },
+        '& .MuiTableSortLabel-root': {
+          color: (theme) => theme.palette.primary.contrastText,
+        },
+      }}
+    />
 
-              <TableBody>
-                {dataInPage.map((row) => (
-                  <PurchaseOrderTableRow
-                    key={row.id}
-                    row={row}
-                    selected={table.selected.includes(row.id)}
-                    onSelectRow={() => table.onSelectRow(row.id)}
-                    onToggleCheckbox={handleToggleCheckbox}
-                    onPdfClick={handlePdfClick}
-                    onViewOrder={handleViewOrder}
-                    onMilestoneClick={handleMilestoneClick}
-                    onRevisedClick={handleRevisedClick}
-                    onSizeSpecsClick={handleSizeSpecsClick}
-                  />
-                ))}
+    {/* 👇 Dense sirf rows me apply hoga */}
+    <TableBody
+      sx={{
+        '& .MuiTableRow-root': {
+          backgroundColor: (theme) => theme.palette.background.paper,
+        },
+        '& .MuiTableCell-root': {
+          color: (theme) => theme.palette.text.primary,
+          padding: table.dense ? '6px 8px' : '12px 16px', // 👈 dense padding control
+        },
+      }}
+    >
+      {dataInPage.map((row) => (
+        <PurchaseOrderTableRow
+          key={row.id}
+          row={row}
+          selected={table.selected.includes(row.id)}
+          onSelectRow={() => table.onSelectRow(row.id)}
+          onToggleCheckbox={handleToggleCheckbox}
+          onPdfClick={handlePdfClick}
+          onViewOrder={handleViewOrder}
+          onMilestoneClick={handleMilestoneClick}
+          onRevisedClick={handleRevisedClick}
+          onSizeSpecsClick={handleSizeSpecsClick}
+        />
+      ))}
 
-                <TableEmptyRows
-                  height={denseHeight}
-                  emptyRows={emptyRows(table.page, table.rowsPerPage, dataFiltered.length)}
-                />
+      <TableEmptyRows
+        height={denseHeight}
+        emptyRows={emptyRows(table.page, table.rowsPerPage, dataFiltered.length)}
+      />
 
-                <TableNoData notFound={notFound} />
-              </TableBody>
-            </Table>
-          </TableContainer>
+      <TableNoData notFound={notFound} />
+    </TableBody>
+  </Table>
+</TableContainer>
+
 
           {/* Fixed Pagination */}
           <TablePaginationCustom
