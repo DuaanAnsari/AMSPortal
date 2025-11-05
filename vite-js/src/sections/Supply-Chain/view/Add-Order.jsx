@@ -4,8 +4,10 @@ import { useForm, Controller, FormProvider, useFormContext } from 'react-hook-fo
 import { yupResolver } from '@hookform/resolvers/yup';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-
+import { Autocomplete } from '@mui/material';
+import CalculateIcon from '@mui/icons-material/Calculate';
 import CircularProgress from '@mui/material/CircularProgress';
+
 
 import {
   Box,
@@ -32,11 +34,11 @@ import {
   TableHead,
   TableRow,
   Paper,
+  Alert,
 } from '@mui/material';
 import LoadingButton from '@mui/lab/LoadingButton';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
-import CalculateIcon from '@mui/icons-material/Calculate';
 
 // -------------------- Image Upload Component --------------------
 function SimpleImageUploadField({ name }) {
@@ -49,6 +51,28 @@ function SimpleImageUploadField({ name }) {
       setValue(name, file, { shouldValidate: true });
     }
   };
+const handleQuantityChange = (index, value) => {
+  const newRows = [...rows];
+  const qty = parseFloat(value) || 0;
+
+  newRows[index].quantity = qty;
+  newRows[index].value = qty * (parseFloat(newRows[index].itemPrice) || 0);
+  newRows[index].ldpValue = qty * (parseFloat(newRows[index].ldpPrice) || 0);
+
+  // Totals calculation like VB.NET Calculate()
+  const totalQty = newRows.reduce((sum, r) => sum + (r.quantity || 0), 0);
+  const totalValue = newRows.reduce((sum, r) => sum + (r.value || 0), 0);
+  const totalLdpValue = newRows.reduce((sum, r) => sum + (r.ldpValue || 0), 0);
+
+  setRows(newRows);
+
+  // Optionally, you can store totals in state if you display them
+  setTotals({
+    totalQuantity: totalQty,
+    totalValue: totalValue,
+    totalLdpValue: totalLdpValue,
+  });
+};
 
   return (
     <Controller
@@ -83,9 +107,31 @@ function SimpleImageUploadField({ name }) {
   );
 }
 
+// -------------------- Validation Schema for Item Details --------------------
+const ItemDetailsSchema = Yup.object().shape({
+  styleNo: Yup.string().required('Style No is required'),
+  colorway: Yup.string().required('Colorway is required'),
+  productCode: Yup.string().required('Product Code is required'),
+  itemPrice: Yup.number()
+    .required('Item Price is required')
+    .positive('Item Price must be positive')
+    .typeError('Item Price must be a number'),
+  ldpPrice: Yup.number()
+    .required('LDP Price is required')
+    .positive('LDP Price must be positive')
+    .typeError('LDP Price must be a number'),
+  sizeRange: Yup.string().required('Size Range is required'),
+});
+
 // -------------------- Item Details Dialog Component --------------------
 function ItemDetailsDialog({ open, onClose, onSaveData }) {
-  const { handleSubmit, control, reset } = useForm({
+  const [totals, setTotals] = useState({
+  totalQuantity: 0,
+  totalValue: 0,
+  totalLdpValue: 0,
+});
+  const { handleSubmit, control, reset, formState: { errors, isValid } } = useForm({
+    resolver: yupResolver(ItemDetailsSchema),
     defaultValues: {
       styleNo: '',
       colorway: '',
@@ -94,13 +140,52 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       ldpPrice: '',
       sizeRange: '',
     },
+    mode: 'onChange', // Validate on change to show errors immediately
   });
 
   const [rows, setRows] = useState([]);
+  const [sizeRangeData, setSizeRangeData] = useState([]);
+  const [sizeRangeOptions, setSizeRangeOptions] = useState([]);
+  const [loadingSizeRanges, setLoadingSizeRanges] = useState(false);
+  const [formError, setFormError] = useState('');
 
-  const sizeRangeOptions = ['04-06X', 'XS', 'S', 'M', 'L', 'XL', 'XXL'];
+  // Fetch size ranges from API
+  useEffect(() => {
+    const fetchSizeRanges = async () => {
+      setLoadingSizeRanges(true);
+      try {
+        const token = localStorage.getItem('accessToken');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await axios.get('http://192.168.0.71/api/MyOrders/GetSizeRange', { headers });
+        
+        if (Array.isArray(res.data)) {
+          setSizeRangeData(res.data);
+          
+          // Extract unique size ranges
+          const uniqueSizeRanges = [...new Set(res.data.map(item => item.sizeRange))];
+          setSizeRangeOptions(uniqueSizeRanges);
+        }
+      } catch (err) {
+        console.error('Size range fetch error:', err);
+        setSizeRangeData([]);
+        setSizeRangeOptions([]);
+      } finally {
+        setLoadingSizeRanges(false);
+      }
+    };
+
+    if (open) {
+      fetchSizeRanges();
+      setFormError(''); // Reset form error when dialog opens
+    }
+  }, [open]);
 
   const onSubmit = (data) => {
+    if (!isValid) {
+      setFormError('Please fill all required fields correctly');
+      return;
+    }
+
     const sizes = generateSizes(data.sizeRange);
     
     const newRows = sizes.map(size => ({
@@ -119,21 +204,25 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
     setRows([...rows, ...newRows]);
     
     reset({
-      styleNo: '',
-      colorway: '',
-      productCode: '',
-      itemPrice: '',
-      ldpPrice: '',
+      styleNo: data.styleNo || '',
+      colorway: data.colorway || '',
+      productCode: data.productCode || '',
+      itemPrice: data.itemPrice || '',
+      ldpPrice: data.ldpPrice || '',
       sizeRange: '',
     });
+    setFormError(''); // Clear form error after successful add
   };
 
-  const generateSizes = (sizeRange) => {
-    if (!sizeRange) return [''];
-    if (sizeRange === '04-06X') {
-      return ['04', '05-6', '06X'];
-    }
-    return [sizeRange];
+  const generateSizes = (selectedSizeRange) => {
+    if (!selectedSizeRange) return [''];
+    
+    // Filter sizes for the selected size range
+    const sizesForRange = sizeRangeData
+      .filter(item => item.sizeRange === selectedSizeRange)
+      .map(item => item.sizes);
+    
+    return sizesForRange.length > 0 ? sizesForRange : [selectedSizeRange];
   };
 
   const handleQuantityChange = (index, value) => {
@@ -145,6 +234,11 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
   };
 
   const handleSave = () => {
+    if (rows.length === 0) {
+      setFormError('Please add at least one item before saving');
+      return;
+    }
+
     const totalQuantity = rows.reduce((sum, row) => sum + (row.quantity || 0), 0);
     const totalValue = rows.reduce((sum, row) => sum + (row.value || 0), 0);
     const totalLdpValue = rows.reduce((sum, row) => sum + (row.ldpValue || 0), 0);
@@ -159,10 +253,15 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
     };
     
     onSaveData(savedData);
-    
+    setFormError(''); // Clear form error after successful save
   };
 
   const handleSaveAndClose = () => {
+    if (rows.length === 0) {
+      setFormError('Please add at least one item before saving');
+      return;
+    }
+
     const totalQuantity = rows.reduce((sum, row) => sum + (row.quantity || 0), 0);
     const totalValue = rows.reduce((sum, row) => sum + (row.value || 0), 0);
     const totalLdpValue = rows.reduce((sum, row) => sum + (row.ldpValue || 0), 0);
@@ -178,26 +277,40 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
     
     onSaveData(savedData);
     onClose();
-    alert('Items saved and dialog closed!');
   };
 
   const handleClose = () => {
     reset();
     onClose();
     setRows([]);
+    setFormError('');
   };
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
       <DialogTitle>ITEM DETAILS</DialogTitle>
       <DialogContent>
+        {formError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {formError}
+          </Alert>
+        )}
+        
         <Grid container spacing={2} sx={{ mt: 1 }}>
           <Grid item xs={6} sm={4}>
             <Controller
               name="styleNo"
               control={control}
-              render={({ field }) => (
-                <TextField {...field} label="Style No" fullWidth size="small" />
+              render={({ field, fieldState }) => (
+                <TextField 
+                  {...field} 
+                  label="Style No" 
+                  fullWidth 
+                  size="small" 
+                  error={!!fieldState.error}
+                  helperText={fieldState.error?.message}
+                  required
+                />
               )}
             />
           </Grid>
@@ -205,8 +318,16 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
             <Controller
               name="colorway"
               control={control}
-              render={({ field }) => (
-                <TextField {...field} label="Colorway" fullWidth size="small" />
+              render={({ field, fieldState }) => (
+                <TextField 
+                  {...field} 
+                  label="Colorway" 
+                  fullWidth 
+                  size="small" 
+                  error={!!fieldState.error}
+                  helperText={fieldState.error?.message}
+                  required
+                />
               )}
             />
           </Grid>
@@ -214,8 +335,16 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
             <Controller
               name="productCode"
               control={control}
-              render={({ field }) => (
-                <TextField {...field} label="Product Code" fullWidth size="small" />
+              render={({ field, fieldState }) => (
+                <TextField 
+                  {...field} 
+                  label="Product Code" 
+                  fullWidth 
+                  size="small" 
+                  error={!!fieldState.error}
+                  helperText={fieldState.error?.message}
+                  required
+                />
               )}
             />
           </Grid>
@@ -223,8 +352,17 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
             <Controller
               name="itemPrice"
               control={control}
-              render={({ field }) => (
-                <TextField {...field} label="Item Price" type="number" fullWidth size="small" />
+              render={({ field, fieldState }) => (
+                <TextField 
+                  {...field} 
+                  label="Item Price" 
+                  type="number" 
+                  fullWidth 
+                  size="small" 
+                  error={!!fieldState.error}
+                  helperText={fieldState.error?.message}
+                  required
+                />
               )}
             />
           </Grid>
@@ -232,8 +370,17 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
             <Controller
               name="ldpPrice"
               control={control}
-              render={({ field }) => (
-                <TextField {...field} label="LDP Price" type="number" fullWidth size="small" />
+              render={({ field, fieldState }) => (
+                <TextField 
+                  {...field} 
+                  label="LDP Price" 
+                  type="number" 
+                  fullWidth 
+                  size="small" 
+                  error={!!fieldState.error}
+                  helperText={fieldState.error?.message}
+                  required
+                />
               )}
             />
           </Grid>
@@ -241,22 +388,37 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
             <Controller
               name="sizeRange"
               control={control}
-              render={({ field }) => (
-                <FormControl fullWidth size="small">
-                  <InputLabel>Size Range</InputLabel>
-                  <Select {...field} label="Size Range">
-                    <MenuItem value=""><em>Select Size Range</em></MenuItem>
-                    {sizeRangeOptions.map((option) => (
-                      <MenuItem key={option} value={option}>{option}</MenuItem>
-                    ))}
-                  </Select>
+              render={({ field, fieldState }) => (
+                <FormControl fullWidth size="small" error={!!fieldState.error}>
+                  <Autocomplete
+                    options={sizeRangeOptions}
+                    loading={loadingSizeRanges}
+                    value={field.value || null}
+                    onChange={(_, newValue) => field.onChange(newValue)}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Size Range"
+                        placeholder="Select Size Range"
+                        size="small"
+                        error={!!fieldState.error}
+                        helperText={fieldState.error?.message}
+                        required
+                      />
+                    )}
+                  />
                 </FormControl>
               )}
             />
           </Grid>
         </Grid>
 
-        <Button variant="contained" sx={{ mt: 2 }} onClick={handleSubmit(onSubmit)}>
+        <Button 
+          variant="contained" 
+          sx={{ mt: 2 }} 
+          onClick={handleSubmit(onSubmit)}
+          disabled={!isValid}
+        >
           Add
         </Button>
 
@@ -329,10 +491,20 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={handleSave} variant="contained" color="primary">
+        <Button 
+          onClick={handleSave} 
+          variant="contained" 
+          color="primary"
+          disabled={rows.length === 0}
+        >
           Save
         </Button>
-        <Button onClick={handleSaveAndClose} variant="contained" color="success">
+        <Button 
+          onClick={handleSaveAndClose} 
+          variant="contained" 
+          color="success"
+          disabled={rows.length === 0}
+        >
           Save & Close
         </Button>
         <Button onClick={handleClose} color="error">
@@ -937,6 +1109,7 @@ export default function CompletePurchaseOrderForm() {
     };
 
     const handleShowCalculationFields = () => {
+      handleCalculate();
       setShowCalculationFields(!showCalculationFields);
     };
 
@@ -1576,9 +1749,7 @@ export default function CompletePurchaseOrderForm() {
     {/* Saved Item Data Grid */}
     {showSelections && savedItemData && (
       <Box sx={{ mt: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          SAVED ITEM DETAILS
-        </Typography>
+       
         <TableContainer component={Paper}>
           <Table size="small">
             <TableHead>
@@ -1657,9 +1828,9 @@ export default function CompletePurchaseOrderForm() {
                   <TextField
                     {...field}
                     fullWidth
-                    label="0"
+                    label="Enter value for calculation"
                     type="number"
-                    placeholder="Enter value for calculation"
+                    placeholder="0"
                   />
                 )}
               />
@@ -1672,9 +1843,9 @@ export default function CompletePurchaseOrderForm() {
                   <TextField
                     {...field}
                     fullWidth
-                    label="0"
+                    label="Enter value for calculation"
                     type="number"
-                    placeholder="Enter value for calculation"
+                    placeholder="0"
                   />
                 )}
               />
