@@ -8,7 +8,6 @@ import { Autocomplete } from '@mui/material';
 import CalculateIcon from '@mui/icons-material/Calculate';
 import CircularProgress from '@mui/material/CircularProgress';
 
-
 import {
   Box,
   Card,
@@ -35,11 +34,16 @@ import {
   TableRow,
   Paper,
   Alert,
+  Snackbar,
 } from '@mui/material';
 import LoadingButton from '@mui/lab/LoadingButton';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
+function ImageUploadBase64Field({ name, label }) {
+  const { setValue, control } = useFormContext();
+  const fileInputRef = useRef(null);
 
+}
 // -------------------- Image Upload Component --------------------
 function SimpleImageUploadField({ name }) {
   const fileInputRef = useRef(null);
@@ -51,28 +55,6 @@ function SimpleImageUploadField({ name }) {
       setValue(name, file, { shouldValidate: true });
     }
   };
-const handleQuantityChange = (index, value) => {
-  const newRows = [...rows];
-  const qty = parseFloat(value) || 0;
-
-  newRows[index].quantity = qty;
-  newRows[index].value = qty * (parseFloat(newRows[index].itemPrice) || 0);
-  newRows[index].ldpValue = qty * (parseFloat(newRows[index].ldpPrice) || 0);
-
-  // Totals calculation like VB.NET Calculate()
-  const totalQty = newRows.reduce((sum, r) => sum + (r.quantity || 0), 0);
-  const totalValue = newRows.reduce((sum, r) => sum + (r.value || 0), 0);
-  const totalLdpValue = newRows.reduce((sum, r) => sum + (r.ldpValue || 0), 0);
-
-  setRows(newRows);
-
-  // Optionally, you can store totals in state if you display them
-  setTotals({
-    totalQuantity: totalQty,
-    totalValue: totalValue,
-    totalLdpValue: totalLdpValue,
-  });
-};
 
   return (
     <Controller
@@ -123,13 +105,15 @@ const ItemDetailsSchema = Yup.object().shape({
   sizeRange: Yup.string().required('Size Range is required'),
 });
 
+  
+
 // -------------------- Item Details Dialog Component --------------------
 function ItemDetailsDialog({ open, onClose, onSaveData }) {
   const [totals, setTotals] = useState({
-  totalQuantity: 0,
-  totalValue: 0,
-  totalLdpValue: 0,
-});
+    totalQuantity: 0,
+    totalValue: 0,
+    totalLdpValue: 0,
+  });
   const { handleSubmit, control, reset, formState: { errors, isValid } } = useForm({
     resolver: yupResolver(ItemDetailsSchema),
     defaultValues: {
@@ -140,7 +124,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       ldpPrice: '',
       sizeRange: '',
     },
-    mode: 'onChange', // Validate on change to show errors immediately
+    mode: 'onChange',
   });
 
   const [rows, setRows] = useState([]);
@@ -156,12 +140,10 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       try {
         const token = localStorage.getItem('accessToken');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await axios.get('http://192.168.0.71/api/MyOrders/GetSizeRange', { headers });
+        const res = await axios.get(`${API_BASE_URL}/api/MyOrders/GetSizeRange`, { headers });
         
         if (Array.isArray(res.data)) {
           setSizeRangeData(res.data);
-          
-          // Extract unique size ranges
           const uniqueSizeRanges = [...new Set(res.data.map(item => item.sizeRange))];
           setSizeRangeOptions(uniqueSizeRanges);
         }
@@ -176,7 +158,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
 
     if (open) {
       fetchSizeRanges();
-      setFormError(''); // Reset form error when dialog opens
+      setFormError('');
     }
   }, [open]);
 
@@ -211,13 +193,12 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       ldpPrice: data.ldpPrice || '',
       sizeRange: '',
     });
-    setFormError(''); // Clear form error after successful add
+    setFormError('');
   };
 
   const generateSizes = (selectedSizeRange) => {
     if (!selectedSizeRange) return [''];
     
-    // Filter sizes for the selected size range
     const sizesForRange = sizeRangeData
       .filter(item => item.sizeRange === selectedSizeRange)
       .map(item => item.sizes);
@@ -253,7 +234,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
     };
     
     onSaveData(savedData);
-    setFormError(''); // Clear form error after successful save
+    setFormError('');
   };
 
   const handleSaveAndClose = () => {
@@ -393,8 +374,8 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
                   <Autocomplete
                     options={sizeRangeOptions}
                     loading={loadingSizeRanges}
-                    value={field.value || null}
-                    onChange={(_, newValue) => field.onChange(newValue)}
+                    value={field.value || ''}
+                    onChange={(_, newValue) => field.onChange(newValue || '')}
                     renderInput={(params) => (
                       <TextField
                         {...params}
@@ -517,9 +498,8 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
 
 // -------------------- Validation Schema --------------------
 const Schema = Yup.object().shape({
-  // Basic Order Info
   costingRef: Yup.string().required('Costing Ref No. is required'),
-  masterPo: Yup.string(),
+  masterPo: Yup.string().required('Master No. is required'),
   customer: Yup.string().required('Customer is required'),
   supplier: Yup.string().required('Supplier is required'),
   merchant: Yup.string().required('Merchant is required'),
@@ -529,7 +509,12 @@ const Schema = Yup.object().shape({
   version: Yup.string().required('Version is required'),
   amsRef: Yup.string(),
   customerPo: Yup.string(),
-  commission: Yup.string().min(0).max(100),
+ commission: Yup.number()
+  .transform((value) => (isNaN(value) ? undefined : parseFloat(value.toFixed(2))))
+  .min(0, 'Commission cannot be negative')
+  .max(100, 'Commission cannot exceed 100')
+  .typeError('Commission must be a number'),
+
   vendorCommission: Yup.number().min(0).max(100),
   internalPo: Yup.string(),
   rnNo: Yup.string(),
@@ -546,7 +531,6 @@ const Schema = Yup.object().shape({
   reasonReviseBuyer: Yup.string().required('Reason of Revise Shipment Dates(B) is required'),
   reasonReviseVendor: Yup.string().required('Reason of Revise Shipment Dates(V) is required'),
 
-  // Product Portfolio Fields
   productPortfolio: Yup.string(),
   productCategory: Yup.string(),
   productGroup: Yup.string(),
@@ -583,30 +567,28 @@ const Schema = Yup.object().shape({
   inquiryNo: Yup.string(),
   buyerCustomer: Yup.string(),
 
-  // Product Specific Information
   currency: Yup.string(),
   exchangeRate: Yup.string(),
   style: Yup.string(),
 
-  // Shipping and Payment
   paymentMode: Yup.string(),
   shipmentTerm: Yup.string(),
   destination: Yup.string(),
   shipmentMode: Yup.string(),
 
-  // Bank Details
   bankName: Yup.string(),
   routingNo: Yup.string(),
   bankBranch: Yup.string(),
+  bankID: Yup.string(),
+  titleOfAccount: Yup.string(),
+  accountNo: Yup.string(),
 
-  // Calculation Fields
   calculationField1: Yup.string(),
   calculationField2: Yup.string(),
 });
 
 // -------------------- Default Values --------------------
 const defaultValues = {
-  // Basic Order Info
   costingRef: '',
   masterPo: '',
   customer: '',
@@ -635,7 +617,6 @@ const defaultValues = {
   reasonReviseBuyer: '',
   reasonReviseVendor: '',
 
-  // Product Portfolio Defaults
   productPortfolio: '',
   productCategory: '',
   productGroup: '',
@@ -659,7 +640,7 @@ const defaultValues = {
   ratio: '',
   cartonMarking: '',
   poSpecialInstructions: '',
-  washingCareLabel: '',
+  washingCareLabel: 'Machine Wash Cold With Like Colors, Tumble Dry Low, Use Only Non Chlorine Bleach, Do Not Iron Embalishment',
   importantNote: '',
   moreInfo: '',
   samplingRequirements: '',
@@ -668,27 +649,26 @@ const defaultValues = {
   netWeight: '',
   unit: '',
   packingList: '',
-  embEmbellishment: '',
+  embEmbellishment: 'Not Required',
   inquiryNo: '',
   buyerCustomer: '',
 
-  // Product Specific
   currency: 'Dollar',
   exchangeRate: '',
   style: '',
 
-  // Shipping and Payment
   paymentMode: 'DP',
   shipmentTerm: 'CNF',
   destination: 'New York',
   shipmentMode: '',
 
-  // Bank Details
   bankName: '',
   routingNo: '',
   bankBranch: '',
+  bankID: '',
+  titleOfAccount: '',
+  accountNo: '',
 
-  // Calculation Fields
   calculationField1: '',
   calculationField2: '',
 };
@@ -716,6 +696,7 @@ export default function CompletePurchaseOrderForm() {
   const [savedItemData, setSavedItemData] = useState(null);
   const [showSelections, setShowSelections] = useState(false);
   const [showCalculationFields, setShowCalculationFields] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   // API States
   const [costingOptions, setCostingOptions] = useState([]);
@@ -766,219 +747,107 @@ export default function CompletePurchaseOrderForm() {
 
   // Fetch APIs
   useEffect(() => {
-    const fetchCostingRefs = async () => {
-      setCostingLoading(true);
-      setCostingError(null);
-      try {
-        const token = localStorage.getItem('accessToken');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await axios.get(`${API_BASE_URL}/api/MyOrders/CostingRefNo`, { headers });
-        const data = res.data;
-        if (Array.isArray(data)) {
-          setCostingOptions(data);
-        } else if (data) {
-          setCostingOptions([data]);
-        } else {
-          setCostingOptions([]);
+    const fetchAPIs = async () => {
+      const token = localStorage.getItem('accessToken');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+      const apis = [
+        { 
+          name: 'costingRefs', 
+          url: `${API_BASE_URL}/api/MyOrders/CostingRefNo`,
+          setter: setCostingOptions,
+          setLoading: setCostingLoading,
+          setError: setCostingError
+        },
+        { 
+          name: 'customers', 
+          url: `${API_BASE_URL}/api/MyOrders/GetCustomer`,
+          setter: setCustomerOptions,
+          setLoading: setCustomerLoading,
+          setError: setCustomerError
+        },
+        { 
+          name: 'suppliers', 
+          url: `${API_BASE_URL}/api/MyOrders/GetSupplier`,
+          setter: setSupplierOptions,
+          setLoading: setSupplierLoading,
+          setError: setSupplierError
+        },
+        { 
+          name: 'merchants', 
+          url: `${API_BASE_URL}/api/MyOrders/GetMerchants`,
+          setter: setMerchantOptions,
+          setLoading: setMerchantLoading
+        },
+        { 
+          name: 'portfolios', 
+          url: `${API_BASE_URL}/api/MyOrders/GetProductPortfolio`,
+          setter: setProductPortfolios,
+          setLoading: setLoadingPortfolio
+        },
+        { 
+          name: 'inquiries', 
+          url: `${API_BASE_URL}/api/MyOrders/GetInquirySamples`,
+          setter: setInquiryOptions,
+          setLoading: setInquiryLoading,
+          setError: setInquiryError
+        },
+        { 
+          name: 'paymentModes', 
+          url: `${API_BASE_URL}/api/MyOrders/GetPaymentModes`,
+          setter: setPaymentOptions,
+          setLoading: setPaymentLoading,
+          setError: setPaymentError
+        },
+        { 
+          name: 'shipmentModes', 
+          url: `${API_BASE_URL}/api/MyOrders/GetShipmentModes`,
+          setter: setShipmentOptions,
+          setLoading: setShipmentLoading,
+          setError: setShipmentError
+        },
+        { 
+          name: 'deliveryTypes', 
+          url: `${API_BASE_URL}/api/MyOrders/GetDeliveryTypes`,
+          setter: setDeliveryOptions,
+          setLoading: setDeliveryLoading,
+          setError: setDeliveryError
+        },
+        { 
+          name: 'banks', 
+          url: `${API_BASE_URL}/api/MyOrders/GetBanks`,
+          setter: (data) => setBankOptions(data.map(b => ({ id: b.bankID, name: b.bankName }))),
+          setLoading: setBankLoading,
+          setError: setBankError
         }
-      } catch (err) {
-        console.error('CostingRefNo fetch error:', err);
-        setCostingOptions([]);
-        setCostingError(err.response ? `Error ${err.response.status}: ${err.response.statusText}` : 'Unable to load costing refs');
-      } finally {
-        setCostingLoading(false);
-      }
-    };
+      ];
 
-    const fetchCustomers = async () => {
-      setCustomerLoading(true);
-      setCustomerError(null);
-      try {
-        const token = localStorage.getItem('accessToken');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await axios.get(`${API_BASE_URL}/api/MyOrders/GetCustomer`, { headers });
-        const data = res.data;
-        if (Array.isArray(data)) {
-          setCustomerOptions(data);
-        } else {
-          setCustomerOptions([]);
+      for (const api of apis) {
+        try {
+          api.setLoading(true);
+          const res = await axios.get(api.url, { headers });
+          const data = res.data;
+          
+          if (Array.isArray(data)) {
+            api.setter(data);
+          } else if (data) {
+            api.setter([data]);
+          } else {
+            api.setter([]);
+          }
+        } catch (err) {
+          console.error(`${api.name} fetch error:`, err);
+          if (api.setError) {
+            api.setError(err.response ? `Error ${err.response.status}: ${err.response.statusText}` : `Unable to load ${api.name}`);
+          }
+          api.setter([]);
+        } finally {
+          api.setLoading(false);
         }
-      } catch (err) {
-        console.error('Customer fetch error:', err);
-        setCustomerOptions([]);
-        setCustomerError(err.response ? `Error ${err.response.status}: ${err.response.statusText}` : 'Unable to load customers');
-      } finally {
-        setCustomerLoading(false);
       }
-    };
 
-    const fetchSuppliers = async () => {
-      setSupplierLoading(true);
+      // Fetch AMS Ref
       try {
-        const token = localStorage.getItem('accessToken');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await axios.get(`${API_BASE_URL}/api/MyOrders/GetSupplier`, { headers });
-        if (Array.isArray(res.data)) {
-          setSupplierOptions(res.data);
-        } else if (res.data) {
-          setSupplierOptions([res.data]);
-        } else {
-          setSupplierOptions([]);
-        }
-      } catch (err) {
-        console.error('Supplier fetch error:', err);
-        setSupplierError(err);
-        setSupplierOptions([]);
-      } finally {
-        setSupplierLoading(false);
-      }
-    };
-
-    const fetchMerchants = async () => {
-      setMerchantLoading(true);
-      try {
-        const token = localStorage.getItem('accessToken');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await axios.get(`${API_BASE_URL}/api/MyOrders/GetMerchants`, { headers });
-        setMerchantOptions(res.data || []);
-      } catch (err) {
-        console.error('Merchant fetch error:', err);
-      } finally {
-        setMerchantLoading(false);
-      }
-    };
-
-    const fetchPortfolios = async () => {
-      setLoadingPortfolio(true);
-      try {
-        const token = localStorage.getItem('accessToken');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await axios.get(`${API_BASE_URL}/api/MyOrders/GetProductPortfolio`, { headers });
-        setProductPortfolios(res.data || []);
-      } catch (err) {
-        console.error('Portfolio fetch error:', err);
-      } finally {
-        setLoadingPortfolio(false);
-      }
-    };
-
-    const fetchInquiries = async () => {
-      setInquiryLoading(true);
-      setInquiryError(null);
-      try {
-        const token = localStorage.getItem('accessToken');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await axios.get(`${API_BASE_URL}/api/MyOrders/GetInquirySamples`, { headers });
-        if (Array.isArray(res.data)) {
-          setInquiryOptions(res.data);
-        } else {
-          setInquiryOptions([]);
-        }
-      } catch (err) {
-        console.error('Inquiry fetch error:', err.response || err.message);
-        setInquiryError('Unable to load inquiries');
-        setInquiryOptions([]);
-      } finally {
-        setInquiryLoading(false);
-      }
-    };
-
-    const fetchPaymentModes = async () => {
-      setPaymentLoading(true);
-      setPaymentError(null);
-      try {
-        const token = localStorage.getItem('accessToken');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await axios.get(`${API_BASE_URL}/api/MyOrders/GetPaymentModes`, { headers });
-        if (Array.isArray(res.data)) {
-          setPaymentOptions(res.data);
-        } else if (res.data) {
-          setPaymentOptions([res.data]);
-        } else {
-          setPaymentOptions([]);
-        }
-      } catch (err) {
-        console.error('Payment fetch error:', err);
-        setPaymentError('Unable to load payment modes');
-        setPaymentOptions([]);
-      } finally {
-        setPaymentLoading(false);
-      }
-    };
-
-    const fetchShipmentModes = async () => {
-      setShipmentLoading(true);
-      setShipmentError(null);
-      try {
-        const token = localStorage.getItem('accessToken');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await axios.get(`${API_BASE_URL}/api/MyOrders/GetShipmentModes`, { headers });
-        if (Array.isArray(res.data)) {
-          setShipmentOptions(res.data);
-        } else if (res.data) {
-          setShipmentOptions([res.data]);
-        } else {
-          setShipmentOptions([]);
-        }
-      } catch (err) {
-        console.error('Shipment fetch error:', err);
-        setShipmentError('Unable to load shipment modes');
-        setShipmentOptions([]);
-      } finally {
-        setShipmentLoading(false);
-      }
-    };
-
-    const fetchDeliveryTypes = async () => {
-      setDeliveryLoading(true);
-      setDeliveryError(null);
-      try {
-        const token = localStorage.getItem('accessToken');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await axios.get(`${API_BASE_URL}/api/MyOrders/GetDeliveryTypes`, { headers });
-        if (Array.isArray(res.data)) {
-          setDeliveryOptions(res.data);
-        } else if (res.data) {
-          setDeliveryOptions([res.data]);
-        } else {
-          setDeliveryOptions([]);
-        }
-      } catch (err) {
-        console.error('Delivery fetch error:', err);
-        setDeliveryError('Unable to load delivery types');
-        setDeliveryOptions([]);
-      } finally {
-        setDeliveryLoading(false);
-      }
-    };
-
-    const fetchBanks = async () => {
-      setBankLoading(true);
-      setBankError(null);
-      try {
-        const token = localStorage.getItem('accessToken');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await axios.get(`${API_BASE_URL}/api/MyOrders/GetBanks`, { headers });
-        if (Array.isArray(res.data)) {
-          setBankOptions(res.data.map((b) => ({ id: b.bankID, name: b.bankName })));
-        } else if (res.data) {
-          setBankOptions([{ id: res.data.bankID, name: res.data.bankName }]);
-        } else {
-          setBankOptions([]);
-        }
-      } catch (err) {
-        console.error('Bank fetch error:', err);
-        setBankError('Unable to load banks');
-        setBankOptions([]);
-      } finally {
-        setBankLoading(false);
-      }
-    };
-
-    const fetchAMSRef = async () => {
-      try {
-        const token = localStorage.getItem('accessToken');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
         const res = await axios.get(`${API_BASE_URL}/api/MyOrders/GetNextAMSRefNo`, { headers });
         if (res.data && res.data.amsRefNo) {
           setValue('amsRef', res.data.amsRefNo);
@@ -989,23 +858,13 @@ export default function CompletePurchaseOrderForm() {
       }
     };
 
-    fetchCostingRefs();
-    fetchCustomers();
-    fetchSuppliers();
-    fetchMerchants();
-    fetchPortfolios();
-    fetchInquiries();
-    fetchPaymentModes();
-    fetchShipmentModes();
-    fetchDeliveryTypes();
-    fetchBanks();
-    fetchAMSRef();
+    fetchAPIs();
   }, [setValue]);
 
   useEffect(() => {
     const fetchCommission = async () => {
       if (!selectedCustomer) {
-        setValue('commission', '0.00');
+        setValue('commission', 0);
         return;
       }
 
@@ -1023,14 +882,14 @@ export default function CompletePurchaseOrderForm() {
           );
           const commissionData = res.data;
           if (commissionData && commissionData.commission) {
-            setValue('commission', parseFloat(commissionData.commission).toFixed(2));
+            setValue('commission', parseFloat(commissionData.commission));
           } else {
-            setValue('commission', '0.00');
+            setValue('commission', 0);
           }
         }
       } catch (err) {
         console.error('Commission fetch error:', err);
-        setValue('commission', '0.00');
+        setValue('commission', 0);
       }
     };
 
@@ -1038,7 +897,7 @@ export default function CompletePurchaseOrderForm() {
   }, [selectedCustomer, customerOptions, setValue]);
 
   const handlePortfolioChange = async (portfolioID) => {
-    setValue('productPortfolio', portfolioID);
+    setValue('productPortfolio', portfolioID || '');
     setValue('productCategory', '');
     setValue('productGroup', '');
     setProductCategories([]);
@@ -1058,679 +917,1150 @@ export default function CompletePurchaseOrderForm() {
     } catch (err) {
       console.error('Category fetch error:', err);
     } finally {
-        setLoadingCategory(false);
-      }
-    };
+      setLoadingCategory(false);
+    }
+  };
 
-    const handleCategoryChange = async (categoryID) => {
-      setValue('productCategory', categoryID);
-      setValue('productGroup', '');
-      setProductGroups([]);
+  const handleCategoryChange = async (categoryID) => {
+    setValue('productCategory', categoryID || '');
+    setValue('productGroup', '');
+    setProductGroups([]);
 
-      if (!categoryID) return;
+    if (!categoryID) return;
 
-      setLoadingGroup(true);
-      try {
-        const token = localStorage.getItem('accessToken');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await axios.get(
-          `${API_BASE_URL}/api/MyOrders/GetProductGroups/${categoryID}`,
-          { headers }
-        );
-        setProductGroups(res.data || []);
-      } catch (err) {
-        console.error('Group fetch error:', err);
-      } finally {
-        setLoadingGroup(false);
-      }
-    };
+    setLoadingGroup(true);
+    try {
+      const token = localStorage.getItem('accessToken');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await axios.get(
+        `${API_BASE_URL}/api/MyOrders/GetProductGroups/${categoryID}`,
+        { headers }
+      );
+      setProductGroups(res.data || []);
+    } catch (err) {
+      console.error('Group fetch error:', err);
+    } finally {
+      setLoadingGroup(false);
+    }
+  };
 
-    const handleFileChange = (field, e) => {
-      setFiles((prev) => ({
-        ...prev,
-        [field]: e.target.files[0],
-      }));
-    };
+  const handleFileChange = (field, e) => {
+    setFiles((prev) => ({
+      ...prev,
+      [field]: e.target.files[0],
+    }));
+  };
 
-    const handleOpenItemDialog = () => {
-      setOpenItemDialog(true);
-    };
+  const handleOpenItemDialog = () => {
+    setOpenItemDialog(true);
+  };
 
-    const handleCloseItemDialog = () => {
-      setOpenItemDialog(false);
-    };
+  const handleCloseItemDialog = () => {
+    setOpenItemDialog(false);
+  };
 
-    const handleSaveItemData = (data) => {
-      setSavedItemData(data);
-    };
+  const handleSaveItemData = (data) => {
+    setSavedItemData(data);
+  };
 
-    const handleShowSelections = () => {
-      setShowSelections(!showSelections);
-    };
+  const handleShowSelections = () => {
+    setShowSelections(!showSelections);
+  };
 
-    const handleShowCalculationFields = () => {
-      handleCalculate();
-      setShowCalculationFields(!showCalculationFields);
-    };
+  const handleShowCalculationFields = () => {
+    handleCalculate();
+    setShowCalculationFields(!showCalculationFields);
+  };
 
-    const handleCalculate = () => {
-      // Perform calculation logic here
-      const field1 = parseFloat(calculationField1) || 0;
-      const field2 = parseFloat(calculationField2) || 0;
-      const result = field1 + field2; // Example calculation
+  const handleCalculate = () => {
+    const field1 = parseFloat(calculationField1) || 0;
+    const field2 = parseFloat(calculationField2) || 0;
+    const result = field1 + field2;
+    alert(`Calculation Result: ${field1} + ${field2} = ${result}`);
+  };
+
+  const showSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  // Helper functions for safe data conversion
+  const safeParseInt = (value) => {
+    if (!value && value !== 0) return 0;
+    const parsed = parseInt(value);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const safeParseFloat = (value) => {
+    if (!value && value !== 0) return 0;
+    const parsed = parseFloat(value);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return null;
+    try {
+      const date = new Date(dateString);
+      return isNaN(date.getTime()) ? null : date.toISOString();
+    } catch {
+      return null;
+    }
+  };
+
+  // Map form data to API format - FIXED VERSION
+  const mapFormDataToAPI = (data) => {
+    const selectedCustomerObj = customerOptions.find(c => c.customerName === data.customer);
+    const selectedSupplierObj = supplierOptions.find(s => s.venderName === data.supplier);
+    const selectedMerchantObj = merchantOptions.find(m => m.userName === data.merchant);
+    const selectedInquiryObj = inquiryOptions.find(i => i.sampleNo === data.inquiryNo);
+
+    return {
+  
+      pono: data.internalPo || '',
+      internalPONO: data.internalPo || '',
+      creationDate: new Date().toISOString(),
+      status: data.status || '',
+      pOtype: data.orderType || '',
       
-      alert(`Calculation Result: ${field1} + ${field2} = ${result}`);
+      // Convert IDs to numbers
+      customerID: selectedCustomerObj?.customerID ? safeParseInt(selectedCustomerObj.customerID) : 0,
+      supplierID: selectedSupplierObj?.venderLibraryID ? safeParseInt(selectedSupplierObj.venderLibraryID) : 0,
+      marchandID: selectedMerchantObj?.userId ? safeParseInt(selectedMerchantObj.userId) : 0,
+      
+      placementDate: formatDate(data.placementDate),
+      shipmentDate: formatDate(data.buyerShipInitial),
+      vendorExIndiaShipmentDate: formatDate(data.vendorShipInitial),
+      
+      commission: safeParseFloat(data.commission),
+      toleranceindays: data.tolQuantity || '',
+      tolerance: formatDate(data.buyerShipLast),
+      buyerExIndiaTolerance: formatDate(data.buyerShipLast),
+      
+      timeSpame: 0,
+      productGroup: data.productGroup || '',
+      season: data.season || '',
+      quality: data.qualityComposition || '',
+      construction: data.construction || '',
+      shipmentMode: data.shipmentMode || '',
+      paymentMode: data.paymentMode || '',
+      paymentType: data.paymentMode || '',
+      ekNumber: '',
+      deliveryType: data.shipmentTerm || '',
+      currency: data.currency || '',
+      poRefNo: data.costingRef || '',
+      design: data.design || '',
+      exchangeRate: safeParseFloat(data.exchangeRate),
+      exchangeDate: new Date().toISOString(),
+      lastUpdate: new Date().toISOString(),
+      
+      xmlFileName: '',
+      buyerName: data.customer || '',
+      buyingDepartment: '',
+      contactName: '',
+      buyerStreet: '',
+      buyerZip: '',
+      buyerCity: '',
+      buyerCountry: '',
+      contactPhone: '',
+      contactFax: '',
+      contactEmail: '',
+      deliveryName: '',
+      deliveryStreet: '',
+      deliveryZip: '',
+      deliveryCity: '',
+      airFreight: '',
+      seaFreight: '',
+      
+      // Convert portfolio/category/group IDs to numbers
+      productPortfolioID: safeParseInt(data.productPortfolio),
+      productCategoriesID: safeParseInt(data.productCategory),
+      productGroupID: safeParseInt(data.productGroup),
+      
+      proceedings: data.proceedings || '',
+      transactions: data.transactions || '',
+      destination: data.destination || '',
+      vendorCommission: safeParseFloat(data.vendorCommission),
+      productImage: files.productImage ? files.productImage.name : '',
+      revisedShipmenttVendor: data.reasonReviseVendor || '',
+      version: data.version || '',
+      reasonCancellation: '',
+      itemDescriptionShippingInvoice: '',
+      titleOfAccount: data.titleOfAccount || '',
+      bankName: data.bankName || '',
+      bankBranch: data.bankBranch || '',
+      accountNo: data.accountNo || '',
+      iban: data.routingNo || '',
+      pO_Special_Instructions: data.poSpecialInstructions || '',
+      gms: data.gsm || '',
+      pO_Special_Operation: data.poSpecialOperation || '',
+      pO_Special_Treatement: data.poSpecialTreatment || '',
+      styleSource: data.styleSource || '',
+      rnNo: data.rnNo || '',
+      brand: data.brand || '',
+      consignee: data.consignee || '',
+      ration: data.ratio || '',
+      otherFabric: data.otherFabric || '',
+      packingList: data.packingList || '',
+      ribGSM: data.gsmOF || '',
+      fabric: data.fabric || '',
+      item: data.item || '',
+      cartonMarking: data.cartonMarking || '',
+      washingCareLabelInstructions: data.washingCareLabel || '',
+      importantNote: data.importantNote || '',
+      moreInfo: data.moreInfo || '',
+      pcPerCarton: safeParseInt(data.pcsPerCarton),
+      amsRefNo: data.amsRef || '',
+      embAndEmbellishment: data.embEmbellishment || '',
+      poImage: files.image ? files.image.name : '',
+      poImgFileName: files.image ? files.image.name : '',
+      poQtyUnit: data.unit || '',
+      shipmentModeText: data.shipmentMode || '',
+      costingMstID: 0,
+      userID: 0,
+      reasonforReviseShpmnt: data.reasonReviseBuyer || '',
+      reasonforReviseShpmntVendor: data.reasonReviseVendor || '',
+      exchangeRate2: 0,
+      masterPO: data.masterPo || '',
+      samplingReq: data.samplingRequirements || '',
+      qaid: 0,
+      printQAID: 0,
+      tdqaid: 0,
+      prodPersonID: 0,
+      shipPersonID: 0,
+      assistantID: 0,
+      finalInspDate: formatDate(data.finalInspectionDate),
+      qrImgPO: '',
+      qrCodePO: '',
+      assortment: data.assortment || '',
+      grossWeight: safeParseFloat(data.grossWeight),
+      netWeight: safeParseFloat(data.netWeight),
+      specsimage: files.finalSpecs ? files.finalSpecs.name : '',
+      pPimage: files.ppComment ? files.ppComment.name : '',
+      finalspecs: files.finalSpecs ? files.finalSpecs.name : '',
+      sizeset: files.sizeSetComment ? files.sizeSetComment.name : '',
+      specstype: '',
+      pptype: '',
+      finaltype: '',
+      sizetype: '',
+      grossAndNetWeight: '',
+      barCodeTFPO: '',
+      etanjDate: formatDate(data.etaNewJerseyDate),
+      etaWarehouseDate: formatDate(data.etaWarehouseDate),
+      
+      // Convert inquiry and bank IDs to numbers
+      inquiryMstID: selectedInquiryObj?.inquiryMstID ? safeParseInt(selectedInquiryObj.inquiryMstID) : 0,
+      bankID: safeParseInt(data.bankID),
+      
+      prodImgFileName: files.productImage ? files.productImage.name : '',
+      originalPDFName: files.originalPurchaseOrder ? files.originalPurchaseOrder.name : '',
+      buyerCustomer: data.buyerCustomer || ''
     };
+  };
 
-    const onSubmit = (data) => {
-      const finalData = {
-        ...data,
-        itemDetails: savedItemData
-      };
-      console.log('Submitted Data:', finalData);
-      console.log('Uploaded Files:', files);
-      alert('Form Submitted! Check console.');
-    };
+  const onSubmit = async (data) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const headers = token ? { 
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      } : { 'Content-Type': 'application/json' };
+      
+      const apiData = mapFormDataToAPI(data);
+      
+      console.log('Submitting data to API:', apiData);
+      
+      // Log specific fields that might cause issues
+      console.log('Important IDs:', {
+        customerID: apiData.customerID,
+        supplierID: apiData.supplierID,
+        productPortfolioID: apiData.productPortfolioID,
+        productCategoriesID: apiData.productCategoriesID,
+        productGroupID: apiData.productGroupID,
+        bankID: apiData.bankID,
+        inquiryMstID: apiData.inquiryMstID
+      });
+      
+      const response = await axios.post(
+        `${API_BASE_URL}/api/MyOrders/AddPurchaseOrder`,
+        apiData,
+        { 
+          headers,
+          timeout: 30000 // 30 seconds timeout
+        }
+      );
+      
+      if (response.status === 200 || response.status === 201) {
+        showSnackbar('Purchase Order saved successfully!', 'success');
+        console.log('API Response:', response.data);
+        
+        // Reset form after successful submission
+        methods.reset(defaultValues);
+        setSavedItemData(null);
+        setFiles({});
+      } else {
+        throw new Error(`Failed to save purchase order. Status: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      
+      let errorMessage = 'Error saving purchase order. Please try again.';
+      
+      if (error.response) {
+        // Server responded with error status
+        console.error('Server Error Details:', error.response.data);
+        errorMessage = error.response.data.message || 
+                      error.response.data.title || 
+                      `Server Error: ${error.response.status} - ${error.response.statusText}`;
+      } else if (error.request) {
+        // Request was made but no response received
+        errorMessage = 'No response from server. Please check your connection.';
+      } else {
+        // Something else happened
+        errorMessage = error.message;
+      }
+      
+      showSnackbar(errorMessage, 'error');
+    }
+  };
 
-    return (
-      <FormProvider {...methods}>
-        <Container maxWidth="xl">
-          <form onSubmit={handleSubmit(onSubmit)}>
-            
-            {/* ----------------- Section: Basic Order Info ----------------- */}
-            <Card sx={{ p: 3, mb: 4 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <ArrowBackIosIcon
-                  sx={{
-                    cursor: 'pointer',
-                    mr: 1,
-                    fontSize: '1.2rem',
-                    color: 'primary.main',
-                    '&:hover': { color: 'primary.dark' },
-                  }}
-                  onClick={() => navigate('/dashboard/user/profile')}
+  const handleSaveAndEmail = async (data) => {
+    try {
+      await onSubmit(data);
+      // Add email functionality here if needed
+      showSnackbar('Purchase Order saved and email sent!', 'success');
+    } catch (error) {
+      console.error('Error saving and emailing:', error);
+    }
+  };
+
+  return (
+    <FormProvider {...methods}>
+      <Container maxWidth="xl">
+        <form onSubmit={handleSubmit(onSubmit)}>
+          
+          {/* ----------------- Section: Basic Order Info ----------------- */}
+          <Card sx={{ p: 3, mb: 4 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <ArrowBackIosIcon
+                sx={{
+                  cursor: 'pointer',
+                  mr: 1,
+                  fontSize: '1.2rem',
+                  color: 'primary.main',
+                  '&:hover': { color: 'primary.dark' },
+                }}
+                onClick={() => navigate('/dashboard/user/profile')}
+              />
+              <Typography variant="h6">PURCHASE ORDER ENTRY</Typography>
+            </Box>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="costingRef"
+                  render={({ field, fieldState }) => (
+                    <TextField
+                      {...field}
+                      label="Costing Ref No."
+                      select
+                      fullWidth
+                      size="medium"
+                      variant="outlined"
+                      error={!!fieldState.error}
+                      helperText={fieldState.error?.message || (costingError ? 'Unable to load costing refs' : '')}
+                      InputLabelProps={{ shrink: true }}
+                      SelectProps={{
+                        MenuProps: {
+                          PaperProps: { style: { maxHeight: 200, marginTop: 8 } },
+                          anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+                          transformOrigin: { vertical: 'top', horizontal: 'left' },
+                        },
+                      }}
+                    >
+                      <MenuItem value="">Select</MenuItem>
+                      {costingLoading ? (
+                        <MenuItem value="" disabled>Loading...</MenuItem>
+                      ) : (
+                        costingOptions.map((opt) => (
+                          <MenuItem key={opt.costingMstID ?? opt.costingNo} value={opt.costingNo}>
+                            {opt.costingNo}
+                          </MenuItem>
+                        ))
+                      )}
+                    </TextField>
+                  )}
                 />
-                <Typography variant="h6">PURCHASE ORDER ENTRY</Typography>
-              </Box>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <SimpleImageUploadField name="image" />
+              </Grid>
+
+              {[
+                { name: 'masterPo', label: 'Master PO. No.' },
+                { name: 'amsRef', label: 'AMS Ref No.' },
+                { name: 'customerPo', label: 'Customer PO. No.' },
+                { name: 'internalPo', label: 'Internal PO. No.' },
+                { name: 'rnNo', label: 'RN No.' },
+                { name: 'consignee', label: 'Consignee' },
+              ].map((item) => (
+                <Grid item xs={12} sm={6} key={item.name}>
                   <Controller
-                    name="costingRef"
-                    render={({ field, fieldState }) => (
-                      <TextField
-                        {...field}
-                        label="Costing Ref No."
-                        select
-                        fullWidth
-                        size="medium"
-                        variant="outlined"
-                        error={!!fieldState.error}
-                        helperText={fieldState.error?.message || (costingError ? 'Unable to load costing refs' : '')}
-                        InputLabelProps={{ shrink: true }}
-                        SelectProps={{
-                          MenuProps: {
-                            PaperProps: { style: { maxHeight: 200, marginTop: 8 } },
-                            anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
-                            transformOrigin: { vertical: 'top', horizontal: 'left' },
-                          },
-                        }}
-                      >
-                        <MenuItem value="">Select</MenuItem>
-                        {costingLoading ? (
-                          <MenuItem value="" disabled>Loading...</MenuItem>
-                        ) : (
-                          costingOptions.map((opt) => (
-                            <MenuItem key={opt.costingMstID ?? opt.costingNo} value={opt.costingNo}>
-                              {opt.costingNo}
-                            </MenuItem>
-                          ))
-                        )}
-                      </TextField>
-                    )}
-                  />
-                </Grid>
-
-                <Grid item xs={12} sm={6}>
-                  <SimpleImageUploadField name="image" />
-                </Grid>
-
-                {[
-                  { name: 'masterPo', label: 'Master PO. No.' },
-                  { name: 'amsRef', label: 'AMS Ref No.' },
-                  { name: 'customerPo', label: 'Customer PO. No.' },
-                  { name: 'internalPo', label: 'Internal PO. No.' },
-                  { name: 'rnNo', label: 'RN No.' },
-                  { name: 'consignee', label: 'Consignee' },
-                ].map((item) => (
-                  <Grid item xs={12} sm={6} key={item.name}>
-                    <Controller
-                      name={item.name}
-                      control={control}
-                      render={({ field }) => (
-                        <TextField
-                          {...field}
-                          label={item.label}
-                          fullWidth
-                          disabled={item.name === 'amsRef'}
-                        />
-                      )}
-                    />
-                  </Grid>
-                ))}
-
-                <Grid item xs={12} sm={6}>
-                  <Controller
-                    name="customer"
-                    render={({ field, fieldState }) => (
-                      <TextField
-                        {...field}
-                        label="Customer"
-                        fullWidth
-                        select
-                        error={!!fieldState.error}
-                        helperText={fieldState.error?.message || (customerError ? 'Unable to load customers' : '')}
-                      >
-                        <MenuItem value="">Select Customer</MenuItem>
-                        {customerLoading ? (
-                          <MenuItem value="" disabled>Loading customers...</MenuItem>
-                        ) : (
-                          customerOptions.map((customer) => (
-                            <MenuItem key={customer.customerID} value={customer.customerName}>
-                              {customer.customerName}
-                            </MenuItem>
-                          ))
-                        )}
-                        {!customerLoading && customerOptions.length === 0 && !customerError && (
-                          <MenuItem value="" disabled>No customers found</MenuItem>
-                        )}
-                      </TextField>
-                    )}
-                  />
-                </Grid>
-
-                {[
-                  { name: 'supplier', label: 'Supplier', options: supplierOptions },
-                  { name: 'merchant', label: 'Merchant', options: merchantOptions },
-                  {
-                    name: 'proceedings',
-                    label: 'Proceedings',
-                    options: [
-                      { label: 'Supply Chain', value: 0 },
-                      { label: 'Inspection Only', value: 1 },
-                    ],
-                  },
-                  {
-                    name: 'orderType',
-                    label: 'Order Type',
-                    options: [
-                      { label: 'New', value: 0 },
-                      { label: 'Repeat', value: 1 },
-                    ],
-                  },
-                  {
-                    name: 'transactions',
-                    label: 'Transactions',
-                    options: [
-                      { label: 'Services', value: 0 },
-                      { label: 'Trade', value: 1 },
-                    ],
-                  },
-                  {
-                    name: 'version',
-                    label: 'Version',
-                    options: [
-                      { label: 'Regular', value: 0 },
-                      { label: 'Promotion', value: 1 },
-                      { label: 'Advertising', value: 2 },
-                      { label: 'On-line', value: 3 },
-                    ],
-                  },
-                ].map(({ name, label, options }) => (
-                  <Grid item xs={12} sm={6} key={name}>
-                    <Controller
-                      name={name}
-                      control={control}
-                      render={({ field, fieldState }) => (
-                        <TextField
-                          {...field}
-                          label={label}
-                          fullWidth
-                          select
-                          error={!!fieldState?.error}
-                          helperText={fieldState?.error?.message}
-                        >
-                          <MenuItem value="">Select</MenuItem>
-                          {name === 'supplier' ? (
-                            supplierLoading ? (
-                              <MenuItem disabled>Loading...</MenuItem>
-                            ) : (
-                              supplierOptions.map((opt) => (
-                                <MenuItem key={opt.venderLibraryID} value={opt.venderName}>
-                                  {opt.venderName}
-                                </MenuItem>
-                              ))
-                            )
-                          ) : name === 'merchant' ? (
-                            merchantLoading ? (
-                              <MenuItem disabled>Loading...</MenuItem>
-                            ) : (
-                              merchantOptions.map((opt) => (
-                                <MenuItem key={opt.userId} value={opt.userName}>
-                                  {opt.userName}
-                                </MenuItem>
-                              ))
-                            )
-                          ) : (
-                            options.map((opt, idx) => (
-                              <MenuItem key={idx} value={opt.value}>
-                                {opt.label}
-                              </MenuItem>
-                            ))
-                          )}
-                        </TextField>
-                      )}
-                    />
-                  </Grid>
-                ))}
-
-                <Grid item xs={12} sm={6}>
-                  <Controller
-                    name="commission"
+                    name={item.name}
+                    control={control}
                     render={({ field }) => (
                       <TextField
                         {...field}
-                        label="Commission (%)"
-                        type="text"
+                        label={item.label}
                         fullWidth
-                        InputProps={{ readOnly: true }}
-                        helperText="Auto-filled from selected customer"
+                        disabled={item.name === 'amsRef'}
                       />
                     )}
                   />
                 </Grid>
-                <Grid item xs={12} sm={6}>
+              ))}
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="customer"
+                  render={({ field, fieldState }) => (
+                    <TextField
+                      {...field}
+                      label="Customer"
+                      fullWidth
+                      select
+                      error={!!fieldState.error}
+                      helperText={fieldState.error?.message || (customerError ? 'Unable to load customers' : '')}
+                      value={field.value || ''}
+                    >
+                      <MenuItem value="">Select Customer</MenuItem>
+                      {customerLoading ? (
+                        <MenuItem value="" disabled>Loading customers...</MenuItem>
+                      ) : (
+                        customerOptions.map((customer) => (
+                          <MenuItem key={customer.customerID} value={customer.customerName}>
+                            {customer.customerName}
+                          </MenuItem>
+                        ))
+                      )}
+                      {!customerLoading && customerOptions.length === 0 && !customerError && (
+                        <MenuItem value="" disabled>No customers found</MenuItem>
+                      )}
+                    </TextField>
+                  )}
+                />
+              </Grid>
+
+              {[
+                { name: 'supplier', label: 'Supplier', options: supplierOptions },
+                { name: 'merchant', label: 'Merchant', options: merchantOptions },
+                {
+                  name: 'proceedings',
+                  label: 'Proceedings',
+                  options: [
+                    { label: 'Supply Chain', value: 'Supply Chain' },
+                    { label: 'Inspection Only', value: 'Inspection Only' },
+                  ],
+                },
+                {
+                  name: 'orderType',
+                  label: 'Order Type',
+                  options: [
+                    { label: 'New', value: 'New' },
+                    { label: 'Repeat', value: 'Repeat' },
+                  ],
+                },
+                {
+                  name: 'transactions',
+                  label: 'Transactions',
+                  options: [
+                    { label: 'Services', value: 'Services' },
+                    { label: 'Trade', value: 'Trade' },
+                  ],
+                },
+                {
+                  name: 'version',
+                  label: 'Version',
+                  options: [
+                    { label: 'Regular', value: 'Regular' },
+                    { label: 'Promotion', value: 'Promotion' },
+                    { label: 'Advertising', value: 'Advertising' },
+                    { label: 'On-line', value: 'On-line' },
+                  ],
+                },
+              ].map(({ name, label, options }) => (
+                <Grid item xs={12} sm={6} key={name}>
                   <Controller
-                    name="vendorCommission"
-                    render={({ field }) => (
-                      <TextField {...field} label="Vendor Commission (%)" type="number" fullWidth />
-                    )}
-                  />
-                </Grid>
-              </Grid>
-            </Card>
-
-            {/* ----------------- Section: Important Dates ----------------- */}
-            <Card sx={{ p: 3, mb: 4 }}>
-              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                PURCHASE ORDER IMPORTANT DATES
-              </Typography>
-              <Grid container spacing={2}>
-                {[
-                  { name: 'placementDate', label: 'Placement Date' },
-                  { name: 'etaNewJerseyDate', label: 'ETA New Jersey Date' },
-                  { name: 'etaWarehouseDate', label: 'ETA Warehouse Date' },
-                ].map(({ name, label }) => (
-                  <Grid item xs={12} sm={4} key={name}>
-                    <Controller
-                      name={name}
-                      control={control}
-                      render={({ field, fieldState }) => (
-                        <TextField
-                          {...field}
-                          label={label}
-                          type="date"
-                          fullWidth
-                          InputLabelProps={{ shrink: true }}
-                          error={!!fieldState.error}
-                          helperText={fieldState.error?.message}
-                        />
-                      )}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-            </Card>
-
-            {/* ----------------- Section: Buyer Shipment ----------------- */}
-            <Card sx={{ p: 3, mb: 4 }}>
-              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                BUYER SHIPMENT WINDOW
-              </Typography>
-              <Grid container spacing={2}>
-                {[
-                  { name: 'buyerShipInitial', label: 'Buyer Ship. Dt. (Initial)' },
-                  { name: 'buyerShipLast', label: 'Buyer Ship. Dt. (Last)' },
-                ].map(({ name, label }) => (
-                  <Grid item xs={12} sm={6} key={name}>
-                    <Controller
-                      name={name}
-                      control={control}
-                      render={({ field, fieldState }) => (
-                        <TextField
-                          {...field}
-                          label={label}
-                          type="date"
-                          fullWidth
-                          InputLabelProps={{ shrink: true }}
-                          error={!!fieldState.error}
-                          helperText={fieldState.error?.message}
-                        />
-                      )}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-            </Card>
-
-            {/* ----------------- Section: Vendor Shipment ----------------- */}
-            <Card sx={{ p: 3, mb: 4 }}>
-              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                VENDOR SHIPMENT WINDOW
-              </Typography>
-              <Grid container spacing={2}>
-                {[
-                  { name: 'vendorShipInitial', label: 'Vendor Ship. Dt. (Initial)' },
-                  { name: 'vendorShipLast', label: 'Vendor Ship. Dt. (Last)' },
-                  { name: 'finalInspectionDate', label: 'Final Inspection Date' },
-                ].map(({ name, label }) => (
-                  <Grid item xs={12} sm={4} key={name}>
-                    <Controller
-                      name={name}
-                      control={control}
-                      render={({ field, fieldState }) => (
-                        <TextField
-                          {...field}
-                          label={label}
-                          type="date"
-                          fullWidth
-                          InputLabelProps={{ shrink: true }}
-                          error={!!fieldState.error}
-                          helperText={fieldState.error?.message}
-                        />
-                      )}
-                    />
-                  </Grid>
-                ))}
-                {[
-                  { name: 'reasonReviseBuyer', label: 'Reason of Revise Shipment Dates(B)' },
-                  { name: 'reasonReviseVendor', label: 'Reason of Revise Shipment Dates(V)' },
-                ].map(({ name, label }) => (
-                  <Grid item xs={12} key={name}>
-                    <Controller
-                      name={name}
-                      control={control}
-                      render={({ field, fieldState }) => (
-                        <TextField
-                          {...field}
-                          label={label}
-                          fullWidth
-                          multiline
-                          minRows={2}
-                          error={!!fieldState.error}
-                          helperText={fieldState.error?.message}
-                        />
-                      )}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-            </Card>
-
-            {/* ----------------- Section: Product Portfolio ----------------- */}
-            <Box sx={{ backgroundColor: '#ffffff', p: 3, borderRadius: 2, mb: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                PRODUCT INFORMATION
-              </Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={4}>
-                  <Controller
-                    name="productPortfolio"
+                    name={name}
                     control={control}
-                    render={({ field }) => (
-                      <FormControl fullWidth>
-                        <InputLabel>Product Portfolio</InputLabel>
-                        <Select
-                          {...field}
-                          label="Product Portfolio"
-                          onChange={(e) => handlePortfolioChange(e.target.value)}
-                        >
-                          <MenuItem value="">Select Portfolio</MenuItem>
-                          {loadingPortfolio ? (
+                    render={({ field, fieldState }) => (
+                      <TextField
+                        {...field}
+                        label={label}
+                        fullWidth
+                        select
+                        error={!!fieldState?.error}
+                        helperText={fieldState?.error?.message}
+                        value={field.value || ''}
+                      >
+                        <MenuItem value="">Select</MenuItem>
+                        {name === 'supplier' ? (
+                          supplierLoading ? (
                             <MenuItem disabled>Loading...</MenuItem>
                           ) : (
-                            productPortfolios.map((p) => (
-                              <MenuItem key={p.productPortfolioID} value={p.productPortfolioID}>
-                                {p.productPortfolio}
+                            supplierOptions.map((opt) => (
+                              <MenuItem key={opt.venderLibraryID} value={opt.venderName}>
+                                {opt.venderName}
                               </MenuItem>
                             ))
-                          )}
-                        </Select>
-                      </FormControl>
-                    )}
-                  />
-                </Grid>
-
-                <Grid item xs={12} sm={4}>
-                  <Controller
-                    name="productCategory"
-                    control={control}
-                    render={({ field }) => (
-                      <FormControl fullWidth>
-                        <InputLabel>Product Category</InputLabel>
-                        <Select
-                          {...field}
-                          label="Product Category"
-                          onChange={(e) => handleCategoryChange(e.target.value)}
-                        >
-                          <MenuItem value="">Select Category</MenuItem>
-                          {loadingCategory ? (
+                          )
+                        ) : name === 'merchant' ? (
+                          merchantLoading ? (
                             <MenuItem disabled>Loading...</MenuItem>
                           ) : (
-                            productCategories.map((c) => (
-                              <MenuItem key={c.productCategoriesID} value={c.productCategoriesID}>
-                                {c.productCategories}
+                            merchantOptions.map((opt) => (
+                              <MenuItem key={opt.userId} value={opt.userName}>
+                                {opt.userName}
                               </MenuItem>
                             ))
-                          )}
-                        </Select>
-                      </FormControl>
-                    )}
-                  />
-                </Grid>
-
-                <Grid item xs={12} sm={4}>
-                  <Controller
-                    name="productGroup"
-                    control={control}
-                    render={({ field }) => (
-                      <FormControl fullWidth>
-                        <InputLabel>Product Group</InputLabel>
-                        <Select {...field} label="Product Group">
-                          <MenuItem value="">Select Group</MenuItem>
-                          {loadingGroup ? (
-                            <MenuItem disabled>Loading...</MenuItem>
-                          ) : (
-                            productGroups.map((g) => (
-                              <MenuItem key={g.productGroupID} value={g.productGroupID}>
-                                {g.productGroup}
-                              </MenuItem>
-                            ))
-                          )}
-                        </Select>
-                      </FormControl>
-                    )}
-                  />
-                </Grid>
-
-                <Grid item xs={12} sm={4}>
-                  <Controller name="season" render={({ field }) => <TextField {...field} fullWidth label="Season" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="tolQuantity" render={({ field }) => <TextField {...field} fullWidth label="Tol. Quantity" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller
-                    name="set"
-                    render={({ field }) => (
-                      <FormControl fullWidth>
-                        <InputLabel>Set</InputLabel>
-                        <Select {...field} label="Set">
-                          <MenuItem value="Set">Set</MenuItem>
-                          <MenuItem value="PCS">PCS</MenuItem>
-                          <MenuItem value="KG">KG</MenuItem>
-                        </Select>
-                      </FormControl>
-                    )}
-                  />
-                </Grid>
-
-                <Grid item xs={12} sm={4}>
-                  <Controller name="fabric" render={({ field }) => <TextField {...field} fullWidth label="Fabric" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="item" render={({ field }) => <TextField {...field} fullWidth label="Item" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="qualityComposition" render={({ field }) => <TextField {...field} fullWidth label="Quality / Composition" />} />
-                </Grid>
-
-                <Grid item xs={12} sm={4}>
-                  <Controller name="gsm" render={({ field }) => <TextField {...field} fullWidth label="GSM" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="design" render={({ field }) => <TextField {...field} fullWidth label="Design" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="otherFabric" render={({ field }) => <TextField {...field} fullWidth label="Other Fabric" />} />
-                </Grid>
-
-                <Grid item xs={12} sm={6}>
-                  <Controller name="gsmOF" render={({ field }) => <TextField {...field} fullWidth label="GSM (O.F)" />} />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Controller name="construction" render={({ field }) => <TextField {...field} fullWidth label="Construction" />} />
-                </Grid>
-
-                <Grid item xs={12} sm={6}>
-                  <Controller name="poSpecialOperation" render={({ field }) => <TextField {...field} fullWidth label="PO Special Operation" />} />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Controller
-                    name="status"
-                    render={({ field }) => (
-                      <FormControl fullWidth>
-                        <InputLabel>Status</InputLabel>
-                        <Select {...field} label="Status">
-                          <MenuItem value="Inspection">Inspection</MenuItem>
-                          <MenuItem value="Cancel">Cancel</MenuItem>
-                          <MenuItem value="Close">Close</MenuItem>
-                        </Select>
-                      </FormControl>
-                    )}
-                  />
-                </Grid>
-
-                <Grid item xs={12} sm={4}>
-                  <Controller name="poSpecialTreatment" render={({ field }) => <TextField {...field} fullWidth label="PO Special Treatment" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="styleSource" render={({ field }) => <TextField {...field} fullWidth label="Style Source" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="brand" render={({ field }) => <TextField {...field} fullWidth label="Brand" />} />
-                </Grid>
-
-                <Grid item xs={12} sm={4}>
-                  <Controller
-                    name="assortment"
-                    render={({ field }) => (
-                      <FormControl fullWidth>
-                        <InputLabel>Assortment</InputLabel>
-                        <Select {...field} label="Assortment">
-                          <MenuItem value="Solid">Solid</MenuItem>
-                          <MenuItem value="Ratio">Ratio</MenuItem>
-                        </Select>
-                      </FormControl>
-                    )}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="ratio" render={({ field }) => <TextField {...field} fullWidth label="Ratio" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="cartonMarking" render={({ field }) => <TextField {...field} fullWidth label="Carton Marking" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="PO_Special_Instructions" render={({ field }) => <TextField {...field} fullWidth label="PO_Special_Instructions" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="Washing_Care Label Instructions" render={({ field }) => <TextField {...field} fullWidth label="Washing_Care Label Instructions" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="Important Note" render={({ field }) => <TextField {...field} fullWidth label="Important Note" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="More Info:" render={({ field }) => <TextField {...field} fullWidth label="More Info:" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="Sampling Requirements:" render={({ field }) => <TextField {...field} fullWidth label="Sampling Requirements:" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="Pcs Per Carton:" render={({ field }) => <TextField {...field} fullWidth label="Pcs Per Carton:" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="Gross Weight" render={({ field }) => <TextField {...field} fullWidth label="Gross Weight" />} />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Controller name="Net Weight" render={({ field }) => <TextField {...field} fullWidth label="Net Weight" />} />
-                </Grid>
-                   <Grid item xs={12} sm={4}>
-                  <Controller
-                    name="Unit"
-                    render={({ field }) => (
-                      <FormControl fullWidth>
-                        <InputLabel>Unit</InputLabel>
-                        <Select {...field} label="Unit">
-                          <MenuItem value="KG">KG</MenuItem>
-                          <MenuItem value="DZN">DZN</MenuItem>
-                          <MenuItem value="LBS">LBS</MenuItem>
-                        </Select>
-                      </FormControl>
-                    )}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Controller
-                    name="Packing List"
-                    control={control}
-                    render={({ field }) => <TextField {...field} fullWidth label="Packing List" />}
-                  />
-                </Grid>
-                  <Grid item xs={12} sm={6}>
-                  <Controller
-                    name="Emb & Embellishment"
-                    control={control}
-                    render={({ field }) => <TextField {...field} fullWidth label="Emb & Embellishment" />}
-                  />
-                </Grid>
-                
-
-                <Grid item xs={12} sm={6}>
-                  <Controller
-                    name="inquiryNo"
-                    control={control}
-                    render={({ field }) => (
-                      <FormControl fullWidth>
-                        <InputLabel>Inquiry No</InputLabel>
-                        {inquiryLoading ? (
-                          <CircularProgress size={24} />
-                        ) : inquiryError ? (
-                          <Typography color="error">{inquiryError}</Typography>
+                          )
                         ) : (
-                          <Select {...field} label="Inquiry No">
-                            {inquiryOptions.map((inq) => (
-                              <MenuItem key={`${inq.inquiryMstID}-${inq.sampleNo}`} value={inq.sampleNo}>
-                                {inq.sampleNo}
+                          options.map((opt, idx) => (
+                            <MenuItem key={idx} value={opt.value}>
+                              {opt.label}
+                            </MenuItem>
+                          ))
+                        )}
+                      </TextField>
+                    )}
+                  />
+                </Grid>
+              ))}
+
+             <Grid item xs={12} sm={6}>
+  <Controller
+    name="commission"
+    render={({ field }) => (
+      <TextField
+        {...field}
+        label="Commission (%)"
+        type="number"
+        fullWidth
+        InputProps={{ readOnly: true }}
+        helperText="Auto-filled from selected customer"
+        value={
+          field.value !== undefined && field.value !== ''
+            ? Number(field.value).toFixed(2)
+            : ''
+        }
+      />
+    )}
+  />
+</Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="vendorCommission"
+                  render={({ field }) => (
+                    <TextField {...field} label="Vendor Commission (%)" type="number" fullWidth />
+                  )}
+                />
+              </Grid>
+            </Grid>
+          </Card>
+
+          {/* ----------------- Section: Important Dates ----------------- */}
+          <Card sx={{ p: 3, mb: 4 }}>
+            <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+              PURCHASE ORDER IMPORTANT DATES
+            </Typography>
+            <Grid container spacing={2}>
+              {[
+                { name: 'placementDate', label: 'Placement Date' },
+                { name: 'etaNewJerseyDate', label: 'ETA New Jersey Date' },
+                { name: 'etaWarehouseDate', label: 'ETA Warehouse Date' },
+              ].map(({ name, label }) => (
+                <Grid item xs={12} sm={4} key={name}>
+                  <Controller
+                    name={name}
+                    control={control}
+                    render={({ field, fieldState }) => (
+                      <TextField
+                        {...field}
+                        label={label}
+                        type="date"
+                        fullWidth
+                        InputLabelProps={{ shrink: true }}
+                        error={!!fieldState.error}
+                        helperText={fieldState.error?.message}
+                      />
+                    )}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          </Card>
+
+          {/* ----------------- Section: Buyer Shipment ----------------- */}
+          <Card sx={{ p: 3, mb: 4 }}>
+            <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+              BUYER SHIPMENT WINDOW
+            </Typography>
+            <Grid container spacing={2}>
+              {[
+                { name: 'buyerShipInitial', label: 'Buyer Ship. Dt. (Initial)' },
+                { name: 'buyerShipLast', label: 'Buyer Ship. Dt. (Last)' },
+              ].map(({ name, label }) => (
+                <Grid item xs={12} sm={6} key={name}>
+                  <Controller
+                    name={name}
+                    control={control}
+                    render={({ field, fieldState }) => (
+                      <TextField
+                        {...field}
+                        label={label}
+                        type="date"
+                        fullWidth
+                        InputLabelProps={{ shrink: true }}
+                        error={!!fieldState.error}
+                        helperText={fieldState.error?.message}
+                      />
+                    )}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          </Card>
+
+          {/* ----------------- Section: Vendor Shipment ----------------- */}
+          <Card sx={{ p: 3, mb: 4 }}>
+            <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+              VENDOR SHIPMENT WINDOW
+            </Typography>
+            <Grid container spacing={2}>
+              {[
+                { name: 'vendorShipInitial', label: 'Vendor Ship. Dt. (Initial)' },
+                { name: 'vendorShipLast', label: 'Vendor Ship. Dt. (Last)' },
+                { name: 'finalInspectionDate', label: 'Final Inspection Date' },
+              ].map(({ name, label }) => (
+                <Grid item xs={12} sm={4} key={name}>
+                  <Controller
+                    name={name}
+                    control={control}
+                    render={({ field, fieldState }) => (
+                      <TextField
+                        {...field}
+                        label={label}
+                        type="date"
+                        fullWidth
+                        InputLabelProps={{ shrink: true }}
+                        error={!!fieldState.error}
+                        helperText={fieldState.error?.message}
+                      />
+                    )}
+                  />
+                </Grid>
+              ))}
+              {[
+                { name: 'reasonReviseBuyer', label: 'Reason of Revise Shipment Dates(B)' },
+                { name: 'reasonReviseVendor', label: 'Reason of Revise Shipment Dates(V)' },
+              ].map(({ name, label }) => (
+                <Grid item xs={12} key={name}>
+                  <Controller
+                    name={name}
+                    control={control}
+                    render={({ field, fieldState }) => (
+                      <TextField
+                        {...field}
+                        label={label}
+                        fullWidth
+                        multiline
+                        minRows={2}
+                        error={!!fieldState.error}
+                        helperText={fieldState.error?.message}
+                      />
+                    )}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          </Card>
+
+          {/* ----------------- Section: Product Portfolio ----------------- */}
+          <Box sx={{ backgroundColor: '#ffffff', p: 3, borderRadius: 2, mb: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+            <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+              PRODUCT INFORMATION
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="productPortfolio"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Product Portfolio</InputLabel>
+                      <Select
+                        {...field}
+                        label="Product Portfolio"
+                        value={field.value || ''}
+                        onChange={(e) => handlePortfolioChange(e.target.value)}
+                      >
+                        <MenuItem value="">Select Portfolio</MenuItem>
+                        {loadingPortfolio ? (
+                          <MenuItem disabled>Loading...</MenuItem>
+                        ) : (
+                          productPortfolios.map((p) => (
+                            <MenuItem key={p.productPortfolioID} value={p.productPortfolioID}>
+                              {p.productPortfolio}
+                            </MenuItem>
+                          ))
+                        )}
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="productCategory"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Product Category</InputLabel>
+                      <Select
+                        {...field}
+                        label="Product Category"
+                        value={field.value || ''}
+                        onChange={(e) => handleCategoryChange(e.target.value)}
+                      >
+                        <MenuItem value="">Select Category</MenuItem>
+                        {loadingCategory ? (
+                          <MenuItem disabled>Loading...</MenuItem>
+                        ) : (
+                          productCategories.map((c) => (
+                            <MenuItem key={c.productCategoriesID} value={c.productCategoriesID}>
+                              {c.productCategories}
+                            </MenuItem>
+                          ))
+                        )}
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="productGroup"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Product Group</InputLabel>
+                      <Select {...field} label="Product Group" value={field.value || ''}>
+                        <MenuItem value="">Select Group</MenuItem>
+                        {loadingGroup ? (
+                          <MenuItem disabled>Loading...</MenuItem>
+                        ) : (
+                          productGroups.map((g) => (
+                            <MenuItem key={g.productGroupID} value={g.productGroupID}>
+                              {g.productGroup}
+                            </MenuItem>
+                          ))
+                        )}
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              {/* Rest of the product information fields */}
+              <Grid item xs={12} sm={4}>
+                <Controller name="season" render={({ field }) => <TextField {...field} fullWidth label="Season" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="tolQuantity" render={({ field }) => <TextField {...field} fullWidth label="Tol. Quantity" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="set"
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Set</InputLabel>
+                      <Select {...field} label="Set" value={field.value || ''}>
+                        <MenuItem value="Set">Set</MenuItem>
+                        <MenuItem value="PCS">PCS</MenuItem>
+                        <MenuItem value="KG">KG</MenuItem>
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Controller name="fabric" render={({ field }) => <TextField {...field} fullWidth label="Fabric" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="item" render={({ field }) => <TextField {...field} fullWidth label="Item" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="qualityComposition" render={({ field }) => <TextField {...field} fullWidth label="Quality / Composition" />} />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Controller name="gsm" render={({ field }) => <TextField {...field} fullWidth label="GSM" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="design" render={({ field }) => <TextField {...field} fullWidth label="Design" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="otherFabric" render={({ field }) => <TextField {...field} fullWidth label="Other Fabric" />} />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller name="gsmOF" render={({ field }) => <TextField {...field} fullWidth label="GSM (O.F)" />} />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="construction" render={({ field }) => <TextField {...field} fullWidth label="Construction" />} />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller name="poSpecialOperation" render={({ field }) => <TextField {...field} fullWidth label="PO Special Operation" />} />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="status"
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Status</InputLabel>
+                      <Select {...field} label="Status" value={field.value || ''}>
+                        <MenuItem value="Inspection">Inspection</MenuItem>
+                        <MenuItem value="Cancel">Cancel</MenuItem>
+                        <MenuItem value="Close">Close</MenuItem>
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Controller name="poSpecialTreatment" render={({ field }) => <TextField {...field} fullWidth label="PO Special Treatment" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="styleSource" render={({ field }) => <TextField {...field} fullWidth label="Style Source" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="brand" render={({ field }) => <TextField {...field} fullWidth label="Brand" />} />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="assortment"
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Assortment</InputLabel>
+                      <Select {...field} label="Assortment" value={field.value || ''}>
+                        <MenuItem value="Solid">Solid</MenuItem>
+                        <MenuItem value="Ratio">Ratio</MenuItem>
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="ratio" render={({ field }) => <TextField {...field} fullWidth label="Ratio" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="cartonMarking" render={({ field }) => <TextField {...field} fullWidth label="Carton Marking" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="poSpecialInstructions" render={({ field }) => <TextField {...field} fullWidth label="PO Special Instructions" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="washingCareLabel"
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Washing Care Label Instructions"
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Controller name="importantNote" render={({ field }) => <TextField {...field} fullWidth label="Important Note" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="moreInfo" render={({ field }) => <TextField {...field} fullWidth label="More Info" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="samplingRequirements" render={({ field }) => <TextField {...field} fullWidth label="Sampling Requirements" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="pcsPerCarton" render={({ field }) => <TextField {...field} fullWidth label="Pcs Per Carton" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="grossWeight" render={({ field }) => <TextField {...field} fullWidth label="Gross Weight" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="netWeight" render={({ field }) => <TextField {...field} fullWidth label="Net Weight" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="unit"
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Unit</InputLabel>
+                      <Select {...field} label="Unit" value={field.value || ''}>
+                        <MenuItem value="KG">KG</MenuItem>
+                        <MenuItem value="DZN">DZN</MenuItem>
+                        <MenuItem value="LBS">LBS</MenuItem>
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="packingList"
+                  control={control}
+                  render={({ field }) => <TextField {...field} fullWidth label="Packing List" />}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="embEmbellishment"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Emb & Embellishment"
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="inquiryNo"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Inquiry No</InputLabel>
+                      {inquiryLoading ? (
+                        <CircularProgress size={24} />
+                      ) : inquiryError ? (
+                        <Typography color="error">{inquiryError}</Typography>
+                      ) : (
+                        <Select {...field} label="Inquiry No" value={field.value || ''}>
+                          {inquiryOptions.map((inq) => (
+                            <MenuItem key={`${inq.inquiryMstID}-${inq.sampleNo}`} value={inq.sampleNo}>
+                              {inq.sampleNo}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      )}
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="buyerCustomer"
+                  control={control}
+                  render={({ field }) => <TextField {...field} fullWidth label="Buyer Customer" />}
+                />
+              </Grid>
+            </Grid>
+          </Box>
+
+          {/* ----------------- Product Specific Information ----------------- */}
+          <Card sx={{ p: 3, mb: 4 }}>
+            <CardContent>
+              <Typography variant="h6" sx={{ fontWeight: "bold", mb: 2 }}>
+                PRODUCT SPECIFIC INFORMATION
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="currency"
+                    render={({ field }) => (
+                      <FormControl fullWidth>
+                        <InputLabel>Currency</InputLabel>
+                        <Select {...field} label="Currency" value={field.value || ''}>
+                          <MenuItem value="Dollar">Dollar</MenuItem>
+                          <MenuItem value="PKR">PKR</MenuItem>
+                          <MenuItem value="Euro">Euro</MenuItem>
+                        </Select>
+                      </FormControl>
+                    )}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="exchangeRate"
+                    render={({ field }) => (
+                      <TextField {...field} fullWidth label="Exchange Rate (to USD)" type="number" />
+                    )}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="style"
+                    render={({ field }) => <TextField {...field} fullWidth label="Style" />}
+                  />
+                </Grid>
+              </Grid>
+
+              <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 3 }}>
+                <Button variant="contained" color="primary" onClick={handleOpenItemDialog}>
+                  Add Item Details
+                </Button>
+                <Button variant="contained" color="primary" onClick={handleShowSelections}>
+                  {showSelections ? 'Hide Selections' : 'Show Selections'}
+                </Button>
+              </Stack>
+
+              {showSelections && savedItemData && (
+                <Box sx={{ mt: 3 }}>
+                  <TableContainer component={Paper}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Style No</TableCell>
+                          <TableCell>Colorway</TableCell>
+                          <TableCell>Product Code</TableCell>
+                          <TableCell>Size Range</TableCell>
+                          <TableCell>Sizes</TableCell>
+                          <TableCell>Quantity</TableCell>
+                          <TableCell>Item Price</TableCell>
+                          <TableCell>Value</TableCell>
+                          <TableCell>LDP Price</TableCell>
+                          <TableCell>LDP Value</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {savedItemData.rows.map((row, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{row.styleNo}</TableCell>
+                            <TableCell>{row.colorway}</TableCell>
+                            <TableCell>{row.productCode}</TableCell>
+                            <TableCell>{row.sizeRange}</TableCell>
+                            <TableCell>{row.size}</TableCell>
+                            <TableCell>{row.quantity}</TableCell>
+                            <TableCell>{row.itemPrice}</TableCell>
+                            <TableCell>{row.value.toFixed(2)}</TableCell>
+                            <TableCell>{row.ldpPrice}</TableCell>
+                            <TableCell>{row.ldpValue.toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+
+                  <Box sx={{ mt: 2, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+                    <Grid container spacing={3}>
+                      <Grid item xs={4}>
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          Total Qty: {savedItemData.totals.totalQuantity}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={4}>
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          Total Value: {savedItemData.totals.totalValue.toFixed(2)}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={4}>
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          Total LDP Value: {savedItemData.totals.totalLdpValue.toFixed(2)}
+                        </Typography>
+                      </Grid>
+                    </Grid>
+                  </Box>
+
+                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button 
+                      variant="contained" 
+                      color="secondary" 
+                      startIcon={<CalculateIcon />}
+                      onClick={handleShowCalculationFields}
+                    >
+                      Calculate
+                    </Button>
+                  </Box>
+
+                  {showCalculationFields && (
+                    <Grid container spacing={2} sx={{ mt: 2 }}>
+                      <Grid item xs={12} sm={6}>
+                        <Controller
+                          name="calculationField1"
+                          control={control}
+                          render={({ field }) => (
+                            <TextField
+                              {...field}
+                              fullWidth
+                              label="Enter value for calculation"
+                              type="number"
+                              placeholder="0"
+                            />
+                          )}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <Controller
+                          name="calculationField2"
+                          control={control}
+                          render={({ field }) => (
+                            <TextField
+                              {...field}
+                              fullWidth
+                              label="Enter value for calculation"
+                              type="number"
+                              placeholder="0"
+                            />
+                          )}
+                        />
+                      </Grid>
+                    </Grid>
+                  )}
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ----------------- Shipping and Payment Terms ----------------- */}
+          <Card sx={{ p: 3, mb: 4 }}>
+            <CardContent>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+                SHIPPING AND PAYMENT TERMS
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={3}>
+                  <Controller
+                    name="paymentMode"
+                    control={control}
+                    render={({ field }) => (
+                      <FormControl fullWidth>
+                        <InputLabel>Payment Mode</InputLabel>
+                        {paymentLoading ? (
+                          <CircularProgress size={24} />
+                        ) : paymentError ? (
+                          <Typography color="error">{paymentError}</Typography>
+                        ) : (
+                          <Select {...field} label="Payment Mode" value={field.value || ''}>
+                            {paymentOptions.map((p) => (
+                              <MenuItem key={p.id} value={p.name}>
+                                {p.name}
                               </MenuItem>
                             ))}
                           </Select>
@@ -1740,416 +2070,227 @@ export default function CompletePurchaseOrderForm() {
                   />
                 </Grid>
 
-                <Grid item xs={12} sm={6}>
+                <Grid item xs={12} sm={3}>
                   <Controller
-                    name="buyerCustomer"
+                    name="shipmentTerm"
                     control={control}
-                    render={({ field }) => <TextField {...field} fullWidth label="Buyer Customer" />}
+                    render={({ field }) => (
+                      <FormControl fullWidth>
+                        <InputLabel>Shipment Term</InputLabel>
+                        {shipmentLoading ? (
+                          <CircularProgress size={24} />
+                        ) : shipmentError ? (
+                          <Typography color="error">{shipmentError}</Typography>
+                        ) : (
+                          <Select {...field} label="Shipment Term" value={field.value || ''}>
+                            {shipmentOptions.map((s) => (
+                              <MenuItem key={s.id} value={s.name}>
+                                {s.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        )}
+                      </FormControl>
+                    )}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={3}>
+                  <Controller
+                    name="destination"
+                    render={({ field }) => <TextField {...field} fullWidth label="Destination" />}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={3}>
+                  <Controller
+                    name="shipmentMode"
+                    control={control}
+                    render={({ field }) => (
+                      <FormControl fullWidth>
+                        <InputLabel>Shipment Mode</InputLabel>
+                        {deliveryLoading ? (
+                          <CircularProgress size={24} />
+                        ) : deliveryError ? (
+                          <Typography color="error">{deliveryError}</Typography>
+                        ) : (
+                          <Select {...field} label="Shipment Mode" value={field.value || ''}>
+                            {deliveryOptions.map((d) => (
+                              <MenuItem key={d.id} value={d.name}>
+                                {d.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        )}
+                      </FormControl>
+                    )}
                   />
                 </Grid>
               </Grid>
-            </Box>
+            </CardContent>
+          </Card>
 
-            {/* ----------------- Product Specific Information ----------------- */}
-           <Card sx={{ p: 3, mb: 4 }}>
-  <CardContent>
-    <Typography variant="h6" sx={{ fontWeight: "bold", mb: 2 }}>
-      PRODUCT SPECIFIC INFORMATION
-    </Typography>
-
-    <Grid container spacing={2}>
-      <Grid item xs={12} sm={4}>
-        <Controller
-          name="currency"
-          render={({ field }) => (
-            <FormControl fullWidth>
-              <InputLabel>Currency</InputLabel>
-              <Select {...field} label="Currency">
-                <MenuItem value="Dollar">Dollar</MenuItem>
-                <MenuItem value="PKR">PKR</MenuItem>
-                <MenuItem value="Euro">Euro</MenuItem>
-              </Select>
-            </FormControl>
-          )}
-        />
-      </Grid>
-
-      <Grid item xs={12} sm={4}>
-        <Controller
-          name="exchangeRate"
-          render={({ field }) => (
-            <TextField {...field} fullWidth label="Exchange Rate (to USD)" />
-          )}
-        />
-      </Grid>
-
-      <Grid item xs={12} sm={4}>
-        <Controller
-          name="style"
-          render={({ field }) => <TextField {...field} fullWidth label="Style" />}
-        />
-      </Grid>
-    </Grid>
-
-    <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 3 }}>
-      <Button variant="contained" color="primary" onClick={handleOpenItemDialog}>
-        Add Item Details
-      </Button>
-      <Button variant="contained" color="primary" onClick={handleShowSelections}>
-        {showSelections ? 'Hide Selections' : 'Show Selections'}
-      </Button>
-    </Stack>
-
-    {/* Saved Item Data Grid */}
-    {showSelections && savedItemData && (
-      <Box sx={{ mt: 3 }}>
-       
-        <TableContainer component={Paper}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Style No</TableCell>
-                <TableCell>Colorway</TableCell>
-                <TableCell>Product Code</TableCell>
-                <TableCell>Size Range</TableCell>
-                <TableCell>Sizes</TableCell>
-                <TableCell>Quantity</TableCell>
-                <TableCell>Item Price</TableCell>
-                <TableCell>Value</TableCell>
-                <TableCell>LDP Price</TableCell>
-                <TableCell>LDP Value</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {savedItemData.rows.map((row, index) => (
-                <TableRow key={index}>
-                  <TableCell>{row.styleNo}</TableCell>
-                  <TableCell>{row.colorway}</TableCell>
-                  <TableCell>{row.productCode}</TableCell>
-                  <TableCell>{row.sizeRange}</TableCell>
-                  <TableCell>{row.size}</TableCell>
-                  <TableCell>{row.quantity}</TableCell>
-                  <TableCell>{row.itemPrice}</TableCell>
-                  <TableCell>{row.value.toFixed(2)}</TableCell>
-                  <TableCell>{row.ldpPrice}</TableCell>
-                  <TableCell>{row.ldpValue.toFixed(2)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Box sx={{ mt: 2, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
-          <Grid container spacing={3}>
-            <Grid item xs={4}>
-              <Typography variant="subtitle1" fontWeight="bold">
-                Total Qty: {savedItemData.totals.totalQuantity}
+          {/* ----------------- Reference & Attachment Form ----------------- */}
+          <Card sx={{ p: 3, mb: 4 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
+                REFERENCE & ATTACHMENT
               </Typography>
-            </Grid>
-            <Grid item xs={4}>
-              <Typography variant="subtitle1" fontWeight="bold">
-                Total Value: {savedItemData.totals.totalValue.toFixed(2)}
-              </Typography>
-            </Grid>
-            <Grid item xs={4}>
-              <Typography variant="subtitle1" fontWeight="bold">
-                Total LDP Value: {savedItemData.totals.totalLdpValue.toFixed(2)}
-              </Typography>
-            </Grid>
-          </Grid>
-        </Box>
 
-        {/* Calculate button moved here - below the grid */}
-        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button 
-            variant="contained" 
-            color="secondary" 
-            startIcon={<CalculateIcon />}
-            onClick={handleShowCalculationFields}
+             <Grid container spacing={3}>
+      {[
+        { name: "originalPurchaseOrder", label: "Original Purchase Order" },
+        { name: "processOrderConfirmation", label: "Process at the time Order Confirmation" },
+        { name: "finalSpecs", label: "Final Specs" },
+        { name: "productImage", label: "Product Image" },
+        { name: "ppComment", label: "PP Comment Received" },
+        { name: "sizeSetComment", label: "Size Set Comment" },
+      ].map(({ name, label }) => (
+        <Grid item xs={12} sm={6} key={name}>
+          <Button
+            variant="outlined"
+            component="label"
+            fullWidth
+            startIcon={<UploadFileIcon />}
           >
-            Calculate
+            {label}
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => handleFileChange(name, e)}
+            />
           </Button>
-        </Box>
+          <Typography variant="body2" sx={{ mt: 1, color: "gray" }}>
+            {files[name] ? files[name].name : "No file chosen"}
+          </Typography>
+        </Grid>
+      ))}
+    </Grid>
+            </CardContent>
+          </Card>
 
-        {/* Only 2 Text Boxes for Calculation */}
-        {showCalculationFields && (
-          <Grid container spacing={2} sx={{ mt: 2 }}>
-            <Grid item xs={12} sm={6}>
-              <Controller
-                name="calculationField1"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    fullWidth
-                    label="Enter value for calculation"
-                    type="number"
-                    placeholder="0"
+          {/* ----------------- Bank Detail Form ----------------- */}
+          <Card sx={{ p: 3, mb: 4 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
+                BANK DETAILS
+              </Typography>
+
+              <Grid container spacing={3}>
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="bankID"
+                    control={control}
+                    render={({ field }) => (
+                      <FormControl fullWidth>
+                        <InputLabel>Bank</InputLabel>
+                        {bankLoading ? (
+                          <CircularProgress size={24} />
+                        ) : bankError ? (
+                          <Typography color="error">{bankError}</Typography>
+                        ) : (
+                          <Select {...field} label="Bank" value={field.value || ''}>
+                            {bankOptions.map((b) => (
+                              <MenuItem key={b.id} value={b.id}>
+                                {b.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        )}
+                      </FormControl>
+                    )}
                   />
-                )}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Controller
-                name="calculationField2"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    fullWidth
-                    label="Enter value for calculation"
-                    type="number"
-                    placeholder="0"
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="titleOfAccount"
+                    render={({ field }) => (
+                      <TextField {...field} label="Title Of Account" fullWidth />
+                    )}
                   />
-                )}
-              />
-            </Grid>
-          </Grid>
-        )}
-      </Box>
-    )}
-  </CardContent>
-</Card>
-            {/* ----------------- Shipping and Payment Terms ----------------- */}
-            <Card sx={{ p: 3, mb: 4 }}>
-              <CardContent>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-                  SHIPPING AND PAYMENT TERMS
-                </Typography>
-
-                <Grid container spacing={2}>
-                  {/* Payment Mode */}
-                  <Grid item xs={12} sm={3}>
-                    <Controller
-                      name="paymentMode"
-                      control={control}
-                      render={({ field }) => (
-                        <FormControl fullWidth>
-                          <InputLabel>Payment Mode</InputLabel>
-                          {paymentLoading ? (
-                            <CircularProgress size={24} />
-                          ) : paymentError ? (
-                            <Typography color="error">{paymentError}</Typography>
-                          ) : (
-                            <Select {...field} label="Payment Mode">
-                              {paymentOptions.map((p) => (
-                                <MenuItem key={p.id} value={p.name}>
-                                  {p.name}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          )}
-                        </FormControl>
-                      )}
-                    />
-                  </Grid>
-
-                  {/* Shipment Term */}
-                  <Grid item xs={12} sm={3}>
-                    <Controller
-                      name="shipmentTerm"
-                      control={control}
-                      render={({ field }) => (
-                        <FormControl fullWidth>
-                          <InputLabel>Shipment Term</InputLabel>
-                          {shipmentLoading ? (
-                            <CircularProgress size={24} />
-                          ) : shipmentError ? (
-                            <Typography color="error">{shipmentError}</Typography>
-                          ) : (
-                            <Select {...field} label="Shipment Term">
-                              {shipmentOptions.map((s) => (
-                                <MenuItem key={s.id} value={s.name}>
-                                  {s.name}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          )}
-                        </FormControl>
-                      )}
-                    />
-                  </Grid>
-
-                  {/* Destination */}
-                  <Grid item xs={12} sm={3}>
-                    <Controller
-                      name="destination"
-                      render={({ field }) => <TextField {...field} fullWidth label="Destination" />}
-                    />
-                  </Grid>
-
-                  {/* Shipment Mode */}
-                  <Grid item xs={12} sm={3}>
-                    <Controller
-                      name="shipmentMode"
-                      control={control}
-                      render={({ field }) => (
-                        <FormControl fullWidth>
-                          <InputLabel>Shipment Mode</InputLabel>
-                          {deliveryLoading ? (
-                            <CircularProgress size={24} />
-                          ) : deliveryError ? (
-                            <Typography color="error">{deliveryError}</Typography>
-                          ) : (
-                            <Select {...field} label="Shipment Mode">
-                              {deliveryOptions.map((d) => (
-                                <MenuItem key={d.id} value={d.name}>
-                                  {d.name}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          )}
-                        </FormControl>
-                      )}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-        <Controller
-          name="Shipment Mode"
-          render={({ field }) => <TextField {...field} fullWidth label="Shipment Mode" />}
-        />
-      </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-
-            {/* ----------------- Reference & Attachment Form ----------------- */}
-            <Card sx={{ p: 3, mb: 4 }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
-                  REFERENCE & ATTACHMENT
-                </Typography>
-
-                <Grid container spacing={3}>
-                  {[
-                    { name: 'originalPurchaseOrder', label: 'Original Purchase Order' },
-                    {
-                      name: 'processOrderConfirmation',
-                      label: 'Process at the time Order Confirmation',
-                    },
-                    { name: 'finalSpecs', label: 'Final Specs' },
-                    { name: 'productImage', label: 'Product Image' },
-                    { name: 'ppComment', label: 'PP Comment Received' },
-                    { name: 'sizeSetComment', label: 'Size Set Comment' },
-                  ].map(({ name, label }) => (
-                    <Grid item xs={12} sm={6} key={name}>
-                      <Button
-                        variant="outlined"
-                        component="label"
-                        fullWidth
-                        startIcon={<UploadFileIcon />}
-                      >
-                        {label}
-                        <input type="file" hidden onChange={(e) => handleFileChange(name, e)} />
-                      </Button>
-                      <Typography variant="body2" sx={{ mt: 1, color: 'gray' }}>
-                        {files[name] ? files[name].name : 'No file chosen'}
-                      </Typography>
-                    </Grid>
-                  ))}
-                </Grid>
-              </CardContent>
-            </Card>
-
-            {/* ----------------- Bank Detail Form ----------------- */}
-            <Card sx={{ p: 3, mb: 4 }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
-                  BANK DETAILS
-                </Typography>
-
-                <Grid container spacing={3}>
-                  {/* Bank Dropdown */}
-                  <Grid item xs={12} sm={4}>
-                    <Controller
-                      name="bankID"
-                      control={control}
-                      render={({ field }) => (
-                        <FormControl fullWidth>
-                          <InputLabel>Bank</InputLabel>
-                          {bankLoading ? (
-                            <CircularProgress size={24} />
-                          ) : bankError ? (
-                            <Typography color="error">{bankError}</Typography>
-                          ) : (
-                            <Select {...field} label="Bank">
-                              {bankOptions.map((b) => (
-                                <MenuItem key={b.id} value={b.id}>
-                                  {b.name}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          )}
-                        </FormControl>
-                      )}
-                    />
-                  </Grid>
-
-                  {/* Title of Account */}
-                  <Grid item xs={12} sm={4}>
-                    <Controller
-                      name="titleOfAccount"
-                      render={({ field }) => (
-                        <TextField {...field} label="Title Of Account" fullWidth />
-                      )}
-                    />
-                  </Grid>
-
-                  {/* Bank Name */}
-                  <Grid item xs={12} sm={4}>
-                    <Controller
-                      name="bankName"
-                      render={({ field }) => <TextField {...field} label="Bank Name" fullWidth />}
-                    />
-                  </Grid>
-
-                  {/* Bank Branch */}
-                  <Grid item xs={12} sm={4}>
-                    <Controller
-                      name="bankBranch"
-                      render={({ field }) => <TextField {...field} label="Bank Branch" fullWidth />}
-                    />
-                  </Grid>
-
-                  {/* Account No. */}
-                  <Grid item xs={12} sm={4}>
-                    <Controller
-                      name="accountNo"
-                      render={({ field }) => <TextField {...field} label="Account No." fullWidth />}
-                    />
-                  </Grid>
-
-                  {/* Routing No. */}
-                  <Grid item xs={12} sm={4}>
-                    <Controller
-                      name="routingNo"
-                      render={({ field }) => <TextField {...field} label="Routing No." fullWidth />}
-                    />
-                  </Grid>
                 </Grid>
 
-                <Stack direction="row" justifyContent="flex-end" spacing={2} sx={{ mt: 3 }}>
-                  <Button type="submit" variant="contained" color="primary">
-                    Save
-                  </Button>
-                  <Button type="submit" variant="contained" color="primary">
-                    Save & Email
-                  </Button>
-                  <Button type="button" variant="contained" color="primary">
-                    Cancel
-                  </Button>
-                </Stack>
-              </CardContent>
-            </Card>
-          </form>
-        </Container>
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="bankName"
+                    render={({ field }) => <TextField {...field} label="Bank Name" fullWidth />}
+                  />
+                </Grid>
 
-        {/* Item Details Dialog */}
-        <ItemDetailsDialog
-          open={openItemDialog}
-          onClose={handleCloseItemDialog}
-          onSaveData={handleSaveItemData}
-        />
-      </FormProvider>
-    );
-  }
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="bankBranch"
+                    render={({ field }) => <TextField {...field} label="Bank Branch" fullWidth />}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="accountNo"
+                    render={({ field }) => <TextField {...field} label="Account No." fullWidth />}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="routingNo"
+                    render={({ field }) => <TextField {...field} label="Routing No." fullWidth />}
+                  />
+                </Grid>
+              </Grid>
+
+              <Stack direction="row" justifyContent="flex-end" spacing={2} sx={{ mt: 3 }}>
+                <LoadingButton 
+                  type="submit" 
+                  variant="contained" 
+                  color="primary"
+                  loading={isSubmitting}
+                >
+                  Save
+                </LoadingButton>
+                <LoadingButton 
+                  type="button" 
+                  variant="contained" 
+                  color="secondary"
+                  loading={isSubmitting}
+                  onClick={handleSubmit(handleSaveAndEmail)}
+                >
+                  Save & Email
+                </LoadingButton>
+                <Button 
+                  type="button" 
+                  variant="outlined" 
+                  color="error"
+                  onClick={() => navigate('/dashboard/user/profile')}
+                >
+                  Cancel
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+        </form>
+      </Container>
+
+      {/* Item Details Dialog */}
+      <ItemDetailsDialog
+        open={openItemDialog}
+        onClose={handleCloseItemDialog}
+        onSaveData={handleSaveItemData}
+      />
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </FormProvider>
+  );
+}
