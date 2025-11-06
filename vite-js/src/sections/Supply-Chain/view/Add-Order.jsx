@@ -1660,6 +1660,60 @@ export default function CompletePurchaseOrderForm() {
                 <Grid item xs={12} sm={4}>
                   <Controller name="cartonMarking" render={({ field }) => <TextField {...field} fullWidth label="Carton Marking" />} />
                 </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller name="PO_Special_Instructions" render={({ field }) => <TextField {...field} fullWidth label="PO_Special_Instructions" />} />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller name="Washing_Care Label Instructions" render={({ field }) => <TextField {...field} fullWidth label="Washing_Care Label Instructions" />} />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller name="Important Note" render={({ field }) => <TextField {...field} fullWidth label="Important Note" />} />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller name="More Info:" render={({ field }) => <TextField {...field} fullWidth label="More Info:" />} />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller name="Sampling Requirements:" render={({ field }) => <TextField {...field} fullWidth label="Sampling Requirements:" />} />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller name="Pcs Per Carton:" render={({ field }) => <TextField {...field} fullWidth label="Pcs Per Carton:" />} />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller name="Gross Weight" render={({ field }) => <TextField {...field} fullWidth label="Gross Weight" />} />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller name="Net Weight" render={({ field }) => <TextField {...field} fullWidth label="Net Weight" />} />
+                </Grid>
+                   <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="Unit"
+                    render={({ field }) => (
+                      <FormControl fullWidth>
+                        <InputLabel>Unit</InputLabel>
+                        <Select {...field} label="Unit">
+                          <MenuItem value="KG">KG</MenuItem>
+                          <MenuItem value="DZN">DZN</MenuItem>
+                          <MenuItem value="LBS">LBS</MenuItem>
+                        </Select>
+                      </FormControl>
+                    )}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Controller
+                    name="Packing List"
+                    control={control}
+                    render={({ field }) => <TextField {...field} fullWidth label="Packing List" />}
+                  />
+                </Grid>
+                  <Grid item xs={12} sm={6}>
+                  <Controller
+                    name="Emb & Embellishment"
+                    control={control}
+                    render={({ field }) => <TextField {...field} fullWidth label="Emb & Embellishment" />}
+                  />
+                </Grid>
+                
 
                 <Grid item xs={12} sm={6}>
                   <Controller
