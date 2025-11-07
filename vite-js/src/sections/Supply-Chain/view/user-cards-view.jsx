@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useSnackbar } from 'notistack';
 import axios from 'axios';
 import {
   Box,
@@ -51,6 +53,9 @@ export default function POSearchEngine({ settings }) {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+  const navigate = useNavigate();
+  const { enqueueSnackbar } = useSnackbar();
 
   // ✅ Fetch customers
   useEffect(() => {
@@ -191,6 +196,30 @@ export default function POSearchEngine({ settings }) {
   const handleCopyClick = (row) => alert('Copy clicked for ' + row.poNo);
   const handleStatusClick = (row) => alert('Status clicked for ' + row.poNo);
   const handleWipClick = (row) => alert('WIP clicked for ' + row.poNo);
+
+  // --- NEW: Handlers for Milestone, View, PDF (minimal safe stubs) ---
+  const handleMilestoneClick = useCallback(
+    (id) => {
+      enqueueSnackbar(`Opening Milestone for PO ID: ${id}`, { variant: 'info' });
+      navigate(`/dashboard/supply-chain/milestone/${id}`);
+    },
+    [enqueueSnackbar, navigate]
+  );
+
+  const handleViewOrder = useCallback(
+    (id) => {
+      enqueueSnackbar(`Viewing details for PO ID: ${id}`, { variant: 'success' });
+      navigate(`/dashboard/supply-chain/view/${id}`);
+    },
+    [enqueueSnackbar, navigate]
+  );
+
+  // Small stub for PDF click so code doesn't break if previously expecting onPdfClick
+  const handlePdfClick = useCallback((id, field) => {
+    // you can replace this with real pdf logic
+    console.log('PDF click for', id, field);
+    enqueueSnackbar(`Opening PDF for PO ID: ${id}`, { variant: 'info' });
+  }, [enqueueSnackbar]);
 
   return (
     <Container maxWidth={settings?.themeStretch ? false : 'xl'} sx={{ py: 2 }}>
@@ -391,68 +420,71 @@ export default function POSearchEngine({ settings }) {
                             <TableCell align="center">{row.etaNewJerseyDate}</TableCell>
                             <TableCell align="center">{row.etaWarehouseDate}</TableCell>
                             <TableCell align="center">
-                                 <IconButton size="small" onClick={() => onPdfClick(row.id, field)} sx={{ p: 0.5 }}>
-          <img src="/assets/icons/files/pdf.png" alt="PDF" width={16} height={16} />
-        </IconButton>
+                              <IconButton size="small" onClick={() => handlePdfClick(row.id, null)} sx={{ p: 0.5 }}>
+                                <img src="/assets/icons/files/pdf.png" alt="PDF" width={16} height={16} />
+                              </IconButton>
                             </TableCell>
-                                 {/* Milestone - Capsule Tag */}
-      <TableCell align="center">
-        <span
-          style={{
-            backgroundColor: '#FFF4E5',
-            color: '#FB8C00',
-            border: '1px solid #FB8C00',
-            fontWeight: 600,
-            fontSize: '12px',
-            padding: '4px 10px',
-            borderRadius: '10px',
-            display: 'inline-block',
-            cursor: 'pointer',
-            textTransform: 'capitalize',
-            transition: 'all 0.2s ease-in-out',
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.backgroundColor = '#FFE0B2';
-            e.target.style.boxShadow = '0 0 6px rgba(251,140,0,0.4)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.backgroundColor = '#FFF4E5';
-            e.target.style.boxShadow = 'none';
-          }}
-          onClick={() => onMilestoneClick(row.id)}
-        >
-          Milestone
-        </span>
-      </TableCell>
-                             {/* View - Capsule Tag */}
-      <TableCell align="center">
-        <span
-          style={{
-            backgroundColor: '#E8F0FE',
-            color: '#1A73E8',
-            border: '1px solid #1A73E8',
-            fontWeight: 600,
-            fontSize: '12px',
-            padding: '4px 10px',
-            borderRadius: '10px',
-            display: 'inline-block',
-            cursor: 'pointer',
-            textTransform: 'capitalize',
-            transition: 'all 0.2s ease-in-out',
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.backgroundColor = '#D2E3FC';
-            e.target.style.boxShadow = '0 0 6px rgba(26,115,232,0.4)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.backgroundColor = '#E8F0FE';
-            e.target.style.boxShadow = 'none';
-          }}
-          onClick={() => onViewOrder(row.id)}
-        >
-          View
-        </span>
-      </TableCell>
+
+                            {/* Milestone - Capsule Tag */}
+                            <TableCell align="center">
+                              <span
+                                style={{
+                                  backgroundColor: '#FFF4E5',
+                                  color: '#FB8C00',
+                                  border: '1px solid #FB8C00',
+                                  fontWeight: 600,
+                                  fontSize: '12px',
+                                  padding: '4px 10px',
+                                  borderRadius: '10px',
+                                  display: 'inline-block',
+                                  cursor: 'pointer',
+                                  textTransform: 'capitalize',
+                                  transition: 'all 0.2s ease-in-out',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.target.style.backgroundColor = '#FFE0B2';
+                                  e.target.style.boxShadow = '0 0 6px rgba(251,140,0,0.4)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.target.style.backgroundColor = '#FFF4E5';
+                                  e.target.style.boxShadow = 'none';
+                                }}
+                             onClick={() => handleMilestoneClick(row.poid)}
+                              >
+                                Milestone
+                              </span>
+                            </TableCell>
+
+                            {/* View - Capsule Tag */}
+                            <TableCell align="center">
+                              <span
+                                style={{
+                                  backgroundColor: '#E8F0FE',
+                                  color: '#1A73E8',
+                                  border: '1px solid #1A73E8',
+                                  fontWeight: 600,
+                                  fontSize: '12px',
+                                  padding: '4px 10px',
+                                  borderRadius: '10px',
+                                  display: 'inline-block',
+                                  cursor: 'pointer',
+                                  textTransform: 'capitalize',
+                                  transition: 'all 0.2s ease-in-out',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.target.style.backgroundColor = '#D2E3FC';
+                                  e.target.style.boxShadow = '0 0 6px rgba(26,115,232,0.4)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.target.style.backgroundColor = '#E8F0FE';
+                                  e.target.style.boxShadow = 'none';
+                                }}
+                                onClick={() => handleViewOrder(row.id)}
+                              >
+                                View
+                              </span>
+                            </TableCell>
+
                             <TableCell align="center">
                               <IconButton size="small" onClick={() => handleCopyClick(row)}>
                                 <ContentCopyIcon fontSize="small" />
@@ -468,64 +500,65 @@ export default function POSearchEngine({ settings }) {
                                 <BuildIcon fontSize="small" />
                               </IconButton>
                             </TableCell>
-                               {/* Inspection - Green Capsule Tag */}
-      <TableCell align="center">
-        <span
-          style={{
-            backgroundColor: '#E8F5E9',
-            color: '#43A047',
-            border: '1px solid #43A047',
-            fontWeight: 600,
-            fontSize: '12px',
-            padding: '4px 10px',
-            borderRadius: '10px',
-            display: 'inline-block',
-            cursor: 'pointer',
-            textTransform: 'capitalize',
-            transition: 'all 0.2s ease-in-out',
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.backgroundColor = '#C8E6C9';
-            e.target.style.boxShadow = '0 0 6px rgba(67,160,71,0.4)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.backgroundColor = '#E8F5E9';
-            e.target.style.boxShadow = 'none';
-          }}
-        >
-          Inspection
-        </span>
-      </TableCell>
-    {/* Size Specs - Capsule Tag */}
-<TableCell align="center">
-  <span
-    style={{
-      backgroundColor: '#FDECEA', // Light red background
-      color: '#D32F2F', // Red text
-      border: '1px solid #D32F2F', // Red border
-      fontWeight: 600,
-      fontSize: '12px',
-      padding: '4px 10px',
-      borderRadius: '10px',
-      display: 'inline-block',
-      cursor: 'pointer',
-      textTransform: 'capitalize',
-      transition: 'all 0.2s ease-in-out',
-    }}
-    onMouseEnter={(e) => {
-      e.target.style.backgroundColor = '#F9D6D5'; // Slightly darker on hover
-      e.target.style.boxShadow = '0 0 6px rgba(211,47,47,0.4)'; // Red glow
-    }}
-    onMouseLeave={(e) => {
-      e.target.style.backgroundColor = '#FDECEA';
-      e.target.style.boxShadow = 'none';
-    }}
-    onClick={() => onViewOrder(row.id)}
-  >
-    Size Specs
-  </span>
-</TableCell>
 
+                            {/* Inspection - Green Capsule Tag */}
+                            <TableCell align="center">
+                              <span
+                                style={{
+                                  backgroundColor: '#E8F5E9',
+                                  color: '#43A047',
+                                  border: '1px solid #43A047',
+                                  fontWeight: 600,
+                                  fontSize: '12px',
+                                  padding: '4px 10px',
+                                  borderRadius: '10px',
+                                  display: 'inline-block',
+                                  cursor: 'pointer',
+                                  textTransform: 'capitalize',
+                                  transition: 'all 0.2s ease-in-out',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.target.style.backgroundColor = '#C8E6C9';
+                                  e.target.style.boxShadow = '0 0 6px rgba(67,160,71,0.4)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.target.style.backgroundColor = '#E8F5E9';
+                                  e.target.style.boxShadow = 'none';
+                                }}
+                              >
+                                Inspection
+                              </span>
+                            </TableCell>
+
+                            {/* Size Specs - Capsule Tag */}
+                            <TableCell align="center">
+                              <span
+                                style={{
+                                  backgroundColor: '#FDECEA', // Light red background
+                                  color: '#D32F2F', // Red text
+                                  border: '1px solid #D32F2F', // Red border
+                                  fontWeight: 600,
+                                  fontSize: '12px',
+                                  padding: '4px 10px',
+                                  borderRadius: '10px',
+                                  display: 'inline-block',
+                                  cursor: 'pointer',
+                                  textTransform: 'capitalize',
+                                  transition: 'all 0.2s ease-in-out',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.target.style.backgroundColor = '#F9D6D5'; // Slightly darker on hover
+                                  e.target.style.boxShadow = '0 0 6px rgba(211,47,47,0.4)'; // Red glow
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.target.style.backgroundColor = '#FDECEA';
+                                  e.target.style.boxShadow = 'none';
+                                }}
+                                onClick={() => handleViewOrder(row.id)}
+                              >
+                                Size Specs
+                              </span>
+                            </TableCell>
                           </TableRow>
                         ))
                       ) : (
