@@ -35,57 +35,307 @@ import {
   Paper,
   Alert,
   Snackbar,
+  IconButton,
 } from '@mui/material';
 import LoadingButton from '@mui/lab/LoadingButton';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
-function ImageUploadBase64Field({ name, label }) {
-  const { setValue, control } = useFormContext();
-  const fileInputRef = useRef(null);
+import DeleteIcon from '@mui/icons-material/Delete';
 
-}
-// -------------------- Image Upload Component --------------------
-function SimpleImageUploadField({ name }) {
+// -------------------- Image Upload Component with Preview --------------------
+function ImageUploadBase64Field({ name, label }) {
+  const { setValue, control, watch } = useFormContext();
   const fileInputRef = useRef(null);
-  const { setValue } = useFormContext();
+  const [previewUrl, setPreviewUrl] = useState('');
+  const imageValue = watch(name);
 
   const handleFileChange = (event) => {
     const file = event.target.files?.[0];
     if (file) {
       setValue(name, file, { shouldValidate: true });
+      
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreviewUrl(e.target.result);
+      };
+      reader.readAsDataURL(file);
     }
   };
+
+  const handleRemoveImage = () => {
+    setValue(name, null, { shouldValidate: true });
+    setPreviewUrl('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Reset preview when form is reset
+  useEffect(() => {
+    if (!imageValue) {
+      setPreviewUrl('');
+    }
+  }, [imageValue]);
 
   return (
     <Controller
       name={name}
       render={({ field, fieldState }) => (
-        <Grid container spacing={1} alignItems="center">
-          <Grid item xs>
-            <TextField
-              fullWidth
-              disabled
-              label="Image"
-              value={field.value?.name || ''}
-              error={!!fieldState.error}
-              helperText={fieldState.error?.message}
-            />
+        <Box>
+          <Grid container spacing={1} alignItems="center">
+            <Grid item xs>
+              <TextField
+                fullWidth
+                disabled
+                label={label}
+                value={field.value?.name || ''}
+                error={!!fieldState.error}
+                helperText={fieldState.error?.message}
+                InputProps={{
+                  endAdornment: previewUrl && (
+                    <IconButton 
+                      size="small" 
+                      onClick={handleRemoveImage}
+                      color="error"
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  ),
+                }}
+              />
+            </Grid>
+            <Grid item>
+              <input
+                type="file"
+                accept="image/*"
+                hidden
+                ref={fileInputRef}
+                onChange={handleFileChange}
+              />
+              <Button 
+                variant="contained" 
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!!previewUrl}
+              >
+                Select
+              </Button>
+            </Grid>
           </Grid>
-          <Grid item>
-            <input
-              type="file"
-              accept="image/*"
-              hidden
-              ref={fileInputRef}
-              onChange={handleFileChange}
-            />
-            <Button variant="contained" onClick={() => fileInputRef.current?.click()}>
-              Select
-            </Button>
-          </Grid>
-        </Grid>
+          
+          {/* Image Preview */}
+          {previewUrl && (
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <img
+                src={previewUrl}
+                alt="Preview"
+                style={{
+                  maxWidth: '200px',
+                  maxHeight: '200px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                }}
+              />
+            </Box>
+          )}
+        </Box>
       )}
     />
+  );
+}
+
+// -------------------- Simple Image Upload Component with Preview --------------------
+function SimpleImageUploadField({ name, label = "Image" }) {
+  const { setValue, watch } = useFormContext();
+  const fileInputRef = useRef(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const imageValue = watch(name);
+
+  const handleFileChange = (event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setValue(name, file, { shouldValidate: true });
+      
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreviewUrl(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setValue(name, null, { shouldValidate: true });
+    setPreviewUrl('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Reset preview when form is reset
+  useEffect(() => {
+    if (!imageValue) {
+      setPreviewUrl('');
+    }
+  }, [imageValue]);
+
+  return (
+    <Box>
+      <Grid container spacing={1} alignItems="center">
+        <Grid item xs>
+          <TextField
+            fullWidth
+            disabled
+            label={label}
+            value={imageValue?.name || ''}
+            InputProps={{
+              endAdornment: previewUrl && (
+                <IconButton 
+                  size="small" 
+                  onClick={handleRemoveImage}
+                  color="error"
+                >
+                  <DeleteIcon />
+                </IconButton>
+              ),
+            }}
+          />
+        </Grid>
+        <Grid item>
+          <input
+            type="file"
+            accept="image/*"
+            hidden
+            ref={fileInputRef}
+            onChange={handleFileChange}
+          />
+          <Button 
+            variant="contained" 
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!!previewUrl}
+          >
+            Select
+          </Button>
+        </Grid>
+      </Grid>
+      
+      {/* Image Preview */}
+      {previewUrl && (
+        <Box sx={{ mt: 2, textAlign: 'center' }}>
+          <img
+            src={previewUrl}
+            alt="Preview"
+            style={{
+              maxWidth: '200px',
+              maxHeight: '200px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+            }}
+          />
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+// -------------------- File Upload Component with Preview --------------------
+function FileUploadWithPreview({ name, label, accept = "image/*" }) {
+  const { setValue, watch } = useFormContext();
+  const fileInputRef = useRef(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const fileValue = watch(name);
+
+  const handleFileChange = (event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setValue(name, file, { shouldValidate: true });
+      
+      // Create preview URL for images
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setPreviewUrl(e.target.result);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setPreviewUrl('');
+      }
+    }
+  };
+
+  const handleRemoveFile = () => {
+    setValue(name, null, { shouldValidate: true });
+    setPreviewUrl('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Reset preview when form is reset
+  useEffect(() => {
+    if (!fileValue) {
+      setPreviewUrl('');
+    }
+  }, [fileValue]);
+
+  const isImage = fileValue?.type?.startsWith('image/');
+
+  return (
+    <Box>
+      <Button
+        variant="outlined"
+        component="label"
+        fullWidth
+        startIcon={<UploadFileIcon />}
+      >
+        {label}
+        <input
+          type="file"
+          accept={accept}
+          hidden
+          ref={fileInputRef}
+          onChange={handleFileChange}
+        />
+      </Button>
+      
+      {fileValue && (
+        <Box sx={{ mt: 1, p: 1, border: '1px solid #ddd', borderRadius: 1 }}>
+          <Grid container alignItems="center" justifyContent="space-between">
+            <Grid item>
+              <Typography variant="body2" noWrap>
+                {fileValue.name}
+              </Typography>
+            </Grid>
+            <Grid item>
+              <IconButton 
+                size="small" 
+                onClick={handleRemoveFile}
+                color="error"
+              >
+                <DeleteIcon />
+              </IconButton>
+            </Grid>
+          </Grid>
+
+          {/* Image Preview */}
+          {isImage && previewUrl && (
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <img
+                src={previewUrl}
+                alt="Preview"
+                style={{
+                  maxWidth: '200px',
+                  maxHeight: '200px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                }}
+              />
+            </Box>
+          )}
+        </Box>
+      )}
+    </Box>
   );
 }
 
@@ -104,8 +354,6 @@ const ItemDetailsSchema = Yup.object().shape({
     .typeError('LDP Price must be a number'),
   sizeRange: Yup.string().required('Size Range is required'),
 });
-
-  
 
 // -------------------- Item Details Dialog Component --------------------
 function ItemDetailsDialog({ open, onClose, onSaveData }) {
@@ -498,7 +746,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
 
 // -------------------- Validation Schema --------------------
 const Schema = Yup.object().shape({
-  costingRef: Yup.string().required('Costing Ref No. is required'),
+  costingRef: Yup.string(),
   masterPo: Yup.string().required('Master No. is required'),
   customer: Yup.string().required('Customer is required'),
   supplier: Yup.string().required('Supplier is required'),
@@ -528,8 +776,8 @@ const Schema = Yup.object().shape({
   vendorShipInitial: Yup.date().required('Vendor Ship. Dt. (Initial) is required'),
   vendorShipLast: Yup.date().required('Vendor Ship. Dt. (Last) is required'),
   finalInspectionDate: Yup.date().required('Final Inspection Date is required'),
-  reasonReviseBuyer: Yup.string().required('Reason of Revise Shipment Dates(B) is required'),
-  reasonReviseVendor: Yup.string().required('Reason of Revise Shipment Dates(V) is required'),
+  reasonReviseBuyer: Yup.string(),
+  reasonReviseVendor: Yup.string(),
 
   productPortfolio: Yup.string(),
   productCategory: Yup.string(),
@@ -945,10 +1193,21 @@ export default function CompletePurchaseOrderForm() {
   };
 
   const handleFileChange = (field, e) => {
-    setFiles((prev) => ({
-      ...prev,
-      [field]: e.target.files[0],
-    }));
+    const file = e.target.files[0];
+    if (file) {
+      setFiles((prev) => ({
+        ...prev,
+        [field]: file,
+      }));
+    }
+  };
+
+  const handleRemoveFile = (field) => {
+    setFiles((prev) => {
+      const newFiles = { ...prev };
+      delete newFiles[field];
+      return newFiles;
+    });
   };
 
   const handleOpenItemDialog = () => {
@@ -1295,7 +1554,7 @@ export default function CompletePurchaseOrderForm() {
               </Grid>
 
               <Grid item xs={12} sm={6}>
-                <SimpleImageUploadField name="image" />
+                <SimpleImageUploadField name="image" label="PO Image" />
               </Grid>
 
               {[
@@ -2137,36 +2396,24 @@ export default function CompletePurchaseOrderForm() {
                 REFERENCE & ATTACHMENT
               </Typography>
 
-             <Grid container spacing={3}>
-      {[
-        { name: "originalPurchaseOrder", label: "Original Purchase Order" },
-        { name: "processOrderConfirmation", label: "Process at the time Order Confirmation" },
-        { name: "finalSpecs", label: "Final Specs" },
-        { name: "productImage", label: "Product Image" },
-        { name: "ppComment", label: "PP Comment Received" },
-        { name: "sizeSetComment", label: "Size Set Comment" },
-      ].map(({ name, label }) => (
-        <Grid item xs={12} sm={6} key={name}>
-          <Button
-            variant="outlined"
-            component="label"
-            fullWidth
-            startIcon={<UploadFileIcon />}
-          >
-            {label}
-            <input
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(e) => handleFileChange(name, e)}
-            />
-          </Button>
-          <Typography variant="body2" sx={{ mt: 1, color: "gray" }}>
-            {files[name] ? files[name].name : "No file chosen"}
-          </Typography>
-        </Grid>
-      ))}
-    </Grid>
+              <Grid container spacing={3}>
+                {[
+                  { name: "originalPurchaseOrder", label: "Original Purchase Order" },
+                  { name: "processOrderConfirmation", label: "Process at the time Order Confirmation" },
+                  { name: "finalSpecs", label: "Final Specs" },
+                  { name: "productImage", label: "Product Image" },
+                  { name: "ppComment", label: "PP Comment Received" },
+                  { name: "sizeSetComment", label: "Size Set Comment" },
+                ].map(({ name, label }) => (
+                  <Grid item xs={12} sm={6} key={name}>
+                    <FileUploadWithPreview 
+                      name={name} 
+                      label={label} 
+                      accept="image/*,.pdf,.doc,.docx" 
+                    />
+                  </Grid>
+                ))}
+              </Grid>
             </CardContent>
           </Card>
 
