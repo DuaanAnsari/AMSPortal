@@ -1848,7 +1848,15 @@ export default function CompletePurchaseOrderForm() {
           </Card>
 
           {/* ----------------- Section: Product Portfolio ----------------- */}
-          <Box sx={{ backgroundColor: '#ffffff', p: 3, borderRadius: 2, mb: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+       <Box
+  sx={(theme) => ({
+    backgroundColor: theme.palette.background.paper,
+    p: 3,
+    borderRadius: 2,
+    mb: 4,
+    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+  })}
+>
             <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
               PRODUCT INFORMATION
             </Typography>
