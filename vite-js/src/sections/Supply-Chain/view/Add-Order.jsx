@@ -7,6 +7,8 @@ import axios from 'axios';
 import { Autocomplete } from '@mui/material';
 import CalculateIcon from '@mui/icons-material/Calculate';
 import CircularProgress from '@mui/material/CircularProgress';
+import CloseIcon from '@mui/icons-material/Close';
+import ZoomInIcon from '@mui/icons-material/ZoomIn';
 
 import {
   Box,
@@ -36,17 +38,85 @@ import {
   Alert,
   Snackbar,
   IconButton,
+  Checkbox,
+  ListItemText,
+  OutlinedInput,
 } from '@mui/material';
 import LoadingButton from '@mui/lab/LoadingButton';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
 import DeleteIcon from '@mui/icons-material/Delete';
 
+// -------------------- Full Screen Image Preview Dialog --------------------
+function FullScreenImagePreview({ open, imageUrl, onClose }) {
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="xl"
+      fullWidth
+      sx={{
+        '& .MuiDialog-paper': {
+          width: '100%',
+          height: '100%',
+          maxWidth: '100%',
+          maxHeight: '100%',
+          margin: 0,
+          borderRadius: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        },
+      }}
+    >
+      <DialogContent
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100%',
+          padding: 0,
+          position: 'relative',
+        }}
+      >
+        <IconButton
+          onClick={onClose}
+          sx={{
+            position: 'absolute',
+            top: 16,
+            right: 16,
+            color: 'white',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            '&:hover': {
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            },
+            zIndex: 1000,
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
+        
+        {imageUrl && (
+          <img
+            src={imageUrl}
+            alt="Full screen preview"
+            style={{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              objectFit: 'contain',
+            }}
+            onClick={onClose}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // -------------------- Image Upload Component with Preview --------------------
 function ImageUploadBase64Field({ name, label }) {
   const { setValue, control, watch } = useFormContext();
   const fileInputRef = useRef(null);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const imageValue = watch(name);
 
   const handleFileChange = (event) => {
@@ -69,6 +139,16 @@ function ImageUploadBase64Field({ name, label }) {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const handlePreviewClick = () => {
+    if (previewUrl) {
+      setFullScreenOpen(true);
+    }
+  };
+
+  const handleCloseFullScreen = () => {
+    setFullScreenOpen(false);
   };
 
   // Reset preview when form is reset
@@ -125,19 +205,60 @@ function ImageUploadBase64Field({ name, label }) {
           
           {/* Image Preview */}
           {previewUrl && (
-            <Box sx={{ mt: 2, textAlign: 'center' }}>
-              <img
-                src={previewUrl}
-                alt="Preview"
-                style={{
-                  maxWidth: '200px',
-                  maxHeight: '200px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
+            <Box sx={{ mt: 2, textAlign: 'center', position: 'relative' }}>
+              <Box
+                sx={{
+                  position: 'relative',
+                  display: 'inline-block',
+                  cursor: 'pointer',
+                  '&:hover .preview-overlay': {
+                    opacity: 1,
+                  },
                 }}
-              />
+                onClick={handlePreviewClick}
+              >
+                <img
+                  src={previewUrl}
+                  alt="Preview"
+                  style={{
+                    maxWidth: '200px',
+                    maxHeight: '200px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                  }}
+                />
+                <Box
+                  className="preview-overlay"
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: 0,
+                    transition: 'opacity 0.3s ease',
+                    borderRadius: '4px',
+                  }}
+                >
+                  <ZoomInIcon sx={{ color: 'white', fontSize: 40 }} />
+                </Box>
+              </Box>
+              <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>
+                Click on image to view full screen
+              </Typography>
             </Box>
           )}
+
+          {/* Full Screen Preview Dialog */}
+          <FullScreenImagePreview
+            open={fullScreenOpen}
+            imageUrl={previewUrl}
+            onClose={handleCloseFullScreen}
+          />
         </Box>
       )}
     />
@@ -149,6 +270,7 @@ function SimpleImageUploadField({ name, label = "Image" }) {
   const { setValue, watch } = useFormContext();
   const fileInputRef = useRef(null);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const imageValue = watch(name);
 
   const handleFileChange = (event) => {
@@ -171,6 +293,16 @@ function SimpleImageUploadField({ name, label = "Image" }) {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const handlePreviewClick = () => {
+    if (previewUrl) {
+      setFullScreenOpen(true);
+    }
+  };
+
+  const handleCloseFullScreen = () => {
+    setFullScreenOpen(false);
   };
 
   // Reset preview when form is reset
@@ -222,19 +354,60 @@ function SimpleImageUploadField({ name, label = "Image" }) {
       
       {/* Image Preview */}
       {previewUrl && (
-        <Box sx={{ mt: 2, textAlign: 'center' }}>
-          <img
-            src={previewUrl}
-            alt="Preview"
-            style={{
-              maxWidth: '200px',
-              maxHeight: '200px',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
+        <Box sx={{ mt: 2, textAlign: 'center', position: 'relative' }}>
+          <Box
+            sx={{
+              position: 'relative',
+              display: 'inline-block',
+              cursor: 'pointer',
+              '&:hover .preview-overlay': {
+                opacity: 1,
+              },
             }}
-          />
+            onClick={handlePreviewClick}
+          >
+            <img
+              src={previewUrl}
+              alt="Preview"
+              style={{
+                maxWidth: '200px',
+                maxHeight: '200px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+              }}
+            />
+            <Box
+              className="preview-overlay"
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: 0,
+                transition: 'opacity 0.3s ease',
+                borderRadius: '4px',
+              }}
+            >
+              <ZoomInIcon sx={{ color: 'white', fontSize: 40 }} />
+            </Box>
+          </Box>
+          <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>
+            Click on image to view full screen
+          </Typography>
         </Box>
       )}
+
+      {/* Full Screen Preview Dialog */}
+      <FullScreenImagePreview
+        open={fullScreenOpen}
+        imageUrl={previewUrl}
+        onClose={handleCloseFullScreen}
+      />
     </Box>
   );
 }
@@ -244,6 +417,7 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
   const { setValue, watch } = useFormContext();
   const fileInputRef = useRef(null);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const fileValue = watch(name);
 
   const handleFileChange = (event) => {
@@ -270,6 +444,16 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const handlePreviewClick = () => {
+    if (previewUrl) {
+      setFullScreenOpen(true);
+    }
+  };
+
+  const handleCloseFullScreen = () => {
+    setFullScreenOpen(false);
   };
 
   // Reset preview when form is reset
@@ -320,21 +504,62 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
 
           {/* Image Preview */}
           {isImage && previewUrl && (
-            <Box sx={{ mt: 2, textAlign: 'center' }}>
-              <img
-                src={previewUrl}
-                alt="Preview"
-                style={{
-                  maxWidth: '200px',
-                  maxHeight: '200px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
+            <Box sx={{ mt: 2, textAlign: 'center', position: 'relative' }}>
+              <Box
+                sx={{
+                  position: 'relative',
+                  display: 'inline-block',
+                  cursor: 'pointer',
+                  '&:hover .preview-overlay': {
+                    opacity: 1,
+                  },
                 }}
-              />
+                onClick={handlePreviewClick}
+              >
+                <img
+                  src={previewUrl}
+                  alt="Preview"
+                  style={{
+                    maxWidth: '200px',
+                    maxHeight: '200px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                  }}
+                />
+                <Box
+                  className="preview-overlay"
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: 0,
+                    transition: 'opacity 0.3s ease',
+                    borderRadius: '4px',
+                  }}
+                >
+                  <ZoomInIcon sx={{ color: 'white', fontSize: 40 }} />
+                </Box>
+              </Box>
+              <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>
+                Click on image to view full screen
+              </Typography>
             </Box>
           )}
         </Box>
       )}
+
+      {/* Full Screen Preview Dialog */}
+      <FullScreenImagePreview
+        open={fullScreenOpen}
+        imageUrl={previewUrl}
+        onClose={handleCloseFullScreen}
+      />
     </Box>
   );
 }
@@ -750,19 +975,18 @@ const Schema = Yup.object().shape({
   masterPo: Yup.string().required('Master No. is required'),
   customer: Yup.string().required('Customer is required'),
   supplier: Yup.string().required('Supplier is required'),
-  merchant: Yup.string().required('Merchant is required'),
+  merchant: Yup.array().min(1, 'At least one merchant is required').required('Merchant is required'),
   proceedings: Yup.string().required('Proceedings is required'),
   orderType: Yup.string().required('Order Type is required'),
   transactions: Yup.string().required('Transactions is required'),
   version: Yup.string().required('Version is required'),
   amsRef: Yup.string(),
   customerPo: Yup.string(),
- commission: Yup.number()
-  .transform((value) => (isNaN(value) ? undefined : parseFloat(value.toFixed(2))))
-  .min(0, 'Commission cannot be negative')
-  .max(100, 'Commission cannot exceed 100')
-  .typeError('Commission must be a number'),
-
+  commission: Yup.number()
+    .transform((value) => (isNaN(value) ? undefined : parseFloat(value.toFixed(2))))
+    .min(0, 'Commission cannot be negative')
+    .max(100, 'Commission cannot exceed 100')
+    .typeError('Commission must be a number'),
   vendorCommission: Yup.number().min(0).max(100),
   internalPo: Yup.string(),
   rnNo: Yup.string(),
@@ -814,6 +1038,7 @@ const Schema = Yup.object().shape({
   embEmbellishment: Yup.string(),
   inquiryNo: Yup.string(),
   buyerCustomer: Yup.string(),
+  itemDescriptionShippingInvoice: Yup.string(),
 
   currency: Yup.string(),
   exchangeRate: Yup.string(),
@@ -841,7 +1066,7 @@ const defaultValues = {
   masterPo: '',
   customer: '',
   supplier: '',
-  merchant: '',
+  merchant: [],
   proceedings: '',
   orderType: 'New',
   transactions: 'Services',
@@ -900,6 +1125,7 @@ const defaultValues = {
   embEmbellishment: 'Not Required',
   inquiryNo: '',
   buyerCustomer: '',
+  itemDescriptionShippingInvoice: '',
 
   currency: 'Dollar',
   exchangeRate: '',
@@ -922,6 +1148,52 @@ const defaultValues = {
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+// -------------------- Merchant Multiple Select Component --------------------
+function MerchantMultipleSelect({ name, label, options, loading, error }) {
+  const { control } = useFormContext();
+
+  return (
+    <Controller
+      name={name}
+      control={control}
+      render={({ field, fieldState }) => (
+        <FormControl fullWidth error={!!fieldState.error}>
+          <InputLabel>{label}</InputLabel>
+          <Select
+            {...field}
+            multiple
+            input={<OutlinedInput label={label} />}
+            renderValue={(selected) => selected.join(', ')}
+          >
+            {loading ? (
+              <MenuItem disabled>
+                <CircularProgress size={24} />
+                Loading...
+              </MenuItem>
+            ) : error ? (
+              <MenuItem disabled>
+                <Typography color="error">{error}</Typography>
+              </MenuItem>
+            ) : (
+              options.map((opt) => (
+                <MenuItem key={opt.userId} value={opt.userName}>
+                  <Checkbox checked={field.value.indexOf(opt.userName) > -1} />
+                  <ListItemText primary={opt.userName} />
+                </MenuItem>
+              ))
+            )}
+          </Select>
+          {fieldState.error && (
+            <Typography variant="caption" color="error">
+              {fieldState.error.message}
+            </Typography>
+          )}
+        </FormControl>
+      )}
+    />
+  );
+}
 
 // -------------------- Main Component --------------------
 export default function CompletePurchaseOrderForm() {
@@ -1269,15 +1541,18 @@ export default function CompletePurchaseOrderForm() {
     }
   };
 
-  // Map form data to API format - FIXED VERSION
+  // Map form data to API format - UPDATED FOR MULTIPLE MERCHANTS
   const mapFormDataToAPI = (data) => {
     const selectedCustomerObj = customerOptions.find(c => c.customerName === data.customer);
     const selectedSupplierObj = supplierOptions.find(s => s.venderName === data.supplier);
-    const selectedMerchantObj = merchantOptions.find(m => m.userName === data.merchant);
+    
+    // Handle multiple merchants - take the first one for API compatibility
+    const selectedMerchantNames = Array.isArray(data.merchant) ? data.merchant : [data.merchant];
+    const selectedMerchantObj = merchantOptions.find(m => selectedMerchantNames.includes(m.userName));
+    
     const selectedInquiryObj = inquiryOptions.find(i => i.sampleNo === data.inquiryNo);
 
     return {
-  
       pono: data.internalPo || '',
       internalPONO: data.internalPo || '',
       creationDate: new Date().toISOString(),
@@ -1346,7 +1621,7 @@ export default function CompletePurchaseOrderForm() {
       revisedShipmenttVendor: data.reasonReviseVendor || '',
       version: data.version || '',
       reasonCancellation: '',
-      itemDescriptionShippingInvoice: '',
+      itemDescriptionShippingInvoice: data.itemDescriptionShippingInvoice || '',
       titleOfAccount: data.titleOfAccount || '',
       bankName: data.bankName || '',
       bankBranch: data.bankBranch || '',
@@ -1415,7 +1690,10 @@ export default function CompletePurchaseOrderForm() {
       
       prodImgFileName: files.productImage ? files.productImage.name : '',
       originalPDFName: files.originalPurchaseOrder ? files.originalPurchaseOrder.name : '',
-      buyerCustomer: data.buyerCustomer || ''
+      buyerCustomer: data.buyerCustomer || '',
+      
+      // Store multiple merchants as comma-separated string for display purposes
+      multipleMerchants: Array.isArray(data.merchant) ? data.merchant.join(', ') : data.merchant || ''
     };
   };
 
@@ -1439,7 +1717,8 @@ export default function CompletePurchaseOrderForm() {
         productCategoriesID: apiData.productCategoriesID,
         productGroupID: apiData.productGroupID,
         bankID: apiData.bankID,
-        inquiryMstID: apiData.inquiryMstID
+        inquiryMstID: apiData.inquiryMstID,
+        merchants: data.merchant
       });
       
       const response = await axios.post(
@@ -1447,7 +1726,7 @@ export default function CompletePurchaseOrderForm() {
         apiData,
         { 
           headers,
-          timeout: 30000 // 30 seconds timeout
+          timeout: 30000
         }
       );
       
@@ -1468,16 +1747,13 @@ export default function CompletePurchaseOrderForm() {
       let errorMessage = 'Error saving purchase order. Please try again.';
       
       if (error.response) {
-        // Server responded with error status
         console.error('Server Error Details:', error.response.data);
         errorMessage = error.response.data.message || 
                       error.response.data.title || 
                       `Server Error: ${error.response.status} - ${error.response.statusText}`;
       } else if (error.request) {
-        // Request was made but no response received
         errorMessage = 'No response from server. Please check your connection.';
       } else {
-        // Something else happened
         errorMessage = error.message;
       }
       
@@ -1488,15 +1764,11 @@ export default function CompletePurchaseOrderForm() {
   const handleSaveAndEmail = async (data) => {
     try {
       await onSubmit(data);
-      // Add email functionality here if needed
       showSnackbar('Purchase Order saved and email sent!', 'success');
     } catch (error) {
       console.error('Error saving and emailing:', error);
     }
   };
-
-
-  
 
   return (
     <FormProvider {...methods}>
@@ -1615,9 +1887,45 @@ export default function CompletePurchaseOrderForm() {
                 />
               </Grid>
 
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="supplier"
+                  render={({ field, fieldState }) => (
+                    <TextField
+                      {...field}
+                      label="Supplier"
+                      fullWidth
+                      select
+                      error={!!fieldState.error}
+                      helperText={fieldState.error?.message || (supplierError ? 'Unable to load suppliers' : '')}
+                      value={field.value || ''}
+                    >
+                      <MenuItem value="">Select Supplier</MenuItem>
+                      {supplierLoading ? (
+                        <MenuItem value="" disabled>Loading suppliers...</MenuItem>
+                      ) : (
+                        supplierOptions.map((supplier) => (
+                          <MenuItem key={supplier.venderLibraryID} value={supplier.venderName}>
+                            {supplier.venderName}
+                          </MenuItem>
+                        ))
+                      )}
+                    </TextField>
+                  )}
+                />
+              </Grid>
+
+              {/* Updated Merchant Field with Multiple Selection */}
+              <Grid item xs={12} sm={6}>
+                <MerchantMultipleSelect
+                  name="merchant"
+                  label="Merchant"
+                  options={merchantOptions}
+                  loading={merchantLoading}
+                />
+              </Grid>
+
               {[
-                { name: 'supplier', label: 'Supplier', options: supplierOptions },
-                { name: 'merchant', label: 'Merchant', options: merchantOptions },
                 {
                   name: 'proceedings',
                   label: 'Proceedings',
@@ -1668,59 +1976,37 @@ export default function CompletePurchaseOrderForm() {
                         value={field.value || ''}
                       >
                         <MenuItem value="">Select</MenuItem>
-                        {name === 'supplier' ? (
-                          supplierLoading ? (
-                            <MenuItem disabled>Loading...</MenuItem>
-                          ) : (
-                            supplierOptions.map((opt) => (
-                              <MenuItem key={opt.venderLibraryID} value={opt.venderName}>
-                                {opt.venderName}
-                              </MenuItem>
-                            ))
-                          )
-                        ) : name === 'merchant' ? (
-                          merchantLoading ? (
-                            <MenuItem disabled>Loading...</MenuItem>
-                          ) : (
-                            merchantOptions.map((opt) => (
-                              <MenuItem key={opt.userId} value={opt.userName}>
-                                {opt.userName}
-                              </MenuItem>
-                            ))
-                          )
-                        ) : (
-                          options.map((opt, idx) => (
-                            <MenuItem key={idx} value={opt.value}>
-                              {opt.label}
-                            </MenuItem>
-                          ))
-                        )}
+                        {options.map((opt, idx) => (
+                          <MenuItem key={idx} value={opt.value}>
+                            {opt.label}
+                          </MenuItem>
+                        ))}
                       </TextField>
                     )}
                   />
                 </Grid>
               ))}
 
-             <Grid item xs={12} sm={6}>
-  <Controller
-    name="commission"
-    render={({ field }) => (
-      <TextField
-        {...field}
-        label="Commission (%)"
-        type="number"
-        fullWidth
-        InputProps={{ readOnly: true }}
-        helperText="Auto-filled from selected customer"
-        value={
-          field.value !== undefined && field.value !== ''
-            ? Number(field.value).toFixed(2)
-            : ''
-        }
-      />
-    )}
-  />
-</Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="commission"
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="Commission (%)"
+                      type="number"
+                      fullWidth
+                      InputProps={{ readOnly: true }}
+                      helperText="Auto-filled from selected customer"
+                      value={
+                        field.value !== undefined && field.value !== ''
+                          ? Number(field.value).toFixed(2)
+                          : ''
+                      }
+                    />
+                  )}
+                />
+              </Grid>
 
               <Grid item xs={12} sm={6}>
                 <Controller
@@ -1733,6 +2019,7 @@ export default function CompletePurchaseOrderForm() {
             </Grid>
           </Card>
 
+          {/* Rest of the form components remain the same */}
           {/* ----------------- Section: Important Dates ----------------- */}
           <Card sx={{ p: 3, mb: 4 }}>
             <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
@@ -1851,15 +2138,15 @@ export default function CompletePurchaseOrderForm() {
           </Card>
 
           {/* ----------------- Section: Product Portfolio ----------------- */}
-       <Box
-  sx={(theme) => ({
-    backgroundColor: theme.palette.background.paper,
-    p: 3,
-    borderRadius: 2,
-    mb: 4,
-    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-  })}
->
+          <Box
+            sx={(theme) => ({
+              backgroundColor: theme.palette.background.paper,
+              p: 3,
+              borderRadius: 2,
+              mb: 4,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            })}
+          >
             <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
               PRODUCT INFORMATION
             </Typography>
@@ -2006,7 +2293,7 @@ export default function CompletePurchaseOrderForm() {
                     <FormControl fullWidth>
                       <InputLabel>Status</InputLabel>
                       <Select {...field} label="Status" value={field.value || ''}>
-                        <MenuItem value="Inspection">Inspection</MenuItem>
+                        <MenuItem value="Confirm">Confirm</MenuItem>
                         <MenuItem value="Cancel">Cancel</MenuItem>
                         <MenuItem value="Close">Close</MenuItem>
                       </Select>
@@ -2074,19 +2361,21 @@ export default function CompletePurchaseOrderForm() {
                 <Controller name="pcsPerCarton" render={({ field }) => <TextField {...field} fullWidth label="Pcs Per Carton" />} />
               </Grid>
               
-               <Grid item xs={12} sm={4}>
+              {/* Item Description at Shipping Invoice Field */}
+              <Grid item xs={12} sm={4}>
                 <Controller
-                  name="Item Discription At Shipping Invoice"
+                  name="itemDescriptionShippingInvoice"
+                  control={control}
                   render={({ field }) => (
                     <TextField
                       {...field}
                       fullWidth
-                      label="50% Polyester 25% Viscose 25%
-                      "
+                      label="Item Description at shipping invoice"
                     />
                   )}
                 />
               </Grid>
+
               <Grid item xs={12} sm={2}>
                 <Controller name="grossWeight" render={({ field }) => <TextField {...field} fullWidth label="Gross Weight" />} />
               </Grid>
