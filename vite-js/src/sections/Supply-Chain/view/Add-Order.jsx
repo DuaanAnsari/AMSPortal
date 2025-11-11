@@ -1786,7 +1786,7 @@ export default function CompletePurchaseOrderForm() {
                   color: 'primary.main',
                   '&:hover': { color: 'primary.dark' },
                 }}
-                onClick={() => navigate('/dashboard/user/profile')}
+                onClick={() => navigate('/dashboard/supply-chain')}
               />
               <Typography variant="h6">PURCHASE ORDER ENTRY</Typography>
             </Box>
@@ -2824,7 +2824,7 @@ export default function CompletePurchaseOrderForm() {
                   type="button" 
                   variant="outlined" 
                   color="primary"
-                  onClick={() => navigate('/dashboard/user/profile')}
+                  onClick={() => navigate('/dashboard/supply-chain')}
                 >
                   Cancel
                 </Button>
