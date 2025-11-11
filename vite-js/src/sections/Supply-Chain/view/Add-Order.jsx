@@ -1495,6 +1495,9 @@ export default function CompletePurchaseOrderForm() {
     }
   };
 
+
+  
+
   return (
     <FormProvider {...methods}>
       <Container maxWidth="xl">
@@ -2070,13 +2073,27 @@ export default function CompletePurchaseOrderForm() {
               <Grid item xs={12} sm={4}>
                 <Controller name="pcsPerCarton" render={({ field }) => <TextField {...field} fullWidth label="Pcs Per Carton" />} />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              
+               <Grid item xs={12} sm={4}>
+                <Controller
+                  name="Item Discription At Shipping Invoice"
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="50% Polyester 25% Viscose 25%
+                      "
+                    />
+                  )}
+                />
+              </Grid>
+              <Grid item xs={12} sm={2}>
                 <Controller name="grossWeight" render={({ field }) => <TextField {...field} fullWidth label="Gross Weight" />} />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={2}>
                 <Controller name="netWeight" render={({ field }) => <TextField {...field} fullWidth label="Net Weight" />} />
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={2}>
                 <Controller
                   name="unit"
                   render={({ field }) => (
