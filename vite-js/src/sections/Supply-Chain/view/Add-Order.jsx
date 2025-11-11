@@ -2362,7 +2362,7 @@ export default function CompletePurchaseOrderForm() {
               </Grid>
               
               {/* Item Description at Shipping Invoice Field */}
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6}>
                 <Controller
                   name="itemDescriptionShippingInvoice"
                   control={control}
@@ -2814,7 +2814,7 @@ export default function CompletePurchaseOrderForm() {
                 <LoadingButton 
                   type="button" 
                   variant="contained" 
-                  color="secondary"
+                  color="primary"
                   loading={isSubmitting}
                   onClick={handleSubmit(handleSaveAndEmail)}
                 >
@@ -2823,7 +2823,7 @@ export default function CompletePurchaseOrderForm() {
                 <Button 
                   type="button" 
                   variant="outlined" 
-                  color="error"
+                  color="primary"
                   onClick={() => navigate('/dashboard/user/profile')}
                 >
                   Cancel
