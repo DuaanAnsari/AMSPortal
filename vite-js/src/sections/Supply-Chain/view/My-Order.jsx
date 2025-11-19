@@ -81,8 +81,8 @@ const SHIPMENT_MONTH_OPTIONS = [
   { value: '12', label: 'December' },
 ];
 
-// Compact table headers with smaller widths
-const TABLE_HEAD = [
+// Base table headers - sabke liye common
+const BASE_TABLE_HEAD = [
   { id: 'poNo', label: 'PO No.', width: 100 },
   { id: 'styleNo', label: 'Style No.', width: 100 },
   { id: 'customer', label: 'Customer', width: 140 },
@@ -90,11 +90,19 @@ const TABLE_HEAD = [
   { id: 'placementDate', label: 'Placement Date', width: 110 },
   { id: 'shipmentDate', label: 'Shipment Date', width: 110 },
   { id: 'amount', label: 'Amount', width: 90, align: 'right' },
+];
+
+// Restricted columns - jo hide hone hain (milestone ko hata diya)
+const RESTRICTED_COLUMNS = [
   { id: 'view', label: 'View', width: 70 },
-  { id: 'milestone', label: 'Milestone', width: 80 },
   { id: 'pdf', label: 'PDF', width: 60 },
   { id: 'copy', label: 'Copy', width: 60 },
   { id: 'revised', label: 'Revised', width: 70 },
+];
+
+// Common columns - jo sabko dikhne hain (milestone add kiya)
+const COMMON_COLUMNS = [
+  { id: 'milestone', label: 'Milestone', width: 80 },
   { id: 'inspection', label: 'Inspection', width: 100 },
   { id: 'sizeSpecs', label: 'Size Specs', width: 90 },
   { id: 'ssPdf', label: 'SS PDF', width: 70 },
@@ -110,13 +118,56 @@ const defaultFilters = {
 };
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-//duaan ne commnet ki hai
-// const API_BASE_URL = 'https://amsapitesting.scmcloud.online/api';
+// User variables - localStorage se lekar
+const getUserRoleId = () => {
+  if (typeof window !== 'undefined') {
+    const roleId = localStorage.getItem('roleId');
+    if (roleId) {
+      try {
+        return parseInt(roleId, 10);
+      } catch (error) {
+        console.error('Error parsing roleId from localStorage:', error);
+      }
+    }
+  }
+  return null;
+};
 
-// User variables
-const USER_ID = 1;
-const ROLE_ID = 1;
-const MANAGER_BIT = 1;
+// Check if user has restricted access based on role IDs
+const hasRestrictedAccess = () => {
+  const userRoleId = getUserRoleId();
+  
+  if (!userRoleId) return false;
+  
+  const restrictedRoles = [21, 44, 45, 30];
+  
+  return restrictedRoles.includes(userRoleId);
+};
+
+// Dynamic TABLE_HEAD based on user role
+const getTableHead = (isRestricted) => {
+  if (isRestricted) {
+    // Restricted users ke liye sirf base + common columns
+    return [...BASE_TABLE_HEAD, ...COMMON_COLUMNS];
+  }
+  // Normal users ke liye sab columns
+  return [...BASE_TABLE_HEAD, ...RESTRICTED_COLUMNS, ...COMMON_COLUMNS];
+};
+
+// Helper function to get month from date string
+const getMonthFromDate = (dateString) => {
+  if (!dateString) return null;
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return null;
+    
+    return (date.getMonth() + 1).toString(); // JavaScript months are 0-indexed, so +1
+  } catch (error) {
+    console.error('Error parsing date:', dateString, error);
+    return null;
+  }
+};
 
 export default function PurchaseOrderView() {
   const { enqueueSnackbar } = useSnackbar();
@@ -134,6 +185,12 @@ export default function PurchaseOrderView() {
   const [statusOptions, setStatusOptions] = useState(STATUS_OPTIONS);
   const [supplierOptions, setSupplierOptions] = useState([]);
   const [customerOptions, setCustomerOptions] = useState([]);
+
+  // Check restricted access
+  const isRestrictedUser = hasRestrictedAccess();
+  
+  // Dynamic table head based on user role
+  const TABLE_HEAD = getTableHead(isRestrictedUser);
 
   // ✅ Supplier fetch function (sirf Supplier API se aayega)
   const fetchSuppliers = useCallback(async () => {
@@ -260,7 +317,7 @@ export default function PurchaseOrderView() {
     } finally {
       setLoading(false);
     }
-  }, [enqueueSnackbar, filters, USER_ID, ROLE_ID, MANAGER_BIT]);
+  }, [enqueueSnackbar, filters]);
 
   // ✅ Update dropdown options (supplier ko override nahi karna)
   const updateDropdownOptions = useCallback((apiData) => {
@@ -389,7 +446,6 @@ export default function PurchaseOrderView() {
     (id) => {
       enqueueSnackbar(`Opening Milestone for PO ID: ${id}`);
       navigate(`/dashboard/supply-chain/milestone/${id}`);
-      // Yahan aap milestone page pe navigate kar sakte hain
     },
     [enqueueSnackbar]
   );
@@ -397,7 +453,6 @@ export default function PurchaseOrderView() {
   const handleRevisedClick = useCallback(
     (id) => {
       enqueueSnackbar(`Opening Revised for PO ID: ${id}`);
-      // Yahan aap revised page pe navigate kar sakte hain
     },
     [enqueueSnackbar]
   );
@@ -405,7 +460,6 @@ export default function PurchaseOrderView() {
   const handleSizeSpecsClick = useCallback(
     (id) => {
       enqueueSnackbar(`Opening Size Specs for PO ID: ${id}`);
-      // Yahan aap size Specs page pe navigate kar sakte hain
     },
     [enqueueSnackbar]
   );
@@ -418,7 +472,9 @@ export default function PurchaseOrderView() {
       supplierOptions,
       customerOptions,
     });
-  }, [tableData, filters, statusOptions, supplierOptions, customerOptions]);
+    console.log('Is Restricted User:', isRestrictedUser);
+    console.log('Table Head:', TABLE_HEAD);
+  }, [tableData, filters, statusOptions, supplierOptions, customerOptions, isRestrictedUser, TABLE_HEAD]);
 
   return (
     <Container maxWidth={settings.themeStretch ? false : 'xl'} sx={{ py: 2 }}>
@@ -688,81 +744,84 @@ export default function PurchaseOrderView() {
       {/* Main Table Card */}
       {!loading && !error && (
         <Card>
-<TableContainer sx={{ maxHeight: 600 }}>
-  <Table
-    stickyHeader
-    sx={{ minWidth: 1200, tableLayout: 'fixed' }}
-  >
-    {/* Header same rahega */}
-    <TableHeadCustom
-      order={table.order}
-      orderBy={table.orderBy}
-      headLabel={TABLE_HEAD}
-      rowCount={dataFiltered.length}
-      numSelected={table.selected.length}
-      onSort={table.onSort}
-      sx={{
-        '& .MuiTableRow-root': {
-          backgroundColor: (theme) => theme.palette.primary.main,
-        },
-        '& .MuiTableCell-root': {
-          backgroundColor: (theme) => theme.palette.primary.main,
-          color: (theme) => theme.palette.primary.contrastText,
-        },
-        '& .MuiTableSortLabel-root': {
-          color: (theme) => theme.palette.primary.contrastText,
-        },
-      }}
-    />
+          <TableContainer sx={{ maxHeight: 600 }}>
+            <Table
+              stickyHeader
+              sx={{ 
+                minWidth: isRestrictedUser ? 980 : 1200, 
+                tableLayout: 'fixed' 
+              }}
+            >
+              {/* Dynamic Header based on user role */}
+              <TableHeadCustom
+                order={table.order}
+                orderBy={table.orderBy}
+                headLabel={TABLE_HEAD}
+                rowCount={dataFiltered.length}
+                numSelected={table.selected.length}
+                onSort={table.onSort}
+                sx={{
+                  '& .MuiTableRow-root': {
+                    backgroundColor: (theme) => theme.palette.primary.main,
+                  },
+                  '& .MuiTableCell-root': {
+                    backgroundColor: (theme) => theme.palette.primary.main,
+                    color: (theme) => theme.palette.primary.contrastText,
+                  },
+                  '& .MuiTableSortLabel-root': {
+                    color: (theme) => theme.palette.primary.contrastText,
+                  },
+                }}
+              />
 
-    {/* 👇 Dense sirf rows me apply hoga */}
-    <TableBody
-      sx={{
-        '& .MuiTableRow-root': {
-          backgroundColor: (theme) => theme.palette.background.paper,
-        },
-        '& .MuiTableCell-root': {
-          color: (theme) => theme.palette.text.primary,
-          padding: table.dense ? '6px 8px' : '12px 16px', // 👈 dense padding control
-        },
-      }}
-    >
-      {dataInPage.map((row) => (
-        <PurchaseOrderTableRow
-          key={row.id}
-          row={row}
-          selected={table.selected.includes(row.id)}
-          onSelectRow={() => table.onSelectRow(row.id)}
-          onToggleCheckbox={handleToggleCheckbox}
-          onPdfClick={handlePdfClick}
-          onViewOrder={handleViewOrder}
-          onMilestoneClick={handleMilestoneClick}
-          onRevisedClick={handleRevisedClick}
-          onSizeSpecsClick={handleSizeSpecsClick}
-        />
-      ))}
+              {/* Table Body */}
+              <TableBody
+                sx={{
+                  '& .MuiTableRow-root': {
+                    backgroundColor: (theme) => theme.palette.background.paper,
+                  },
+                  '& .MuiTableCell-root': {
+                    color: (theme) => theme.palette.text.primary,
+                    padding: table.dense ? '6px 8px' : '12px 16px',
+                  },
+                }}
+              >
+                {dataInPage.map((row) => (
+                  <PurchaseOrderTableRow
+                    key={row.id}
+                    row={row}
+                    selected={table.selected.includes(row.id)}
+                    onSelectRow={() => table.onSelectRow(row.id)}
+                    onToggleCheckbox={handleToggleCheckbox}
+                    onPdfClick={handlePdfClick}
+                    onViewOrder={handleViewOrder}
+                    onMilestoneClick={handleMilestoneClick}
+                    onRevisedClick={handleRevisedClick}
+                    onSizeSpecsClick={handleSizeSpecsClick}
+                    isRestrictedUser={isRestrictedUser}
+                  />
+                ))}
 
-      <TableEmptyRows
-        height={denseHeight}
-        emptyRows={emptyRows(table.page, table.rowsPerPage, dataFiltered.length)}
-      />
+                <TableEmptyRows
+                  height={denseHeight}
+                  emptyRows={emptyRows(table.page, table.rowsPerPage, dataFiltered.length)}
+                />
 
-      <TableNoData notFound={notFound} />
-    </TableBody>
-  </Table>
-</TableContainer>
-
+                <TableNoData notFound={notFound} />
+              </TableBody>
+            </Table>
+          </TableContainer>
 
           {/* Fixed Pagination */}
           <TablePaginationCustom
-          count={dataFiltered.length}
-  page={table.page}
-  rowsPerPage={table.rowsPerPage}
-  onPageChange={table.onChangePage}
-  onRowsPerPageChange={table.onChangeRowsPerPage}
-  rowsPerPageOptions={[5, 10, 25, 60]} // ✅ custom options add kiye
-  dense={table.dense}
-  onChangeDense={table.onChangeDense}
+            count={dataFiltered.length}
+            page={table.page}
+            rowsPerPage={table.rowsPerPage}
+            onPageChange={table.onChangePage}
+            onRowsPerPageChange={table.onChangeRowsPerPage}
+            rowsPerPageOptions={[5, 10, 25, 60]}
+            dense={table.dense}
+            onChangeDense={table.onChangeDense}
           />
         </Card>
       )}
@@ -782,6 +841,7 @@ function PurchaseOrderTableRow({
   onMilestoneClick,
   onRevisedClick,
   onSizeSpecsClick,
+  isRestrictedUser,
 }) {
   const renderPdfIcon = (field) => {
     if (row[field] === 'Available') {
@@ -796,6 +856,7 @@ function PurchaseOrderTableRow({
 
   return (
     <TableRow hover selected={selected} sx={{ '& td': { py: 1 } }}>
+      {/* Base Columns - Sabko dikhne wale */}
       <TableCell sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{row.poNo}</TableCell>
       <TableCell sx={{ fontSize: '0.75rem' }}>{row.styleNo}</TableCell>
       <TableCell sx={{ fontSize: '0.75rem' }}>{row.customer}</TableCell>
@@ -806,37 +867,86 @@ function PurchaseOrderTableRow({
         ${row.amount ? row.amount.toLocaleString() : '0'}
       </TableCell>
 
-      {/* View - Capsule Tag */}
-      <TableCell align="center">
-        <span
-          style={{
-            backgroundColor: '#E8F0FE',
-            color: '#1A73E8',
-            border: '1px solid #1A73E8',
-            fontWeight: 600,
-            fontSize: '12px',
-            padding: '4px 10px',
-            borderRadius: '10px',
-            display: 'inline-block',
-            cursor: 'pointer',
-            textTransform: 'capitalize',
-            transition: 'all 0.2s ease-in-out',
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.backgroundColor = '#D2E3FC';
-            e.target.style.boxShadow = '0 0 6px rgba(26,115,232,0.4)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.backgroundColor = '#E8F0FE';
-            e.target.style.boxShadow = 'none';
-          }}
-          onClick={() => onViewOrder(row.id)}
-        >
-          View
-        </span>
-      </TableCell>
+      {/* Restricted Columns - Sirf normal users ke liye */}
+      {!isRestrictedUser && (
+        <>
+          {/* View - Capsule Tag */}
+          <TableCell align="center">
+            <span
+              style={{
+                backgroundColor: '#E8F0FE',
+                color: '#1A73E8',
+                border: '1px solid #1A73E8',
+                fontWeight: 600,
+                fontSize: '12px',
+                padding: '4px 10px',
+                borderRadius: '10px',
+                display: 'inline-block',
+                cursor: 'pointer',
+                textTransform: 'capitalize',
+                transition: 'all 0.2s ease-in-out',
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#D2E3FC';
+                e.target.style.boxShadow = '0 0 6px rgba(26,115,232,0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = '#E8F0FE';
+                e.target.style.boxShadow = 'none';
+              }}
+              onClick={() => onViewOrder(row.id)}
+            >
+              View
+            </span>
+          </TableCell>
 
-      {/* Milestone - Capsule Tag */}
+          {/* PDF Icon */}
+          <TableCell>
+            {renderPdfIcon('pdf')}
+          </TableCell>
+
+          {/* Copy */}
+          <TableCell>
+            {row.ssPdf === 'Available' && (
+              <img src="/assets/icons/files/copy.jpg" alt="copy" width={16} height={16} />
+            )}
+          </TableCell>
+
+          {/* Revised - White Capsule Tag */}
+          <TableCell align="center">
+            <span
+              style={{
+                backgroundColor: '#FFFFFF',
+                color: '#000000',
+                border: '1px solid #BDBDBD',
+                fontWeight: 600,
+                fontSize: '12px',
+                padding: '4px 10px',
+                borderRadius: '10px',
+                display: 'inline-block',
+                cursor: 'pointer',
+                textTransform: 'capitalize',
+                transition: 'all 0.2s ease-in-out',
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#F5F5F5';
+                e.target.style.boxShadow = '0 0 6px rgba(0,0,0,0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = '#FFFFFF';
+                e.target.style.boxShadow = 'none';
+              }}
+              onClick={() => onRevisedClick(row.id)}
+            >
+              Revised
+            </span>
+          </TableCell>
+        </>
+      )}
+
+      {/* Common Columns - Sabko dikhne wale (Milestone ab sabko dikhega) */}
+      
+      {/* Milestone - Capsule Tag - Ab sabko dikhega */}
       <TableCell align="center">
         <span
           style={{
@@ -863,45 +973,6 @@ function PurchaseOrderTableRow({
           onClick={() => onMilestoneClick(row.id)}
         >
           Milestone
-        </span>
-      </TableCell>
-
-      {/* PDF Icon */}
-      <TableCell>{renderPdfIcon('pdf')}</TableCell>
-
-      <TableCell>
-        {row.ssPdf === 'Available' && (
-          <img src="/assets/icons/files/copy.jpg" alt="copy" width={16} height={16} />
-        )}
-      </TableCell>
-
-      {/* Revised - White Capsule Tag */}
-      <TableCell align="center">
-        <span
-          style={{
-            backgroundColor: '#FFFFFF',
-            color: '#000000',
-            border: '1px solid #BDBDBD',
-            fontWeight: 600,
-            fontSize: '12px',
-            padding: '4px 10px',
-            borderRadius: '10px',
-            display: 'inline-block',
-            cursor: 'pointer',
-            textTransform: 'capitalize',
-            transition: 'all 0.2s ease-in-out',
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.backgroundColor = '#F5F5F5';
-            e.target.style.boxShadow = '0 0 6px rgba(0,0,0,0.2)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.backgroundColor = '#FFFFFF';
-            e.target.style.boxShadow = 'none';
-          }}
-          onClick={() => onRevisedClick(row.id)}
-        >
-          Revised
         </span>
       </TableCell>
 
@@ -976,7 +1047,7 @@ function PurchaseOrderTableRow({
 
 // ----------------------------------------------------------------------
 
-// Updated applyFilter with dropdown logic
+// Updated applyFilter with dropdown logic - Now with proper month filtering
 function applyFilter({ inputData, comparator, filters }) {
   const { status, supplier, customer, bookedMonth, shipmentMonth, search } = filters;
 
@@ -1027,40 +1098,25 @@ function applyFilter({ inputData, comparator, filters }) {
     );
   }
 
-  // Booked Month filter (Placement Date month check)
+  // Booked Month filter (Placement Date month check) - UPDATED
   if (bookedMonth && bookedMonth !== 'All') {
     filteredData = filteredData.filter((order) => {
-      const pd = order.placementDate || order.PlacementDate;
-      if (!pd) return false;
-      const monthName = (() => {
-        const d = new Date(pd);
-        if (isNaN(d)) {
-          // try parse yyyy-mm-dd or other string formats more robustly
-          const parsed = Date.parse(pd);
-          if (isNaN(parsed)) return '';
-          return new Date(parsed).toLocaleString('default', { month: 'long' });
-        }
-        return d.toLocaleString('default', { month: 'long' });
-      })();
-      return monthName.toLowerCase() === bookedMonth.toLowerCase();
+      const placementDate = order.placementDate || order.PlacementDate;
+      if (!placementDate) return false;
+      
+      const placementMonth = getMonthFromDate(placementDate);
+      return placementMonth === bookedMonth;
     });
   }
 
-  // Shipment Month filter (Shipment Date month check)
+  // Shipment Month filter (Shipment Date month check) - UPDATED
   if (shipmentMonth && shipmentMonth !== 'All') {
     filteredData = filteredData.filter((order) => {
-      const sd = order.shipmentDate || order.ShipmentDate;
-      if (!sd) return false;
-      const monthName = (() => {
-        const d = new Date(sd);
-        if (isNaN(d)) {
-          const parsed = Date.parse(sd);
-          if (isNaN(parsed)) return '';
-          return new Date(parsed).toLocaleString('default', { month: 'long' });
-        }
-        return d.toLocaleString('default', { month: 'long' });
-      })();
-      return monthName.toLowerCase() === shipmentMonth.toLowerCase();
+      const shipmentDate = order.shipmentDate || order.ShipmentDate;
+      if (!shipmentDate) return false;
+      
+      const shipmentMonthValue = getMonthFromDate(shipmentDate);
+      return shipmentMonthValue === shipmentMonth;
     });
   }
 
