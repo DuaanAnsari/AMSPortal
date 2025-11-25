@@ -6,6 +6,9 @@ import DashboardLayout from 'src/layouts/dashboard';
 
 import { LoadingScreen } from 'src/components/loading-screen';
 import Milestone from 'src/sections/Supply-Chain/view/Milestone';
+import { View } from '@react-pdf/renderer';
+import CompletePurchaseOrderForm from 'src/sections/Supply-Chain/view/Add-Order';
+import CompletePurchaseOrderFormEdit from 'src/sections/Supply-Chain/view/purchase-order-edit';
 
 // ----------------------------------------------------------------------
 
@@ -38,6 +41,8 @@ const UserCreatePage = lazy(() => import('src/sections/Supply-Chain/view/user-cr
 const UserEditPage = lazy(() => import('src/sections/Supply-Chain/view/user-edit-view'));
 const AddOrderPage = lazy(() => import('src/sections/Supply-Chain/view/Add-Order'));
 const MilestonePage = lazy(() => import('src/sections/Supply-Chain/view/Milestone'));
+const view = lazy(() => import('src/sections/Supply-Chain/view/'));
+
 
 const CancellationsPage = lazy(() => import('src/sections/Supply-Chain/view/Cancellations'));
 const OrderTrackingPage = lazy(() => import('src/sections/Supply-Chain/view/Orders-tracking'));
@@ -139,6 +144,8 @@ export const dashboardRoutes = [
           { path: 'add-inquiry', element: <AddInquiryPage /> },
           { path: 'add-order-detail', element: <AddOrderDetailPage /> },
           { path: 'milestone/:id', element: <Milestone /> },
+          { path: 'view/:id', element:  <CompletePurchaseOrderFormEdit /> },
+
         ],
       },
 

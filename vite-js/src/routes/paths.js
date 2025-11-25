@@ -130,6 +130,8 @@ export const paths = {
       addInquiry: '/dashboard/supply-chain/add-inquiry',
       addOrderDetail: '/dashboard/supply-chain/add-order-detail',
       milestone: `${ROOTS.DASHBOARD}/supply-chain/milestone`,
+      view: `${ROOTS.DASHBOARD}/supply-chain/view`,
+
 
       demo: {
         edit: `${ROOTS.DASHBOARD}/supply-chain/${MOCK_ID}/edit`,
