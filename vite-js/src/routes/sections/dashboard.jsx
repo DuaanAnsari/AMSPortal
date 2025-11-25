@@ -54,6 +54,7 @@ const AddSamplingProgramPage = lazy(
 );
 const AddInquiryPage = lazy(() => import('src/sections/Supply-Chain/view/Add-inquiry'));
 const AddOrderDetailPage = lazy(() => import('src/sections/Supply-Chain/view/Add-order-detail'));
+const PurchaseOrderPDF = lazy(() => import('src/sections/Supply-Chain/PurchaseOrderPDF'));
 
 // Power_TOOL
 const ProcessBoardPage = lazy(() => import('src/sections/power-tool/view/Process-board'));
@@ -146,6 +147,7 @@ export const dashboardRoutes = [
           { path: 'milestone/:id', element: <Milestone /> },
           { path: 'view/:id', element:  <CompletePurchaseOrderFormEdit /> },
 
+     { path: 'purchase-order-pdf', element: <PurchaseOrderPDF /> },
         ],
       },
 
