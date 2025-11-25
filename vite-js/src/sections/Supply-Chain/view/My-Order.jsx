@@ -404,12 +404,13 @@ export default function PurchaseOrderView() {
   }, [enqueueSnackbar, navigate]);
 
   const handleViewOrder = useCallback(
-    (id) => {
-      navigate(`/BusinessProcess/PurchaseOrderDetail/${id}`);
-      enqueueSnackbar(`Viewing details for PO ID: ${id}`);
-    },
-    [enqueueSnackbar, navigate]
-  );
+  (id) => {
+    navigate(`/dashboard/supply-chain/view/${id}`);
+    enqueueSnackbar(`Viewing details for PO ID: ${id}`);
+  },
+  [enqueueSnackbar, navigate]
+);
+   
 
   const handleToggleCheckbox = useCallback(
     (id, field) => {
