@@ -31,9 +31,9 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableRow,
   TableContainer,
   TableHead,
-  TableRow,
   Paper,
   Alert,
   Snackbar,
@@ -111,307 +111,6 @@ function FullScreenImagePreview({ open, imageUrl, onClose }) {
   );
 }
 
-// -------------------- Image Upload Component with Preview --------------------
-function ImageUploadBase64Field({ name, label }) {
-  const { setValue, control, watch } = useFormContext();
-  const fileInputRef = useRef(null);
-  const [previewUrl, setPreviewUrl] = useState('');
-  const [fullScreenOpen, setFullScreenOpen] = useState(false);
-  const imageValue = watch(name);
-
-  const handleFileChange = (event) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setValue(name, file, { shouldValidate: true });
-      
-      // Create preview URL
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setPreviewUrl(e.target.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleRemoveImage = () => {
-    setValue(name, null, { shouldValidate: true });
-    setPreviewUrl('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handlePreviewClick = () => {
-    if (previewUrl) {
-      setFullScreenOpen(true);
-    }
-  };
-
-  const handleCloseFullScreen = () => {
-    setFullScreenOpen(false);
-  };
-
-  // Reset preview when form is reset
-  useEffect(() => {
-    if (!imageValue) {
-      setPreviewUrl('');
-    }
-  }, [imageValue]);
-
-  return (
-    <Controller
-      name={name}
-      render={({ field, fieldState }) => (
-        <Box>
-          <Grid container spacing={1} alignItems="center">
-            <Grid item xs>
-              <TextField
-                fullWidth
-                disabled
-                label={label}
-                value={field.value?.name || ''}
-                error={!!fieldState.error}
-                helperText={fieldState.error?.message}
-                InputProps={{
-                  endAdornment: previewUrl && (
-                    <IconButton 
-                      size="small" 
-                      onClick={handleRemoveImage}
-                      color="error"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  ),
-                }}
-              />
-            </Grid>
-            <Grid item>
-              <input
-                type="file"
-                accept="image/*"
-                hidden
-                ref={fileInputRef}
-                onChange={handleFileChange}
-              />
-              <Button 
-                variant="contained" 
-                onClick={() => fileInputRef.current?.click()}
-                disabled={!!previewUrl}
-              >
-                Select
-              </Button>
-            </Grid>
-          </Grid>
-          
-          {/* Image Preview */}
-          {previewUrl && (
-            <Box sx={{ mt: 2, textAlign: 'center', position: 'relative' }}>
-              <Box
-                sx={{
-                  position: 'relative',
-                  display: 'inline-block',
-                  cursor: 'pointer',
-                  '&:hover .preview-overlay': {
-                    opacity: 1,
-                  },
-                }}
-                onClick={handlePreviewClick}
-              >
-                <img
-                  src={previewUrl}
-                  alt="Preview"
-                  style={{
-                    maxWidth: '200px',
-                    maxHeight: '200px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                  }}
-                />
-                <Box
-                  className="preview-overlay"
-                  sx={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    opacity: 0,
-                    transition: 'opacity 0.3s ease',
-                    borderRadius: '4px',
-                  }}
-                >
-                  <ZoomInIcon sx={{ color: 'white', fontSize: 40 }} />
-                </Box>
-              </Box>
-              <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>
-                Click on image to view full screen
-              </Typography>
-            </Box>
-          )}
-
-          {/* Full Screen Preview Dialog */}
-          <FullScreenImagePreview
-            open={fullScreenOpen}
-            imageUrl={previewUrl}
-            onClose={handleCloseFullScreen}
-          />
-        </Box>
-      )}
-    />
-  );
-}
-
-// -------------------- Simple Image Upload Component with Preview --------------------
-function SimpleImageUploadField({ name, label = "Image" }) {
-  const { setValue, watch } = useFormContext();
-  const fileInputRef = useRef(null);
-  const [previewUrl, setPreviewUrl] = useState('');
-  const [fullScreenOpen, setFullScreenOpen] = useState(false);
-  const imageValue = watch(name);
-
-  const handleFileChange = (event) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setValue(name, file, { shouldValidate: true });
-      
-      // Create preview URL
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setPreviewUrl(e.target.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleRemoveImage = () => {
-    setValue(name, null, { shouldValidate: true });
-    setPreviewUrl('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handlePreviewClick = () => {
-    if (previewUrl) {
-      setFullScreenOpen(true);
-    }
-  };
-
-  const handleCloseFullScreen = () => {
-    setFullScreenOpen(false);
-  };
-
-  // Reset preview when form is reset
-  useEffect(() => {
-    if (!imageValue) {
-      setPreviewUrl('');
-    }
-  }, [imageValue]);
-
-  return (
-    <Box>
-      <Grid container spacing={1} alignItems="center">
-        <Grid item xs>
-          <TextField
-            fullWidth
-            disabled
-            label={label}
-            value={imageValue?.name || ''}
-            InputProps={{
-              endAdornment: previewUrl && (
-                <IconButton 
-                  size="small" 
-                  onClick={handleRemoveImage}
-                  color="error"
-                >
-                  <DeleteIcon />
-                </IconButton>
-              ),
-            }}
-          />
-        </Grid>
-        <Grid item>
-          <input
-            type="file"
-            accept="image/*"
-            hidden
-            ref={fileInputRef}
-            onChange={handleFileChange}
-          />
-          <Button 
-            variant="contained" 
-            onClick={() => fileInputRef.current?.click()}
-            disabled={!!previewUrl}
-          >
-            Select
-          </Button>
-        </Grid>
-      </Grid>
-      
-      {/* Image Preview */}
-      {previewUrl && (
-        <Box sx={{ mt: 2, textAlign: 'center', position: 'relative' }}>
-          <Box
-            sx={{
-              position: 'relative',
-              display: 'inline-block',
-              cursor: 'pointer',
-              '&:hover .preview-overlay': {
-                opacity: 1,
-              },
-            }}
-            onClick={handlePreviewClick}
-          >
-            <img
-              src={previewUrl}
-              alt="Preview"
-              style={{
-                maxWidth: '200px',
-                maxHeight: '200px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-              }}
-            />
-            <Box
-              className="preview-overlay"
-              sx={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: 0,
-                transition: 'opacity 0.3s ease',
-                borderRadius: '4px',
-              }}
-            >
-              <ZoomInIcon sx={{ color: 'white', fontSize: 40 }} />
-            </Box>
-          </Box>
-          <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>
-            Click on image to view full screen
-          </Typography>
-        </Box>
-      )}
-
-      {/* Full Screen Preview Dialog */}
-      <FullScreenImagePreview
-        open={fullScreenOpen}
-        imageUrl={previewUrl}
-        onClose={handleCloseFullScreen}
-      />
-    </Box>
-  );
-}
-
 // -------------------- File Upload Component with Preview --------------------
 function FileUploadWithPreview({ name, label, accept = "image/*" }) {
   const { setValue, watch } = useFormContext();
@@ -420,7 +119,7 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const fileValue = watch(name);
 
-  const handleFileChange = (event) => {
+  const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
     if (file) {
       setValue(name, file, { shouldValidate: true });
@@ -490,6 +189,9 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
               <Typography variant="body2" noWrap>
                 {fileValue.name}
               </Typography>
+              <Typography variant="caption" color="success.main">
+                ✓ File selected
+              </Typography>
             </Grid>
             <Grid item>
               <IconButton 
@@ -551,6 +253,155 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
               </Typography>
             </Box>
           )}
+        </Box>
+      )}
+
+      {/* Full Screen Preview Dialog */}
+      <FullScreenImagePreview
+        open={fullScreenOpen}
+        imageUrl={previewUrl}
+        onClose={handleCloseFullScreen}
+      />
+    </Box>
+  );
+}
+
+// -------------------- Simple Image Upload Component --------------------
+function SimpleImageUploadField({ name, label = "Image" }) {
+  const { setValue, watch } = useFormContext();
+  const fileInputRef = useRef(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [fullScreenOpen, setFullScreenOpen] = useState(false);
+  const imageValue = watch(name);
+ 
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setValue(name, file, { shouldValidate: true });
+      
+      // Create preview URL
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setPreviewUrl(e.target.result);
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setValue(name, null, { shouldValidate: true });
+    setPreviewUrl('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handlePreviewClick = () => {
+    if (previewUrl) {
+      setFullScreenOpen(true);
+    }
+  };
+
+  const handleCloseFullScreen = () => {
+    setFullScreenOpen(false);
+  };
+
+  // Reset preview when form is reset
+  useEffect(() => {
+    if (!imageValue) {
+      setPreviewUrl('');
+    }
+  }, [imageValue]);
+
+  return (
+    <Box>
+      <Grid container spacing={1} alignItems="center">
+        <Grid item xs>
+          <TextField
+            fullWidth
+            disabled
+            label={label}
+            value={imageValue?.name || ''}
+            InputProps={{
+              endAdornment: previewUrl && (
+                <IconButton 
+                  size="small" 
+                  onClick={handleRemoveImage}
+                  color="error"
+                >
+                  <DeleteIcon />
+                </IconButton>
+              ),
+            }}
+            helperText={imageValue ? 'File selected' : 'No image selected'}
+          />
+        </Grid>
+        <Grid item>
+          <input
+            type="file"
+            accept="image/*"
+            hidden
+            ref={fileInputRef}
+            onChange={handleFileChange}
+          />
+          <Button 
+            variant="contained" 
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Select
+          </Button>
+        </Grid>
+      </Grid>
+      
+      {/* Image Preview */}
+      {previewUrl && (
+        <Box sx={{ mt: 2, textAlign: 'center', position: 'relative' }}>
+          <Box
+            sx={{
+              position: 'relative',
+              display: 'inline-block',
+              cursor: 'pointer',
+              '&:hover .preview-overlay': {
+                opacity: 1,
+              },
+            }}
+            onClick={handlePreviewClick}
+          >
+            <img
+              src={previewUrl}
+              alt="Preview"
+              style={{
+                maxWidth: '200px',
+                maxHeight: '200px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+              }}
+            />
+            <Box
+              className="preview-overlay"
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: 0,
+                transition: 'opacity 0.3s ease',
+                borderRadius: '4px',
+              }}
+            >
+              <ZoomInIcon sx={{ color: 'white', fontSize: 40 }} />
+            </Box>
+          </Box>
+          <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>
+            Click on image to view full screen
+          </Typography>
         </Box>
       )}
 
@@ -1210,6 +1061,7 @@ export default function CompletePurchaseOrderForm() {
     setValue,
     watch,
   } = methods;
+
   
   const [files, setFiles] = useState({});
   const [openItemDialog, setOpenItemDialog] = useState(false);
@@ -1262,8 +1114,46 @@ export default function CompletePurchaseOrderForm() {
   const [bankError, setBankError] = useState(null);
 
   const selectedCustomer = watch('customer');
+  const customerPoValue = watch('customerPo');
   const calculationField1 = watch('calculationField1');
   const calculationField2 = watch('calculationField2');
+
+  // NEW: Auto-fill internalPo when customerPo changes
+  useEffect(() => {
+    if (customerPoValue) {
+      setValue('internalPo', customerPoValue);
+    }
+  }, [customerPoValue, setValue]);
+
+  // Handle file changes
+  const handleFileChangeWithBase64 = async (field, file) => {
+    if (file) {
+      setFiles((prev) => ({
+        ...prev,
+        [field]: file,
+      }));
+
+      try {
+        // Convert file to base64 for API
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => {
+            // Remove the data:image/...;base64, prefix
+            const base64 = reader.result.split(',')[1];
+            resolve(base64);
+          };
+          reader.onerror = error => reject(error);
+        });
+        
+        console.log(`File "${file.name}" converted to base64 successfully! Length: ${base64.length} characters`);
+        
+      } catch (error) {
+        console.error(`Error converting ${field} to base64:`, error);
+        showSnackbar(`Error converting file to base64: ${error.message}`, 'error');
+      }
+    }
+  };
 
   // Fetch APIs
   useEffect(() => {
@@ -1467,10 +1357,7 @@ export default function CompletePurchaseOrderForm() {
   const handleFileChange = (field, e) => {
     const file = e.target.files[0];
     if (file) {
-      setFiles((prev) => ({
-        ...prev,
-        [field]: file,
-      }));
+      handleFileChangeWithBase64(field, file);
     }
   };
 
@@ -1495,6 +1382,12 @@ export default function CompletePurchaseOrderForm() {
   };
 
   const handleShowSelections = () => {
+    if (!showSelections && savedItemData) {
+      // Extract all unique style numbers from savedItemData.rows and join them with comma
+      const styleNumbers = [...new Set(savedItemData.rows.map(row => row.styleNo))].join(', ');
+      // Set the form value for 'style' field
+      setValue('style', styleNumbers);
+    }
     setShowSelections(!showSelections);
   };
 
@@ -1507,7 +1400,6 @@ export default function CompletePurchaseOrderForm() {
     const field1 = parseFloat(calculationField1) || 0;
     const field2 = parseFloat(calculationField2) || 0;
     const result = field1 + field2;
-    alert(`Calculation Result: ${field1} + ${field2} = ${result}`);
   };
 
   const showSnackbar = (message, severity = 'success') => {
@@ -1541,8 +1433,23 @@ export default function CompletePurchaseOrderForm() {
     }
   };
 
-  // Map form data to API format - UPDATED FOR MULTIPLE MERCHANTS
-  const mapFormDataToAPI = (data) => {
+  // Function to convert file to base64
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        // Remove the data:image/...;base64, prefix
+        const base64 = reader.result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  // Map form data to API format - COMPLETELY UPDATED FOR IMAGE HANDLING
+  const mapFormDataToAPI = async (data) => {
+    
     const selectedCustomerObj = customerOptions.find(c => c.customerName === data.customer);
     const selectedSupplierObj = supplierOptions.find(s => s.venderName === data.supplier);
     
@@ -1552,7 +1459,33 @@ export default function CompletePurchaseOrderForm() {
     
     const selectedInquiryObj = inquiryOptions.find(i => i.sampleNo === data.inquiryNo);
 
-    return {
+    // Convert all files to base64
+    const convertFileToBase64 = async (file) => {
+      if (!file) return '';
+      try {
+        return await fileToBase64(file);
+      } catch (error) {
+        console.error('Error converting file to base64:', error);
+        return '';
+      }
+    };
+
+    // Convert all images to base64
+    const poImageBase64 = await convertFileToBase64(files.image);
+    const productImageBase64 = await convertFileToBase64(files.productImage);
+    const finalSpecsBase64 = await convertFileToBase64(files.finalSpecs);
+    const ppCommentBase64 = await convertFileToBase64(files.ppComment);
+    const sizeSetCommentBase64 = await convertFileToBase64(files.sizeSetComment);
+
+    console.log('🖼️ Image Conversion Results:', {
+      poImage: poImageBase64 ? `✅ (${poImageBase64.length} chars)` : '❌ Missing',
+      productImage: productImageBase64 ? `✅ (${productImageBase64.length} chars)` : '❌ Missing',
+      finalSpecs: finalSpecsBase64 ? `✅ (${finalSpecsBase64.length} chars)` : '❌ Missing',
+      ppComment: ppCommentBase64 ? `✅ (${ppCommentBase64.length} chars)` : '❌ Missing',
+      sizeSetComment: sizeSetCommentBase64 ? `✅ (${sizeSetCommentBase64.length} chars)` : '❌ Missing'
+    });
+
+    const apiData = {
       pono: data.internalPo || '',
       internalPONO: data.internalPo || '',
       creationDate: new Date().toISOString(),
@@ -1617,7 +1550,7 @@ export default function CompletePurchaseOrderForm() {
       transactions: data.transactions || '',
       destination: data.destination || '',
       vendorCommission: safeParseFloat(data.vendorCommission),
-      productImage: files.productImage ? files.productImage.name : '',
+      productImage: productImageBase64, // Base64 string
       revisedShipmenttVendor: data.reasonReviseVendor || '',
       version: data.version || '',
       reasonCancellation: '',
@@ -1648,7 +1581,7 @@ export default function CompletePurchaseOrderForm() {
       pcPerCarton: safeParseInt(data.pcsPerCarton),
       amsRefNo: data.amsRef || '',
       embAndEmbellishment: data.embEmbellishment || '',
-      poImage: files.image ? files.image.name : '',
+      poImage: poImageBase64, // Base64 string
       poImgFileName: files.image ? files.image.name : '',
       poQtyUnit: data.unit || '',
       shipmentModeText: data.shipmentMode || '',
@@ -1671,14 +1604,14 @@ export default function CompletePurchaseOrderForm() {
       assortment: data.assortment || '',
       grossWeight: safeParseFloat(data.grossWeight),
       netWeight: safeParseFloat(data.netWeight),
-      specsimage: files.finalSpecs ? files.finalSpecs.name : '',
-      pPimage: files.ppComment ? files.ppComment.name : '',
-      finalspecs: files.finalSpecs ? files.finalSpecs.name : '',
-      sizeset: files.sizeSetComment ? files.sizeSetComment.name : '',
-      specstype: '',
-      pptype: '',
-      finaltype: '',
-      sizetype: '',
+      specsimage: finalSpecsBase64, // Base64 string
+      pPimage: ppCommentBase64, // Base64 string
+      finalspecs: finalSpecsBase64, // Base64 string
+      sizeset: sizeSetCommentBase64, // Base64 string
+      specstype: files.finalSpecs ? files.finalSpecs.type : '',
+      pptype: files.ppComment ? files.ppComment.type : '',
+      finaltype: files.finalSpecs ? files.finalSpecs.type : '',
+      sizetype: files.sizeSetComment ? files.sizeSetComment.type : '',
       grossAndNetWeight: '',
       barCodeTFPO: '',
       etanjDate: formatDate(data.etaNewJerseyDate),
@@ -1691,13 +1624,20 @@ export default function CompletePurchaseOrderForm() {
       prodImgFileName: files.productImage ? files.productImage.name : '',
       originalPDFName: files.originalPurchaseOrder ? files.originalPurchaseOrder.name : '',
       buyerCustomer: data.buyerCustomer || '',
-      
-      // Store multiple merchants as comma-separated string for display purposes
-      multipleMerchants: Array.isArray(data.merchant) ? data.merchant.join(', ') : data.merchant || ''
     };
+
+    console.log('🚀 FINAL API DATA - Images:', {
+      poImage: apiData.poImage ? `PRESENT (${apiData.poImage.length} chars)` : 'NULL',
+      productImage: apiData.productImage ? `PRESENT (${apiData.productImage.length} chars)` : 'NULL',
+      specsimage: apiData.specsimage ? `PRESENT (${apiData.specsimage.length} chars)` : 'NULL'
+    });
+
+    return apiData;
   };
 
   const onSubmit = async (data) => {
+    console.log('🔍 DEBUG START ==================');
+    
     try {
       const token = localStorage.getItem('accessToken');
       const headers = token ? { 
@@ -1705,21 +1645,9 @@ export default function CompletePurchaseOrderForm() {
         'Content-Type': 'application/json'
       } : { 'Content-Type': 'application/json' };
       
-      const apiData = mapFormDataToAPI(data);
+      const apiData = await mapFormDataToAPI(data);
       
-      console.log('Submitting data to API:', apiData);
-      
-      // Log specific fields that might cause issues
-      console.log('Important IDs:', {
-        customerID: apiData.customerID,
-        supplierID: apiData.supplierID,
-        productPortfolioID: apiData.productPortfolioID,
-        productCategoriesID: apiData.productCategoriesID,
-        productGroupID: apiData.productGroupID,
-        bankID: apiData.bankID,
-        inquiryMstID: apiData.inquiryMstID,
-        merchants: data.merchant
-      });
+      console.log('📤 Sending to API:', apiData);
       
       const response = await axios.post(
         `${API_BASE_URL}/api/MyOrders/AddPurchaseOrder`,
@@ -1732,7 +1660,7 @@ export default function CompletePurchaseOrderForm() {
       
       if (response.status === 200 || response.status === 201) {
         showSnackbar('Purchase Order saved successfully!', 'success');
-        console.log('API Response:', response.data);
+        console.log('✅ API Response:', response.data);
         
         // Reset form after successful submission
         methods.reset(defaultValues);
@@ -1742,12 +1670,12 @@ export default function CompletePurchaseOrderForm() {
         throw new Error(`Failed to save purchase order. Status: ${response.status}`);
       }
     } catch (error) {
-      console.error('Error submitting form:', error);
+      console.error('❌ Error submitting form:', error);
       
       let errorMessage = 'Error saving purchase order. Please try again.';
       
       if (error.response) {
-        console.error('Server Error Details:', error.response.data);
+        console.error('📞 Server Error Details:', error.response.data);
         errorMessage = error.response.data.message || 
                       error.response.data.title || 
                       `Server Error: ${error.response.status} - ${error.response.statusText}`;
@@ -1759,6 +1687,8 @@ export default function CompletePurchaseOrderForm() {
       
       showSnackbar(errorMessage, 'error');
     }
+    
+    console.log('🔍 DEBUG END ==================');
   };
 
   const handleSaveAndEmail = async (data) => {
@@ -2019,7 +1949,6 @@ export default function CompletePurchaseOrderForm() {
             </Grid>
           </Card>
 
-          {/* Rest of the form components remain the same */}
           {/* ----------------- Section: Important Dates ----------------- */}
           <Card sx={{ p: 3, mb: 4 }}>
             <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
@@ -2851,6 +2780,7 @@ export default function CompletePurchaseOrderForm() {
         <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
           {snackbar.message}
         </Alert>
+        
       </Snackbar>
     </FormProvider>
   );

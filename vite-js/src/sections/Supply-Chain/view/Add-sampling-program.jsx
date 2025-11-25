@@ -27,6 +27,7 @@ export default function SamplingProgramForm() {
             whiteSpace: 'nowrap',
             minWidth: '80px',
           }}
+          
         >
           Image:
         </Typography>
