@@ -422,17 +422,22 @@ export default function PurchaseOrderView() {
     [enqueueSnackbar]
   );
 
-  const handlePdfClick = useCallback(
+    const handlePdfClick = useCallback(
     (id, type = 'pdf') => {
       if (type === 'pdf') {
         enqueueSnackbar(`Opening PDF document for PO ID: ${id}`);
+        navigate('/dashboard/supply-chain/purchase-order-pdf', { 
+          state: { id, type } 
+        });
       } else if (type === 'ssPdf') {
         enqueueSnackbar(`Opening SS PDF document for PO ID: ${id}`);
+        navigate('/dashboard/supply-chain/purchase-order-pdf', { 
+          state: { id, type } 
+        });
       }
     },
-    [enqueueSnackbar]
+    [enqueueSnackbar, navigate]
   );
-
   const handleRetry = useCallback(() => {
     fetchPurchaseOrders();
   }, [fetchPurchaseOrders]);

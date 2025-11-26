@@ -1,5 +1,5 @@
 // src/sections/Supply-Chain/PurchaseOrderPDF.jsx
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Box,
   Typography,
@@ -9,37 +9,69 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper
+  Paper,
+  useTheme,
+  IconButton,
+  AppBar,
+  Toolbar,
+  Zoom
 } from '@mui/material';
+import { useReactToPrint } from 'react-to-print';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import {
+  ZoomIn,
+  ZoomOut,
+  Download,
+  Print,
+  Close,
+  Fullscreen
+} from '@mui/icons-material';
 
-// --- Helper Components (Unchanged and Correct) ---
-const POCell = ({ children, header = false, sx = {} }) => (
-  <TableCell 
+// --- Helper Components ---
+const POCell = ({ children, header = false, sx = {} }) => {
+  const theme = useTheme();
+  return (
+    <TableCell 
+      sx={{ 
+        verticalAlign: 'top', 
+        border: 'none', 
+        fontSize: '9px', 
+        fontWeight: header ? 'bold' : 'normal',
+        padding: '3px 5px', 
+        lineHeight: '1.2',
+        borderColor: '#000', 
+        whiteSpace: 'normal', 
+        color: '#000000',
+        backgroundColor: '#FFFFFF',
+        ...sx 
+      }}
+    >
+      {children}
+    </TableCell>
+  );
+};
+
+const BorderedPOCell = ({ children, header = false, sx = {} }) => (
+  <POCell 
+    header={header} 
     sx={{ 
-      verticalAlign: 'top', 
-      border: 'none', 
-      fontSize: '9px', 
-      fontWeight: header ? 'bold' : 'normal',
-      padding: '3px 5px', 
-      lineHeight: '1.2',
-      borderColor: '#000', 
-      whiteSpace: 'normal', 
+      border: '1px solid black', 
+      color: '#000000',
+      backgroundColor: '#FFFFFF',
       ...sx 
     }}
   >
     {children}
-  </TableCell>
+  </POCell>
 );
 
-const BorderedPOCell = ({ children, header = false, sx = {} }) => (
-    <POCell header={header} sx={{ border: '1px solid black', ...sx }}>
-      {children}
-    </POCell>
-);
+// --- Main Component ---
+const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
+  const theme = useTheme();
+  const componentRef = useRef();
+  const [zoomLevel, setZoomLevel] = useState(1.2); // Default zoom for better fit
 
-// --- Full Purchase Order Component ---
-const PurchaseOrderPageExactMatch = ({ poData = {} }) => {
-  // fallback values if poData missing
   const data = {
     ref: poData.ref || 'AMS-2261',
     receivedDate: poData.receivedDate || 'Monday, May 19, 2025',
@@ -66,9 +98,7 @@ const PurchaseOrderPageExactMatch = ({ poData = {} }) => {
       'Before cutting fabric should be kept on table for atleast 24 hours.',
       'All garments should be 100% checked for sizes before carton packing'
     ],
-    productImage: poData.productImage || '', // absolute URL or empty
-    
-    // --- Added / Completed Fields ---
+    productImage: poData.productImage || '',
     shipMode: poData.shipMode || 'Sea',
     destination: poData.destination || 'NEW YORK',
     shipmentTerms: poData.shipmentTerms || 'FOB',
@@ -77,10 +107,9 @@ const PurchaseOrderPageExactMatch = ({ poData = {} }) => {
     cpoNumber: poData.cpoNumber || '37522-LS-RED',
     styleNumber: poData.styleNumber || 'LR2096',
     productCategory: poData.productCategory || 'Knits',
-    cartonMarking: poData.cartonMarking || 'LR',
     specialInstructions: poData.specialInstructions || 'N/A',
     source: poData.source || 'Local',
-    embellishment: poData.embellishment || 'N/A', // Assuming this is for Embroidery/Embellishment details
+    embellishment: poData.embellishment || 'N/A',
     trimsAccessories: poData.trimsAccessories || 'Local',
     specialOperation: poData.specialOperation || 'GARMENT DYE',
     samplingReq: poData.samplingReq || 'N/A',
@@ -88,818 +117,621 @@ const PurchaseOrderPageExactMatch = ({ poData = {} }) => {
     accountNo: poData.accountNo || '601-55-112233',
     routingNo: poData.routingNo || '125010999',
     washingInstructions: poData.washingInstructions || 'Machine Wash Cold With Like Colors, Gentle Cycle. Use Only Non Chlorine Bleach when needed, Line Dry, Cool Iron.',
-    // Assume PO total breakdown: 2256 PCS / 12 = 188 Dozens. 2256 / 48 Pcs/Ctn = 47 Cartons.
     poTotalDetails: poData.poTotalDetails || '2,256 PCS 188.00 Dz 47 Ctn', 
+  };
+
+  // Zoom functionality
+  const handleZoomIn = () => {
+    setZoomLevel(prev => Math.min(prev + 0.1, 2));
+  };
+
+  const handleZoomOut = () => {
+    setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
+  };
+
+  // Print functionality
+  const handlePrint = useReactToPrint({
+    content: () => componentRef.current,
+    documentTitle: `Purchase_Order_${data.ref}`,
+    onAfterPrint: () => console.log('Printed PDF successfully!'),
+  });
+
+  // Download as PDF functionality
+  const handleDownloadPDF = async () => {
+    const element = componentRef.current;
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#FFFFFF'
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    
+    const imgWidth = canvas.width;
+    const imgHeight = canvas.height;
+    const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight) * 0.95;
+    
+    const imgX = (pdfWidth - imgWidth * ratio) / 2;
+    const imgY = 10;
+
+    pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+    pdf.save(`Purchase_Order_${data.ref}.pdf`);
   };
 
   return (
     <Box sx={{ 
-      p: 1.5, 
-      fontFamily: 'Arial, sans-serif',
-      fontSize: '10px',
-      lineHeight: '1.3',
-      maxWidth: '850px', 
-      margin: '0 auto',
-
-      //  BACKGROUND COLOR
-      backgroundColor: '#FAFAF8',
-
-      boxShadow: '0 0 5px rgba(0,0,0,0.1)', 
+      height: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      backgroundColor: '#f5f5f5'
     }}>
-      
-      {/* 1. Header Section (Unchanged and Correct) */}
-     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-    
-    {/* Left Side: AMS Logo and Address (Adjusted width and structure) */}
-    <Box sx={{ width: '50%' }}>
-      
-      {/* Logo and APPAREL MERCHANDISING SERVICES */}
-      <Box sx={{ mb: 0.2, display: 'block' }}> 
-          {/* Logo container */}
-          <Box sx={{ width: '150px', height: 'auto', mb: 0.2 }}> 
-              {/* Note: Assuming /logo/AMSlogo.png is the path to the combined logo and text image */}
-              <img 
-                  src="/logo/AMSlogo.png" 
-                  alt="AMS Logo" 
-                  style={{ width: '150px', height: 'auto', display: 'block' }}
-              />
+      {/* PDF Viewer Header */}
+      <AppBar 
+        position="static" 
+        sx={{ 
+          backgroundColor: '#080303ff',
+          color: '#000000',
+          borderBottom: '1px solid #e0e0e0',
+          boxShadow: 'none'
+        }}
+      >
+        <Toolbar variant="dense" sx={{ minHeight: '48px !important' }}>
+          {/* Left Section - Document Info */}
+          <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+            <Typography 
+              variant="h6" 
+              sx={{ 
+                fontSize: '14px',
+                fontWeight: 'bold',
+                color: '#fff'
+              }}
+            >
+              Departmental Request - {data.ref}
+            </Typography>
+            <Typography 
+              sx={{ 
+                fontSize: '12px',
+                color: '#fff',
+                ml: 2
+              }}
+            >
+              1/1
+            </Typography>
           </Box>
-          {/* If logo and text are separate, use this for text: */}
-          <Typography sx={{ fontSize: '9px', mt: 0, fontWeight: 'bold', color: '#581845' }}>
-             APPAREL MERCHANDISING SERVICES 
-          </Typography>
-      </Box>
 
-      {/* Address and Phone Number - Left Aligned */}
-      <Typography sx={{ fontSize: '9px', mt: 0.5 }}>
-        A M S House 84,Kokan Housing Society Alamgir Road - Postal Code: 74800
-      </Typography>
-      <Typography sx={{ fontSize: '9px' }}>
-        Karachi - Pakistan. &nbsp; &nbsp; &nbsp; &nbsp; Telephone # : **(+92213) 485-3935 & 36**
-      </Typography>
-    </Box>
-
-    {/* Right Side: PO Title, Ref, Date, and Product Image */}
-    <Box sx={{ width: '50%', display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start' }}>
-        
-        {/* PO Details - Ref and Date */}
-        <Box sx={{ mr: 2, textAlign: 'right', pt: 0.5, pr: 1 }}>
-            {/* Purchase Order Title - Using a generic cursive style property for effect */}
-            <Typography variant="h5" sx={{ 
-                fontSize: '18px', 
-                fontWeight: 'normal', 
-                color: '#333', 
-                mb: 1.5,
-                // Using a fallback font family for cursive effect (exact font requires font import)
-                fontFamily: 'cursive', 
-                textAlign: 'right' 
-            }}>
-                Purchase Order
+          {/* Center Section - Zoom Controls */}
+          <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, justifyContent: 'center' }}>
+            <IconButton 
+              size="small" 
+              onClick={handleZoomOut}
+              sx={{ color: '#fff' }}
+            >
+              <ZoomOut fontSize="small" />
+            </IconButton>
+            
+            <Typography 
+              sx={{ 
+                fontSize: '12px',
+                color: '#fff',
+                mx: 1,
+                minWidth: '40px',
+                textAlign: 'center'
+              }}
+            >
+              {Math.round(zoomLevel * 100)}%
             </Typography>
             
-            {/* AMS Ref # */}
-            <Typography sx={{ fontSize: '9px', lineHeight: 1.5 }}>
-                AMS - Ref # : **{data.ref || 'AMS-2261'}**
-            </Typography>
+            <IconButton 
+              size="small" 
+              onClick={handleZoomIn}
+              sx={{ color: '#fff' }}
+            >
+              <ZoomIn fontSize="small" />
+            </IconButton>
+          </Box>
+
+          {/* Right Section - Action Buttons */}
+          <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, justifyContent: 'flex-end', gap: 0.5 }}>
+            <IconButton 
+              size="small" 
+              onClick={handleDownloadPDF}
+              sx={{ color: '#fff' }}
+            >
+              <Download fontSize="small" />
+            </IconButton>
             
-            {/* P.O Received Date */}
-            <Typography sx={{ fontSize: '9px', lineHeight: 1.5 }}>
-                P.O Received Date : **{data.receivedDate || 'Monday, May 19, 2025'}**
-            </Typography>
-        </Box>
-        
-        {/* Product Image */}
-        <Box sx={{ width: '60px', height: '80px', overflow: 'hidden' }}>
-            {/* Assuming a placeholder image for the product */}
-            <img 
-                src={data.productImage || 'product_image_url_or_placeholder'} 
-                alt="Product" 
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }} // objectFit: 'contain' for the whole garment to be visible
-            />
-        </Box>
-    </Box>
-</Box>
+            <IconButton 
+              size="small" 
+              onClick={handlePrint}
+              sx={{ color: '#fff' }}
+            >
+              <Print fontSize="small" />
+            </IconButton>
+            
+            {onClose && (
+              <IconButton 
+                size="small" 
+                onClick={onClose}
+                sx={{ color: '#fff' }}
+              >
+                <Close fontSize="small" />
+              </IconButton>
+            )}
+          </Box>
+        </Toolbar>
+      </AppBar>
 
-      {/* 2. Addresses and Key Dates Section */}
-    <TableContainer component={Paper} sx={{ mb: 1, border: '1px solid black', backgroundColor: '#FAFAF8' }}>
-  <Table size="small" sx={{ borderCollapse: 'collapse' }}>
-    <TableBody>
-      {/* Row 1: Addresses */}
-      <TableRow>
-        
-        {/* Column 1 - Attn / Tracking Code */}
-        <TableCell sx={{ 
-          width: '33.3%', 
-          borderRight: '1px solid black !important',
-          padding: '8px',
-          border: 'none', // Retaining original border style
-          verticalAlign: 'top' // Added vertical alignment
-        }}>
-          {/* Attn Header */}
-          <Typography sx={{ fontSize: '9px', fontWeight: 'bold' }}>Attn : COMFORT APPAREL</Typography>
+      {/* PDF Content Area with Scroll and Zoom */}
+      <Box 
+        sx={{ 
+          flex: 1,
+          overflow: 'auto',
+          padding: 2,
+          backgroundColor: '#000000',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'flex-start'
+        }}
+      >
+        <Box 
+          ref={componentRef}
+          sx={{ 
+            p: 1.5, 
+            fontFamily: 'Arial, sans-serif',
+            fontSize: '10px',
+            lineHeight: '1.3',
+            width: '210mm',
+            minHeight: '297mm',
+            backgroundColor: '#FFFFFF',
+            color: '#000000',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+            transform: `scale(${zoomLevel})`,
+            transformOrigin: 'top center',
+            transition: 'transform 0.2s ease-in-out',
+            '@media print': {
+              boxShadow: 'none',
+              p: 0,
+              m: 0,
+              width: '100%',
+              minHeight: '100%',
+              transform: 'none'
+            }
+          }}
+        >
           
-          {/* Address Block */}
-          <Box sx={{ mt: 0.2 }}>
-            <Typography sx={{ fontSize: '9px', fontWeight: 'normal' }}>PLOT # E-99, SECTOR 31-D KORANGI INDUSTRIAL /</Typography>
-            {/* KARACHI and PAKISTAN on one line, spaced out */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography sx={{ fontSize: '9px', fontWeight: 'bold' }}>KARACHI</Typography>
-                <Typography sx={{ fontSize: '9px', fontWeight: 'normal' }}>PAKISTAN</Typography>
+          {/* Header Section */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+            <Box sx={{ width: '50%' }}>
+              <Box sx={{ mb: 0.2, display: 'block' }}> 
+                <Box sx={{ width: '150px', height: 'auto', mb: 0.2 }}> 
+                  <img 
+                    src="/logo/AMSlogo.png" 
+                    alt="AMS Logo" 
+                    style={{ width: '150px', height: 'auto', display: 'block' }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                </Box>
+                <Typography sx={{ fontSize: '9px', mt: 0, fontWeight: 'bold', color: '#581845' }}>
+                  APPAREL MERCHANDISING SERVICES 
+                </Typography>
+              </Box>
+              <Typography sx={{ fontSize: '9px', mt: 0.5, color: '#000000' }}>
+                A M S House 84,Kokan Housing Society Alamgir Road - Postal Code: 74800
+              </Typography>
+              <Typography sx={{ fontSize: '9px', color: '#000000' }}>
+                Karachi - Pakistan. &nbsp; &nbsp; &nbsp; &nbsp; Telephone # : **(+92213) 485-3935 & 36**
+              </Typography>
+            </Box>
+
+            <Box sx={{ width: '50%', display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start' }}>
+              <Box sx={{ mr: 2, textAlign: 'right', pt: 0.5, pr: 1 }}>
+                <Typography variant="h5" sx={{ 
+                  fontSize: '18px', 
+                  fontWeight: 'normal', 
+                  color: '#000000', 
+                  mb: 1.5,
+                  fontFamily: 'cursive', 
+                  textAlign: 'right' 
+                }}>
+                  Purchase Order
+                </Typography>
+                <Typography sx={{ fontSize: '9px', lineHeight: 1.5, color: '#000000' }}>
+                  AMS - Ref # : **{data.ref}**
+                </Typography>
+                <Typography sx={{ fontSize: '9px', lineHeight: 1.5, color: '#000000' }}>
+                  P.O Received Date : **{data.receivedDate}**
+                </Typography>
+              </Box>
+              <Box sx={{ width: '60px', height: '80px', overflow: 'hidden', border: '1px solid #ddd' }}>
+                <img 
+                  src={data.productImage || '/placeholder-product.png'} 
+                  alt="Product" 
+                  style={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    objectFit: 'contain',
+                    backgroundColor: '#f5f5f5'
+                  }}
+                  onError={(e) => {
+                    e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA2MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0yMCAyMEg0MFY0MEgyMFYyMFpNMzAgMzBDMzEuNjU2OSAzMCAzMyAyOC42NTY5IDMzIDI3QzMzIDI1LjM0MzEgMzEuNjU2OSAyNCAzMCAyNEMyOC4zNDMxIDI0IDI3IDI1LjM0MzEgMjcgMjdDMjcgMjguNjU2OSAyOC4zNDMxIDMwIDMwIDMwWk0zNiA1MEgyNFY1MkgzNlY1MFpNMzYgNTZIMjRWNThIMzZWNTZaIiBmaWxsPSIjQ0RDRENEIi8+Cjwvc3ZnPgo=';
+                  }}
+                />
+              </Box>
             </Box>
           </Box>
 
-          {/* Tracking Code (WITH INNER HORIZONTAL LINE) */}
-          <Typography 
-            sx={{ 
-              fontSize: '9px', 
-              fontWeight: 'bold', 
-              mt: 0.5, 
-              pt: 0.5, // Padding top for border separation
-              borderTop: '1px solid black' // <-- Inner Horizontal Line (Alignment ka hissa)
-            }}
-          >
-            Tracking Code: <span style={{fontWeight: 'normal'}}>11265</span>
-          </Typography>
-        </TableCell>
-        
-        {/* Column 2 - Customer/Brand/Division */}
-        <TableCell sx={{ 
-          width: '33.3%', 
-          borderRight: '1px solid black !important',
-          padding: '8px',
-          border: 'none', // Retaining original border style
-          verticalAlign: 'top' // Added vertical alignment
-        }}>
-          {/* Customer/Brand Header */}
-          <Typography sx={{ fontSize: '9px', fontWeight: 'bold' }}>Customer,Brand / Label Name & Division: LR</Typography>
-          
-          {/* Brand & R.N # (WITH INNER HORIZONTAL LINE) */}
-          <Box 
-            sx={{ 
-              mt: 0.5, 
-              pt: 0.5, 
-              display: 'flex', 
-              borderTop: '1px solid black', // <-- Inner Horizontal Line (Alignment ka hissa)
-              flexWrap: 'wrap'
-            }}
-          >
-            <Typography sx={{ fontSize: '9px', fontWeight: 'bold', mr: 0.5 }}>Brand:</Typography>
-            <Typography sx={{ fontSize: '9px', fontWeight: 'normal', mr: 2 }}>Gentle Threads</Typography>
-            <Typography sx={{ fontSize: '9px', fontWeight: 'bold', mr: 0.5 }}>R.N #:</Typography>
-            <Typography sx={{ fontSize: '9px', fontWeight: 'normal' }}>130691</Typography>
-          </Box>
-          
-          {/* Division */}
-          <Box sx={{ mt: 0.5 }}>
-            <Typography sx={{ fontSize: '9px', fontWeight: 'bold', display: 'inline', mr: 0.5 }}>Division:</Typography>
-            <Typography sx={{ fontSize: '9px', fontWeight: 'normal', display: 'inline' }}>Men</Typography>
-          </Box>
-        </TableCell>
-        
-        {/* Column 3 - Ship To */}
-        <TableCell sx={{ 
-          width: '33.3%',
-          padding: '8px',
-          border: 'none', // Retaining original border style
-          verticalAlign: 'top' // Added vertical alignment
-        }}>
-          <Typography sx={{ fontSize: '9px', fontWeight: 'bold' }}>Ship To:</Typography>
-          <Typography sx={{ fontSize: '9px', fontWeight: 'normal' }}>ALL SEASONS TEXTILE</Typography>
-          {/* Address line 2 & 3 combined and fixed */}
-          <Typography sx={{ fontSize: '9px', fontWeight: 'normal' }}>1441 BROADWAY, SUITE # 6162 NEW YORK, NY 10018</Typography> 
-          
-          {/* NY and USA split (as per image) */}
-          <Box sx={{ mt: 0.5, display: 'flex', justifyContent: 'space-between', pr: 2 }}> 
-            <Typography sx={{ fontSize: '9px', fontWeight: 'normal' }}>NY</Typography>
-            <Typography sx={{ fontSize: '9px', fontWeight: 'normal' }}>USA</Typography> 
-          </Box>
-        </TableCell>
-        
-      </TableRow>
-    </TableBody>
-  </Table>
-</TableContainer>
-      {/* Item Description, Dates and Ship Details in one row */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-        {/* Left Side - Item Description and Dates */}
-        <Box sx={{ width: '40%' }}>
-          <Typography sx={{ fontSize: '9px', fontWeight: 'bold' }}>Item Description :</Typography>
-          <Typography sx={{ fontSize: '9px', fontWeight: 'bold', mt: 0.5 }}>
-            {data.itemDescription}
-          </Typography>
-          
-          <Box sx={{ display: 'flex', mt: 1 }}>
-            <Box sx={{ width: '45%' }}>
-              <Typography sx={{ fontSize: '9px', fontWeight: 'bold' }}>Ex-Factory (Ship Date)</Typography>
-              <Typography sx={{ fontSize: '9px', fontWeight: 'bold' }}>Final Inspection Date</Typography>
-            </Box>
-            <Box sx={{ width: '55%', textAlign: 'right' }}>
-              <Typography sx={{ fontSize: '9px' }}>{data.exFactory} - {data.exFactory}</Typography>
-              <Typography sx={{ fontSize: '9px' }}>{data.finalInspection}</Typography>
-            </Box>
-          </Box>
-        </Box>
-
-        {/* Right Side - Ship Details Table */}
-        <Box sx={{ width: '60%' }}>
-          <TableContainer component={Paper} sx={{ backgroundColor: '#FAFAF8' }}>
-            <Table size="small">
+          {/* Addresses Section */}
+          <TableContainer component={Paper} sx={{ mb: 1, border: '1px solid black', backgroundColor: '#FFFFFF' }}>
+            <Table size="small" sx={{ borderCollapse: 'collapse' }}>
               <TableBody>
                 <TableRow>
-                  <POCell header sx={{ width: '15%' }}>Lead Time:</POCell>
-                  <POCell header sx={{ width: '15%' }}>{data.leadTime}</POCell>
-                  <POCell header sx={{ width: '15%' }}>Ship Mode:</POCell>
-                  <POCell header sx={{ width: '25%' }}>Destination:</POCell>
-                  <POCell header sx={{ width: '15%' }}>Shipment Terms:</POCell>
-                  <POCell header sx={{ width: '15%' }}>Payment Terms:</POCell>
-                </TableRow>
-                <TableRow>
-                  <POCell></POCell>
-                  <POCell></POCell>
-                  <POCell>{data.shipMode}</POCell>
-                  <POCell>{data.destination}</POCell>
-                  <POCell>{data.shipmentTerms}</POCell>
-                  <POCell>{data.paymentTerms}</POCell>
+                  <TableCell sx={{ width: '33.3%', borderRight: '1px solid black', padding: '8px', backgroundColor: '#FFFFFF' }}>
+                    <Typography sx={{ fontSize: '9px', fontWeight: 'bold', color: '#000000' }}>Attn : {data.attn}</Typography>
+                    <Box sx={{ mt: 0.2 }}>
+                      <Typography sx={{ fontSize: '9px', fontWeight: 'normal', color: '#000000', whiteSpace: 'pre-line' }}>
+                        {data.addressLeft}
+                      </Typography>
+                    </Box>
+                    <Typography sx={{ fontSize: '9px', fontWeight: 'bold', mt: 0.5, pt: 0.5, borderTop: '1px solid black', color: '#000000' }}>
+                      Tracking Code: <span style={{fontWeight: 'normal'}}>{data.trackingCode}</span>
+                    </Typography>
+                  </TableCell>
+                  
+                  <TableCell sx={{ width: '33.3%', borderRight: '1px solid black', padding: '8px', backgroundColor: '#FFFFFF' }}>
+                    <Typography sx={{ fontSize: '9px', fontWeight: 'bold', color: '#000000' }}>Customer,Brand / Label Name & Division: {data.cartonMarking}</Typography>
+                    <Box sx={{ mt: 0.5, pt: 0.5, display: 'flex', borderTop: '1px solid black', flexWrap: 'wrap' }}>
+                      <Typography sx={{ fontSize: '9px', fontWeight: 'bold', mr: 0.5, color: '#000000' }}>Brand:</Typography>
+                      <Typography sx={{ fontSize: '9px', fontWeight: 'normal', mr: 2, color: '#000000' }}>{data.brand}</Typography>
+                      <Typography sx={{ fontSize: '9px', fontWeight: 'bold', mr: 0.5, color: '#000000' }}>R.N #:</Typography>
+                      <Typography sx={{ fontSize: '9px', fontWeight: 'normal', color: '#000000' }}>{data.rn}</Typography>
+                    </Box>
+                    <Box sx={{ mt: 0.5 }}>
+                      <Typography sx={{ fontSize: '9px', fontWeight: 'bold', display: 'inline', mr: 0.5, color: '#000000' }}>Division:</Typography>
+                      <Typography sx={{ fontSize: '9px', fontWeight: 'normal', display: 'inline', color: '#000000' }}>{data.division}</Typography>
+                    </Box>
+                  </TableCell>
+                  
+                  <TableCell sx={{ width: '33.3%', padding: '8px', backgroundColor: '#FFFFFF' }}>
+                    <Typography sx={{ fontSize: '9px', fontWeight: 'bold', color: '#000000' }}>Ship To:</Typography>
+                    <Typography sx={{ fontSize: '9px', fontWeight: 'normal', color: '#000000', whiteSpace: 'pre-line' }}>
+                      {data.shipTo}
+                    </Typography>
+                  </TableCell>
                 </TableRow>
               </TableBody>
             </Table>
           </TableContainer>
-        </Box>
-      </Box>
 
-      {/* 3. Fabrication and Packing Table */}
-<Box
-  sx={{
-    display: 'flex',
-    mb: 1,
-    borderTop: '1px solid black',
-    backgroundColor: '#FAFAF8',
-    flexDirection: 'column'
-  }}
->
-  {/* -------- TOP HEADER CONTAINER -------- */}
-  <Box sx={{ display: 'flex', padding: '10px', gap: '90px' }}>
-    <POCell header sx={{ padding: '0' }}>
-      Fabrication Body & Trims
-    </POCell>
-
-    <POCell header sx={{ padding: '0' }}>
-      AMS - Team: {data.amsTeam}
-    </POCell>
-
-    <POCell header sx={{ padding: '0' }}>
-      C.P.O #: {data.cpoNumber}
-    </POCell>
-
-    <POCell header sx={{ padding: '0' }}>
-      Style #: {data.styleNumber}
-    </POCell>
-  </Box>
-  {/* -------- MAIN TABLE CONTAINER -------- */}
-<TableContainer
-  component={Paper}
-  sx={{ flex: '1', backgroundColor: '#FAFAF8' }}
->
-  <Table size="small" sx={{ borderCollapse: 'collapse', width: '100%' }}>
-    <TableHead>
-      {/* -------- HEADER ROW -------- */}
-      <TableRow sx={{ borderBottom: '1px solid black' }}>
-        <POCell header sx={{ width: '12%', textAlign: 'left', paddingLeft: '8px' }}>Description</POCell>
-        <POCell header sx={{ width: '12%', textAlign: 'left', paddingLeft: '8px' }}>Fabric</POCell>
-        <POCell header sx={{ width: '15%', textAlign: 'left', paddingLeft: '8px' }}>Content</POCell>
-        <POCell header sx={{ width: '10%', textAlign: 'left', paddingLeft: '8px' }}>Weight</POCell>
-
-        <POCell
-          header
-          sx={{
-            width: '36%',
-            borderLeft: '1px solid black',
-            fontWeight: 'bold',
-            textAlign: 'left',
-            paddingLeft: '8px',
-          }}
-        >
-          Packing Instructions
-        </POCell>
-
-        <POCell
-          header
-          sx={{
-            width: '15%',
-            borderLeft: '1px solid black',
-            fontWeight: 'bold',
-            textAlign: 'left',
-            paddingLeft: '8px',
-          }}
-        >
-          Ratio
-        </POCell>
-      </TableRow>
-    </TableHead>
-
-    {/* -------- BODY ROW -------- */}
-    <TableBody>
-      {/* ROW 1: Fabric Details & Packing Details */}
-      <TableRow sx={{ borderLeft: '1px solid black', borderRight: '1px solid black' }}>
-        
-        {/* Description */}
-        <POCell sx={{ 
-          borderRight: '1px solid black', 
-          verticalAlign: 'top', 
-          height: '60px',
-          borderBottom: '1px solid black',
-          width: '12%',
-          paddingLeft: '8px'
-        }}>
-          <Typography sx={{ fontSize: '11px', fontWeight: 'bold' }}>Body</Typography>
-        </POCell>
-
-        {/* Fabric */}
-        <POCell sx={{ 
-          borderRight: '1px solid black', 
-          verticalAlign: 'top', 
-          height: '60px',
-          borderBottom: '1px solid black',
-          width: '12%',
-          paddingLeft: '8px'
-        }}>
-          <Typography sx={{ fontSize: '11px' }}>Jersey</Typography>
-        </POCell>
-
-        {/* Content */}
-        <POCell sx={{ 
-          borderRight: '1px solid black', 
-          verticalAlign: 'top', 
-          height: '60px',
-          borderBottom: '1px solid black',
-          width: '15%',
-          paddingLeft: '8px'
-        }}>
-          <Typography sx={{ fontSize: '11px' }}>100% Cotton</Typography>
-        </POCell>
-
-        {/* Weight */}
-        <POCell sx={{ 
-          borderRight: '1px solid black', 
-          verticalAlign: 'top', 
-          height: '60px',
-          borderBottom: '1px solid black',
-          width: '10%',
-          paddingLeft: '8px'
-        }}>
-          <Typography sx={{ fontSize: '11px' }}>190 GSM</Typography>
-        </POCell>
-
-        {/* Packing Instructions */}
-        <POCell sx={{ 
-          verticalAlign: 'top', 
-          height: '60px',
-          borderBottom: '1px solid black',
-          width: '36%',
-          paddingLeft: '8px'
-        }}>
-          <Typography sx={{ fontSize: '11px' }}>12pcs poly bag and 48pcs Master Carton</Typography>
-        </POCell>
-
-        {/* Ratio */}
-        <POCell sx={{ 
-          verticalAlign: 'top', 
-          height: '60px',
-          borderBottom: '1px solid black',
-          width: '15%',
-          paddingLeft: '8px',
-          borderLeft: '1px solid black'
-        }}>
-          {/* Ratio data */}
-        </POCell>
-      </TableRow>
-
-      {/* ROW 2: OTHER */}
-      <TableRow sx={{ 
-        borderLeft: '1px solid black', 
-        borderRight: '1px solid black',
-        borderBottom: '1px solid black' 
-      }}>
-        
-        {/* OTHER LABEL */}
-        <POCell sx={{ 
-          verticalAlign: 'top',
-          borderRight: '1px solid black',
-          width: '12%',
-          paddingLeft: '8px'
-        }}>
-          <Typography sx={{ fontSize: '11px', fontWeight: 'bold' }}>Other</Typography>
-        </POCell>
-        
-        {/* OTHER VALUE (ColSpan 3) */}
-        <POCell colSpan={3} sx={{ 
-          borderRight: '1px solid black'
-        }}>
-          {/* {data.otherDetails} */}
-        </POCell>
-
-        {/* PACKING NOTES/RATIO (ColSpan 2) */}
-        <POCell colSpan={2} sx={{ 
-          height: '35px',
-          borderLeft: '1px solid black'
-        }}>
-          {/* {data.ratioDetails} */}
-        </POCell>
-      </TableRow>
-    </TableBody>
-  </Table>
-</TableContainer>
-</Box>
-
-
-      {/* 4. Product Details, Team, and Carton Marking */}
-      <Box sx={{ display: 'flex', mb: 1, backgroundColor: '#FAFAF8' }}>
-  
-  {/* Left Side (Product Category, Pcs Per Carton) - 55% */}
-  <Box sx={{ flex: 55, mr: 0.5 }}>
-    <TableContainer component={Paper} sx={{ backgroundColor: '#FAFAF8' }}>
-      <Table size="small" sx={{ borderCollapse: 'collapse' }}>
-        <TableBody>
-          <TableRow>
-            <BorderedPOCell header sx={{ width: '30%' }}>Product Category:</BorderedPOCell>
-            <BorderedPOCell sx={{ width: '20%' }}>{data.productCategory}</BorderedPOCell>
-            <BorderedPOCell header sx={{ width: '30%' }}>Pcs Per Carton:</BorderedPOCell>
-            <BorderedPOCell sx={{ width: '20%' }}>{data.pcsPerCarton}</BorderedPOCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-    </TableContainer>
-  </Box>
-
-  {/* Right Side (Carton Marking) - 45% */}
-  <Box sx={{ flex: 45, ml: 0.5 }}>
-    <TableContainer component={Paper} sx={{ backgroundColor: '#FAFAF8' }}>
-      <Table size="small" sx={{ borderCollapse: 'collapse' }}>
-        <TableHead>
-          <TableRow>
-            <BorderedPOCell header>Carton Marking:</BorderedPOCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          <TableRow>
-            <BorderedPOCell sx={{ height: '10px' }}>{data.cartonMarking}</BorderedPOCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-    </TableContainer>
-  </Box>
-</Box>
-
-
-      {/* 5. Main Quantity and Pricing Table */}
-<TableContainer component={Paper} sx={{ mb: 0, border: '1px solid black', backgroundColor: '#FAFAF8' }}>
-  <Table sx={{ minWidth: 450, fontSize: '0.70rem', borderCollapse: 'collapse' }} size="small">
-
-    <TableHead>
-      <TableRow sx={{ borderBottom: "1px solid black" }}>
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>Color (s)</TableCell>
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>Product Code</TableCell>
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>Reference</TableCell>
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }} colSpan={4}>Size Range</TableCell>
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>Color Total Qty in PCS</TableCell>
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>FOB Unit Price ($)</TableCell>
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>FOB Value Sub Amount ($)</TableCell>
-      </TableRow>
-    </TableHead>
-
-    <TableBody>
-
-      {/* ------- Color main title row ------- */}
-      <TableRow sx={{ borderBottom: "1px solid black" }}>
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>{data.orderRows?.[0]?.color ?? "Red clay"}</TableCell>
-        <TableCell sx={{ padding: '2px 4px' }}></TableCell>
-        <TableCell sx={{ padding: '2px 4px' }}></TableCell>
-        <TableCell colSpan={4} sx={{ padding: '2px 4px' }}></TableCell>
-        <TableCell sx={{ padding: '2px 4px' }}></TableCell>
-        <TableCell sx={{ padding: '2px 4px' }}></TableCell>
-        <TableCell sx={{ padding: '2px 4px' }}></TableCell>
-      </TableRow>
-
-      {/* ------- S-XL SIZE HEADER ------- */}
-      <TableRow sx={{ borderBottom: "1px solid black" }}>
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>S-XL</TableCell>
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>{data.orderRows?.[0]?.productCode ?? "NA"}</TableCell>
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>Size</TableCell>
-
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>S</TableCell>
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>M</TableCell>
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>L</TableCell>
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>XL</TableCell>
-
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>PCS</TableCell>
-        <TableCell sx={{ padding: '2px 4px' }}></TableCell>
-        <TableCell sx={{ padding: '2px 4px' }}></TableCell>
-      </TableRow>
-
-      {/* ------- S-XL QUANTITY ROW ------- */}
-      <TableRow sx={{ borderBottom: "1px solid black" }}>
-        <TableCell sx={{ padding: '2px 4px' }}></TableCell>
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>{data.orderRows?.[0]?.productCode ?? "NA"}</TableCell>
-
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>Quantity</TableCell>
-
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>{data.orderRows?.[0]?.sizeRow?.[0] ?? 672}</TableCell>
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>{data.orderRows?.[0]?.sizeRow?.[1] ?? 480}</TableCell>
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>{data.orderRows?.[0]?.sizeRow?.[2] ?? 672}</TableCell>
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>{data.orderRows?.[0]?.sizeRow?.[3] ?? 432}</TableCell>
-
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>{data.orderRows?.[0]?.totalQty ?? '2,256.00 PCS'}</TableCell>
-
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>${data.orderRows?.[0]?.unitPrice ?? "2.93"}</TableCell>
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>${data.orderRows?.[0]?.subAmount ?? "6,610.08"}</TableCell>
-      </TableRow>
-
-      {/* ------- 2XL HEADER ------- */}
-      <TableRow sx={{ borderBottom: "1px solid black" }}>
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>2XL</TableCell>
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>{data.orderRows?.[1]?.productCode ?? "NA"}</TableCell>
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>Size</TableCell>
-
-        <TableCell colSpan={4} sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>2XL</TableCell>
-
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>PCS</TableCell>
-        <TableCell sx={{ padding: '2px 4px' }}></TableCell>
-        <TableCell sx={{ padding: '2px 4px' }}></TableCell>
-      </TableRow>
-
-      {/* ------- 2XL QUANTITY ------- */}
-      <TableRow sx={{ borderBottom: "1px solid black" }}>
-                <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>2XL</TableCell>
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>{data.orderRows?.[1]?.productCode ?? "NA"}</TableCell>
-
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>Quantity</TableCell>
-        <TableCell colSpan={4} sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>{data.orderRows?.[1]?.sizeRow?.[0] ?? 0}</TableCell>
-
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>{data.orderRows?.[1]?.totalQty ?? '0 PCS'}</TableCell>
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>${data.orderRows?.[1]?.unitPrice ?? "3.15"}</TableCell>
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>${data.orderRows?.[1]?.subAmount ?? "0.00"}</TableCell>
-      </TableRow>
-
-      {/* ------- 3XL HEADER ------- */}
-      <TableRow sx={{ borderBottom: "1px solid black" }}>
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>3XL</TableCell>
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>{data.orderRows?.[2]?.productCode ?? "NA"}</TableCell>
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>Size</TableCell>
-
-        <TableCell colSpan={4} sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>3XL</TableCell>
-
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>PCS</TableCell>
-        <TableCell sx={{ padding: '2px 4px' }}></TableCell>
-        <TableCell sx={{ padding: '2px 4px' }}></TableCell>
-      </TableRow>
-
-      {/* ------- 3XL QUANTITY ------- */}
-      <TableRow sx={{ borderBottom: "1px solid black" }}>
-       <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>3XL</TableCell>
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>{data.orderRows?.[2]?.productCode ?? "NA"}</TableCell>
-
-        <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px' }}>Quantity</TableCell>
-        <TableCell colSpan={4} sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>{data.orderRows?.[2]?.sizeRow?.[0] ?? 0}</TableCell>
-
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>{data.orderRows?.[2]?.totalQty ?? '0 PCS'}</TableCell>
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>${data.orderRows?.[2]?.unitPrice ?? "3.30"}</TableCell>
-        <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px' }}>${data.orderRows?.[2]?.subAmount ?? "0.00"}</TableCell>
-      </TableRow>
-
-      {/* ------- TOTAL ROW ------- */}
-      <TableRow sx={{ borderBottom: "1px solid black" }}>
-        <TableCell colSpan={7} sx={{ textAlign: "right", fontWeight: "bold", fontSize: '0.70rem', padding: '2px 4px' }}>Total:-</TableCell>
-        <TableCell sx={{ fontWeight: "bold", fontSize: '0.70rem', padding: '2px 8px' }}>{data.grandTotalQty ?? "2256"}</TableCell>
-        <TableCell sx={{ padding: '2px 4px' }}></TableCell>
-        <TableCell sx={{ padding: '2px 4px' }}></TableCell>
-      </TableRow>
-
-    </TableBody>
-  </Table>
-</TableContainer>
-
-{/* 🌟 P.O. Total Section - Outside the Table (Left Aligned) 🌟 */}
-<Box
-    sx={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '1px 0', 
-        fontSize: '0.70rem', 
-    }}
->
-    <Box sx={{ 
-        fontWeight: 'bold', 
-        display: 'flex', 
-        gap: '3px' 
-    }}>
-        P.O Total: <span style={{ paddingRight: '10px' }}>{data.poTotalQty ?? '2,256'}</span> PCS {data.poTotalDetails ?? '188.00 Dz 47 Ctn'}
-    </Box>
-    <Box sx={{ 
-        display: 'flex', 
-        fontWeight: 'bold',
-    }}>
-        <Box sx={{ 
-            textAlign: 'left', 
-            pr: 0.5, 
-            pl: 0.5,
-            backgroundColor: '#f0f0f0',
-        }}>
-            P.O Net FOB Value $
-        </Box>
-        <Box sx={{ 
-            textAlign: 'left', 
-            pr: 0.5, 
-            pl: 0.5,
-            backgroundColor: '#f0f0f0',
-            minWidth: '60px'
-        }}>
-            {data.grandTotalAmount ?? '6,610.08'}
-        </Box>
-    </Box>
-</Box>
-
-      {/* 6. Instructions, More Info, Banking, and Washing Instructions Section */}
-<TableContainer component={Paper} sx={{ border: '1px solid black', borderRadius: 0, boxShadow: 'none' }}>
-  <Table size="small" sx={{ borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-    
-    {/* Columns Width setting */}
-    <colgroup>
-      <col style={{ width: '15%' }} />
-      <col style={{ width: '45%' }} />
-      <col style={{ width: '20%' }} />
-      <col style={{ width: '20%' }} />
-    </colgroup>
-
-    <TableBody>
-
-      {/* ===================== ROW 1: Special Inst & Source ===================== */}
-      <TableRow>
-        <TableCell sx={{ border: '1px solid black', verticalAlign: 'top', fontWeight: 'bold', fontSize: '11px', p: 1 }}>
-          Special 
-          Instructions :
-        </TableCell>
-
-        <TableCell sx={{ border: '1px solid black', verticalAlign: 'top', p: 1 }}>
-          {/* Empty */}
-        </TableCell>
-
-        <TableCell colSpan={2} sx={{ border: '1px solid black', verticalAlign: 'top', p: 1 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <Box sx={{ width: '100%', textAlign: 'right', mb: 1 }}>
-              <Typography sx={{ fontSize: '11px', fontWeight: 'bold' }}>Source</Typography>
+          {/* Item Description & Ship Details */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+            <Box sx={{ width: '40%' }}>
+              <Typography sx={{ fontSize: '9px', fontWeight: 'bold', color: '#000000' }}>Item Description :</Typography>
+              <Typography sx={{ fontSize: '9px', fontWeight: 'bold', mt: 0.5, color: '#000000' }}>
+                {data.itemDescription}
+              </Typography>
+              <Box sx={{ display: 'flex', mt: 1 }}>
+                <Box sx={{ width: '45%' }}>
+                  <Typography sx={{ fontSize: '9px', fontWeight: 'bold', color: '#000000' }}>Ex-Factory (Ship Date)</Typography>
+                  <Typography sx={{ fontSize: '9px', fontWeight: 'bold', color: '#000000' }}>Final Inspection Date</Typography>
+                </Box>
+                <Box sx={{ width: '55%', textAlign: 'right' }}>
+                  <Typography sx={{ fontSize: '9px', color: '#000000' }}>{data.exFactory}</Typography>
+                  <Typography sx={{ fontSize: '9px', color: '#000000' }}>{data.finalInspection}</Typography>
+                </Box>
+              </Box>
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-               <Box>
-                 <Typography sx={{ fontSize: '11px', fontWeight: 'bold' }}>Fabric</Typography>
-                 <Typography sx={{ fontSize: '11px' }}>Local</Typography>
-               </Box>
-               <Box sx={{ textAlign: 'right' }}>
-                 <Typography sx={{ fontSize: '11px' }}>Trims & Accessories</Typography>
-                 <Typography sx={{ fontSize: '11px' }}>{data.trimsAccessories || ""}</Typography>
-               </Box>
+
+            <Box sx={{ width: '60%' }}>
+              <TableContainer component={Paper} sx={{ backgroundColor: '#FFFFFF' }}>
+                <Table size="small">
+                  <TableBody>
+                    <TableRow>
+                      <POCell header sx={{ width: '15%' }}>Lead Time:</POCell>
+                      <POCell header sx={{ width: '15%' }}>{data.leadTime}</POCell>
+                      <POCell header sx={{ width: '15%' }}>Ship Mode:</POCell>
+                      <POCell header sx={{ width: '25%' }}>Destination:</POCell>
+                      <POCell header sx={{ width: '15%' }}>Shipment Terms:</POCell>
+                      <POCell header sx={{ width: '15%' }}>Payment Terms:</POCell>
+                    </TableRow>
+                    <TableRow>
+                      <POCell></POCell>
+                      <POCell></POCell>
+                      <POCell>{data.shipMode}</POCell>
+                      <POCell>{data.destination}</POCell>
+                      <POCell>{data.shipmentTerms}</POCell>
+                      <POCell>{data.paymentTerms}</POCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </Box>
           </Box>
-        </TableCell>
-      </TableRow>
 
+          {/* Fabrication Table */}
+          <Box sx={{ display: 'flex', mb: 1, borderTop: '1px solid black', backgroundColor: '#FFFFFF', flexDirection: 'column' }}>
+            <Box sx={{ display: 'flex', padding: '10px', gap: '90px' }}>
+              <POCell header sx={{ padding: '0' }}>Fabrication Body & Trims</POCell>
+              <POCell header sx={{ padding: '0' }}>AMS - Team: {data.amsTeam}</POCell>
+              <POCell header sx={{ padding: '0' }}>C.P.O #: {data.cpoNumber}</POCell>
+              <POCell header sx={{ padding: '0' }}>Style #: {data.styleNumber}</POCell>
+            </Box>
+            
+            <TableContainer component={Paper} sx={{ flex: '1', backgroundColor: '#FFFFFF' }}>
+              <Table size="small" sx={{ borderCollapse: 'collapse', width: '100%' }}>
+                <TableHead>
+                  <TableRow sx={{ borderBottom: '1px solid black' }}>
+                    <POCell header sx={{ width: '12%', textAlign: 'left', paddingLeft: '8px' }}>Description</POCell>
+                    <POCell header sx={{ width: '12%', textAlign: 'left', paddingLeft: '8px' }}>Fabric</POCell>
+                    <POCell header sx={{ width: '15%', textAlign: 'left', paddingLeft: '8px' }}>Content</POCell>
+                    <POCell header sx={{ width: '10%', textAlign: 'left', paddingLeft: '8px' }}>Weight</POCell>
+                    <POCell header sx={{ width: '36%', borderLeft: '1px solid black', paddingLeft: '8px' }}>Packing Instructions</POCell>
+                    <POCell header sx={{ width: '15%', borderLeft: '1px solid black', paddingLeft: '8px' }}>Ratio</POCell>
+                  </TableRow>
+                </TableHead>
 
-      {/* ===================== ROW 2: Important Note & Special Op (BORDER REMOVED HERE) ===================== */}
-      <TableRow>
-        {/* Note Label */}
-        <TableCell sx={{ border: '1px solid black', verticalAlign: 'top', fontWeight: 'bold', fontSize: '11px', p: 1 }}>
-          Important Note:
-        </TableCell>
+                <TableBody>
+                  <TableRow sx={{ borderLeft: '1px solid black', borderRight: '1px solid black' }}>
+                    <POCell sx={{ borderRight: '1px solid black', height: '60px', borderBottom: '1px solid black', width: '12%', paddingLeft: '8px' }}>
+                      <Typography sx={{ fontSize: '11px', fontWeight: 'bold', color: '#000000' }}>{data.fabric.description}</Typography>
+                    </POCell>
+                    <POCell sx={{ borderRight: '1px solid black', height: '60px', borderBottom: '1px solid black', width: '12%', paddingLeft: '8px' }}>
+                      <Typography sx={{ fontSize: '11px', color: '#000000' }}>{data.fabric.fabric}</Typography>
+                    </POCell>
+                    <POCell sx={{ borderRight: '1px solid black', height: '60px', borderBottom: '1px solid black', width: '15%', paddingLeft: '8px' }}>
+                      <Typography sx={{ fontSize: '11px', color: '#000000' }}>{data.fabric.content}</Typography>
+                    </POCell>
+                    <POCell sx={{ borderRight: '1px solid black', height: '60px', borderBottom: '1px solid black', width: '10%', paddingLeft: '8px' }}>
+                      <Typography sx={{ fontSize: '11px', color: '#000000' }}>{data.fabric.weight}</Typography>
+                    </POCell>
+                    <POCell sx={{ height: '60px', borderBottom: '1px solid black', width: '36%', paddingLeft: '8px' }}>
+                      <Typography sx={{ fontSize: '11px', color: '#000000' }}>{data.packingInstructions}</Typography>
+                    </POCell>
+                    <POCell sx={{ height: '60px', borderBottom: '1px solid black', width: '15%', paddingLeft: '8px', borderLeft: '1px solid black' }}>
+                      {/* Ratio data */}
+                    </POCell>
+                  </TableRow>
 
-        {/* Note Content */}
-        <TableCell sx={{ border: '1px solid black', verticalAlign: 'top', p: 1 }}>
-          <Typography sx={{ fontSize: '10px', lineHeight: 1.5 }}>
-            1- {data.importantNotes?.[0] || "Fabric should be heat set and lock properly to avoid shrinkage problem."}<br/>
-            2- {data.importantNotes?.[1] || "Before cutting fabric should be kept on table for atleast 24 hours."}<br/>
-            3- {data.importantNotes?.[2] || "All garments should be 100% checked for sizes before carton packing"}
-          </Typography>
-        </TableCell>
+                  <TableRow sx={{ borderLeft: '1px solid black', borderRight: '1px solid black', borderBottom: '1px solid black' }}>
+                    <POCell sx={{ verticalAlign: 'top', borderRight: '1px solid black', width: '12%', paddingLeft: '8px' }}>
+                      <Typography sx={{ fontSize: '11px', fontWeight: 'bold', color: '#000000' }}>Other</Typography>
+                    </POCell>
+                    <POCell colSpan={3} sx={{ borderRight: '1px solid black' }}></POCell>
+                    <POCell colSpan={2} sx={{ height: '35px', borderLeft: '1px solid black' }}></POCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
 
-        {/* Special Op Label - RIGHT BORDER REMOVED */}
-        <TableCell sx={{ 
-            border: '1px solid black', 
-            borderRight: 'none',   // <--- Yahan se border hataya
-            verticalAlign: 'top', 
-            fontWeight: 'bold', 
-            fontSize: '11px', 
-            p: 1 
-          }}>
-          Special Operation
-        </TableCell>
+          {/* Product Details */}
+          <Box sx={{ display: 'flex', mb: 1, backgroundColor: '#FFFFFF' }}>
+            <Box sx={{ flex: 55, mr: 0.5 }}>
+              <TableContainer component={Paper} sx={{ backgroundColor: '#FFFFFF' }}>
+                <Table size="small" sx={{ borderCollapse: 'collapse' }}>
+                  <TableBody>
+                    <TableRow>
+                      <BorderedPOCell header sx={{ width: '30%' }}>Product Category:</BorderedPOCell>
+                      <BorderedPOCell sx={{ width: '20%' }}>{data.productCategory}</BorderedPOCell>
+                      <BorderedPOCell header sx={{ width: '30%' }}>Pcs Per Carton:</BorderedPOCell>
+                      <BorderedPOCell sx={{ width: '20%' }}>{data.pcsPerCarton}</BorderedPOCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
 
-        {/* Special Op Content - LEFT BORDER REMOVED */}
-        <TableCell sx={{ 
-            border: '1px solid black', 
-            borderLeft: 'none',    // <--- Yahan se border hataya
-            verticalAlign: 'top', 
-            textAlign: 'right', 
-            p: 1 
-          }}>
-          <Typography sx={{ fontSize: '10px', fontWeight: 'bold' }}>Emb & Embellishment :</Typography>
-          <Typography sx={{ fontSize: '10px', mt: 0.5 }}>{data.embellishment || "GARMENT DYE"}</Typography>
-        </TableCell>
-      </TableRow>
+            <Box sx={{ flex: 45, ml: 0.5 }}>
+              <TableContainer component={Paper} sx={{ backgroundColor: '#FFFFFF' }}>
+                <Table size="small" sx={{ borderCollapse: 'collapse' }}>
+                  <TableHead>
+                    <TableRow>
+                      <BorderedPOCell header>Carton Marking:</BorderedPOCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <TableRow>
+                      <BorderedPOCell sx={{ height: '10px' }}>{data.cartonMarking}</BorderedPOCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+          </Box>
 
-      {/* ===================== ROW 3: More Info ===================== */}
-      <TableRow>
-        <TableCell sx={{ border: '1px solid black', fontWeight: 'bold', fontSize: '11px', p: 1 }}>More Info :</TableCell>
-        <TableCell colSpan={3} sx={{ border: '1px solid black', p: 1 }}>
-             <Typography sx={{ fontSize: '11px' }}>N/A</Typography>
-        </TableCell>
-      </TableRow>
+          {/* Main Quantity Table */}
+          <TableContainer component={Paper} sx={{ mb: 0, border: '1px solid black', backgroundColor: '#FFFFFF' }}>
+            <Table sx={{ minWidth: 450, fontSize: '0.70rem', borderCollapse: 'collapse' }} size="small">
+              <TableHead>
+                <TableRow sx={{ borderBottom: "1px solid black" }}>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Color (s)</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Product Code</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Reference</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }} colSpan={4}>Size Range</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Color Total Qty in PCS</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>FOB Unit Price ($)</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>FOB Value Sub Amount ($)</TableCell>
+                </TableRow>
+              </TableHead>
 
-      {/* ===================== ROW 4: Sampling Req ===================== */}
-      <TableRow>
-        <TableCell sx={{ border: '1px solid black', fontWeight: 'bold', fontSize: '11px', p: 1 }}>Sampling Req :</TableCell>
-        <TableCell colSpan={3} sx={{ border: '1px solid black', p: 1 }}>
-             <Typography sx={{ fontSize: '11px' }}>{data.samplingReq || "N/A"}</Typography>
-        </TableCell>
-      </TableRow>
+              <TableBody>
+                <TableRow sx={{ borderBottom: "1px solid black" }}>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.color ?? "Red clay"}</TableCell>
+                  <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
+                  <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
+                  <TableCell colSpan={4} sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
+                  <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
+                  <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
+                  <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
+                </TableRow>
 
-      {/* ===================== ROW 5: Bank & Washing ===================== */}
-     {/* ===================== ROW 5: Bank & Washing (Alignment Changed) ===================== */}
-      <TableRow>
-        
-        {/* BANK DETAILS - Left Side (No Change) */}
-       
+                <TableRow sx={{ borderBottom: "1px solid black" }}>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>S-XL</TableCell>
+                  <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.productCode ?? "NA"}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Size</TableCell>
+                  <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>S</TableCell>
+                  <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>M</TableCell>
+                  <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>L</TableCell>
+                  <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>XL</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>PCS</TableCell>
+                  <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
+                  <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
+                </TableRow>
 
-      </TableRow>
+                <TableRow sx={{ borderBottom: "1px solid black" }}>
+                  <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
+                  <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.productCode ?? "NA"}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Quantity</TableCell>
+                  <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.sizeRow?.[0] ?? 672}</TableCell>
+                  <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.sizeRow?.[1] ?? 480}</TableCell>
+                  <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.sizeRow?.[2] ?? 672}</TableCell>
+                  <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.sizeRow?.[3] ?? 432}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.total ?? '2,256.00 PCS'}</TableCell>
+                  <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>${data.orderRows?.[0]?.unit ?? "2.93"}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>${data.orderRows?.[0]?.amount ?? "6,610.08"}</TableCell>
+                </TableRow>
 
-    </TableBody>
-  </Table>
-</TableContainer>
-{/* Main Container for the two Boxes */}
-<Box sx={{ 
-    display: 'flex', 
-    justifyContent: 'space-between', 
-    alignItems: 'flex-start',
-    mb: 1, 
-    // Assuming the container fills a certain width, e.g., 100%
-    width: '100%' 
-}}>
-    
-    {/* LEFT BOX: Beneficiary's Bank Details */}
-    <Box 
-        sx={{ 
-            width: '38%', // <--- Maximum Gap setting (38% + 38% = 76% width used, 24% for gap)
-            border: '1px solid black', 
-            p: 1, 
-            minHeight: '120px', 
-            display: 'flex', 
-            flexDirection: 'column', 
-            justifyContent: 'space-between'
-        }}
-    >
-        {/* Top: Heading */}
-        <Box>
-            <Typography sx={{ fontSize: '11px', fontWeight: 'bold' }}>Beneficiary's Bank :</Typography>
-            <Typography sx={{ fontSize: '11px', fontWeight: 'bold', mt: 0.5, lineHeight: 1.6 }}>{data.beneficiaryBank || ""}</Typography> 
+                <TableRow sx={{ borderBottom: "1px solid black" }}>
+                  <TableCell colSpan={7} sx={{ textAlign: "right", fontWeight: "bold", fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Total:-</TableCell>
+                  <TableCell sx={{ fontWeight: "bold", fontSize: '0.70rem', padding: '2px 8px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.totalQty ?? "2256"}</TableCell>
+                  <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
+                  <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          {/* PO Total Section */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1px 0', fontSize: '0.70rem', color: '#000000', backgroundColor: '#FFFFFF' }}>
+            <Box sx={{ fontWeight: 'bold', display: 'flex', gap: '3px' }}>
+              P.O Total: <span style={{ paddingRight: '10px' }}>{data.totalQty ?? '2,256'}</span> PCS {data.poTotalDetails ?? '188.00 Dz 47 Ctn'}
+            </Box>
+            <Box sx={{ display: 'flex', fontWeight: 'bold' }}>
+              <Box sx={{ textAlign: 'left', pr: 0.5, pl: 0.5, backgroundColor: '#f0f0f0', color: '#000000' }}>
+                P.O Net FOB Value $
+              </Box>
+              <Box sx={{ textAlign: 'left', pr: 0.5, pl: 0.5, backgroundColor: '#f0f0f0', minWidth: '60px', color: '#000000' }}>
+                {data.totalAmount ?? '6,610.08'}
+              </Box>
+            </Box>
+          </Box>
+
+          {/* Instructions Section */}
+          <TableContainer component={Paper} sx={{ border: '1px solid black', borderRadius: 0, boxShadow: 'none', backgroundColor: '#FFFFFF' }}>
+            <Table size="small" sx={{ borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: '15%' }} />
+                <col style={{ width: '45%' }} />
+                <col style={{ width: '20%' }} />
+                <col style={{ width: '20%' }} />
+              </colgroup>
+
+              <TableBody>
+                <TableRow>
+                  <TableCell sx={{ border: '1px solid black', verticalAlign: 'top', fontWeight: 'bold', fontSize: '11px', p: 1, color: '#000000', backgroundColor: '#FFFFFF' }}>
+                    Special Instructions :
+                  </TableCell>
+                  <TableCell sx={{ border: '1px solid black', verticalAlign: 'top', p: 1, backgroundColor: '#FFFFFF' }}>
+                    {data.specialInstructions}
+                  </TableCell>
+                  <TableCell colSpan={2} sx={{ border: '1px solid black', verticalAlign: 'top', p: 1, backgroundColor: '#FFFFFF' }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                      <Box sx={{ width: '100%', textAlign: 'right', mb: 1 }}>
+                        <Typography sx={{ fontSize: '11px', fontWeight: 'bold', color: '#000000' }}>Source</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <Box>
+                          <Typography sx={{ fontSize: '11px', fontWeight: 'bold', color: '#000000' }}>Fabric</Typography>
+                          <Typography sx={{ fontSize: '11px', color: '#000000' }}>{data.source}</Typography>
+                        </Box>
+                        <Box sx={{ textAlign: 'right' }}>
+                          <Typography sx={{ fontSize: '11px', color: '#000000' }}>Trims & Accessories</Typography>
+                          <Typography sx={{ fontSize: '11px', color: '#000000' }}>{data.trimsAccessories}</Typography>
+                        </Box>
+                      </Box>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+
+                <TableRow>
+                  <TableCell sx={{ border: '1px solid black', verticalAlign: 'top', fontWeight: 'bold', fontSize: '11px', p: 1, color: '#000000', backgroundColor: '#FFFFFF' }}>
+                    Important Note:
+                  </TableCell>
+                  <TableCell sx={{ border: '1px solid black', verticalAlign: 'top', p: 1, backgroundColor: '#FFFFFF' }}>
+                    <Typography sx={{ fontSize: '10px', lineHeight: 1.5, color: '#000000' }}>
+                      {data.importantNotes.map((note, index) => (
+                        <span key={index}>
+                          {index + 1}- {note}<br/>
+                        </span>
+                      ))}
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={{ border: '1px solid black', borderRight: 'none', verticalAlign: 'top', fontWeight: 'bold', fontSize: '11px', p: 1, color: '#000000', backgroundColor: '#FFFFFF' }}>
+                    Special Operation
+                  </TableCell>
+                  <TableCell sx={{ border: '1px solid black', borderLeft: 'none', verticalAlign: 'top', textAlign: 'right', p: 1, backgroundColor: '#FFFFFF' }}>
+                    <Typography sx={{ fontSize: '10px', fontWeight: 'bold', color: '#000000' }}>Emb & Embellishment :</Typography>
+                    <Typography sx={{ fontSize: '10px', mt: 0.5, color: '#000000' }}>{data.embellishment}</Typography>
+                    <Typography sx={{ fontSize: '10px', fontWeight: 'bold', mt: 1, color: '#000000' }}>Special Operation:</Typography>
+                    <Typography sx={{ fontSize: '10px', color: '#000000' }}>{data.specialOperation}</Typography>
+                  </TableCell>
+                </TableRow>
+
+                <TableRow>
+                  <TableCell sx={{ border: '1px solid black', fontWeight: 'bold', fontSize: '11px', p: 1, color: '#000000', backgroundColor: '#FFFFFF' }}>More Info :</TableCell>
+                  <TableCell colSpan={3} sx={{ border: '1px solid black', p: 1, backgroundColor: '#FFFFFF' }}>
+                    <Typography sx={{ fontSize: '11px', color: '#000000' }}>N/A</Typography>
+                  </TableCell>
+                </TableRow>
+
+                <TableRow>
+                  <TableCell sx={{ border: '1px solid black', fontWeight: 'bold', fontSize: '11px', p: 1, color: '#000000', backgroundColor: '#FFFFFF' }}>Sampling Req :</TableCell>
+                  <TableCell colSpan={3} sx={{ border: '1px solid black', p: 1, backgroundColor: '#FFFFFF' }}>
+                    <Typography sx={{ fontSize: '11px', color: '#000000' }}>{data.samplingReq}</Typography>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          {/* Bank & Washing */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1, width: '100%', backgroundColor: '#FFFFFF' }}>
+            <Box sx={{ width: '38%', border: '1px solid black', p: 1, minHeight: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', backgroundColor: '#FFFFFF' }}>
+              <Box>
+                <Typography sx={{ fontSize: '11px', fontWeight: 'bold', color: '#000000' }}>Beneficiary's Bank :</Typography>
+                <Typography sx={{ fontSize: '11px', fontWeight: 'bold', mt: 0.5, lineHeight: 1.6, color: '#000000' }}>{data.beneficiaryBank}</Typography> 
+              </Box>
+              <Box sx={{ mt: 3, lineHeight: 1.6 }}>
+                <Typography sx={{ fontSize: '11px', color: '#000000' }}>Account No.: {data.accountNo}</Typography>
+                <Typography sx={{ fontSize: '11px', color: '#000000' }}>Routing No.: {data.routingNo}</Typography>
+              </Box>
+            </Box>
+
+            <Box sx={{ width: '38%', border: '1px solid black', p: 1, minHeight: '120px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', backgroundColor: '#FFFFFF' }}>
+              <Typography sx={{ fontSize: '11px', fontWeight: 'bold', textAlign: 'center', mb: 1, width: '100%', color: '#000000' }}>
+                Washing - Care Label Instructions
+              </Typography>
+              <Typography sx={{ fontSize: '10px', lineHeight: 1.8, textAlign: 'left', color: '#000000' }}> 
+                {data.washingInstructions}
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* Footer */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5, pr: 0.5, pl: 0.5 }}>
+            <Typography sx={{ fontSize: '9px', color: 'gray' }}>
+              ERP Solution Provider : www.itg.net.pk
+            </Typography>
+            <Typography sx={{ fontSize: '9px', color: 'gray' }}>
+              Page # : 1
+            </Typography>
+          </Box>
         </Box>
-        
-        {/* Bottom: Details */}
-        <Box sx={{ mt: 3, lineHeight: 1.6 }}>
-           <Typography sx={{ fontSize: '11px' }}>Account No.: {data.accountNo || ""}</Typography>
-           <Typography sx={{ fontSize: '11px' }}>Routing No.: {data.routingNo || ""}</Typography>
-        </Box>
-    </Box>
-
-    {/* RIGHT BOX: Washing Instructions */}
-    <Box 
-        sx={{ 
-            width: '38%', // <--- Maximum Gap setting
-            border: '1px solid black', 
-            p: 1, 
-            minHeight: '120px', 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'flex-start'
-        }}
-    >
-        
-        {/* Header: Centered Alignment (for the header text only) */}
-        <Typography sx={{ fontSize: '11px', fontWeight: 'bold', textAlign: 'center', mb: 1, width: '100%' }}>
-            Washing - Care Label Instructions
-        </Typography>
-        
-        {/* Text: Increased Line Height (line-brhra) */}
-        <Typography sx={{ fontSize: '10px', lineHeight: 1.8, textAlign: 'left' }}> 
-            {data.washingInstructions || "Machine Wash Cold With Like Colors, Gentle Cycle. Use Only Non Chlorine Bleach when needed , Line Dry, Cool Iron."}
-        </Typography>
-    </Box>
-</Box>
-      {/* 7. Footer */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5, pr: 0.5, pl: 0.5 }}>
-        <Typography sx={{ fontSize: '9px', color: 'gray' }}>
-          ERP Solution Provider : www.itg.net.pk
-        </Typography>
-        <Typography sx={{ fontSize: '9px', color: 'gray' }}>
-          Page # : 1
-        </Typography>
       </Box>
     </Box>
   );
