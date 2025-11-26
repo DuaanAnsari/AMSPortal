@@ -45,7 +45,7 @@ import ZoomInIcon from '@mui/icons-material/ZoomIn';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 // Create axios instance with authorization header
 const apiClient = axios.create({
-  baseURL: 'http://172.16.0.126/api',
+baseURL: `${API_BASE_URL}/api`,
 });
 
 // Add request interceptor to include authorization token
