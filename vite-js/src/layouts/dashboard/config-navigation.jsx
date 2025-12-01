@@ -111,6 +111,8 @@ export function useNavData() {
               { title: t('Merchant Inquiry'), path: paths.dashboard.supplyChain.merchantInquiry },
               { title: t('Order Detail'), path: paths.dashboard.supplyChain.orderDetail },
               { title: t('Sampling Program'), path: paths.dashboard.supplyChain.samplingProgram },
+              { title: t('Edit Order'), path: paths.dashboard.supplyChain.editOrder },
+
               // { title: t('Purchase Order PDF'), path: paths.dashboard.supplyChain.purchaseOrderPDF },
               // { title: t('Milestone'), path: paths.dashboard.supplyChain.milestone },
               // { title: t('Cancellations'), path: paths.dashboard.user.demo.edit },

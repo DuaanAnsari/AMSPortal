@@ -1211,14 +1211,14 @@ export default function CompletePurchaseOrderForm() {
         },
         { 
           name: 'shipmentModes', 
-          url: `${API_BASE_URL}/api/MyOrders/GetShipmentModes`,
+          url: `${API_BASE_URL}/api/MyOrders/GetDeliveryTypes`,
           setter: setShipmentOptions,
           setLoading: setShipmentLoading,
           setError: setShipmentError
         },
         { 
           name: 'deliveryTypes', 
-          url: `${API_BASE_URL}/api/MyOrders/GetDeliveryTypes`,
+          url: `${API_BASE_URL}/api/MyOrders/GetShipmentModes`,
           setter: setDeliveryOptions,
           setLoading: setDeliveryLoading,
           setError: setDeliveryError
@@ -1583,7 +1583,7 @@ export default function CompletePurchaseOrderForm() {
       embAndEmbellishment: data.embEmbellishment || '',
       poImage: poImageBase64, // Base64 string
       poImgFileName: files.image ? files.image.name : '',
-      poQtyUnit: data.unit || '',
+      grossAndNetWeight: data.unit || '',
       shipmentModeText: data.shipmentMode || '',
       costingMstID: 0,
       userID: 0,
@@ -1612,7 +1612,7 @@ export default function CompletePurchaseOrderForm() {
       pptype: files.ppComment ? files.ppComment.type : '',
       finaltype: files.finalSpecs ? files.finalSpecs.type : '',
       sizetype: files.sizeSetComment ? files.sizeSetComment.type : '',
-      grossAndNetWeight: '',
+      poQtyUnit: data.set || '',
       barCodeTFPO: '',
       etanjDate: formatDate(data.etaNewJerseyDate),
       etaWarehouseDate: formatDate(data.etaWarehouseDate),
@@ -2561,7 +2561,7 @@ export default function CompletePurchaseOrderForm() {
                         ) : (
                           <Select {...field} label="Payment Mode" value={field.value || ''}>
                             {paymentOptions.map((p) => (
-                              <MenuItem key={p.id} value={p.name}>
+                              <MenuItem key={p.id} value={p.id}>
                                 {p.name}
                               </MenuItem>
                             ))}
@@ -2586,7 +2586,7 @@ export default function CompletePurchaseOrderForm() {
                         ) : (
                           <Select {...field} label="Shipment Term" value={field.value || ''}>
                             {shipmentOptions.map((s) => (
-                              <MenuItem key={s.id} value={s.name}>
+                              <MenuItem key={s.id} value={s.id}>
                                 {s.name}
                               </MenuItem>
                             ))}
@@ -2618,7 +2618,7 @@ export default function CompletePurchaseOrderForm() {
                         ) : (
                           <Select {...field} label="Shipment Mode" value={field.value || ''}>
                             {deliveryOptions.map((d) => (
-                              <MenuItem key={d.id} value={d.name}>
+                              <MenuItem key={d.id} value={d.id}>
                                 {d.name}
                               </MenuItem>
                             ))}

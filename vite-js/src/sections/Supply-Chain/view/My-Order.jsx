@@ -405,7 +405,7 @@ export default function PurchaseOrderView() {
 
   const handleViewOrder = useCallback(
   (id) => {
-    navigate(`/dashboard/supply-chain/view/${id}`);
+    navigate(`/dashboard/supply-chain/purchase-order-edit/${id}`);
     enqueueSnackbar(`Viewing details for PO ID: ${id}`);
   },
   [enqueueSnackbar, navigate]

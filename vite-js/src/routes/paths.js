@@ -131,6 +131,8 @@ export const paths = {
       addOrderDetail: '/dashboard/supply-chain/add-order-detail',
       milestone: `${ROOTS.DASHBOARD}/supply-chain/milestone`,
       view: `${ROOTS.DASHBOARD}/supply-chain/view`,
+      editOrder: `${ROOTS.DASHBOARD}/supply-chain/edit-order`,
+
 
         purchaseOrderPDF: `${ROOTS.DASHBOARD}/supply-chain/purchase-order-pdf`,
 

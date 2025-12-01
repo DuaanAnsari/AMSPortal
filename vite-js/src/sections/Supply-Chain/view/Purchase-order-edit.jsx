@@ -42,10 +42,41 @@ import CalculateIcon from '@mui/icons-material/Calculate';
 import CircularProgress from '@mui/material/CircularProgress';
 import CloseIcon from '@mui/icons-material/Close';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+// -------------------- Constants / Helpers --------------------
+const STATUS_OPTIONS = ['Confirm', 'Cancel', 'Close'];
+
+function mapApiStatusToOption(status) {
+  if (status === undefined || status === null) return '';
+  const s = String(status).trim().toLowerCase();
+  if (!s) return '';
+
+  if (s === 'confirm' || s === 'confirmed') return 'Confirm';
+  if (s === 'cancel' || s === 'cancelled' || s === 'canceled') return 'Cancel';
+  if (s === 'close' || s === 'closed') return 'Close';
+
+  // Fallback: show whatever API returned
+  return String(status);
+}
+
+// Helper functions for safe data conversion (similar to Add-Order.jsx)
+const safeParseInt = (value) => {
+  if (value === undefined || value === null || value === '') return 0;
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const safeParseFloat = (value) => {
+  if (value === undefined || value === null || value === '') return 0;
+  const parsed = parseFloat(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
 // Create axios instance with authorization header
 const apiClient = axios.create({
-  baseURL: 'http://172.16.0.126/api',
+  baseURL: `${API_BASE_URL}/api`,
 });
 
 // Add request interceptor to include authorization token
@@ -737,9 +768,9 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
   );
 }
 
-// -------------------- Merchant Multiple Select Component --------------------
-function MerchantMultipleSelect({ name, label }) {
-  const { control } = useFormContext();
+// -------------------- Updated Merchant Multiple Select Component --------------------
+function MerchantMultipleSelect({ name, label, merchants, selectedMerchantNames }) {
+  const { control, setValue } = useFormContext();
 
   return (
     <Controller
@@ -753,19 +784,14 @@ function MerchantMultipleSelect({ name, label }) {
             multiple
             input={<OutlinedInput label={label} />}
             renderValue={(selected) => selected.join(', ')}
+            value={selectedMerchantNames || []}
           >
-            <MenuItem value="Merchant 1">
-              <Checkbox checked={field.value.indexOf('Merchant 1') > -1} />
-              <ListItemText primary="Merchant 1" />
-            </MenuItem>
-            <MenuItem value="Merchant 2">
-              <Checkbox checked={field.value.indexOf('Merchant 2') > -1} />
-              <ListItemText primary="Merchant 2" />
-            </MenuItem>
-            <MenuItem value="Merchant 3">
-              <Checkbox checked={field.value.indexOf('Merchant 3') > -1} />
-              <ListItemText primary="Merchant 3" />
-            </MenuItem>
+            {merchants.map((merchant) => (
+              <MenuItem key={merchant.userId} value={merchant.userName}>
+                <Checkbox checked={field.value ? field.value.indexOf(merchant.userName) > -1 : false} />
+                <ListItemText primary={merchant.userName} />
+              </MenuItem>
+            ))}
           </Select>
         </FormControl>
       )}
@@ -878,10 +904,276 @@ export default function CompletePurchaseOrderFormEdit() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [loading, setLoading] = useState(true);
   const [apiData, setApiData] = useState(null);
+  const [customers, setCustomers] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [merchants, setMerchants] = useState([]);
+  const [productPortfolios, setProductPortfolios] = useState([]);
+  const [productCategories, setProductCategories] = useState([]);
+  const [productGroups, setProductGroups] = useState([]);
+  const [filteredProductCategories, setFilteredProductCategories] = useState([]);
+  const [filteredProductGroups, setFilteredProductGroups] = useState([]);
+  const [selectedCustomerName, setSelectedCustomerName] = useState('');
+  const [selectedSupplierName, setSelectedSupplierName] = useState('');
+  const [selectedMerchantNames, setSelectedMerchantNames] = useState([]);
+  const [selectedProductPortfolioName, setSelectedProductPortfolioName] = useState('');
+  const [bankOptions, setBankOptions] = useState([]);
+  const [bankLoading, setBankLoading] = useState(false);
+  const [bankError, setBankError] = useState(null);
+  // Costing Ref options (CostingRefNo API)
+  const [costingOptions, setCostingOptions] = useState([]);
+  const [costingLoading, setCostingLoading] = useState(false);
 
   const customerPoValue = watch('customerPo');
   const calculationField1 = watch('calculationField1');
   const calculationField2 = watch('calculationField2');
+  const selectedProductPortfolio = watch('productPortfolio');
+  const selectedProductCategory = watch('productCategory');
+
+  // Fetch customers from API
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const response = await apiClient.get('/MyOrders/GetCustomer');
+        if (response.data) {
+          // Remove duplicates based on customerID
+          const uniqueCustomers = response.data.filter((customer, index, self) => 
+            index === self.findIndex(c => c.customerID === customer.customerID)
+          );
+          setCustomers(uniqueCustomers);
+        }
+      } catch (error) {
+        console.error('Error fetching customers:', error);
+        showSnackbar('Error loading customers data', 'error');
+      }
+    };
+
+    fetchCustomers();
+  }, []);
+
+  // Fetch suppliers from API
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      try {
+        const response = await apiClient.get('/MyOrders/GetSupplier');
+        if (response.data) {
+          // Remove duplicates based on venderLibraryID
+          const uniqueSuppliers = response.data.filter((supplier, index, self) => 
+            index === self.findIndex(s => s.venderLibraryID === supplier.venderLibraryID)
+          );
+          setSuppliers(uniqueSuppliers);
+        }
+      } catch (error) {
+        console.error('Error fetching suppliers:', error);
+        showSnackbar('Error loading suppliers data', 'error');
+      }
+    };
+
+    fetchSuppliers();
+  }, []);
+
+  // Fetch banks from API for Bank dropdown
+  useEffect(() => {
+    const fetchBanks = async () => {
+      try {
+        setBankLoading(true);
+        setBankError(null);
+        const response = await apiClient.get('/MyOrders/GetBanks');
+        const data = response.data;
+
+        if (Array.isArray(data)) {
+          setBankOptions(data);
+        } else if (data) {
+          setBankOptions([data]);
+        } else {
+          setBankOptions([]);
+        }
+      } catch (error) {
+        console.error('Error fetching banks:', error);
+        setBankError('Unable to load banks');
+        showSnackbar('Error loading banks data', 'error');
+        setBankOptions([]);
+      } finally {
+        setBankLoading(false);
+      }
+    };
+
+    fetchBanks();
+  }, []);
+
+  // Fetch costing references from API for Costing Ref dropdown
+  useEffect(() => {
+    const fetchCostingRefs = async () => {
+      try {
+        setCostingLoading(true);
+        const response = await apiClient.get('/MyOrders/CostingRefNo');
+        const data = response.data;
+
+        if (Array.isArray(data)) {
+          setCostingOptions(data);
+        } else if (data) {
+          setCostingOptions([data]);
+        } else {
+          setCostingOptions([]);
+        }
+      } catch (error) {
+        console.error('Error fetching costing refs:', error);
+        showSnackbar('Error loading costing references', 'error');
+        setCostingOptions([]);
+      } finally {
+        setCostingLoading(false);
+      }
+    };
+
+    fetchCostingRefs();
+  }, []);
+
+  // Fetch merchants from API
+  useEffect(() => {
+    const fetchMerchants = async () => {
+      try {
+        const response = await apiClient.get('/MyOrders/GetMerchants');
+        if (response.data) {
+          setMerchants(response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching merchants:', error);
+        showSnackbar('Error loading merchants data', 'error');
+      }
+    };
+
+    fetchMerchants();
+  }, []);
+
+  // Fetch product portfolios from API
+  useEffect(() => {
+    const fetchProductPortfolios = async () => {
+      try {
+        const response = await apiClient.get('/MyOrders/GetProductPortfolio');
+        if (response.data) {
+          setProductPortfolios(response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching product portfolios:', error);
+        showSnackbar('Error loading product portfolios data', 'error');
+      }
+    };
+
+    fetchProductPortfolios();
+  }, []);
+
+  // Load product categories from API based on selected or API portfolio
+  useEffect(() => {
+    const loadCategories = async () => {
+      let portfolioID = null;
+
+      // Try from selected portfolio name
+      if (selectedProductPortfolio && productPortfolios.length > 0) {
+        const selectedPortfolio = productPortfolios.find(
+          (p) => p.productPortfolio === selectedProductPortfolio
+        );
+        if (selectedPortfolio) {
+          portfolioID = selectedPortfolio.productPortfolioID;
+        }
+      }
+
+      // Fallback to API data (when editing existing PO and field is pre-set)
+      if (!portfolioID && apiData?.productPortfolioID) {
+        portfolioID = apiData.productPortfolioID;
+      }
+
+      if (!portfolioID) {
+        setProductCategories([]);
+        setFilteredProductCategories([]);
+        return;
+      }
+
+      try {
+        const response = await apiClient.get(
+          `/MyOrders/GetProductCategories/${portfolioID}`
+        );
+        const categories = response.data || [];
+        setProductCategories(categories);
+        setFilteredProductCategories(categories);
+
+        // When loading from API for first time, set form field from IDs
+        if (apiData?.productCategoriesID) {
+          const categoryFromAPI = categories.find(
+            (c) =>
+              Number(c.productCategoriesID) ===
+              Number(apiData.productCategoriesID)
+          );
+          if (categoryFromAPI) {
+            setValue('productCategory', categoryFromAPI.productCategories);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching product categories:', error);
+        showSnackbar('Error loading product categories data', 'error');
+        setProductCategories([]);
+        setFilteredProductCategories([]);
+      }
+    };
+
+    // Run once dependent data is available
+    if (productPortfolios.length > 0) {
+      loadCategories();
+    }
+  }, [selectedProductPortfolio, productPortfolios, apiData, setValue]);
+
+  // Load product groups from API based on selected or API category
+  useEffect(() => {
+    const loadGroups = async () => {
+      let categoryID = null;
+
+      // Try from selected category name
+      if (selectedProductCategory && productCategories.length > 0) {
+        const selectedCategory = productCategories.find(
+          (c) => c.productCategories === selectedProductCategory
+        );
+        if (selectedCategory) {
+          categoryID = selectedCategory.productCategoriesID;
+        }
+      }
+
+      // Fallback to API data (when editing existing PO and field is pre-set)
+      if (!categoryID && apiData?.productCategoriesID) {
+        categoryID = apiData.productCategoriesID;
+      }
+
+      if (!categoryID) {
+        setProductGroups([]);
+        setFilteredProductGroups([]);
+        return;
+      }
+
+      try {
+        const response = await apiClient.get(
+          `/MyOrders/GetProductGroups/${categoryID}`
+        );
+        const groups = response.data || [];
+        setProductGroups(groups);
+        setFilteredProductGroups(groups);
+
+        if (apiData?.productGroupID) {
+          const groupFromAPI = groups.find(
+            (g) => Number(g.productGroupID) === Number(apiData.productGroupID)
+          );
+          if (groupFromAPI) {
+            setValue('productGroup', groupFromAPI.productGroup);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching product groups:', error);
+        showSnackbar('Error loading product groups data', 'error');
+        setProductGroups([]);
+        setFilteredProductGroups([]);
+      }
+    };
+
+    if (productCategories.length > 0) {
+      loadGroups();
+    }
+  }, [selectedProductCategory, productCategories, apiData, setValue]);
 
   // Fetch data from API when component mounts or ID changes
   useEffect(() => {
@@ -900,6 +1192,52 @@ export default function CompletePurchaseOrderFormEdit() {
           console.log("API Order Data:", orderData);
           setApiData(orderData);
           
+          // Find customer name based on customerID from purchase order
+          const customerFromAPI = customers.find(customer => customer.customerID === orderData.customerID);
+          const customerName = customerFromAPI ? customerFromAPI.customerName : '';
+          setSelectedCustomerName(customerName);
+
+          // Find supplier name based on supplierID from purchase order
+          const supplierFromAPI = suppliers.find(supplier => supplier.venderLibraryID === orderData.supplierID);
+          const supplierName = supplierFromAPI ? supplierFromAPI.venderName : '';
+          setSelectedSupplierName(supplierName);
+
+          // Find merchant names based on marchandID from purchase order
+          const merchantFromAPI = merchants.find(merchant => merchant.userId === orderData.marchandID);
+          const merchantNames = merchantFromAPI ? [merchantFromAPI.userName] : [];
+          setSelectedMerchantNames(merchantNames);
+
+          // Find product portfolio name based on productPortfolioID from purchase order
+          const portfolioFromAPI = productPortfolios.find(portfolio => portfolio.productPortfolioID === orderData.productPortfolioID);
+          const portfolioName = portfolioFromAPI ? portfolioFromAPI.productPortfolio : '';
+          setSelectedProductPortfolioName(portfolioName);
+
+          // Find product category name based on productCategoriesID from purchase order
+          const categoryFromAPI = productCategories.find(
+            category => category.productCategoriesID === orderData.productCategoriesID
+          );
+          const categoryName = categoryFromAPI ? categoryFromAPI.productCategories : '';
+          
+          // Find product group name based on productGroupID from purchase order
+          const groupFromAPI = productGroups.find(
+            group => group.productGroupID === orderData.productGroupID
+          );
+          const groupName = groupFromAPI ? groupFromAPI.productGroup : '';
+          
+          console.log("Category Match:", {
+            purchaseOrderCategoryID: orderData.productCategoriesID,
+            allCategories: productCategories,
+            matchedCategory: categoryFromAPI,
+            categoryName: categoryName
+          });
+
+          console.log("Group Match:", {
+            purchaseOrderGroupID: orderData.productGroupID,
+            allGroups: productGroups,
+            matchedGroup: groupFromAPI,
+            groupName: groupName
+          });
+          
           // Map API data to form fields with date mappings
           reset({
             // Basic Order Info
@@ -909,7 +1247,12 @@ export default function CompletePurchaseOrderFormEdit() {
             amsRef: orderData.amsRefNo || '',
             rnNo: orderData.rnNo || '',
             consignee: orderData.consignee || '',
-            customer: orderData.buyerName || '',
+            customer: customerName || '', // Set customer name from API
+            supplier: supplierName || '', // Set supplier name from API
+            merchant: merchantNames || [], // Set merchant names from API
+            productPortfolio: portfolioName || '', // Set product portfolio name from API
+            productCategory: categoryName || '', // Set product category name from API (matched by ID)
+            productGroup: groupName || '', // Set product group name from API (matched by ID)
             proceedings: orderData.proceedings || '',
             orderType: orderData.pOtype || 'New',
             transactions: orderData.transactions || 'Services',
@@ -932,14 +1275,13 @@ export default function CompletePurchaseOrderFormEdit() {
             vendorShipLast: orderData.vendorExIndiaShipmentDate ? orderData.vendorExIndiaShipmentDate.split('T')[0] : '',
             
             // Product Information
-            productGroup: orderData.productGroup || '',
             season: orderData.season || '',
             fabric: orderData.fabric || '',
             item: orderData.item || '',
             design: orderData.design || '',
             otherFabric: orderData.otherFabric || '',
             construction: orderData.construction || '',
-            status: orderData.status || '',
+            status: mapApiStatusToOption(orderData.status) || '',
             styleSource: orderData.styleSource || '',
             brand: orderData.brand || '',
             assortment: orderData.assortment || '',
@@ -950,10 +1292,11 @@ export default function CompletePurchaseOrderFormEdit() {
             importantNote: orderData.importantNote || '',
             moreInfo: orderData.moreInfo || '',
             samplingRequirements: orderData.samplingReq || '',
-            pcsPerCarton: orderData.pcPerCarton || '',
-            grossWeight: orderData.grossWeight || '',
-            netWeight: orderData.netWeight || '',
-            unit: orderData.poQtyUnit || '',
+            // Use nullish coalescing so 0 is preserved (0 should show as 0, not empty)
+            pcsPerCarton: orderData.pcPerCarton ?? '',
+            grossWeight: orderData.grossWeight ?? '',
+            netWeight: orderData.netWeight ?? '',
+            unit: orderData.grossAndNetWeight || '',
             packingList: orderData.packingList || '',
             embEmbellishment: orderData.embAndEmbellishment || 'Not Required',
             buyerCustomer: orderData.buyerCustomer || '',
@@ -961,14 +1304,19 @@ export default function CompletePurchaseOrderFormEdit() {
             
             // Product Specific Information
             currency: orderData.currency || 'Dollar',
-            exchangeRate: orderData.exchangeRate || '',
-            style: orderData.design || '',
+            // Preserve 0 exchange rate as "0", only empty when null/undefined
+            exchangeRate: orderData.exchangeRate ?? '',
+            // Prefer styleNo (as shown in My-Order list), fallback to design
+            style: orderData.styleNo || orderData.design || '',
             
             // Shipping and Payment Terms
+            // "paymentMode":  "2"  -> Payment Mode select (values: "2", "3", ...)
+            // "shipmentMode": "5"  -> Shipment Term select (values: "4", "5", ...)
+            // "deliveryType": "7"  -> Shipment Mode select (values: "1", "7", "8", ...)
             paymentMode: orderData.paymentMode || '',
-            shipmentTerm: orderData.deliveryType || 'CNF',
+            shipmentTerm: orderData.shipmentMode || '',
             destination: orderData.destination || 'New York',
-            shipmentMode: orderData.shipmentMode || '',
+            shipmentMode: orderData.deliveryType || '',
             
             // Bank Details
             bankName: orderData.bankName || '',
@@ -977,24 +1325,28 @@ export default function CompletePurchaseOrderFormEdit() {
             accountNo: orderData.accountNo || '',
             
             // Keep existing values for fields not in API
-            costingRef: '',
-            supplier: '',
-            merchant: [],
+            // Costing Ref: API sends costingMstID; our select uses IDs as string values.
+            costingRef:
+              orderData.costingMstID !== undefined && orderData.costingMstID !== null
+                ? String(orderData.costingMstID)
+                : '',
             RevisedShipmentDate: '',
             reasonReviseBuyer: '',
             reasonReviseVendor: '',
-            productPortfolio: '',
-            productCategory: '',
             tolQuantity: orderData.toleranceindays || 0,
-            set: '',
+            set: orderData.poQtyUnit || '',
             qualityComposition: orderData.quality || 0,
             gsm: orderData.gms || 0,
-            gsmOF: '',
+            gsmOF: orderData.costingMstID || 0,
             poSpecialOperation: orderData.pO_Special_Operation || '',
             poSpecialTreatment: orderData.pO_Special_Treatement || '',
             inquiryNo: orderData.inquiryMstID ? `INQ${orderData.inquiryMstID}` : '',
             routingNo: '',
-            bankID: orderData.bankID || '',
+            // Bank ID is saved as numeric/string ID; our select uses string values
+            bankID:
+              orderData.bankID !== undefined && orderData.bankID !== null
+                ? String(orderData.bankID)
+                : '',
             calculationField1: '',
             calculationField2: '',
           });
@@ -1008,9 +1360,14 @@ export default function CompletePurchaseOrderFormEdit() {
       }
     };
 
-    fetchPurchaseOrderData();
-  }, [id, reset]);
+    // Fetch purchase order data only when main dependent data is loaded
+    if (customers.length > 0 && suppliers.length > 0 && merchants.length > 0 && 
+        productPortfolios.length > 0) {
+      fetchPurchaseOrderData();
+    }
+  }, [id, reset, customers, suppliers, merchants, productPortfolios]);
 
+  // Auto-fill internal PO when customer PO changes
   useEffect(() => {
     if (customerPoValue) {
       setValue('internalPo', customerPoValue);
@@ -1049,19 +1406,144 @@ export default function CompletePurchaseOrderFormEdit() {
     setSnackbar({ ...snackbar, open: false });
   };
 
+  // Build payload for UpdatePurchaseOrder API from form data + existing apiData
+  const buildUpdatePayload = (form) => {
+    if (!apiData) return null;
+
+    const toIsoOrExisting = (dateStr, existing) => {
+      if (dateStr) {
+        const d = new Date(dateStr);
+        return Number.isNaN(d.getTime()) ? existing : d.toISOString();
+      }
+      return existing || null;
+    };
+
+    const payload = { ...apiData };
+
+    // Basic Order Info
+    payload.masterPO = form.masterPo || apiData.masterPO || '';
+    payload.pono = form.customerPo || apiData.pono || '';
+    payload.internalPONO = form.internalPo || apiData.internalPONO || '';
+    payload.amsRefNo = form.amsRef || apiData.amsRefNo || '';
+    payload.rnNo = form.rnNo || apiData.rnNo || '';
+    payload.consignee = form.consignee || apiData.consignee || '';
+
+    // Proceedings / types
+    payload.proceedings = form.proceedings || apiData.proceedings || '';
+    payload.pOtype = form.orderType || apiData.pOtype || '';
+    payload.transactions = form.transactions || apiData.transactions || '';
+    payload.version = form.version || apiData.version || '';
+
+    // Dates
+    payload.placementDate = toIsoOrExisting(form.placementDate, apiData.placementDate);
+    payload.etanjDate = toIsoOrExisting(form.etaNewJerseyDate, apiData.etanjDate);
+    payload.etaWarehouseDate = toIsoOrExisting(form.etaWarehouseDate, apiData.etaWarehouseDate);
+    payload.finalInspDate = toIsoOrExisting(form.finalInspectionDate, apiData.finalInspDate);
+
+    // Buyer / Vendor shipment windows
+    payload.tolerance = toIsoOrExisting(form.buyerShipInitial, apiData.tolerance);
+    payload.buyerExIndiaTolerance = toIsoOrExisting(
+      form.buyerShipLast,
+      apiData.buyerExIndiaTolerance
+    );
+    payload.shipmentDate = toIsoOrExisting(form.vendorShipInitial, apiData.shipmentDate);
+    payload.vendorExIndiaShipmentDate = toIsoOrExisting(
+      form.vendorShipLast,
+      apiData.vendorExIndiaShipmentDate
+    );
+
+    // Product Information
+    payload.season = form.season || apiData.season || '';
+    payload.fabric = form.fabric || apiData.fabric || '';
+    payload.item = form.item || apiData.item || '';
+    payload.design = form.design || apiData.design || '';
+    payload.otherFabric = form.otherFabric || apiData.otherFabric || '';
+    payload.construction = form.construction || apiData.construction || '';
+    payload.status = form.status || apiData.status || '';
+    payload.styleSource = form.styleSource || apiData.styleSource || '';
+    payload.brand = form.brand || apiData.brand || '';
+    payload.assortment = form.assortment || apiData.assortment || '';
+    payload.ration = form.ratio || apiData.ration || '';
+    payload.cartonMarking = form.cartonMarking || apiData.cartonMarking || '';
+    payload.pO_Special_Instructions =
+      form.poSpecialInstructions || apiData.pO_Special_Instructions || '';
+    payload.washingCareLabelInstructions =
+      form.washingCareLabel || apiData.washingCareLabelInstructions || '';
+    payload.importantNote = form.importantNote || apiData.importantNote || '';
+    payload.moreInfo = form.moreInfo || apiData.moreInfo || '';
+    payload.samplingReq = form.samplingRequirements || apiData.samplingReq || '';
+    payload.pcPerCarton = safeParseInt(form.pcsPerCarton ?? apiData.pcPerCarton);
+    payload.grossWeight = safeParseFloat(form.grossWeight ?? apiData.grossWeight);
+    payload.netWeight = safeParseFloat(form.netWeight ?? apiData.netWeight);
+    payload.grossAndNetWeight = form.unit || apiData.grossAndNetWeight || '';
+    payload.packingList = form.packingList || apiData.packingList || '';
+    payload.embAndEmbellishment = form.embEmbellishment || apiData.embAndEmbellishment || '';
+
+    // Product Specific Information
+    payload.currency = form.currency || apiData.currency || '';
+    payload.exchangeRate = safeParseFloat(form.exchangeRate ?? apiData.exchangeRate);
+
+    // Shipping & Payment Terms
+    // "paymentMode":  "2"  -> Payment Mode select (values: "2", "3", ...)
+    // "shipmentMode": "5"  -> Shipment Term select (values: "4", "5", ...)
+    // "deliveryType": "7"  -> Shipment Mode select (values: "1", "7", "8", ...)
+    payload.paymentMode = form.paymentMode || apiData.paymentMode || '';
+    payload.shipmentMode = form.shipmentTerm || apiData.shipmentMode || '';
+    payload.deliveryType = form.shipmentMode || apiData.deliveryType || '';
+    payload.destination = form.destination || apiData.destination || '';
+
+    // Bank Details
+    payload.titleOfAccount = form.titleOfAccount || apiData.titleOfAccount || '';
+    payload.bankName = form.bankName || apiData.bankName || '';
+    payload.bankBranch = form.bankBranch || apiData.bankBranch || '';
+    payload.accountNo = form.accountNo || apiData.accountNo || '';
+    payload.iban = form.routingNo || apiData.iban || '';
+    payload.bankID =
+      form.bankID !== undefined && form.bankID !== null && form.bankID !== ''
+        ? safeParseInt(form.bankID)
+        : apiData.bankID || 0;
+
+    // Reasons / notes
+    payload.reasonforReviseShpmnt =
+      form.reasonReviseBuyer || apiData.reasonforReviseShpmnt || '';
+    payload.reasonforReviseShpmntVendor =
+      form.reasonReviseVendor || apiData.reasonforReviseShpmntVendor || '';
+
+    // Master references
+    payload.masterPO = form.masterPo || apiData.masterPO || '';
+    payload.amsRefNo = form.amsRef || apiData.amsRefNo || '';
+    payload.samplingReq = form.samplingRequirements || apiData.samplingReq || '';
+    payload.buyerCustomer = form.buyerCustomer || apiData.buyerCustomer || '';
+
+    // Costing / product hierarchy IDs (keep existing IDs)
+    payload.productPortfolioID = apiData.productPortfolioID;
+    payload.productCategoriesID = apiData.productCategoriesID;
+    payload.productGroupID = apiData.productGroupID;
+    payload.costingMstID = apiData.costingMstID;
+
+    // Keep creation & last update timestamps
+    payload.creationDate = apiData.creationDate || new Date().toISOString();
+    payload.lastUpdate = new Date().toISOString();
+
+    return payload;
+  };
+
   const onSubmit = async (data) => {
     try {
-      console.log('Form submitted:', data);
-      showSnackbar('Purchase Order saved successfully!', 'success');
-      
-      setTimeout(() => {
-        methods.reset();
-        setSavedItemData(null);
-        setFiles({});
-      }, 1000);
+      const payload = buildUpdatePayload(data);
+      if (!payload) {
+        showSnackbar('Unable to build update payload. Please reload the page.', 'error');
+        return;
+      }
+
+      console.log('Update payload:', payload);
+
+      await apiClient.post(`/MyOrders/UpdatePurchaseOrder?poid=${id}`, payload);
+
+      showSnackbar('Purchase Order updated successfully!', 'success');
     } catch (error) {
       console.error('Error submitting form:', error);
-      showSnackbar('Error saving purchase order. Please try again.', 'error');
+      showSnackbar('Error updating purchase order. Please try again.', 'error');
     }
   };
 
@@ -1120,9 +1602,20 @@ export default function CompletePurchaseOrderFormEdit() {
                       InputLabelProps={{ shrink: true }}
                     >
                       <MenuItem value="">Select</MenuItem>
-                      <MenuItem value="REF001">REF001</MenuItem>
-                      <MenuItem value="REF002">REF002</MenuItem>
-                      <MenuItem value="REF003">REF003</MenuItem>
+                      {costingLoading ? (
+                        <MenuItem value="" disabled>
+                          Loading...
+                        </MenuItem>
+                      ) : (
+                        costingOptions.map((opt) => (
+                          <MenuItem
+                            key={opt.costingMstID ?? opt.costingNo}
+                            value={String(opt.costingMstID)}
+                          >
+                            {opt.costingNo}
+                          </MenuItem>
+                        ))
+                      )}
                     </TextField>
                   )}
                 />
@@ -1169,9 +1662,11 @@ export default function CompletePurchaseOrderFormEdit() {
                       value={field.value || ''}
                     >
                       <MenuItem value="">Select Customer</MenuItem>
-                      <MenuItem value="Customer 1">Customer 1</MenuItem>
-                      <MenuItem value="Customer 2">Customer 2</MenuItem>
-                      <MenuItem value="Customer 3">Customer 3</MenuItem>
+                      {customers.map((customer) => (
+                        <MenuItem key={customer.customerID} value={customer.customerName}>
+                          {customer.customerName}
+                        </MenuItem>
+                      ))}
                     </TextField>
                   )}
                 />
@@ -1190,9 +1685,11 @@ export default function CompletePurchaseOrderFormEdit() {
                       value={field.value || ''}
                     >
                       <MenuItem value="">Select Supplier</MenuItem>
-                      <MenuItem value="Supplier 1">Supplier 1</MenuItem>
-                      <MenuItem value="Supplier 2">Supplier 2</MenuItem>
-                      <MenuItem value="Supplier 3">Supplier 3</MenuItem>
+                      {suppliers.map((supplier) => (
+                        <MenuItem key={supplier.venderLibraryID} value={supplier.venderName}>
+                          {supplier.venderName}
+                        </MenuItem>
+                      ))}
                     </TextField>
                   )}
                 />
@@ -1202,6 +1699,8 @@ export default function CompletePurchaseOrderFormEdit() {
                 <MerchantMultipleSelect
                   name="merchant"
                   label="Merchant"
+                  merchants={merchants}
+                  selectedMerchantNames={selectedMerchantNames}
                 />
               </Grid>
 
@@ -1434,11 +1933,19 @@ export default function CompletePurchaseOrderFormEdit() {
                         {...field}
                         label="Product Portfolio"
                         value={field.value || ''}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          // Reset dependent fields when portfolio changes
+                          setValue('productCategory', '');
+                          setValue('productGroup', '');
+                        }}
                       >
                         <MenuItem value="">Select Portfolio</MenuItem>
-                        <MenuItem value="Portfolio 1">Portfolio 1</MenuItem>
-                        <MenuItem value="Portfolio 2">Portfolio 2</MenuItem>
-                        <MenuItem value="Portfolio 3">Portfolio 3</MenuItem>
+                        {productPortfolios.map((portfolio) => (
+                          <MenuItem key={portfolio.productPortfolioID} value={portfolio.productPortfolio}>
+                            {portfolio.productPortfolio}
+                          </MenuItem>
+                        ))}
                       </Select>
                     </FormControl>
                   )}
@@ -1456,11 +1963,19 @@ export default function CompletePurchaseOrderFormEdit() {
                         {...field}
                         label="Product Category"
                         value={field.value || ''}
+                        disabled={!selectedProductPortfolio}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          // Reset product group when category changes
+                          setValue('productGroup', '');
+                        }}
                       >
                         <MenuItem value="">Select Category</MenuItem>
-                        <MenuItem value="Category 1">Category 1</MenuItem>
-                        <MenuItem value="Category 2">Category 2</MenuItem>
-                        <MenuItem value="Category 3">Category 3</MenuItem>
+                        {filteredProductCategories.map((category) => (
+                          <MenuItem key={category.productCategoriesID} value={category.productCategories}>
+                            {category.productCategories}
+                          </MenuItem>
+                        ))}
                       </Select>
                     </FormControl>
                   )}
@@ -1474,11 +1989,18 @@ export default function CompletePurchaseOrderFormEdit() {
                   render={({ field }) => (
                     <FormControl fullWidth>
                       <InputLabel>Product Group</InputLabel>
-                      <Select {...field} label="Product Group" value={field.value || ''}>
+                      <Select
+                        {...field}
+                        label="Product Group"
+                        value={field.value || ''}
+                        disabled={!selectedProductCategory}
+                      >
                         <MenuItem value="">Select Group</MenuItem>
-                        <MenuItem value="Group 1">Group 1</MenuItem>
-                        <MenuItem value="Group 2">Group 2</MenuItem>
-                        <MenuItem value="Group 3">Group 3</MenuItem>
+                        {filteredProductGroups.map((group) => (
+                          <MenuItem key={group.productGroupID} value={group.productGroup}>
+                            {group.productGroup}
+                          </MenuItem>
+                        ))}
                       </Select>
                     </FormControl>
                   )}
@@ -1868,9 +2390,9 @@ export default function CompletePurchaseOrderFormEdit() {
                       <FormControl fullWidth>
                         <InputLabel>Payment Mode</InputLabel>
                         <Select {...field} label="Payment Mode" value={field.value || ''}>
-                          <MenuItem value="DP">DP</MenuItem>
-                          <MenuItem value="LC">LC</MenuItem>
-                          <MenuItem value="TT">TT</MenuItem>
+                          <MenuItem value="2">DP</MenuItem>
+                          <MenuItem value="3">Dp/ap</MenuItem>
+                         
                         </Select>
                       </FormControl>
                     )}
@@ -1885,9 +2407,9 @@ export default function CompletePurchaseOrderFormEdit() {
                       <FormControl fullWidth>
                         <InputLabel>Shipment Term</InputLabel>
                         <Select {...field} label="Shipment Term" value={field.value || ''}>
-                          <MenuItem value="CNF">CNF</MenuItem>
-                          <MenuItem value="FOB">FOB</MenuItem>
-                          <MenuItem value="CIF">CIF</MenuItem>
+                          <MenuItem value="4">CNF</MenuItem>
+                          <MenuItem value="5">FOB</MenuItem>
+                         
                         </Select>
                       </FormControl>
                     )}
@@ -1909,28 +2431,27 @@ export default function CompletePurchaseOrderFormEdit() {
                       <FormControl fullWidth>
                         <InputLabel>Shipment Mode</InputLabel>
                         <Select {...field} label="Shipment Mode" value={field.value || ''}>
-                          <MenuItem value="Air">Air</MenuItem>
-                          <MenuItem value="Sea">Sea</MenuItem>
-                          <MenuItem value="Land">Land</MenuItem>
+                          <MenuItem value="1">Air</MenuItem>
+                          <MenuItem value="7">Sea</MenuItem>
+                          <MenuItem value="8">courier</MenuItem>
                         </Select>
                       </FormControl>
                     )}
                   />
                 </Grid>
                 <Grid item xs={12} sm={3}>
-  <Controller
-    name="naField"
-    control={control}
-    render={({ field }) => (
-      <TextField
-        {...field}
-        fullWidth
-        label="N/A"
-      />
-    )}
-  />
-</Grid>
-
+                  <Controller
+                    name="naField"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        fullWidth
+                        label="N/A"
+                      />
+                    )}
+                  />
+                </Grid>
               </Grid>
             </CardContent>
           </Card>
@@ -1979,9 +2500,22 @@ export default function CompletePurchaseOrderFormEdit() {
                       <FormControl fullWidth>
                         <InputLabel>Bank</InputLabel>
                         <Select {...field} label="Bank" value={field.value || ''}>
-                          <MenuItem value="1">Bank 1</MenuItem>
-                          <MenuItem value="2">Bank 2</MenuItem>
-                          <MenuItem value="3">Bank 3</MenuItem>
+                          {bankLoading ? (
+                            <MenuItem disabled>Loading...</MenuItem>
+                          ) : bankError ? (
+                            <MenuItem disabled>{bankError}</MenuItem>
+                          ) : bankOptions.length > 0 ? (
+                            bankOptions.map((bank) => (
+                              <MenuItem
+                                key={bank.bankID}
+                                value={String(bank.bankID)}
+                              >
+                                {bank.bankName}
+                              </MenuItem>
+                            ))
+                          ) : (
+                            <MenuItem disabled>No banks found</MenuItem>
+                          )}
                         </Select>
                       </FormControl>
                     )}
