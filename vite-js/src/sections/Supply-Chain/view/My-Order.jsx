@@ -83,6 +83,7 @@ const SHIPMENT_MONTH_OPTIONS = [
 
 // Base table headers - sabke liye common
 const BASE_TABLE_HEAD = [
+  { id: 'select', label: '', width: 50 }, // Checkbox column
   { id: 'poNo', label: 'PO No.', width: 100 },
   { id: 'styleNo', label: 'Style No.', width: 100 },
   { id: 'customer', label: 'Customer', width: 140 },
@@ -566,6 +567,25 @@ export default function PurchaseOrderView() {
                   </Button>
                 )}
 
+                {/* Edit Selected Button */}
+                {table.selected.length > 0 && (
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    startIcon={<Iconify icon="eva:edit-fill" width={20} />}
+                    onClick={() => {
+                      // Navigate to edit-order with selected PO IDs
+                      navigate('/dashboard/supply-chain/edit-order', {
+                        state: { selectedPOIds: table.selected }
+                      });
+                      enqueueSnackbar(`Editing ${table.selected.length} selected PO(s)`);
+                    }}
+                    sx={{ whiteSpace: 'nowrap' }}
+                  >
+                    Edit ({table.selected.length})
+                  </Button>
+                )}
+
                 <Button
                   variant="contained"
                   startIcon={<Iconify icon="eva:plus-fill" width={20} />}
@@ -862,6 +882,14 @@ function PurchaseOrderTableRow({
 
   return (
     <TableRow hover selected={selected} sx={{ '& td': { py: 1 } }}>
+      {/* Checkbox Column */}
+      <TableCell padding="checkbox">
+        <Checkbox
+          checked={selected}
+          onClick={onSelectRow}
+          sx={{ p: 0.5 }}
+        />
+      </TableCell>
       {/* Base Columns - Sabko dikhne wale */}
       <TableCell sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{row.poNo}</TableCell>
       <TableCell sx={{ fontSize: '0.75rem' }}>{row.styleNo}</TableCell>

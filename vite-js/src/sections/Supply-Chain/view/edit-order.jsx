@@ -1,416 +1,574 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { AgGridReact } from "ag-grid-react";
-import 'ag-grid-enterprise';
-import {
-    ModuleRegistry,
-    AllCommunityModule,
-    themeBalham,
-    colorSchemeDarkBlue
-} from 'ag-grid-community';
-import { useNavigate } from "react-router";
-import { Autocomplete, Button, Card, Grid, IconButton, InputAdornment, Stack, TextField, Tooltip, Typography,Dialog } from "@mui/material";
+import { ModuleRegistry, AllCommunityModule, themeBalham, colorSchemeDarkBlue } from 'ag-grid-community';
+import { AllEnterpriseModule, LicenseManager } from 'ag-grid-enterprise';
+import axios from 'axios';
+
+// AG Grid Enterprise License
+LicenseManager.setLicenseKey("Using_this_{AG_Charts_and_AG_Grid}_Enterprise_key_{AG-077aborr}_{granted_to_AMS_Baig_&_Co}_{for_application_{AMS_Portal}_is_not_permitted_for_apps_not_developed_in_partnership_with_AMS_Baig_&_Co}_{This_key_has_not_been_granted_a_Deployment_License_Add-on}_{This_key_works_with_{AG_Charts_and_AG_Grid}_Enterprise_versions_released_before_{28_April_2026}}_{[v3]_[0102]_MTc0NTc5NDgwMDAwMA==69c9a0c4f82299b15b7fc24c8226fac3}");
+
+// Register all modules (Community + Enterprise)
+ModuleRegistry.registerModules([AllCommunityModule, AllEnterpriseModule]);
+
+import { useNavigate, useLocation } from "react-router-dom";
+import { Alert, Box, Button, Card, CircularProgress, Container, Snackbar, Stack, Typography } from "@mui/material";
 import { LoadingButton } from "@mui/lab";
-import { LoadingScreen } from "src/components/loading-screen";
-import Iconify from 'src/components/iconify';
-import { useSettingsContext } from 'src/components/settings'
-import { paths } from "src/routes/paths";
-import DocumentsDetailDialog from "./document-detail-dialog";
+import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
+import SaveIcon from '@mui/icons-material/Save';
 
-// Register AG Grid community modules (required for v30+)
-ModuleRegistry.registerModules([AllCommunityModule]);
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-const LogisticGrid = ({ superSearch = false, zoomLevel = 1 }) => {
-    const settings = useSettingsContext();
+// Create axios instance with authorization header
+const apiClient = axios.create({
+    baseURL: `${API_BASE_URL}/api`,
+});
 
-    const themeDark = themeBalham.withPart(colorSchemeDarkBlue);
+// Add request interceptor to include authorization token
+apiClient.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
 
-    const navigate = useNavigate();
+// Helper function to transform API data to grid format
+const transformPODataToGridRow = (orderData) => {
+    return {
+        // Store original data for payload construction
+        originalData: orderData,
+        // Keep the original PO ID for update
+        poid: orderData.poid || orderData.POID || orderData.id || orderData.purchaseOrderId || '',
+        // Basic Order Info
+        costingRef: orderData.costingMstID ? String(orderData.costingMstID) : '',
+        masterPo: orderData.masterPO || '',
+        amsRef: orderData.amsRefNo || '',
+        customerPo: orderData.pono || '',
+        internalPo: orderData.internalPONO || '',
+        rnNo: orderData.rnNo || '',
+        consignee: orderData.consignee || '',
+        merchant: orderData.marchandID ? String(orderData.marchandID) : '',
+        proceedings: orderData.proceedings || '',
+        orderType: orderData.pOtype || '',
+        version: orderData.version || '',
 
-    const months = [
-        { value: '1', label: 'January' },
-        { value: '2', label: 'February' },
-        { value: '3', label: 'March' },
-        { value: '4', label: 'April' },
-        { value: '5', label: 'May' },
-        { value: '6', label: 'June' },
-        { value: '7', label: 'July' },
-        { value: '8', label: 'August' },
-        { value: '9', label: 'September' },
-        { value: '10', label: 'October' },
-        { value: '11', label: 'November' },
-        { value: '12', label: 'December' },
-    ];
-
-    const containerStyle = useMemo(() => ({ width: "100%", height: "500px" }), []);
-    const gridStyle = useMemo(() => ({ height: "100%", width: "100%" }), []);
-
-    const userData = useMemo(() => JSON.parse(localStorage.getItem('UserData') || '[]'), []);
-
-    // Date In SQL format
-    const formatDate = (date) => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-
-        return `${year}-${month}-${day}`;
+        // Important Dates
+        placementDate: orderData.placementDate ? orderData.placementDate.split('T')[0] : '',
+        etaNewJerseyDate: orderData.etanjDate ? orderData.etanjDate.split('T')[0] : '',
+        etaWarehouseDate: orderData.etaWarehouseDate ? orderData.etaWarehouseDate.split('T')[0] : '',
+        // Buyer Shipment Window
+        buyerShipInitial: orderData.tolerance ? orderData.tolerance.split('T')[0] : '',
+        buyerShipLast: orderData.buyerExIndiaTolerance ? orderData.buyerExIndiaTolerance.split('T')[0] : '',
+        // Vendor Shipment Window
+        vendorShipInitial: orderData.shipmentDate ? orderData.shipmentDate.split('T')[0] : '',
+        vendorShipLast: orderData.vendorExIndiaShipmentDate ? orderData.vendorExIndiaShipmentDate.split('T')[0] : '',
+        finalInspectionDate: orderData.finalInspDate ? orderData.finalInspDate.split('T')[0] : '',
+        // Product Information
+        productPortfolio: orderData.productPortfolioID ? String(orderData.productPortfolioID) : '',
+        productCategory: orderData.productCategoriesID ? String(orderData.productCategoriesID) : '',
+        productGroup: orderData.productGroupID ? String(orderData.productGroupID) : '',
+        season: orderData.season || '',
+        tolQuantity: orderData.toleranceindays || '',
+        set: orderData.poQtyUnit || '',
+        fabric: orderData.fabric || '',
+        item: orderData.item || '',
+        qualityComposition: orderData.quality || '',
+        gsm: orderData.gms || '',
+        design: orderData.design || '',
+        otherFabric: orderData.otherFabric || '',
+        gsmOF: '',
+        construction: orderData.construction || '',
+        poSpecialOperation: orderData.pO_Special_Operation || '',
+        status: orderData.status || '',
+        poSpecialTreatment: orderData.pO_Special_Treatement || '',
+        styleSource: orderData.styleSource || '',
+        brand: orderData.brand || '',
+        assortment: orderData.assortment || '',
+        ratio: orderData.ration || '',
+        cartonMarking: orderData.cartonMarking || '',
+        poSpecialInstructions: orderData.pO_Special_Instructions || '',
+        washingCareLabel: orderData.washingCareLabelInstructions || '',
+        importantNote: orderData.importantNote || '',
+        moreInfo: orderData.moreInfo || '',
+        samplingRequirements: orderData.samplingReq || '',
+        pcsPerCarton: orderData.pcPerCarton ?? '',
+        itemDescriptionShipping: orderData.itemDescriptionShippingInvoice || '',
+        grossWeight: orderData.grossWeight ?? '',
+        netWeight: orderData.netWeight ?? '',
+        unit: orderData.grossAndNetWeight || '',
+        packingList: orderData.packingList || '',
+        embEmbellishment: orderData.embAndEmbellishment || '',
+        inquiryNo: orderData.inquiryMstID ? `INQ${orderData.inquiryMstID}` : '',
+        buyerCustomer: orderData.buyerCustomer || '',
+        // Product Specific Information
+        currency: orderData.currency || '',
+        exchangeRate: orderData.exchangeRate ?? '',
+        style: orderData.styleNo || orderData.design || '',
+        // Shipping and Payment Terms
+        paymentMode: orderData.paymentMode || '',
+        shipmentTerm: orderData.shipmentMode || '',
+        destination: orderData.destination || '',
+        shipmentMode: orderData.deliveryType || '',
     };
+};
+
+// Helper to convert grid row back to API payload
+const transformGridRowToAPIPayload = (row) => {
+    const toIsoOrNull = (dateStr) => {
+        if (!dateStr) return null;
+        const d = new Date(dateStr);
+        return Number.isNaN(d.getTime()) ? null : d.toISOString();
+    };
+
+    // Start with original data to preserve unmapped fields
+    const payload = row.originalData ? { ...row.originalData } : {};
+
+    // Helper for safe parsing
+    const safeParseInt = (val) => {
+        const parsed = parseInt(val, 10);
+        return isNaN(parsed) ? 0 : parsed;
+    };
+    const safeParseFloat = (val) => {
+        const parsed = parseFloat(val);
+        return isNaN(parsed) ? 0 : parsed;
+    };
+
+    // Overwrite with grid values
+    Object.assign(payload, {
+        pono: row.customerPo || '',
+        internalPONO: row.internalPo || '',
+        masterPO: row.masterPo || '',
+        amsRefNo: row.amsRef || '',
+        rnNo: row.rnNo || '',
+        consignee: row.consignee || '',
+
+        // Proceedings / types
+        proceedings: row.proceedings || '',
+        pOtype: row.orderType || '',
+        transactions: 'Services',
+        version: row.version || '',
+        commission: safeParseFloat(row.commission),
+        vendorCommission: safeParseFloat(row.vendorCommission),
+
+        // Dates
+        placementDate: toIsoOrNull(row.placementDate),
+        etanjDate: toIsoOrNull(row.etaNewJerseyDate),
+        etaWarehouseDate: toIsoOrNull(row.etaWarehouseDate),
+        tolerance: toIsoOrNull(row.buyerShipInitial),
+        buyerExIndiaTolerance: toIsoOrNull(row.buyerShipLast),
+        shipmentDate: toIsoOrNull(row.vendorShipInitial),
+        vendorExIndiaShipmentDate: toIsoOrNull(row.vendorShipLast),
+        finalInspDate: toIsoOrNull(row.finalInspectionDate),
+
+        // Product Information
+        season: row.season || '',
+        toleranceindays: row.tolQuantity || '',
+        poQtyUnit: row.set || '',
+        fabric: row.fabric || '',
+        item: row.item || '',
+        quality: row.qualityComposition || '',
+        gms: row.gsm || '',
+        design: row.design || '',
+        otherFabric: row.otherFabric || '',
+        construction: row.construction || '',
+        pO_Special_Operation: row.poSpecialOperation || '',
+        status: row.status || '',
+        pO_Special_Treatement: row.poSpecialTreatment || '',
+        styleSource: row.styleSource || '',
+        brand: row.brand || '',
+        assortment: row.assortment || '',
+        ration: row.ratio || '',
+        cartonMarking: row.cartonMarking || '',
+        pO_Special_Instructions: row.poSpecialInstructions || '',
+        washingCareLabelInstructions: row.washingCareLabel || '',
+        importantNote: row.importantNote || '',
+        moreInfo: row.moreInfo || '',
+        samplingReq: row.samplingRequirements || '',
+        pcPerCarton: safeParseInt(row.pcsPerCarton),
+        itemDescriptionShippingInvoice: row.itemDescriptionShipping || '',
+        grossWeight: safeParseFloat(row.grossWeight),
+        netWeight: safeParseFloat(row.netWeight),
+        grossAndNetWeight: row.unit || '',
+        packingList: row.packingList || '',
+        embAndEmbellishment: row.embEmbellishment || '',
+        buyerCustomer: row.buyerCustomer || '',
+
+        // Product Specific Information
+        currency: row.currency || '',
+        exchangeRate: safeParseFloat(row.exchangeRate),
+        style: row.style || '',
+
+        // Shipping and Payment Terms
+        paymentMode: row.paymentMode || '',
+        shipmentMode: row.shipmentTerm || '',
+        destination: row.destination || '',
+        deliveryType: row.shipmentMode || '',
+
+        // IDs (parse as numbers if present)
+        productPortfolioID: row.productPortfolio ? safeParseInt(row.productPortfolio) : (payload.productPortfolioID || 0),
+        productCategoriesID: row.productCategory ? safeParseInt(row.productCategory) : (payload.productCategoriesID || 0),
+        productGroupID: row.productGroup ? safeParseInt(row.productGroup) : (payload.productGroupID || 0),
+        costingMstID: row.costingRef ? safeParseInt(row.costingRef) : (payload.costingMstID || 0),
+        marchandID: row.merchant ? safeParseInt(row.merchant) : (payload.marchandID || 0),
+        inquiryMstID: row.inquiryNo ? safeParseInt(row.inquiryNo.replace('INQ', '')) : (payload.inquiryMstID || 0),
+
+        // Keep last update
+        lastUpdate: new Date().toISOString(),
+    });
+
+    return payload;
+};
+
+const EditOrderPage = () => {
+    const navigate = useNavigate();
+    const location = useLocation();
+    const gridRef = useRef(null);
+
+    // Get selected PO IDs from navigation state
+    const selectedPOIds = location.state?.selectedPOIds || [];
 
     const [tableData, setTableData] = useState([]);
-    const [customersList, setCustomersList] = useState([]);
-    const [suppliersList, setSuppliersList] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-    const [loading, setLoading] = useState(false);
-    const [searching, setSearching] = useState(false);
-    const [firstSearch, setFirstSearch] = useState(false);
+    const containerStyle = useMemo(() => ({ width: "100%", height: "600px" }), []);
 
-    const [searchValue, setSearchValue] = useState({});
-
-    // Super Search
-
-    // Super Search stub (no API calls)
-    const FetchSuperSearchData = async () => {
-        // API hata di gayi hai – yahan sirf local state handle karna hai
-        setSearching(true);
-        // Filter local tableData yahan add kar sakte ho agar zarurat ho
-        setSearching(false);
-        setFirstSearch(true);
+    // Show snackbar helper
+    const showSnackbar = (message, severity = 'success') => {
+        setSnackbar({ open: true, message, severity });
     };
 
-    // Customers / Suppliers stub (no API calls)
-    const GetCustomersData = useCallback(async () => {
-        setCustomersList([]);
-    }, []);
+    const handleCloseSnackbar = () => {
+        setSnackbar({ ...snackbar, open: false });
+    };
 
-    const GetSuppliersData = useCallback(async () => {
-        setSuppliersList([]);
-    }, []);
-
-    // Initial load – filhal dummy data se grid show karwa rahe hain (API baad me add hogi)
+    // Fetch PO data for selected IDs
     useEffect(() => {
-        const now = new Date();
-        const dummyData = [
-            {
-                CargoID: 1,
-                VendorInvoiceNo: 'INV-1001',
-                InvoiceDate: now.toISOString(),
-                TotalQty: 1200,
-                TotalValue: 50000,
-                ETD: now.toISOString(),
-                CutomerName: 'ABC Customer',
-                VenderName: 'XYZ Supplier',
-                CurrencySign: '$',
-            },
-            {
-                CargoID: 2,
-                VendorInvoiceNo: 'INV-1002',
-                InvoiceDate: now.toISOString(),
-                TotalQty: 800,
-                TotalValue: 32000,
-                ETD: now.toISOString(),
-                CutomerName: 'DEF Customer',
-                VenderName: 'LMN Supplier',
-                CurrencySign: '$',
-            },
-        ];
+        const fetchSelectedPOsData = async () => {
+            if (selectedPOIds.length === 0) {
+                setLoading(false);
+                showSnackbar('No POs selected. Please go back and select POs to edit.', 'warning');
+                return;
+            }
 
-        setTableData(dummyData);
-        setCustomersList([]);
-        setSuppliersList([]);
-        setFirstSearch(true);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+            try {
+                setLoading(true);
+                const fetchPromises = selectedPOIds.map(id =>
+                    apiClient.get(`/MyOrders/GetPurchaseOrder/${id}`)
+                );
 
-    const renderLoading = (
-        <LoadingScreen
-            sx={{
-                borderRadius: 1.5,
-                bgcolor: 'background.default',
-                paddingY: '80px'
-            }}
-        />
-    );
+                const responses = await Promise.all(fetchPromises);
+                const allPOData = [];
 
-    // Document Dialog
-    const [activeDocumentData, setActiveDocumentData] = useState({});
-    const [documentsDetailDialogOpen, setDocumentsDetailDialogOpen] = useState(false);
+                responses.forEach((response, index) => {
+                    if (response.data && response.data.length > 0) {
+                        const orderData = response.data[0];
+                        const gridRow = transformPODataToGridRow(orderData);
 
-    const handleDocumentsDetailDialogOpen = () => {
-        setDocumentsDetailDialogOpen(true);
-    };
+                        // Ensure poid is set using the ID we used to fetch
+                        if (!gridRow.poid) {
+                            gridRow.poid = selectedPOIds[index];
+                        }
 
-    const handleDocumentOpen = (MasterData) => {
-        setActiveDocumentData(MasterData);
-        handleDocumentsDetailDialogOpen();
-    };
+                        allPOData.push(gridRow);
+                    } else {
+                        console.warn(`No data found for PO ID: ${selectedPOIds[index]}`);
+                    }
+                });
 
-    const handleDocumentsDetailDialogClose = () => {
-        setDocumentsDetailDialogOpen(false);
-        setActiveDocumentData({});
-    };
+                setTableData(allPOData);
+                showSnackbar(`Loaded ${allPOData.length} Purchase Order(s)`, 'success');
+            } catch (error) {
+                console.error('Error fetching PO data:', error);
+                showSnackbar('Error loading Purchase Order data', 'error');
+            } finally {
+                setLoading(false);
+            }
+        };
 
-    // -----------------------------------------------------------
+        fetchSelectedPOsData();
+    }, [selectedPOIds]);
 
-    // On View Navigation Function
-    const NavigateToEdit = (clickedItem) => {
-        // Encryption API hata di gayi hai – yahan sirf plain ID ke sath navigate kar rahe hain
-        navigate(paths.dashboard.supplyChain.editOrder);
-    }
-    // ************************Master Grid**************************
-
-    // ------------------------Master Grid----------------------------
-
+    // Column definitions
     const [columnDefs] = useState([
-        { headerName: "Vendor Invoice No.", field: "VendorInvoiceNo" },
-        { headerName: "Invoice Date", field: "InvoiceDate" },
-        { headerName: "Invoice Quantity", field: "TotalQty" },
-        { headerName: "Invoice Amount", field: "TotalValue" },
-        { headerName: "Shipment Date", field: "ETD" },
-        { headerName: "Customer", field: "CutomerName" },
-        { headerName: "Vendor", field: "VenderName" },
+        // PO ID (hidden but needed for update)
+        { headerName: "PO ID", field: "poid", hide: true, editable: false },
+        // Basic Order Info
+        { headerName: "Customer PO No.", field: "customerPo", rowDrag: true },
+        { headerName: "Internal PO No.", field: "internalPo" },
+        { headerName: "Master PO No.", field: "masterPo" },
+        { headerName: "AMS Ref No.", field: "amsRef" },
+        { headerName: "RN No.", field: "rnNo" },
+        { headerName: "Consignee", field: "consignee" },
+
+
+        { headerName: "Merchant", field: "merchant" },
+        { headerName: "Proceedings", field: "proceedings" },
+        { headerName: "Order Type", field: "orderType" },
+        { headerName: "Version", field: "version" },
+
+        // Important Dates
+        { headerName: "Placement Date", field: "placementDate" },
+        { headerName: "ETA New Jersey Date", field: "etaNewJerseyDate" },
+        { headerName: "ETA Warehouse Date", field: "etaWarehouseDate" },
+        // Buyer Shipment Window
+        { headerName: "Buyer Ship. Dt. (Initial)", field: "buyerShipInitial" },
+        { headerName: "Buyer Ship. Dt. (Last)", field: "buyerShipLast" },
+        // Vendor Shipment Window
+        { headerName: "Vendor Ship. Dt. (Initial)", field: "vendorShipInitial" },
+        { headerName: "Vendor Ship. Dt. (Last)", field: "vendorShipLast" },
+        { headerName: "Final Inspection Date", field: "finalInspectionDate" },
+        // Product Information
+        { headerName: "Season", field: "season" },
+        { headerName: "Tol. Quantity", field: "tolQuantity" },
+        { headerName: "Set", field: "set" },
+        { headerName: "Fabric", field: "fabric" },
+        { headerName: "Item", field: "item" },
+        { headerName: "Quality / Composition", field: "qualityComposition" },
+        { headerName: "GSM", field: "gsm" },
+        { headerName: "Design", field: "design" },
+        { headerName: "Other Fabric", field: "otherFabric" },
+        { headerName: "Construction", field: "construction" },
+        { headerName: "PO Special Operation", field: "poSpecialOperation" },
+        { headerName: "Status", field: "status" },
+        { headerName: "PO Special Treatment", field: "poSpecialTreatment" },
+        { headerName: "Style Source", field: "styleSource" },
+        { headerName: "Brand", field: "brand" },
+        { headerName: "Assortment", field: "assortment" },
+        { headerName: "Ratio", field: "ratio" },
+        { headerName: "Carton Marking", field: "cartonMarking" },
+        { headerName: "PO Special Instructions", field: "poSpecialInstructions" },
+        { headerName: "Washing Care Label", field: "washingCareLabel" },
+        { headerName: "Important Note", field: "importantNote" },
+        { headerName: "More Info", field: "moreInfo" },
+        { headerName: "Sampling Requirements", field: "samplingRequirements" },
+        { headerName: "Pcs Per Carton", field: "pcsPerCarton" },
+        { headerName: "Item Description (Shipping)", field: "itemDescriptionShipping" },
+        { headerName: "Gross Weight", field: "grossWeight" },
+        { headerName: "Net Weight", field: "netWeight" },
+        { headerName: "Unit", field: "unit" },
+        { headerName: "Packing List", field: "packingList" },
+        { headerName: "Emb & Embellishment", field: "embEmbellishment" },
+        { headerName: "Inquiry No", field: "inquiryNo" },
+        { headerName: "Buyer Customer", field: "buyerCustomer" },
+        // Product Specific Information
+        { headerName: "Currency", field: "currency" },
+        { headerName: "Exchange Rate", field: "exchangeRate" },
+        { headerName: "Style", field: "style" },
+        // Shipping and Payment Terms
+        { headerName: "Payment Mode", field: "paymentMode" },
+        { headerName: "Shipment Term", field: "shipmentTerm" },
+        { headerName: "Destination", field: "destination" },
+        { headerName: "Shipment Mode", field: "shipmentMode" },
     ]);
 
-    // *****************************************************************
-    return (
-        <Card sx={{ p: 2 }}>
-            {
-                superSearch ?
-                    <div
-                        style={{
-                            overflow: 'hidden',
-                            transition: 'all 2s ease',
-                            opacity: superSearch ? 1 : 0,
-                            height: superSearch ? 'auto' : 0,
-                        }}
-                    >
+    // Default column settings - all columns editable for drag-fill
+    const defaultColDef = useMemo(() => ({
+        editable: true,
+        flex: 1,
+        minWidth: 120,
+        resizable: true,
+        sortable: true,
+        filter: true,
+    }), []);
 
-                        <Stack
-                            spacing={2}
-                            alignItems={{ lg: 'flex-end', xl: 'center' }}
-                            direction={{
-                                lg: 'column',
-                                xl: 'row',
-                            }}
-                            sx={{
-                                pb: 2.5,
-                                pt: 1,
-                                px: 0,
-                            }}
-                        >
-                            <>
-                                <Grid container spacing={2}>
-                                    {/* Search PO Field */}
-                                    <Grid item xs={6} sm={6} md={6} lg={3} xl={1.5}>
-                                        <TextField
-                                            fullWidth
-                                            value={searchValue?.PONO || ''}
-                                            onChange={(e) => setSearchValue({ ...searchValue, PONO: e.target.value })}
-                                            placeholder="Search PO..."
-                                            size="small"
-                                            InputProps={{
-                                                startAdornment: (
-                                                    <InputAdornment position="start">
-                                                        <Iconify icon="eva:search-fill" sx={{ color: 'text.disabled' }} />
-                                                    </InputAdornment>
-                                                ),
-                                            }}
-                                        />
-                                    </Grid>
+    // Handle Save/Update all POs
+    const handleSaveAll = async () => {
+        console.log('=== SAVE ALL STARTED ===');
+        console.log('gridRef.current:', gridRef.current);
+        console.log('gridRef.current?.api:', gridRef.current?.api);
 
-                                    {/* Search Invoice Field */}
-                                    <Grid item xs={6} sm={6} md={6} lg={3} xl={1.5}>
-                                        <TextField
-                                            fullWidth
-                                            value={searchValue?.VendorInvoiceNo || ''}
-                                            onChange={(e) => setSearchValue({ ...searchValue, VendorInvoiceNo: e.target.value })}
-                                            placeholder="Search Invoice..."
-                                            size="small"
-                                            InputProps={{
-                                                startAdornment: (
-                                                    <InputAdornment position="start">
-                                                        <Iconify icon="eva:search-fill" sx={{ color: 'text.disabled' }} />
-                                                    </InputAdornment>
-                                                ),
-                                            }}
-                                        />
-                                    </Grid>
+        // First, stop any active cell editing to ensure all changes are committed
+        if (gridRef.current?.api) {
+            gridRef.current.api.stopEditing();
+        }
 
-                                    {/* Customer Autocomplete */}
-                                    <Grid item xs={6} sm={6} md={6} lg={3} xl={1.5}>
-                                        <Autocomplete
-                                            fullWidth
-                                            size="small"
-                                            id="customer-autocomplete"
-                                            options={customersList}
-                                            getOptionLabel={(option) => option?.CustomerName || ""}
-                                            value={customersList?.find(customer => customer.CustomerID === searchValue?.CustomerID) || null}
-                                            onChange={(e, newValue) => setSearchValue({ ...searchValue, CustomerID: newValue?.CustomerID || '0' })}
-                                            renderInput={(params) => (
-                                                <TextField
-                                                    {...params}
-                                                    label="Customer"
-                                                    variant="outlined"
-                                                    inputProps={{
-                                                        ...params.inputProps,
-                                                        autoComplete: 'off',
-                                                    }}
-                                                />
-                                            )}
-                                        />
-                                    </Grid>
+        // Get current grid data from AG Grid API
+        const rowData = [];
+        if (gridRef.current?.api) {
+            gridRef.current.api.forEachNode(node => {
+                console.log('Node data:', node.data);
+                if (node.data) {
+                    rowData.push(node.data);
+                }
+            });
+        } else {
+            console.error('Grid API not available!');
+            showSnackbar('Grid not ready. Please wait and try again.', 'error');
+            return;
+        }
 
-                                    <Grid item xs={6} sm={6} md={6} lg={3} xl={1.5}>
-                                        <Autocomplete
-                                            fullWidth
-                                            size="small"
-                                            id="supplier-autocomplete"
-                                            options={suppliersList}
-                                            getOptionLabel={(option) => option?.VenderName || ""}
-                                            value={suppliersList?.find(supp => supp.VenderLibraryID === searchValue?.SupplierID) || null}
-                                            onChange={(e, newValue) => setSearchValue({ ...searchValue, SupplierID: newValue?.VenderLibraryID || '0' })}
-                                            renderInput={(params) => (
-                                                <TextField
-                                                    {...params}
-                                                    label="Vendor"
-                                                    variant="outlined"
-                                                    inputProps={{
-                                                        ...params.inputProps,
-                                                        autoComplete: 'off',
-                                                    }}
-                                                />
-                                            )}
-                                        />
-                                    </Grid>
+        console.log('Total rows to save:', rowData.length);
+        console.log('Row data:', JSON.stringify(rowData, null, 2));
 
-                                    {/* Invoice Year Autocomplete */}
-                                    <Grid item xs={6} sm={6} md={6} lg={3} xl={1.5}>
-                                        <Autocomplete
-                                            fullWidth
-                                            size="small"
-                                            id="year-autocomplete"
-                                            options={["2030", "2029", "2028", "2027", "2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018"]}
-                                            getOptionLabel={(option) => option}
-                                            value={searchValue?.InvoiceYear || null}
-                                            onChange={(e, newValue) => setSearchValue({ ...searchValue, InvoiceYear: newValue || null })}
-                                            renderInput={(params) => (
-                                                <TextField
-                                                    {...params}
-                                                    label="Invoice Year"
-                                                    variant="outlined"
-                                                    inputProps={{
-                                                        ...params.inputProps,
-                                                        autoComplete: 'off',
-                                                    }}
-                                                />
-                                            )}
-                                        />
-                                    </Grid>
+        if (rowData.length === 0) {
+            showSnackbar('No data to save', 'warning');
+            return;
+        }
 
-                                    {/* Invoice Month Autocomplete */}
-                                    <Grid item xs={6} sm={6} md={6} lg={3} xl={1.5}>
-                                        <Autocomplete
-                                            fullWidth
-                                            size="small"
-                                            id="shipment-autocomplete"
-                                            options={months}
-                                            getOptionLabel={(option) => option?.label || ""}
-                                            value={months?.find(mon => mon.value === searchValue?.InvoiceMonth) || null}
-                                            onChange={(e, newValue) => setSearchValue({ ...searchValue, InvoiceMonth: newValue?.value || '0' })}
-                                            renderInput={(params) => (
-                                                <TextField
-                                                    {...params}
-                                                    label="Invoice Month"
-                                                    variant="outlined"
-                                                    inputProps={{
-                                                        ...params.inputProps,
-                                                        autoComplete: 'off',
-                                                    }}
-                                                />
-                                            )}
-                                        />
-                                    </Grid>
+        try {
+            setSaving(true);
 
-                                    {/* Shipment Year Autocomplete */}
-                                    <Grid item xs={6} sm={6} md={6} lg={3} xl={1.5}>
-                                        <Autocomplete
-                                            fullWidth
-                                            size="small"
-                                            id="-placementYear-autocomplete"
-                                            options={["2030", "2029", "2028", "2027", "2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018"]}
-                                            getOptionLabel={(option) => option}
-                                            value={searchValue?.ETDYear || null}
-                                            onChange={(e, newValue) => setSearchValue({ ...searchValue, ETDYear: newValue || null })}
-                                            renderInput={(params) => (
-                                                <TextField
-                                                    {...params}
-                                                    label="Shipment Year"
-                                                    variant="outlined"
-                                                    inputProps={{
-                                                        ...params.inputProps,
-                                                        autoComplete: 'off',
-                                                    }}
-                                                />
-                                            )}
-                                        />
-                                    </Grid>
+            let successCount = 0;
+            let errorCount = 0;
+            const errors = [];
 
-                                    {/* Shipment Month Autocomplete */}
-                                    <Grid item xs={6} sm={6} md={6} lg={3} xl={1.5}>
-                                        <Autocomplete
-                                            fullWidth
-                                            size="small"
-                                            id="booked-autocomplete"
-                                            options={months}
-                                            getOptionLabel={(option) => option?.label || ""}
-                                            value={months?.find(mon => mon.value === searchValue?.ETDMonth) || null}
-                                            onChange={(e, newValue) => setSearchValue({ ...searchValue, ETDMonth: newValue?.value || '0' })}
-                                            renderInput={(params) => (
-                                                <TextField
-                                                    {...params}
-                                                    label="Shipment Month"
-                                                    variant="outlined"
-                                                    inputProps={{
-                                                        ...params.inputProps,
-                                                        autoComplete: 'off',
-                                                    }}
-                                                />
-                                            )}
-                                        />
-                                    </Grid>
-                                </Grid>
+            // Update each PO one by one
+            for (const row of rowData) {
+                console.log('Processing row:', row);
 
-                                {/* Search Button */}
-                                <Stack direction="row" justifyContent="flex-end" alignItems="center"
-                                    sx={{
-                                        mt: { xs: 2, sm: 2, md: 2, lg: 0 },
-                                    }}>
-                                    <LoadingButton sx={{ height: 37 }} variant="contained" color="primary" loading={searching} onClick={() => FetchSuperSearchData()}>
-                                        Search
-                                    </LoadingButton>
-                                </Stack>
-                            </>
-                        </Stack>
-                    </div> : null
+                if (!row.poid) {
+                    console.warn('Row missing poid, skipping row');
+                    continue;
+                }
+
+                try {
+                    const payload = transformGridRowToAPIPayload(row);
+                    const apiUrl = `/MyOrders/UpdatePurchaseOrder?poid=${row.poid}`;
+                    console.log(`API URL: ${apiUrl}`);
+                    console.log(`Payload for PO ${row.poid}:`, JSON.stringify(payload, null, 2));
+
+                    const response = await apiClient.post(apiUrl, payload);
+                    console.log(`Response for PO ${row.poid}:`, response);
+                    successCount++;
+                } catch (err) {
+                    console.error(`Error updating PO ${row.poid}:`, err);
+                    console.error('Error response:', err.response?.data);
+                    console.error('Error status:', err.response?.status);
+                    errors.push(`PO ${row.poid}: ${err.response?.data?.message || err.message}`);
+                    errorCount++;
+                }
             }
-            {
-                loading ? renderLoading :
+
+            console.log('=== SAVE ALL COMPLETED ===');
+            console.log(`Success: ${successCount}, Errors: ${errorCount}`);
+            console.log('Errors:', errors);
+
+            if (successCount > 0) {
+                showSnackbar(`Successfully updated ${successCount} Purchase Order(s)${errorCount > 0 ? `, ${errorCount} failed` : ''}`, 'success');
+            } else {
+                showSnackbar(`Failed to update Purchase Orders. ${errors.join(', ')}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error updating POs:', error);
+            showSnackbar('Error updating Purchase Orders. Please try again.', 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // Loading state
+    if (loading) {
+        return (
+            <Container maxWidth="xl" sx={{ py: 3 }}>
+                <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+                    <CircularProgress />
+                    <Typography variant="h6" sx={{ ml: 2 }}>
+                        Loading Purchase Order data...
+                    </Typography>
+                </Box>
+            </Container>
+        );
+    }
+
+    return (
+        <Container maxWidth="xl" sx={{ py: 3 }}>
+            {/* Header */}
+            <Card sx={{ p: 3, mb: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <ArrowBackIosIcon
+                            sx={{
+                                cursor: 'pointer',
+                                mr: 1,
+                                fontSize: '1.2rem',
+                                color: 'primary.main',
+                                '&:hover': { color: 'primary.dark' },
+                            }}
+                            onClick={() => navigate('/dashboard/supply-chain')}
+                        />
+                        <Typography variant="h4">
+                            EDIT PURCHASE ORDERS ({tableData.length} Selected)
+                        </Typography>
+                    </Box>
+
+                    <Stack direction="row" spacing={2}>
+                        <LoadingButton
+                            variant="contained"
+                            color="primary"
+                            startIcon={<SaveIcon />}
+                            loading={saving}
+                            onClick={handleSaveAll}
+                            disabled={tableData.length === 0}
+                        >
+                            Save All Changes
+                        </LoadingButton>
+                        <Button
+                            variant="outlined"
+                            onClick={() => navigate('/dashboard/supply-chain')}
+                        >
+                            Cancel
+                        </Button>
+                    </Stack>
+                </Box>
+
+                {tableData.length === 0 && (
+                    <Alert severity="warning" sx={{ mt: 2 }}>
+                        No Purchase Orders selected. Please go back to the Purchase Order list and select POs to edit.
+                    </Alert>
+                )}
+
+                {tableData.length > 0 && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        Edit cells directly in the grid. Use drag-fill (drag corner of selected cell) to copy values. Click "Save All Changes" when done.
+                    </Typography>
+                )}
+            </Card>
+
+            {/* AG Grid */}
+            {tableData.length > 0 && (
+                <Card sx={{ p: 2 }}>
                     <div style={containerStyle}>
-                        <DocumentsDetailDialog MasterData={activeDocumentData} openDialog={documentsDetailDialogOpen} closeDialog={handleDocumentsDetailDialogClose} />
                         <div style={{ width: '100%', height: '100%' }}>
                             <AgGridReact
+                                ref={gridRef}
                                 rowData={tableData}
                                 columnDefs={columnDefs}
+                                defaultColDef={defaultColDef}
+                                rowDragManaged={true}
+                                animateRows={true}
+                                enableRangeSelection={true}
+                                enableFillHandle={true}
+                                fillHandleDirection="y"
+                                undoRedoCellEditing={true}
+                                undoRedoCellEditingLimit={20}
+                                rowSelection="multiple"
+                                suppressRowClickSelection={true}
+                                stopEditingWhenCellsLoseFocus={true}
                             />
                         </div>
-                    </div >
-            }
-        </Card>
+                    </div>
+                </Card>
+            )}
+
+            {/* Snackbar for notifications */}
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={6000}
+                onClose={handleCloseSnackbar}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
+        </Container>
     );
 };
 
-export default LogisticGrid
-
-LogisticGrid.propTypes = {
-    superSearch: PropTypes.bool,
-    zoomLevel: PropTypes.number,
-};
+export default EditOrderPage;

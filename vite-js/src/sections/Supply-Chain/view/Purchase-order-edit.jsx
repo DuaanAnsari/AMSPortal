@@ -1254,9 +1254,9 @@ export default function CompletePurchaseOrderFormEdit() {
             productCategory: categoryName || '', // Set product category name from API (matched by ID)
             productGroup: groupName || '', // Set product group name from API (matched by ID)
             proceedings: orderData.proceedings || '',
-            orderType: orderData.pOtype || 'New',
-            transactions: orderData.transactions || 'Services',
-            version: orderData.version || 'Regular',
+            orderType: orderData.pOtype || '',
+            transactions: orderData.transactions || '',
+            version: orderData.version || '',
             commission: orderData.commission || 0,
             vendorCommission: orderData.vendorCommission || 0,
             
@@ -1303,7 +1303,7 @@ export default function CompletePurchaseOrderFormEdit() {
             itemDescriptionShippingInvoice: orderData.itemDescriptionShippingInvoice || '',
             
             // Product Specific Information
-            currency: orderData.currency || 'Dollar',
+            currency: orderData.currency || '',
             // Preserve 0 exchange rate as "0", only empty when null/undefined
             exchangeRate: orderData.exchangeRate ?? '',
             // Prefer styleNo (as shown in My-Order list), fallback to design
@@ -1708,6 +1708,7 @@ export default function CompletePurchaseOrderFormEdit() {
                 {
                   name: 'proceedings',
                   label: 'Proceedings',
+                  disabled: false,
                   options: [
                     { label: 'Supply Chain', value: 'Supply Chain' },
                     { label: 'Inspection Only', value: 'Inspection Only' },
@@ -1716,6 +1717,7 @@ export default function CompletePurchaseOrderFormEdit() {
                 {
                   name: 'orderType',
                   label: 'Order Type',
+                  disabled: false,
                   options: [
                     { label: 'New', value: 'New' },
                     { label: 'Repeat', value: 'Repeat' },
@@ -1724,6 +1726,7 @@ export default function CompletePurchaseOrderFormEdit() {
                 {
                   name: 'transactions',
                   label: 'Transactions',
+                  disabled: true,
                   options: [
                     { label: 'Services', value: 'Services' },
                     { label: 'Trade', value: 'Trade' },
@@ -1732,6 +1735,7 @@ export default function CompletePurchaseOrderFormEdit() {
                 {
                   name: 'version',
                   label: 'Version',
+                  disabled: false,
                   options: [
                     { label: 'Regular', value: 'Regular' },
                     { label: 'Promotion', value: 'Promotion' },
@@ -1739,7 +1743,7 @@ export default function CompletePurchaseOrderFormEdit() {
                     { label: 'On-line', value: 'On-line' },
                   ],
                 },
-              ].map(({ name, label, options }) => (
+              ].map(({ name, label, options, disabled }) => (
                 <Grid item xs={12} sm={6} key={name}>
                   <Controller
                     name={name}
@@ -1750,7 +1754,7 @@ export default function CompletePurchaseOrderFormEdit() {
                         label={label}
                         fullWidth
                         select
-                        disabled
+                        disabled={disabled}
                         value={field.value || ''}
                       >
                         <MenuItem value="">Select</MenuItem>
