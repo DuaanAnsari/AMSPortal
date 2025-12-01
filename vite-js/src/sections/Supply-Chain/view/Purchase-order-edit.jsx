@@ -76,7 +76,7 @@ const safeParseFloat = (value) => {
 
 // Create axios instance with authorization header
 const apiClient = axios.create({
-  baseURL: `${API_BASE_URL}/api`,
+baseURL: `${API_BASE_URL}/api`,
 });
 
 // Add request interceptor to include authorization token
