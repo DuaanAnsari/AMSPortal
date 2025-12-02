@@ -135,6 +135,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
     packingInstructions: poData.packingList || '12pcs poly bag and 48pcs Master Carton',
     cartonMarking: poData.cartonMarking || 'LR',
     pcsPerCarton: poData.pcPerCarton || '48',
+    ration: poData.ration || '',
     orderRows: [{
       color: poData.color || 'Red clay',
       sizeRow: [
@@ -174,7 +175,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
     accountNo: poData.accountNoBank || '601-55-112233',
     routingNo: poData.ibanBank || '125010999',
     washingInstructions: poData.washingCareLabelInstructions || 'Machine Wash Cold With Like Colors, Gentle Cycle. Use Only Non Chlorine Bleach when needed, Line Dry, Cool Iron.',
-    poTotalDetails: poData.poTotalDetails || '2,256 PCS 188.00 Dz 47 Ctn',
+    poTotalDetails: poData.poTotalDetails || '',
   };
 
   // Second page data
@@ -588,6 +589,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                         <Typography sx={{ fontSize: '11px', color: '#000000' }}>{data.packingInstructions}</Typography>
                       </POCell>
                       <POCell sx={{ height: '60px', borderBottom: '1px solid black', width: '15%', paddingLeft: '8px', borderLeft: '1px solid black' }}>
+                        <Typography sx={{ fontSize: '11px', color: '#000000' }}>{data.ration}</Typography>
                         {/* Ratio data */}
                       </POCell>
                     </TableRow>

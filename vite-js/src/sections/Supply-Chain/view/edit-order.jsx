@@ -236,7 +236,18 @@ const EditOrderPage = () => {
     const [saving, setSaving] = useState(false);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-    const containerStyle = useMemo(() => ({ width: "100%", height: "600px" }), []);
+    // Dynamic height based on row count (header + rows + pagination)
+    const containerStyle = useMemo(() => {
+        const rowHeight = 42; // Default AG Grid row height
+        const headerHeight = 56; // Header height
+        const paginationHeight = 56; // Pagination bar height
+        const calculatedHeight = headerHeight + (tableData.length * rowHeight) + paginationHeight;
+
+        // Min 300px, max 800px for good UX
+        const finalHeight = Math.min(Math.max(calculatedHeight, 300), 800);
+
+        return { width: "100%", height: `${finalHeight}px` };
+    }, [tableData.length]);
 
     // Show snackbar helper
     const showSnackbar = (message, severity = 'success') => {
@@ -371,10 +382,12 @@ const EditOrderPage = () => {
     const defaultColDef = useMemo(() => ({
         editable: true,
         flex: 1,
-        minWidth: 120,
+        minWidth: 150,
         resizable: true,
         sortable: true,
         filter: true,
+        wrapHeaderText: true,
+        autoHeaderHeight: true,
     }), []);
 
     // Handle Save/Update all POs
@@ -525,7 +538,7 @@ const EditOrderPage = () => {
 
                 {tableData.length > 0 && (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                        Edit cells directly in the grid. Use drag-fill (drag corner of selected cell) to copy values. Click "Save All Changes" when done.
+
                     </Typography>
                 )}
             </Card>
@@ -550,6 +563,9 @@ const EditOrderPage = () => {
                                 rowSelection="multiple"
                                 suppressRowClickSelection={true}
                                 stopEditingWhenCellsLoseFocus={true}
+                                pagination={true}
+                                paginationPageSize={10}
+                                paginationPageSizeSelector={[10, 20, 30,]}
                             />
                         </div>
                     </div>
