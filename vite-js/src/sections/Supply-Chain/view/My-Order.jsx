@@ -424,29 +424,21 @@ export default function PurchaseOrderView() {
   );
 
     const handlePdfClick = useCallback(
-    (id, type = 'pdf') => {
-      if (type === 'pdf') {
-        enqueueSnackbar(`Opening PDF document for PO ID: ${id}`);
-        navigate('/dashboard/supply-chain/purchase-order-pdf', { 
-          state: { id, type } 
-        });
-      } else if (type === 'ssPdf') {
-        enqueueSnackbar(`Opening SS PDF document for PO ID: ${id}`);
-        navigate('/dashboard/supply-chain/purchase-order-pdf', { 
-          state: { id, type } 
-        });
-      }
-    },
-    [enqueueSnackbar, navigate]
-  );
-  const handleRetry = useCallback(() => {
-    fetchPurchaseOrders();
-  }, [fetchPurchaseOrders]);
+  (id, type = 'pdf') => {
+    if (type === 'pdf') {
+      enqueueSnackbar(`Opening PDF document for PO ID: ${id}`);
+    } else if (type === 'ssPdf') {
+      enqueueSnackbar(`Opening SS PDF document for PO ID: ${id}`);
+    }
 
-  const handleClearSearch = useCallback(() => {
-    setSearchText('');
-    setFilters((prev) => ({ ...prev, search: '' }));
-  }, []);
+    // ID ko URL me bhej rahe hain — recommended
+    navigate(`/dashboard/supply-chain/purchase-order-pdf/${id}`, {
+      state: { type } // type optional, agar page ko chahiye ho
+    });
+  },
+  [enqueueSnackbar, navigate]
+);
+
 
   // New handlers for text links
   const handleMilestoneClick = useCallback(

@@ -1,5 +1,4 @@
-// src/sections/Supply-Chain/PurchaseOrderPDF.jsx
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -14,7 +13,8 @@ import {
   IconButton,
   AppBar,
   Toolbar,
-  Divider
+  Divider,
+  CircularProgress
 } from '@mui/material';
 import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas';
@@ -26,24 +26,27 @@ import {
   Print,
   Close
 } from '@mui/icons-material';
+import { useParams } from 'react-router-dom';
+import axios from 'axios';
+import { HOST_API } from 'src/config-global';
 
 // --- Helper Components ---
 const POCell = ({ children, header = false, sx = {} }) => {
   const theme = useTheme();
   return (
-    <TableCell 
-      sx={{ 
-        verticalAlign: 'top', 
-        border: 'none', 
-        fontSize: '9px', 
+    <TableCell
+      sx={{
+        verticalAlign: 'top',
+        border: 'none',
+        fontSize: '9px',
         fontWeight: header ? 'bold' : 'normal',
-        padding: '3px 5px', 
+        padding: '3px 5px',
         lineHeight: '1.2',
-        borderColor: '#000', 
-        whiteSpace: 'normal', 
+        borderColor: '#000',
+        whiteSpace: 'normal',
         color: '#000000',
         backgroundColor: '#FFFFFF',
-        ...sx 
+        ...sx
       }}
     >
       {children}
@@ -52,13 +55,13 @@ const POCell = ({ children, header = false, sx = {} }) => {
 };
 
 const BorderedPOCell = ({ children, header = false, sx = {} }) => (
-  <POCell 
-    header={header} 
-    sx={{ 
-      border: '1px solid black', 
+  <POCell
+    header={header}
+    sx={{
+      border: '1px solid black',
       color: '#000000',
       backgroundColor: '#FFFFFF',
-      ...sx 
+      ...sx
     }}
   >
     {children}
@@ -66,57 +69,112 @@ const BorderedPOCell = ({ children, header = false, sx = {} }) => (
 );
 
 // --- Main Component ---
-const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
+const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
   const theme = useTheme();
   const componentRef = useRef();
   const [zoomLevel, setZoomLevel] = useState(1.2);
+  const { id } = useParams();
+  const [fetchedData, setFetchedData] = useState(null);
+  const [loading, setLoading] = useState(!!id && !propPoData);
+
+  useEffect(() => {
+    const fetchPurchaseOrderData = async () => {
+      if (!id || propPoData) return;
+
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('accessToken');
+        console.log('Fetching PO Data for ID:', id);
+        console.log('API URL:', `${HOST_API}/api/Report/GeneratePOReport?poid=${id}`);
+
+        const response = await axios.get(`${HOST_API}/api/Report/GeneratePOReport?poid=${id}`, {
+          headers: {
+            Authorization: token ? `Bearer ${token}` : '',
+          },
+        });
+
+        console.log('API Response:', response);
+
+        if (response.data) {
+          const dataToSet = Array.isArray(response.data) ? response.data[0] : response.data;
+          console.log('Setting fetched data:', dataToSet);
+          setFetchedData(dataToSet);
+        }
+      } catch (error) {
+        console.error('Failed to fetch purchase order data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPurchaseOrderData();
+  }, [id, propPoData]);
+
+  const poData = propPoData || fetchedData || {};
 
   const data = {
-    ref: poData.ref || 'AMS-2261',
-    receivedDate: poData.receivedDate || 'Monday, May 19, 2025',
-    attn: poData.attn || 'COMFORT APPAREL',
-    addressLeft: poData.addressLeft || 'PLOT # E-99, SECTOR 31-D KORANGI INDUSTRIAL\nKARACHI\nPAKISTAN',
-    trackingCode: poData.trackingCode || '11265',
+    ref: poData.amsRefNo || '',
+    receivedDate: poData.creationDate ? new Date(poData.creationDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Monday, May 19, 2025',
+    attn: poData.contactPersonVendor || 'COMFORT APPAREL',
+    addressLeft: poData.venderAddress || 'PLOT # E-99, SECTOR 31-D KORANGI INDUSTRIAL\nKARACHI\nPAKISTAN',
+    trackingCode: poData.venderCode || '11265',
     brand: poData.brand || 'Gentle Threads',
-    division: poData.division || 'Men',
-    rn: poData.rn || '130691',
-    shipTo: poData.shipTo || 'ALL SEASONS TEXTILE\n1441 BROADWAY, SUITE # 6162\nNEW YORK, NY 10018\nUSA',
-    itemDescription: poData.itemDescription || '100% Cotton Men Jersey Garment Dye LS Tee',
-    exFactory: poData.exFactory || '07-15-2025',
-    finalInspection: poData.finalInspection || '07/10/2025',
-    leadTime: poData.leadTime || '57 Days',
-    fabric: poData.fabric || { description: 'Body', fabric: 'Jersey', content: '100% Cotton', weight: '190 GSM' },
-    packingInstructions: poData.packingInstructions || '12pcs poly bag and 48pcs Master Carton',
+    division: poData.ecpDivistion || 'Men',
+    rn: poData.rnNo || '130691',
+    shipTo: poData.consigneeAddress1 || 'ALL SEASONS TEXTILE\n1441 BROADWAY, SUITE # 6162\nNEW YORK, NY 10018\nUSA',
+    itemDescription: poData.itemDescriptionShippingInvoice || '100% Cotton Men Jersey Garment Dye LS Tee',
+    exFactory: poData.shipmentDate ? new Date(poData.shipmentDate).toLocaleDateString('en-US') : '07-15-2025',
+    finalInspection: poData.finalInspDate ? new Date(poData.finalInspDate).toLocaleDateString('en-US') : '07/10/2025',
+    leadTime: poData.timeSpame ? `${poData.timeSpame} Days` : '57 Days',
+    fabric: {
+      description: 'Body',
+      fabric: poData.fabric || 'Jersey',
+      content: poData.otherFabric || '100% Cotton',
+      weight: poData.gms ? `${poData.gms} GSM` : '190 GSM'
+    },
+    packingInstructions: poData.packingList || '12pcs poly bag and 48pcs Master Carton',
     cartonMarking: poData.cartonMarking || 'LR',
-    pcsPerCarton: poData.pcsPerCarton || '48',
-    orderRows: poData.orderRows || [{ color: 'Red clay', sizeRow: [672,480,672,432], total: '2,256.00 PCS', unit: '2.93', amount: '6,610.08' }],
-    totalQty: poData.totalQty || '2,256',
-    totalAmount: poData.totalAmount || '6,610.08',
-    importantNotes: poData.importantNotes || [
+    pcsPerCarton: poData.pcPerCarton || '48',
+    orderRows: [{
+      color: poData.color || 'Red clay',
+      sizeRow: [
+        parseInt(poData.s1) || 672,
+        parseInt(poData.s2) || 480,
+        parseInt(poData.s3) || 672,
+        parseInt(poData.s4) || 432
+      ],
+      total: poData.totalQTY ? `${poData.totalQTY} PCS` : '2,256.00 PCS',
+      unit: poData.rate || '2.93',
+      amount: (parseFloat(poData.totalQTY || 0) * parseFloat(poData.rate || 0)).toFixed(2) || '6,610.08',
+      productCode: poData.productCode || 'NA'
+    }],
+    totalQty: poData.totalQTY || '2,256',
+    totalAmount: (parseFloat(poData.totalQTY || 0) * parseFloat(poData.rate || 0)).toFixed(2) || '6,610.08',
+    importantNotes: poData.importantNote ? [poData.importantNote] : [
       'Fabric should be heat set and lock properly to avoid shrinkage problem.',
       'Before cutting fabric should be kept on table for atleast 24 hours.',
       'All garments should be 100% checked for sizes before carton packing'
     ],
-    productImage: poData.productImage || '',
-    shipMode: poData.shipMode || 'Sea',
+    productImage: poData.poImage || '',
+    shipMode: poData.shipmentModeText || 'Sea',
     destination: poData.destination || 'NEW YORK',
-    shipmentTerms: poData.shipmentTerms || 'FOB',
-    paymentTerms: poData.paymentTerms || 'DP',
-    amsTeam: poData.amsTeam || 'MUHAMMAD SHAHZAIB',
-    cpoNumber: poData.cpoNumber || '37522-LS-RED',
-    styleNumber: poData.styleNumber || 'LR2096',
-    productCategory: poData.productCategory || 'Knits',
-    specialInstructions: poData.specialInstructions || 'N/A',
-    source: poData.source || 'Local',
-    embellishment: poData.embellishment || 'N/A',
+    shipmentTerms: poData.paymentTypeName || 'FOB',
+    paymentTerms: poData.paymentModeName || 'DP',
+    amsTeam: poData.userName || 'MUHAMMAD SHAHZAIB',
+    cpoNumber: poData.pono || '37522-LS-RED',
+    styleNumber: poData.style || 'LR2096',
+    productCategory: poData.productCategoriesName || 'Knits',
+    specialInstructions: poData.pO_Special_Instructions || 'N/A',
+    source: poData.styleSource || 'Local',
+    embellishment: poData.embAndEmbellishment || 'N/A',
     trimsAccessories: poData.trimsAccessories || 'Local',
-    specialOperation: poData.specialOperation || 'GARMENT DYE',
+    specialOperation: poData.pO_Special_Operation || 'GARMENT DYE',
     samplingReq: poData.samplingReq || 'N/A',
-    beneficiaryBank: poData.beneficiaryBank || 'HABIB METROPOLITAN BANK LTD',
-    accountNo: poData.accountNo || '601-55-112233',
-    routingNo: poData.routingNo || '125010999',
-    washingInstructions: poData.washingInstructions || 'Machine Wash Cold With Like Colors, Gentle Cycle. Use Only Non Chlorine Bleach when needed, Line Dry, Cool Iron.',
-    poTotalDetails: poData.poTotalDetails || '2,256 PCS 188.00 Dz 47 Ctn', 
+    beneficiaryBank: poData.bankNameBank || 'HABIB METROPOLITAN BANK LTD',
+    accountNo: poData.accountNoBank || '601-55-112233',
+    routingNo: poData.ibanBank || '125010999',
+    washingInstructions: poData.washingCareLabelInstructions || 'Machine Wash Cold With Like Colors, Gentle Cycle. Use Only Non Chlorine Bleach when needed, Line Dry, Cool Iron.',
+    poTotalDetails: poData.poTotalDetails || '2,256 PCS 188.00 Dz 47 Ctn',
   };
 
   // Second page data
@@ -135,7 +193,7 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
       "If there is a space vacant in the container due to short quantity then factory will be responsible for dead space.",
       "Delay penalties will be charged as under:",
       "01 Week Delay - 5% of Invoice value",
-      "02 Weeks Delay - 8% of Invoice Value", 
+      "02 Weeks Delay - 8% of Invoice Value",
       "03 Weeks Delay - 12 % of Invoice Value",
       "Onward - 16 % of Invoice Value",
       "If any there will be any shortfall then 5% will be adjust from invoice value.",
@@ -173,11 +231,11 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
-    
+
     const imgWidth = canvas.width;
     const imgHeight = canvas.height;
     const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight) * 0.95;
-    
+
     const imgX = (pdfWidth - imgWidth * ratio) / 2;
     const imgY = 10;
 
@@ -185,19 +243,27 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
     pdf.save(`Purchase_Order_${data.ref}.pdf`);
   };
 
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   return (
-    <Box sx={{ 
+    <Box sx={{
       height: '100vh',
       display: 'flex',
       flexDirection: 'column',
       backgroundColor: '#f5f5f5'
     }}>
       {/* PDF Viewer Header */}
-      <AppBar 
-        position="static" 
-        sx={{ 
-          backgroundColor: '#080303ff',
-          color: '#000000',
+      <AppBar
+        position="static"
+        sx={{
+          backgroundColor: '#3C3C3C',
+          color: '#3C3C3C',
           borderBottom: '1px solid #e0e0e0',
           boxShadow: 'none'
         }}
@@ -205,9 +271,9 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
         <Toolbar variant="dense" sx={{ minHeight: '48px !important' }}>
           {/* Left Section - Document Info */}
           <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-            <Typography 
-              variant="h6" 
-              sx={{ 
+            <Typography
+              variant="h6"
+              sx={{
                 fontSize: '14px',
                 fontWeight: 'bold',
                 color: '#fff'
@@ -215,8 +281,8 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
             >
               Departmental Request - {data.ref}
             </Typography>
-            <Typography 
-              sx={{ 
+            <Typography
+              sx={{
                 fontSize: '12px',
                 color: '#fff',
                 ml: 2
@@ -228,16 +294,16 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
 
           {/* Center Section - Zoom Controls */}
           <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, justifyContent: 'center' }}>
-            <IconButton 
-              size="small" 
+            <IconButton
+              size="small"
               onClick={handleZoomOut}
               sx={{ color: '#fff' }}
             >
               <ZoomOut fontSize="small" />
             </IconButton>
-            
-            <Typography 
-              sx={{ 
+
+            <Typography
+              sx={{
                 fontSize: '12px',
                 color: '#fff',
                 mx: 1,
@@ -247,9 +313,9 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
             >
               {Math.round(zoomLevel * 100)}%
             </Typography>
-            
-            <IconButton 
-              size="small" 
+
+            <IconButton
+              size="small"
               onClick={handleZoomIn}
               sx={{ color: '#fff' }}
             >
@@ -259,25 +325,25 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
 
           {/* Right Section - Action Buttons */}
           <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, justifyContent: 'flex-end', gap: 0.5 }}>
-            <IconButton 
-              size="small" 
+            <IconButton
+              size="small"
               onClick={handleDownloadPDF}
               sx={{ color: '#fff' }}
             >
               <Download fontSize="small" />
             </IconButton>
-            
-            <IconButton 
-              size="small" 
+
+            <IconButton
+              size="small"
               onClick={handlePrint}
               sx={{ color: '#fff' }}
             >
               <Print fontSize="small" />
             </IconButton>
-            
+
             {onClose && (
-              <IconButton 
-                size="small" 
+              <IconButton
+                size="small"
                 onClick={onClose}
                 sx={{ color: '#fff' }}
               >
@@ -289,29 +355,29 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
       </AppBar>
 
       {/* PDF Content Area with Scroll and Zoom */}
-      <Box 
-        sx={{ 
+      <Box
+        sx={{
           flex: 1,
           overflow: 'auto',
           padding: 2,
-          backgroundColor: '#000000',
+          backgroundColor: '#282828',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'flex-start'
         }}
       >
-        <Box 
+        <Box
           ref={componentRef}
-          sx={{ 
+          sx={{
             transform: `scale(${zoomLevel})`,
             transformOrigin: 'top center',
             transition: 'transform 0.2s ease-in-out',
           }}
         >
           {/* First Page - Your Original Content */}
-          <Box 
-            sx={{ 
-              p: 1.5, 
+          <Box
+            sx={{
+              p: 1.5,
               fontFamily: 'Arial, sans-serif',
               fontSize: '10px',
               lineHeight: '1.3',
@@ -335,11 +401,11 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
             {/* Header Section */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
               <Box sx={{ width: '50%' }}>
-                <Box sx={{ mb: 0.2, display: 'block' }}> 
-                  <Box sx={{ width: '150px', height: 'auto', mb: 0.2 }}> 
-                    <img 
-                      src="/logo/AMSlogo.png" 
-                      alt="AMS Logo" 
+                <Box sx={{ mb: 0.2, display: 'block' }}>
+                  <Box sx={{ width: '150px', height: 'auto', mb: 0.2 }}>
+                    <img
+                      src="/logo/AMSlogo.png"
+                      alt="AMS Logo"
                       style={{ width: '150px', height: 'auto', display: 'block' }}
                       onError={(e) => {
                         e.target.style.display = 'none';
@@ -347,7 +413,7 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
                     />
                   </Box>
                   <Typography sx={{ fontSize: '9px', mt: 0, fontWeight: 'bold', color: '#581845' }}>
-                    APPAREL MERCHANDISING SERVICES 
+                    APPAREL MERCHANDISING SERVICES
                   </Typography>
                 </Box>
                 <Typography sx={{ fontSize: '9px', mt: 0.5, color: '#000000' }}>
@@ -360,30 +426,30 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
 
               <Box sx={{ width: '50%', display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start' }}>
                 <Box sx={{ mr: 2, textAlign: 'right', pt: 0.5, pr: 1 }}>
-                  <Typography variant="h5" sx={{ 
-                    fontSize: '18px', 
-                    fontWeight: 'normal', 
-                    color: '#000000', 
+                  <Typography variant="h5" sx={{
+                    fontSize: '18px',
+                    fontWeight: 'normal',
+                    color: '#000000',
                     mb: 1.5,
-                    fontFamily: 'cursive', 
-                    textAlign: 'right' 
+                    fontFamily: 'cursive',
+                    textAlign: 'right'
                   }}>
                     Purchase Order
                   </Typography>
                   <Typography sx={{ fontSize: '9px', lineHeight: 1.5, color: '#000000' }}>
-                    AMS - Ref # : **{data.ref}**
+                    AMS - Ref # : {data.ref}
                   </Typography>
                   <Typography sx={{ fontSize: '9px', lineHeight: 1.5, color: '#000000' }}>
-                    P.O Received Date : **{data.receivedDate}**
+                    P.O Received Date : {data.receivedDate}
                   </Typography>
                 </Box>
                 <Box sx={{ width: '60px', height: '80px', overflow: 'hidden', border: '1px solid #ddd' }}>
-                  <img 
-                    src={data.productImage || '/placeholder-product.png'} 
-                    alt="Product" 
-                    style={{ 
-                      width: '100%', 
-                      height: '100%', 
+                  <img
+                    src={data.productImage || '/placeholder-product.png'}
+                    alt="Product"
+                    style={{
+                      width: '100%',
+                      height: '100%',
                       objectFit: 'contain',
                       backgroundColor: '#f5f5f5'
                     }}
@@ -408,10 +474,10 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
                         </Typography>
                       </Box>
                       <Typography sx={{ fontSize: '9px', fontWeight: 'bold', mt: 0.5, pt: 0.5, borderTop: '1px solid black', color: '#000000' }}>
-                        Tracking Code: <span style={{fontWeight: 'normal'}}>{data.trackingCode}</span>
+                        Tracking Code: <span style={{ fontWeight: 'normal' }}>{data.trackingCode}</span>
                       </Typography>
                     </TableCell>
-                    
+
                     <TableCell sx={{ width: '33.3%', borderRight: '1px solid black', padding: '8px', backgroundColor: '#FFFFFF' }}>
                       <Typography sx={{ fontSize: '9px', fontWeight: 'bold', color: '#000000' }}>Customer,Brand / Label Name & Division: {data.cartonMarking}</Typography>
                       <Box sx={{ mt: 0.5, pt: 0.5, display: 'flex', borderTop: '1px solid black', flexWrap: 'wrap' }}>
@@ -425,7 +491,7 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
                         <Typography sx={{ fontSize: '9px', fontWeight: 'normal', display: 'inline', color: '#000000' }}>{data.division}</Typography>
                       </Box>
                     </TableCell>
-                    
+
                     <TableCell sx={{ width: '33.3%', padding: '8px', backgroundColor: '#FFFFFF' }}>
                       <Typography sx={{ fontSize: '9px', fontWeight: 'bold', color: '#000000' }}>Ship To:</Typography>
                       <Typography sx={{ fontSize: '9px', fontWeight: 'normal', color: '#000000', whiteSpace: 'pre-line' }}>
@@ -490,7 +556,7 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
                 <POCell header sx={{ padding: '0' }}>C.P.O #: {data.cpoNumber}</POCell>
                 <POCell header sx={{ padding: '0' }}>Style #: {data.styleNumber}</POCell>
               </Box>
-              
+
               <TableContainer component={Paper} sx={{ flex: '1', backgroundColor: '#FFFFFF' }}>
                 <Table size="small" sx={{ borderCollapse: 'collapse', width: '100%' }}>
                   <TableHead>
@@ -611,6 +677,19 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
                     <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
                     <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
                   </TableRow>
+                  <TableRow sx={{ borderBottom: "1px solid black" }}>
+                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>S-XL</TableCell>
+                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.productCode ?? "NA"}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Size</TableCell>
+                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>S</TableCell>
+                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>M</TableCell>
+                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>L</TableCell>
+                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>XL</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>PCS</TableCell>
+                    <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
+                    <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
+                  </TableRow>
+
 
                   <TableRow sx={{ borderBottom: "1px solid black" }}>
                     <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
@@ -695,7 +774,7 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
                       <Typography sx={{ fontSize: '10px', lineHeight: 1.5, color: '#000000' }}>
                         {data.importantNotes.map((note, index) => (
                           <span key={index}>
-                            {index + 1}- {note}<br/>
+                            {index + 1}- {note}<br />
                           </span>
                         ))}
                       </Typography>
@@ -733,7 +812,7 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
               <Box sx={{ width: '38%', border: '1px solid black', p: 1, minHeight: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', backgroundColor: '#FFFFFF' }}>
                 <Box>
                   <Typography sx={{ fontSize: '11px', fontWeight: 'bold', color: '#000000' }}>Beneficiary's Bank :</Typography>
-                  <Typography sx={{ fontSize: '11px', fontWeight: 'bold', mt: 0.5, lineHeight: 1.6, color: '#000000' }}>{data.beneficiaryBank}</Typography> 
+                  <Typography sx={{ fontSize: '11px', fontWeight: 'bold', mt: 0.5, lineHeight: 1.6, color: '#000000' }}>{data.beneficiaryBank}</Typography>
                 </Box>
                 <Box sx={{ mt: 3, lineHeight: 1.6 }}>
                   <Typography sx={{ fontSize: '11px', color: '#000000' }}>Account No.: {data.accountNo}</Typography>
@@ -745,27 +824,27 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
                 <Typography sx={{ fontSize: '11px', fontWeight: 'bold', textAlign: 'center', mb: 1, width: '100%', color: '#000000' }}>
                   Washing - Care Label Instructions
                 </Typography>
-                <Typography sx={{ fontSize: '10px', lineHeight: 1.8, textAlign: 'left', color: '#000000' }}> 
+                <Typography sx={{ fontSize: '10px', lineHeight: 1.8, textAlign: 'left', color: '#000000' }}>
                   {data.washingInstructions}
                 </Typography>
               </Box>
             </Box>
 
             {/* Footer */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5, pr: 0.5, pl: 0.5 }}>
-              <Typography sx={{ fontSize: '9px', color: 'gray' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 13.5, pr: 0.5, pl: 0.5 }}>
+              <Typography sx={{ fontSize: '9px', color: 'black' }}>
                 ERP Solution Provider : www.itg.net.pk
               </Typography>
-              <Typography sx={{ fontSize: '9px', color: 'gray' }}>
+              <Typography sx={{ fontSize: '9px', color: 'black' }}>
                 Page # : 1
               </Typography>
             </Box>
           </Box>
 
           {/* Second Page - New Content */}
-          <Box 
-            sx={{ 
-              p: 1.5, 
+          <Box
+            sx={{
+              p: 1.5,
               fontFamily: 'Arial, sans-serif',
               fontSize: '10px',
               lineHeight: '1.3',
@@ -788,11 +867,11 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
           >
             {/* Second Page Header */}
             <Box sx={{ textAlign: 'center', mb: 3 }}>
-              <Typography 
-                variant="h5" 
-                sx={{ 
-                  fontSize: '16px', 
-                  fontWeight: 'bold', 
+              <Typography
+                variant="h5"
+                sx={{
+                  fontSize: '16px',
+                  fontWeight: 'bold',
                   color: '#000000',
                   mb: 1
                 }}
@@ -808,7 +887,7 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
               <Box sx={{ textAlign: 'center', flex: 1 }}>
                 <Box sx={{ borderBottom: '1px solid #000', width: '150px', margin: '0 auto', mb: 1 }}></Box>
                 <Typography sx={{ fontSize: '10px' }}>
-                 Mr. Munkhoq Ashraf
+                  Mr. Munkhoq Ashraf
                 </Typography>
               </Box>
 
@@ -828,10 +907,10 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
             </Box>
 
             {/* AMS Logo and Title */}
-            <Box sx={{ width: '150px', height: 'auto', mb: 2.7 }}> 
-              <img 
-                src="/logo/AMSlogo.png" 
-                alt="AMS Logo" 
+            <Box sx={{ width: '150px', height: 'auto', mb: 2.7 }}>
+              <img
+                src="/logo/AMSlogo.png"
+                alt="AMS Logo"
                 style={{ width: '200px', height: 'auto', display: 'block' }}
                 onError={(e) => {
                   e.target.style.display = 'none';
@@ -860,7 +939,7 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
               <Box sx={{ textAlign: 'center', flex: 1 }}>
                 <Box sx={{ borderBottom: '1px solid #000', width: '150px', margin: '0 auto', mb: 1 }}></Box>
                 <Typography sx={{ fontSize: '10px' }}>
-                Mr. Munkhoq Ashrafy
+                  Mr. Munkhoq Ashrafy
                 </Typography>
               </Box>
 
@@ -880,20 +959,39 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
             </Box>
 
             {/* Second Page Footer */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4, pt: 2, borderTop: '1px solid #ccc' }}>
-              <Typography sx={{ fontSize: '9px', color: 'gray' }}>
-                ERP Solution Provider: www.itg.net.pk
-              </Typography>
-              <Typography sx={{ fontSize: '9px', color: 'gray' }}>
-                Page #: 2
-              </Typography>
+            <Box sx={{
+              position: 'relative',
+              height: '300px', /* A4 height in pixels for PDF */
+              minHeight: '300px'
+            }}>
+              {/* Content */}
+
+              {/* Footer */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  position: 'absolute',
+                  bottom: 20,
+                  left: 0,
+                  right: 0,
+                  px: 2
+                }}
+              >
+                <Typography sx={{ fontSize: '9px', color: 'black' }}>
+                  ERP Solution Provider: www.itg.net.pk
+                </Typography>
+                <Typography sx={{ fontSize: '9px', color: 'black' }}>
+                  Page #: 2
+                </Typography>
+              </Box>
             </Box>
           </Box>
 
           {/* Third Page - Exact Match from Image */}
-          <Box 
-            sx={{ 
-              p: 1.5, 
+          <Box
+            sx={{
+              p: 1.5,
               fontFamily: 'Arial, sans-serif',
               fontSize: '10px',
               lineHeight: '1.3',
@@ -902,98 +1000,98 @@ const PurchaseOrderPageExactMatch = ({ poData = {}, onClose }) => {
               backgroundColor: '#FFFFFF',
               color: '#000000',
               boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+              marginBottom: '10mm',
+              display: 'flex',
+              flexDirection: 'column',
               '@media print': {
                 boxShadow: 'none',
                 p: 0,
                 m: 0,
                 width: '100%',
                 minHeight: '100%',
-                transform: 'none'
+                transform: 'none',
+                marginBottom: 0
               }
             }}
           >
-            {/* Third Page Content - Exact match from image */}
-     {/* Third Page - Compact Version */}
-<Box 
-  sx={{ 
-    p: 0.5,  // Bahut kam padding
-    fontFamily: 'Arial, sans-serif',
-    fontSize: '7px',
-    lineHeight: '1.1',
-    width: '210mm',
-    minHeight: '297mm',
-    backgroundColor: '#FFFFFF',
-    color: '#000000',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-    '@media print': {
-      boxShadow: 'none',
-      p: 0,
-      m: 0,
-      width: '100%',
-      minHeight: '100%',
-      transform: 'none'
-    }
-  }}
->
-  {/* Content ko top par le jao */}
-  <Box sx={{ width: '100%', textAlign: 'center', mt: 1, mb: 0.5 }}>
-    <Typography sx={{ fontSize: '10px', fontWeight: 'bold', color: '#000000' }}>
-      Red clay
-    </Typography>
-  </Box>
+            {/* Top Content - Exact same positioning */}
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
 
-  <Box sx={{ width: '100%', textAlign: 'center', mb: 0.5 }}>
-    <Typography sx={{ fontSize: '8px', color: '#000000', lineHeight: 1.2 }}>
-      100% Carbon Men Jersey Cornwell Dye L5 toe
-    </Typography>
-  </Box>
+              {/* Main Title - Red clay */}
+              <Box sx={{ width: '100%', textAlign: 'center', mb: 3 }}>
+                <Typography sx={{ fontSize: '24px', fontWeight: 'bold', color: '#000000', letterSpacing: 1 }}>
+                  {data.orderRows?.[0]?.color || "Red clay"}
+                </Typography>
+              </Box>
 
-  <Box sx={{ width: '100%', textAlign: 'center', mb: 0.5 }}>
-    <Typography sx={{ fontSize: '8px', fontWeight: 'bold', color: '#000000' }}>
-      Qly:2.254
-    </Typography>
-  </Box>
+              {/* Product Description */}
+              <Box sx={{ width: '100%', textAlign: 'center', mb: 4 }}>
+                <Typography sx={{ fontSize: '16px', color: '#000000', lineHeight: 1.4 }}>
+                  {data.itemDescription}
+                </Typography>
+              </Box>
+              {/* No Image Box */}
+              <Box sx={{
+                width: '200px',
+                height: '200px',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                border: '1px solid #ccc',
+                backgroundColor: '#f5f5f5',
+                borderRadius: '4px',
+                margin: '0 auto'
+              }}>
+                <img
+                  src={data.productImage || '/placeholder-product.png'}
+                  alt="Product"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    backgroundColor: '#f5f5f5'
+                  }}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+                {!data.productImage && (
+                  <Typography sx={{ fontSize: '12px', color: '#666', position: 'absolute' }}>
+                    No Image
+                  </Typography>
+                )}
+              </Box>
+              {/* Quantity */}
+              <Box sx={{ width: '100%', textAlign: 'center', mb: 2, mt: 2 }}>
+                <Typography sx={{ fontSize: '16px', fontWeight: 'bold', color: '#000000' }}>
+                  Qty: {data.totalQty}
+                </Typography>
+              </Box>
 
-  <Box sx={{ width: '100%', textAlign: 'center', mb: 1 }}>
-    <Typography sx={{ fontSize: '8px', color: '#000000' }}>
-      100% Carbon
-    </Typography>
-  </Box>
+              {/* Material */}
+              <Box sx={{ width: '100%', textAlign: 'center', mb: 2 }}>
+                <Typography sx={{ fontSize: '14px', color: '#000000' }}>
+                  {data.fabric.content}
+                </Typography>
+              </Box>
 
-  {/* Small Image Placeholder */}
-  <Box sx={{ 
-    width: '60%',
-    height: '100px',
-    display: 'flex', 
-    justifyContent: 'center', 
-    alignItems: 'center',
-    border: '1px solid #ccc',
-    backgroundColor: '#f5f5f5',
-    mb: 1,
-    margin: '0 auto'
-  }}>
-    <Typography sx={{ fontSize: '8px', color: '#666' }}>
-      No Image
-    </Typography>
-  </Box>
+            </Box>
 
-  {/* Footer ko bottom par le jao */}
-  <Box sx={{ 
-    display: 'flex', 
-    justifyContent: 'space-between', 
-    position: 'absolute',
-    bottom: '10px',
-    left: '10px',
-    right: '10px'
-  }}>
-    <Typography sx={{ fontSize: '7px', color: 'gray' }}>
-      ERP Solution Provider: www.itg.net.pk
-    </Typography>
-    <Typography sx={{ fontSize: '7px', color: 'gray' }}>
-      Page #: 3
-    </Typography>
-  </Box>
-</Box>
+            {/* Footer - Exact same styling */}
+            <Box sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              pt: 1,
+              pb: 1
+            }}>
+              <Typography sx={{ fontSize: '10px', color: 'black' }}>
+                ERP Solution Provider - www.itg.net.pk
+              </Typography>
+              <Typography sx={{ fontSize: '10px', color: 'black' }}>
+                Page #: 3
+              </Typography>
+            </Box>
           </Box>
         </Box>
       </Box>
