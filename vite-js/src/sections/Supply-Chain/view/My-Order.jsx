@@ -137,11 +137,11 @@ const getUserRoleId = () => {
 // Check if user has restricted access based on role IDs
 const hasRestrictedAccess = () => {
   const userRoleId = getUserRoleId();
-  
+
   if (!userRoleId) return false;
-  
+
   const restrictedRoles = [21, 44, 45, 30];
-  
+
   return restrictedRoles.includes(userRoleId);
 };
 
@@ -158,11 +158,11 @@ const getTableHead = (isRestricted) => {
 // Helper function to get month from date string
 const getMonthFromDate = (dateString) => {
   if (!dateString) return null;
-  
+
   try {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return null;
-    
+
     return (date.getMonth() + 1).toString(); // JavaScript months are 0-indexed, so +1
   } catch (error) {
     console.error('Error parsing date:', dateString, error);
@@ -189,7 +189,7 @@ export default function PurchaseOrderView() {
 
   // Check restricted access
   const isRestrictedUser = hasRestrictedAccess();
-  
+
   // Dynamic table head based on user role
   const TABLE_HEAD = getTableHead(isRestrictedUser);
 
@@ -405,13 +405,13 @@ export default function PurchaseOrderView() {
   }, [enqueueSnackbar, navigate]);
 
   const handleViewOrder = useCallback(
-  (id) => {
-    navigate(`/dashboard/supply-chain/purchase-order-edit/${id}`);
-    enqueueSnackbar(`Viewing details for PO ID: ${id}`);
-  },
-  [enqueueSnackbar, navigate]
-);
-   
+    (id) => {
+      navigate(`/dashboard/supply-chain/purchase-order-edit/${id}`);
+      enqueueSnackbar(`Viewing details for PO ID: ${id}`);
+    },
+    [enqueueSnackbar, navigate]
+  );
+
 
   const handleToggleCheckbox = useCallback(
     (id, field) => {
@@ -423,17 +423,17 @@ export default function PurchaseOrderView() {
     [enqueueSnackbar]
   );
 
-    const handlePdfClick = useCallback(
+  const handlePdfClick = useCallback(
     (id, type = 'pdf') => {
       if (type === 'pdf') {
         enqueueSnackbar(`Opening PDF document for PO ID: ${id}`);
-        navigate('/dashboard/supply-chain/purchase-order-pdf', { 
-          state: { id, type } 
+        navigate('/dashboard/supply-chain/purchase-order-pdf', {
+          state: { id, type }
         });
       } else if (type === 'ssPdf') {
         enqueueSnackbar(`Opening SS PDF document for PO ID: ${id}`);
-        navigate('/dashboard/supply-chain/purchase-order-pdf', { 
-          state: { id, type } 
+        navigate('/dashboard/supply-chain/purchase-order-pdf', {
+          state: { id, type }
         });
       }
     },
@@ -773,9 +773,9 @@ export default function PurchaseOrderView() {
           <TableContainer sx={{ maxHeight: 600 }}>
             <Table
               stickyHeader
-              sx={{ 
-                minWidth: isRestrictedUser ? 980 : 1200, 
-                tableLayout: 'fixed' 
+              sx={{
+                minWidth: isRestrictedUser ? 980 : 1200,
+                tableLayout: 'fixed'
               }}
             >
               {/* Dynamic Header based on user role */}
@@ -979,7 +979,7 @@ function PurchaseOrderTableRow({
       )}
 
       {/* Common Columns - Sabko dikhne wale (Milestone ab sabko dikhega) */}
-      
+
       {/* Milestone - Capsule Tag - Ab sabko dikhega */}
       <TableCell align="center">
         <span
@@ -1137,7 +1137,7 @@ function applyFilter({ inputData, comparator, filters }) {
     filteredData = filteredData.filter((order) => {
       const placementDate = order.placementDate || order.PlacementDate;
       if (!placementDate) return false;
-      
+
       const placementMonth = getMonthFromDate(placementDate);
       return placementMonth === bookedMonth;
     });
@@ -1148,7 +1148,7 @@ function applyFilter({ inputData, comparator, filters }) {
     filteredData = filteredData.filter((order) => {
       const shipmentDate = order.shipmentDate || order.ShipmentDate;
       if (!shipmentDate) return false;
-      
+
       const shipmentMonthValue = getMonthFromDate(shipmentDate);
       return shipmentMonthValue === shipmentMonth;
     });
