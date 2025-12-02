@@ -148,15 +148,8 @@ export const dashboardRoutes = [
           { path: 'add-inquiry', element: <AddInquiryPage /> },
           { path: 'add-order-detail', element: <AddOrderDetailPage /> },
           { path: 'milestone/:id', element: <Milestone /> },
-<<<<<<< Updated upstream
-          { path: 'purchase-order-edit/:id', element:  <CompletePurchaseOrderFormEdit /> },
-
-     { path: 'purchase-order-pdf', element: <PurchaseOrderPDF /> },
-     { path: 'edit-order', element: <EditOrder /> },
-=======
-          { path: 'view/:id', element:  <CompletePurchaseOrderFormEdit /> },
-{ path: 'purchase-order-pdf/:id', element: <PurchaseOrderPDF /> },
->>>>>>> Stashed changes
+          { path: 'view/:id', element: <CompletePurchaseOrderFormEdit /> },
+          { path: 'purchase-order-pdf/:id', element: <PurchaseOrderPDF /> },
         ],
       },
 
