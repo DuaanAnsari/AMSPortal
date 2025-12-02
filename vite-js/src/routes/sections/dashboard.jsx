@@ -150,6 +150,8 @@ export const dashboardRoutes = [
           { path: 'milestone/:id', element: <Milestone /> },
           { path: 'view/:id', element: <CompletePurchaseOrderFormEdit /> },
           { path: 'purchase-order-pdf/:id', element: <PurchaseOrderPDF /> },
+          { path: 'edit-order', element: <EditOrder /> },
+          { path: 'purchase-order-edit/:id', element: <CompletePurchaseOrderFormEdit /> },
         ],
       },
 
