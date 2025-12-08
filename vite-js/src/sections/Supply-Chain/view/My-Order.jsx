@@ -423,21 +423,22 @@ export default function PurchaseOrderView() {
     [enqueueSnackbar]
   );
 
-    const handlePdfClick = useCallback(
-  (id, type = 'pdf') => {
-    if (type === 'pdf') {
-      enqueueSnackbar(`Opening PDF document for PO ID: ${id}`);
-    } else if (type === 'ssPdf') {
-      enqueueSnackbar(`Opening SS PDF document for PO ID: ${id}`);
-    }
+  const handlePdfClick = useCallback(
+    (id, type = 'pdf') => {
+      if (type === 'pdf') {
+        enqueueSnackbar(`Opening PDF document for PO ID: ${id}`);
+      } else if (type === 'ssPdf') {
+        enqueueSnackbar(`Opening SS PDF document for PO ID: ${id}`);
+      }
 
-    // ID ko URL me bhej rahe hain — recommended
-    navigate(`/dashboard/supply-chain/purchase-order-pdf/${id}`, {
-      state: { type } // type optional, agar page ko chahiye ho
-    });
-  },
-  [enqueueSnackbar, navigate]
-);
+      // ID ko URL me bhej rahe hain — recommended
+      const pdfPath = type === 'ssPdf' ? `/dashboard/supply-chain/purchase-order-sspdf/${id}` : `/dashboard/supply-chain/purchase-order-pdf/${id}`;
+      navigate(pdfPath, {
+        state: { type } // type optional, agar page ko chahiye ho
+      });
+    },
+    [enqueueSnackbar, navigate]
+  );
 
 
   // New handlers for text links
@@ -1063,9 +1064,9 @@ function PurchaseOrderTableRow({
 
       {/* Size Specs PDF */}
       <TableCell>
-        {row.ssPdf === 'Available' && (
-          <img src="/assets/icons/files/pdf.png" alt="SS PDF" width={16} height={16} />
-        )}
+        <IconButton size="small" onClick={() => onPdfClick(row.id, 'ssPdf')} sx={{ p: 0.5 }}><img src="/assets/icons/files/pdf.png" alt="SS PDF" width={16} height={16} /></IconButton>
+
+
       </TableCell>
     </TableRow>
   );

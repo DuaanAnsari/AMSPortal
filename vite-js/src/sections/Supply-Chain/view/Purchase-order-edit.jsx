@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+﻿import { useRef, useState, useEffect } from 'react';
 import { useForm, Controller, FormProvider, useFormContext } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
@@ -76,7 +76,7 @@ const safeParseFloat = (value) => {
 
 // Create axios instance with authorization header
 const apiClient = axios.create({
-baseURL: `${API_BASE_URL}/api`,
+  baseURL: `${API_BASE_URL}/api`,
 });
 
 // Add request interceptor to include authorization token
@@ -139,7 +139,7 @@ function FullScreenImagePreview({ open, imageUrl, onClose }) {
         >
           <CloseIcon />
         </IconButton>
-        
+
         {imageUrl && (
           <img
             src={imageUrl}
@@ -169,7 +169,7 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
     const file = event.target.files?.[0];
     if (file) {
       setValue(name, file, { shouldValidate: true });
-      
+
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -225,7 +225,7 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
           onChange={handleFileChange}
         />
       </Button>
-      
+
       {fileValue && (
         <Box sx={{ mt: 1, p: 1, border: '1px solid #ddd', borderRadius: 1 }}>
           <Grid container alignItems="center" justifyContent="space-between">
@@ -238,8 +238,8 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
               </Typography>
             </Grid>
             <Grid item>
-              <IconButton 
-                size="small" 
+              <IconButton
+                size="small"
                 onClick={handleRemoveFile}
                 color="error"
               >
@@ -315,12 +315,12 @@ function SimpleImageUploadField({ name, label = "Image" }) {
   const [previewUrl, setPreviewUrl] = useState('');
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const imageValue = watch(name);
- 
+
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
     if (file) {
       setValue(name, file, { shouldValidate: true });
-      
+
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -366,8 +366,8 @@ function SimpleImageUploadField({ name, label = "Image" }) {
             value={imageValue?.name || ''}
             InputProps={{
               endAdornment: previewUrl && (
-                <IconButton 
-                  size="small" 
+                <IconButton
+                  size="small"
                   onClick={handleRemoveImage}
                   color="error"
                 >
@@ -386,15 +386,15 @@ function SimpleImageUploadField({ name, label = "Image" }) {
             ref={fileInputRef}
             onChange={handleFileChange}
           />
-          <Button 
-            variant="contained" 
+          <Button
+            variant="contained"
             onClick={() => fileInputRef.current?.click()}
           >
             Select
           </Button>
         </Grid>
       </Grid>
-      
+
       {previewUrl && (
         <Box sx={{ mt: 2, textAlign: 'center', position: 'relative' }}>
           <Box
@@ -478,7 +478,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
 
   const onSubmit = (data) => {
     const sizes = ['S', 'M', 'L', 'XL'];
-    
+
     const newRows = sizes.map(size => ({
       styleNo: data.styleNo || '',
       colorway: data.colorway || '',
@@ -491,9 +491,9 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       ldpPrice: parseFloat(data.ldpPrice) || 0,
       ldpValue: 0,
     }));
-    
+
     setRows([...rows, ...newRows]);
-    
+
     reset({
       styleNo: data.styleNo || '',
       colorway: data.colorway || '',
@@ -531,7 +531,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
         totalLdpValue
       }
     };
-    
+
     onSaveData(savedData);
     setFormError('');
   };
@@ -554,7 +554,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
         totalLdpValue
       }
     };
-    
+
     onSaveData(savedData);
     onClose();
   };
@@ -575,18 +575,18 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
             {formError}
           </Alert>
         )}
-        
+
         <Grid container spacing={2} sx={{ mt: 1 }}>
           <Grid item xs={6} sm={4}>
             <Controller
               name="styleNo"
               control={control}
               render={({ field }) => (
-                <TextField 
-                  {...field} 
-                  label="Style No" 
-                  fullWidth 
-                  size="small" 
+                <TextField
+                  {...field}
+                  label="Style No"
+                  fullWidth
+                  size="small"
                 />
               )}
             />
@@ -596,11 +596,11 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="colorway"
               control={control}
               render={({ field }) => (
-                <TextField 
-                  {...field} 
-                  label="Colorway" 
-                  fullWidth 
-                  size="small" 
+                <TextField
+                  {...field}
+                  label="Colorway"
+                  fullWidth
+                  size="small"
                 />
               )}
             />
@@ -610,11 +610,11 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="productCode"
               control={control}
               render={({ field }) => (
-                <TextField 
-                  {...field} 
-                  label="Product Code" 
-                  fullWidth 
-                  size="small" 
+                <TextField
+                  {...field}
+                  label="Product Code"
+                  fullWidth
+                  size="small"
                 />
               )}
             />
@@ -624,12 +624,12 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="itemPrice"
               control={control}
               render={({ field }) => (
-                <TextField 
-                  {...field} 
-                  label="Item Price" 
-                  type="number" 
-                  fullWidth 
-                  size="small" 
+                <TextField
+                  {...field}
+                  label="Item Price"
+                  type="number"
+                  fullWidth
+                  size="small"
                 />
               )}
             />
@@ -639,12 +639,12 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="ldpPrice"
               control={control}
               render={({ field }) => (
-                <TextField 
-                  {...field} 
-                  label="LDP Price" 
-                  type="number" 
-                  fullWidth 
-                  size="small" 
+                <TextField
+                  {...field}
+                  label="LDP Price"
+                  type="number"
+                  fullWidth
+                  size="small"
                 />
               )}
             />
@@ -667,9 +667,9 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
           </Grid>
         </Grid>
 
-        <Button 
-          variant="contained" 
-          sx={{ mt: 2 }} 
+        <Button
+          variant="contained"
+          sx={{ mt: 2 }}
           onClick={handleSubmit(onSubmit)}
         >
           Add
@@ -744,17 +744,17 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       </DialogContent>
 
       <DialogActions>
-        <Button 
-          onClick={handleSave} 
-          variant="contained" 
+        <Button
+          onClick={handleSave}
+          variant="contained"
           color="primary"
           disabled={rows.length === 0}
         >
           Save
         </Button>
-        <Button 
-          onClick={handleSaveAndClose} 
-          variant="contained" 
+        <Button
+          onClick={handleSaveAndClose}
+          variant="contained"
           color="success"
           disabled={rows.length === 0}
         >
@@ -936,7 +936,7 @@ export default function CompletePurchaseOrderFormEdit() {
         const response = await apiClient.get('/MyOrders/GetCustomer');
         if (response.data) {
           // Remove duplicates based on customerID
-          const uniqueCustomers = response.data.filter((customer, index, self) => 
+          const uniqueCustomers = response.data.filter((customer, index, self) =>
             index === self.findIndex(c => c.customerID === customer.customerID)
           );
           setCustomers(uniqueCustomers);
@@ -957,7 +957,7 @@ export default function CompletePurchaseOrderFormEdit() {
         const response = await apiClient.get('/MyOrders/GetSupplier');
         if (response.data) {
           // Remove duplicates based on venderLibraryID
-          const uniqueSuppliers = response.data.filter((supplier, index, self) => 
+          const uniqueSuppliers = response.data.filter((supplier, index, self) =>
             index === self.findIndex(s => s.venderLibraryID === supplier.venderLibraryID)
           );
           setSuppliers(uniqueSuppliers);
@@ -1186,12 +1186,12 @@ export default function CompletePurchaseOrderFormEdit() {
       try {
         setLoading(true);
         const response = await apiClient.get(`/MyOrders/GetPurchaseOrder/${id}`);
-        
+
         if (response.data && response.data.length > 0) {
           const orderData = response.data[0];
           console.log("API Order Data:", orderData);
           setApiData(orderData);
-          
+
           // Find customer name based on customerID from purchase order
           const customerFromAPI = customers.find(customer => customer.customerID === orderData.customerID);
           const customerName = customerFromAPI ? customerFromAPI.customerName : '';
@@ -1217,13 +1217,13 @@ export default function CompletePurchaseOrderFormEdit() {
             category => category.productCategoriesID === orderData.productCategoriesID
           );
           const categoryName = categoryFromAPI ? categoryFromAPI.productCategories : '';
-          
+
           // Find product group name based on productGroupID from purchase order
           const groupFromAPI = productGroups.find(
             group => group.productGroupID === orderData.productGroupID
           );
           const groupName = groupFromAPI ? groupFromAPI.productGroup : '';
-          
+
           console.log("Category Match:", {
             purchaseOrderCategoryID: orderData.productCategoriesID,
             allCategories: productCategories,
@@ -1237,7 +1237,7 @@ export default function CompletePurchaseOrderFormEdit() {
             matchedGroup: groupFromAPI,
             groupName: groupName
           });
-          
+
           // Map API data to form fields with date mappings
           reset({
             // Basic Order Info
@@ -1259,21 +1259,21 @@ export default function CompletePurchaseOrderFormEdit() {
             version: orderData.version || '',
             commission: orderData.commission || 0,
             vendorCommission: orderData.vendorCommission || 0,
-            
+
             // Dates - Using the mappings you provided
             placementDate: orderData.placementDate ? orderData.placementDate.split('T')[0] : '',
             etaNewJerseyDate: orderData.etanjDate ? orderData.etanjDate.split('T')[0] : '',
             etaWarehouseDate: orderData.etaWarehouseDate ? orderData.etaWarehouseDate.split('T')[0] : '',
             finalInspectionDate: orderData.finalInspDate ? orderData.finalInspDate.split('T')[0] : '',
-            
+
             // Buyer Shipment Dates
             buyerShipInitial: orderData.tolerance ? orderData.tolerance.split('T')[0] : '',
             buyerShipLast: orderData.buyerExIndiaTolerance ? orderData.buyerExIndiaTolerance.split('T')[0] : '',
-            
+
             // Vendor Shipment Dates
             vendorShipInitial: orderData.shipmentDate ? orderData.shipmentDate.split('T')[0] : '',
             vendorShipLast: orderData.vendorExIndiaShipmentDate ? orderData.vendorExIndiaShipmentDate.split('T')[0] : '',
-            
+
             // Product Information
             season: orderData.season || '',
             fabric: orderData.fabric || '',
@@ -1301,14 +1301,14 @@ export default function CompletePurchaseOrderFormEdit() {
             embEmbellishment: orderData.embAndEmbellishment || 'Not Required',
             buyerCustomer: orderData.buyerCustomer || '',
             itemDescriptionShippingInvoice: orderData.itemDescriptionShippingInvoice || '',
-            
+
             // Product Specific Information
             currency: orderData.currency || '',
             // Preserve 0 exchange rate as "0", only empty when null/undefined
             exchangeRate: orderData.exchangeRate ?? '',
             // Prefer styleNo (as shown in My-Order list), fallback to design
             style: orderData.styleNo || orderData.design || '',
-            
+
             // Shipping and Payment Terms
             // "paymentMode":  "2"  -> Payment Mode select (values: "2", "3", ...)
             // "shipmentMode": "5"  -> Shipment Term select (values: "4", "5", ...)
@@ -1317,13 +1317,13 @@ export default function CompletePurchaseOrderFormEdit() {
             shipmentTerm: orderData.shipmentMode || '',
             destination: orderData.destination || 'New York',
             shipmentMode: orderData.deliveryType || '',
-            
+
             // Bank Details
             bankName: orderData.bankName || '',
             bankBranch: orderData.bankBranch || '',
             titleOfAccount: orderData.titleOfAccount || '',
             accountNo: orderData.accountNo || '',
-            
+
             // Keep existing values for fields not in API
             // Costing Ref: API sends costingMstID; our select uses IDs as string values.
             costingRef:
@@ -1351,7 +1351,7 @@ export default function CompletePurchaseOrderFormEdit() {
             calculationField2: '',
           });
         }
-        
+
       } catch (error) {
         console.error('Error fetching purchase order data:', error);
         showSnackbar('Error loading purchase order data', 'error');
@@ -1361,8 +1361,8 @@ export default function CompletePurchaseOrderFormEdit() {
     };
 
     // Fetch purchase order data only when main dependent data is loaded
-    if (customers.length > 0 && suppliers.length > 0 && merchants.length > 0 && 
-        productPortfolios.length > 0) {
+    if (customers.length > 0 && suppliers.length > 0 && merchants.length > 0 &&
+      productPortfolios.length > 0) {
       fetchPurchaseOrderData();
     }
   }, [id, reset, customers, suppliers, merchants, productPortfolios]);
@@ -1407,7 +1407,7 @@ export default function CompletePurchaseOrderFormEdit() {
   };
 
   // Build payload for UpdatePurchaseOrder API from form data + existing apiData
-  const buildUpdatePayload = (form) => {
+  const buildUpdatePayload = (form, customers, suppliers, merchants, productPortfolios, productCategories, productGroups) => {
     if (!apiData) return null;
 
     const toIsoOrExisting = (dateStr, existing) => {
@@ -1427,6 +1427,20 @@ export default function CompletePurchaseOrderFormEdit() {
     payload.amsRefNo = form.amsRef || apiData.amsRefNo || '';
     payload.rnNo = form.rnNo || apiData.rnNo || '';
     payload.consignee = form.consignee || apiData.consignee || '';
+
+
+    // Customer, Supplier, Merchant IDs (map from form selections)
+    // Find customerID based on selected customer name
+    const selectedCustomer = customers.find(c => c.customerName === form.customer);
+    payload.customerID = selectedCustomer ? selectedCustomer.customerID : apiData.customerID;
+
+    // Find supplierID based on selected supplier name
+    const selectedSupplier = suppliers.find(s => s.venderName === form.supplier);
+    payload.supplierID = selectedSupplier ? selectedSupplier.venderLibraryID : apiData.supplierID;
+
+    // Find merchantID based on selected merchant name (taking first one if multiple selected)
+    const selectedMerchant = merchants.find(m => form.merchant?.[0] && m.userName === form.merchant[0]);
+    payload.marchandID = selectedMerchant ? selectedMerchant.userId : apiData.marchandID;
 
     // Proceedings / types
     payload.proceedings = form.proceedings || apiData.proceedings || '';
@@ -1516,21 +1530,53 @@ export default function CompletePurchaseOrderFormEdit() {
     payload.buyerCustomer = form.buyerCustomer || apiData.buyerCustomer || '';
 
     // Costing / product hierarchy IDs (keep existing IDs)
-    payload.productPortfolioID = apiData.productPortfolioID;
-    payload.productCategoriesID = apiData.productCategoriesID;
-    payload.productGroupID = apiData.productGroupID;
-    payload.costingMstID = apiData.costingMstID;
+    const selectedPortfolio = productPortfolios.find(p => p.productPortfolio === form.productPortfolio);
+    payload.productPortfolioID = selectedPortfolio ? selectedPortfolio.productPortfolioID : apiData.productPortfolioID;
+    const selectedCategory = productCategories.find(c => c.productCategories === form.productCategory);
+    payload.productCategoriesID = selectedCategory ? selectedCategory.productCategoriesID : apiData.productCategoriesID;
+    const selectedGroup = productGroups.find(g => g.productGroup === form.productGroup);
+    payload.productGroupID = selectedGroup ? selectedGroup.productGroupID : apiData.productGroupID;
+    payload.costingMstID = form.costingRef ? safeParseInt(form.costingRef) : apiData.costingMstID;
 
     // Keep creation & last update timestamps
     payload.creationDate = apiData.creationDate || new Date().toISOString();
     payload.lastUpdate = new Date().toISOString();
+
+    // Remove image/file fields ONLY if they are File objects (to prevent SQL type clash)
+    // But KEEP them if they are strings (filenames), as the backend requires them ("Must declare scalar variable")
+    const imageFieldsToCheck = [
+      'image',
+      'originalPurchaseOrder',
+      'processOrderConfirmation',
+      'finalSpecs',
+      'productImage',
+      'ppComment',
+      'sizeSetComment',
+      'specsimage',
+      'prodImgFileName',
+      'poImgFileName',
+    ];
+    
+    imageFieldsToCheck.forEach(field => {
+      // If it's a File object (from new upload), revert to original string or empty string
+      // We cannot send File objects to this endpoint
+      if (payload[field] && typeof payload[field] === 'object' && payload[field].name) {
+         // It's likely a File object
+         payload[field] = apiData[field] || ''; 
+      }
+      // If it's undefined/null, ensure it's at least an empty string if required (though null might be valid for some)
+      // But for "Must declare", the key must exist.
+      if (payload[field] === undefined) {
+         payload[field] = apiData[field] || '';
+      }
+    });
 
     return payload;
   };
 
   const onSubmit = async (data) => {
     try {
-      const payload = buildUpdatePayload(data);
+      const payload = buildUpdatePayload(data, customers, suppliers, merchants, productPortfolios, productCategories, productGroups);
       if (!payload) {
         showSnackbar('Unable to build update payload. Please reload the page.', 'error');
         return;
@@ -1571,7 +1617,7 @@ export default function CompletePurchaseOrderFormEdit() {
     <FormProvider {...methods}>
       <Container maxWidth="xl">
         <form onSubmit={handleSubmit(onSubmit)}>
-          
+
           {/* ----------------- Section: Basic Order Info ----------------- */}
           <Card sx={{ p: 3, mb: 4 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -2137,7 +2183,7 @@ export default function CompletePurchaseOrderFormEdit() {
               <Grid item xs={12} sm={4}>
                 <Controller name="pcsPerCarton" render={({ field }) => <TextField {...field} fullWidth label="Pcs Per Carton" />} />
               </Grid>
-              
+
               <Grid item xs={12} sm={6}>
                 <Controller
                   name="itemDescriptionShippingInvoice"
@@ -2329,9 +2375,9 @@ export default function CompletePurchaseOrderFormEdit() {
                   </Box>
 
                   <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-                    <Button 
-                      variant="contained" 
-                      color="secondary" 
+                    <Button
+                      variant="contained"
+                      color="secondary"
                       startIcon={<CalculateIcon />}
                       onClick={handleShowCalculationFields}
                     >
@@ -2396,7 +2442,7 @@ export default function CompletePurchaseOrderFormEdit() {
                         <Select {...field} label="Payment Mode" value={field.value || ''}>
                           <MenuItem value="2">DP</MenuItem>
                           <MenuItem value="3">Dp/ap</MenuItem>
-                         
+
                         </Select>
                       </FormControl>
                     )}
@@ -2413,7 +2459,7 @@ export default function CompletePurchaseOrderFormEdit() {
                         <Select {...field} label="Shipment Term" value={field.value || ''}>
                           <MenuItem value="4">CNF</MenuItem>
                           <MenuItem value="5">FOB</MenuItem>
-                         
+
                         </Select>
                       </FormControl>
                     )}
@@ -2477,10 +2523,10 @@ export default function CompletePurchaseOrderFormEdit() {
                   { name: "sizeSetComment", label: "Size Set Comment" },
                 ].map(({ name, label }) => (
                   <Grid item xs={12} sm={6} key={name}>
-                    <FileUploadWithPreview 
-                      name={name} 
-                      label={label} 
-                      accept="image/*,.pdf,.doc,.docx" 
+                    <FileUploadWithPreview
+                      name={name}
+                      label={label}
+                      accept="image/*,.pdf,.doc,.docx"
                     />
                   </Grid>
                 ))}
@@ -2565,26 +2611,26 @@ export default function CompletePurchaseOrderFormEdit() {
               </Grid>
 
               <Stack direction="row" justifyContent="flex-end" spacing={2} sx={{ mt: 3 }}>
-                <LoadingButton 
-                  type="submit" 
-                  variant="contained" 
+                <LoadingButton
+                  type="submit"
+                  variant="contained"
                   color="primary"
                   loading={isSubmitting}
                 >
                   Save
                 </LoadingButton>
-                <LoadingButton 
-                  type="button" 
-                  variant="contained" 
+                <LoadingButton
+                  type="button"
+                  variant="contained"
                   color="primary"
                   loading={isSubmitting}
                   onClick={handleSubmit(handleSaveAndEmail)}
                 >
                   Save & Email
                 </LoadingButton>
-                <Button 
-                  type="button" 
-                  variant="outlined" 
+                <Button
+                  type="button"
+                  variant="outlined"
                   color="primary"
                   onClick={() => navigate('/dashboard/supply-chain')}
                 >

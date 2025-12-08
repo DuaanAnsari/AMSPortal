@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { AgGridReact } from "ag-grid-react";
 import { ModuleRegistry, AllCommunityModule, themeBalham, colorSchemeDarkBlue } from 'ag-grid-community';
@@ -218,6 +218,48 @@ const transformGridRowToAPIPayload = (row) => {
 
         // Keep last update
         lastUpdate: new Date().toISOString(),
+    });
+
+
+    // AGGRESSIVE FIX: Remove ALL image/binary fields from payload
+    // Database has these IMAGE type fields: poImage, pPimage, finalspecs, sizeset, qrImgPO
+    // Also remove any file upload fields that may contain File objects
+    // NOTE: We MUST keep 'productImage', 'specsimage', etc. if they are strings, as the backend requires them.
+    const fieldsToDelete = [
+        'image', 'Image', 'photo', 'Photo', 'attachment', 'file', 'picture', 'Picture', 'imagePath', 'photoPath',
+        'poImage', 'pPimage', 'finalspecs', 'sizeset', 'qrImgPO',  // Exact database field names
+        // 'productImage', 'specsimage', 'prodImgFileName', 'poImgFileName',  // KEEP THESE (Required by Backend)
+        'originalPurchaseOrder', 'processOrderConfirmation', 'finalSpecs', 'ppComment', 'sizeSetComment',  // Form upload fields
+    ];
+
+    let deletedFields = [];
+    fieldsToDelete.forEach(field => {
+        if (payload[field] !== undefined) {
+            console.log(`🔧 Deleting ${field}:`, payload[field]);
+            deletedFields.push(field);
+            delete payload[field];
+        }
+    });
+
+    if (deletedFields.length > 0) {
+        console.log('✅ Deleted fields:', deletedFields.join(', '));
+    } else {
+        console.log('ℹ️ No problematic fields found in payload');
+    }
+
+    if (deletedFields.length > 0) {
+        console.log('✅ Deleted fields:', deletedFields.join(', '));
+    } else {
+        console.log('ℹ️ No problematic fields found in payload');
+    }
+
+    // FORCE INCLUDE REQUIRED IMAGE FIELDS (as empty strings if missing)
+    // This fixes "Must declare the scalar variable @ProductImage" error
+    const requiredImageFields = ['productImage', 'specsimage', 'prodImgFileName', 'poImgFileName'];
+    requiredImageFields.forEach(field => {
+        if (payload[field] === undefined || payload[field] === null) {
+            payload[field] = '';
+        }
     });
 
     return payload;

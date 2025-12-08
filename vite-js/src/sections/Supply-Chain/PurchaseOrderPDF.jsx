@@ -221,27 +221,60 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
   // Download as PDF functionality
   const handleDownloadPDF = async () => {
     const element = componentRef.current;
-    const canvas = await html2canvas(element, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#FFFFFF'
-    });
+    // Store original transform to restore later
+    const originalTransform = element.style.transform;
+    const originalTransition = element.style.transition;
 
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
+    try {
+      // Temporarily reset transform for clean capture
+      element.style.transform = 'scale(1)';
+      element.style.transition = 'none';
 
-    const imgWidth = canvas.width;
-    const imgHeight = canvas.height;
-    const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight) * 0.95;
+      // Get all page elements (children of the container)
+      const pages = Array.from(element.children);
 
-    const imgX = (pdfWidth - imgWidth * ratio) / 2;
-    const imgY = 10;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
 
-    pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-    pdf.save(`Purchase_Order_${data.ref}.pdf`);
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+
+        // Skip if not an HTML element
+        if (!(page instanceof HTMLElement)) continue;
+
+        const canvas = await html2canvas(page, {
+          scale: 2, // High resolution
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#FFFFFF'
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+        const imgWidth = canvas.width;
+        const imgHeight = canvas.height;
+
+        // Calculate ratio to fit A4 page width (maintaining aspect ratio)
+        const ratio = pdfWidth / imgWidth;
+        const finalHeight = imgHeight * ratio;
+
+        // Add image to PDF
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, finalHeight);
+
+        // Add new page if not the last page
+        if (i < pages.length - 1) {
+          pdf.addPage();
+        }
+      }
+
+      pdf.save(`Purchase_Order_${data.ref}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    } finally {
+      // Restore original styles
+      element.style.transform = originalTransform;
+      element.style.transition = originalTransition;
+    }
   };
 
   if (loading) {
@@ -643,16 +676,16 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
 
             {/* Main Quantity Table */}
             <TableContainer component={Paper} sx={{ mb: 0, border: '1px solid black', backgroundColor: '#FFFFFF' }}>
-              <Table sx={{ minWidth: 450, fontSize: '0.70rem', borderCollapse: 'collapse' }} size="small">
+              <Table sx={{ minWidth: 450, fontSize: '0.70rem', borderCollapse: 'collapse', '& td, & th': { border: '1px solid #000' } }} size="small">
                 <TableHead>
                   <TableRow sx={{ borderBottom: "1px solid black" }}>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Color (s)</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Product Code</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Reference</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }} colSpan={4}>Size Range</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Color Total Qty in PCS</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>FOB Unit Price ($)</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>FOB Value Sub Amount ($)</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF', border: '1px solid #000' }}>Color (s)</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF', border: '1px solid #000' }}>Product Code</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF', border: '1px solid #000' }}>Reference</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF', border: '1px solid #000' }} colSpan={4}>Size Range</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF', border: '1px solid #000' }}>Color Total Qty in PCS</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF', border: '1px solid #000' }}>FOB Unit Price ($)</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF', border: '1px solid #000' }}>FOB Value Sub Amount ($)</TableCell>
                   </TableRow>
                 </TableHead>
 
@@ -832,6 +865,31 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               </Box>
             </Box>
 
+            {/* Signatures Section */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 8, mb: 4 }}>
+              <Box sx={{ textAlign: 'center', flex: 1 }}>
+                <Box sx={{ borderBottom: '1px solid #000', width: '150px', margin: '0 auto', mb: 1 }}></Box>
+                <Typography sx={{ fontSize: '10px' }}>
+                  Mr. Munkhoq Ashraf
+                </Typography>
+              </Box>
+
+              <Box sx={{ textAlign: 'center', flex: 1 }}>
+                <Box sx={{ borderBottom: '1px solid #000', width: '150px', margin: '0 auto', mb: 1 }}></Box>
+                <Typography sx={{ fontSize: '10px' }}>
+                  Prepared & Checked by
+                </Typography>
+              </Box>
+
+              <Box sx={{ textAlign: 'center', flex: 1 }}>
+                <Box sx={{ borderBottom: '1px solid #000', width: '150px', margin: '0 auto', mb: 1 }}></Box>
+                <Typography sx={{ fontSize: '10px' }}>
+                  Factory Acknowledgement
+                </Typography>
+              </Box>
+            </Box>
+
+
             {/* Footer */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 13.5, pr: 0.5, pl: 0.5 }}>
               <Typography sx={{ fontSize: '9px', color: 'black' }}>
@@ -883,30 +941,6 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
             </Box>
 
             <Divider sx={{ mb: 3, borderColor: '#000' }} />
-
-            {/* Signatures Section */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4 }}>
-              <Box sx={{ textAlign: 'center', flex: 1 }}>
-                <Box sx={{ borderBottom: '1px solid #000', width: '150px', margin: '0 auto', mb: 1 }}></Box>
-                <Typography sx={{ fontSize: '10px' }}>
-                  Mr. Munkhoq Ashraf
-                </Typography>
-              </Box>
-
-              <Box sx={{ textAlign: 'center', flex: 1 }}>
-                <Box sx={{ borderBottom: '1px solid #000', width: '150px', margin: '0 auto', mb: 1 }}></Box>
-                <Typography sx={{ fontSize: '10px' }}>
-                  Prepared & Checked by
-                </Typography>
-              </Box>
-
-              <Box sx={{ textAlign: 'center', flex: 1 }}>
-                <Box sx={{ borderBottom: '1px solid #000', width: '150px', margin: '0 auto', mb: 1 }}></Box>
-                <Typography sx={{ fontSize: '10px' }}>
-                  Factory Acknowledgement
-                </Typography>
-              </Box>
-            </Box>
 
             {/* AMS Logo and Title */}
             <Box sx={{ width: '150px', height: 'auto', mb: 2.7 }}>

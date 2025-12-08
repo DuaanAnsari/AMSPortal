@@ -55,6 +55,7 @@ const AddSamplingProgramPage = lazy(
 const AddInquiryPage = lazy(() => import('src/sections/Supply-Chain/view/Add-inquiry'));
 const AddOrderDetailPage = lazy(() => import('src/sections/Supply-Chain/view/Add-order-detail'));
 const PurchaseOrderPDF = lazy(() => import('src/sections/Supply-Chain/PurchaseOrderPDF'));
+const PurchaseOrderSSPDF = lazy(() => import('src/sections/Supply-Chain/PurchaseOrderSSPDF'));
 const EditOrder = lazy(() =>
   import('src/sections/Supply-Chain/view/edit-order')
 );
@@ -150,6 +151,7 @@ export const dashboardRoutes = [
           { path: 'milestone/:id', element: <Milestone /> },
           { path: 'view/:id', element: <CompletePurchaseOrderFormEdit /> },
           { path: 'purchase-order-pdf/:id', element: <PurchaseOrderPDF /> },
+          { path: 'purchase-order-sspdf/:id', element: <PurchaseOrderSSPDF /> },
           { path: 'edit-order', element: <EditOrder /> },
           { path: 'purchase-order-edit/:id', element: <CompletePurchaseOrderFormEdit /> },
         ],
