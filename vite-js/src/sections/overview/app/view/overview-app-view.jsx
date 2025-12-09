@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import { Link } from 'react-router-dom';
@@ -49,6 +49,9 @@ import ShowChartIcon from '@mui/icons-material/ShowChart';
 import QueryStatsIcon from '@mui/icons-material/QueryStats';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import DonutLargeIcon from '@mui/icons-material/DonutLarge';
+
 
 // ✅ Compact card style
 const cardStyle = {
@@ -62,12 +65,240 @@ const cardStyle = {
   },
 };
 
+const openOrdersCardSx = {
+  borderRadius: 3,
+  boxShadow: '0 20px 30px rgba(15, 76, 129, 0.08)',
+  background: '#fff',
+  border: '1px solid rgba(25, 118, 210, 0.2)',
+  color: '#0b1f33',
+};
+
+const premiumChart = {
+  gradient: {
+    enabled: true,
+    shade: 'light',
+    type: 'horizontal',
+    gradientToColors: ['#90caf9', '#e3f2fd'],
+    opacityFrom: 0.9,
+    opacityTo: 0.4,
+    stops: [0, 60, 100],
+  },
+  dropShadow: {
+    enabled: false,
+  },
+};
+
+
+const chartTypes = ['line', 'bar', 'donut'];
+
+const lineBarOptions = {
+  chart: { toolbar: { show: false }, zoom: { enabled: false }, background: '#f8fbff' },
+  stroke: { curve: 'smooth', width: 3 },
+  grid: {
+    show: true,
+    borderColor: 'rgba(25,118,210,0.2)',
+    strokeDashArray: 4,
+  },
+  colors: ['#1e88e5', '#64b5f6'],
+  tooltip: {
+    theme: 'dark',
+    style: { color: '#fff', fontWeight: 600 },
+  },
+  xaxis: { labels: { show: false }, axisBorder: { show: false } },
+  yaxis: { show: false },
+  legend: { show: true, position: 'bottom', markers: { width: 10, height: 10 } },
+  fill: {
+    type: 'gradient',
+    gradient: {
+      shade: 'light',
+      type: 'vertical',
+      opacityFrom: 0.85,
+      opacityTo: 0.25,
+      stops: [0, 65, 100],
+    },
+  },
+};
+
+const circularOptions = {
+  labels: ['Shipped On Time', 'Delayed', 'Other'],
+  chart: { toolbar: { show: false }, background: 'transparent' },
+  legend: { position: 'bottom', labels: { colors: ['#0b1f33'] } },
+  plotOptions: {
+    radialBar: {
+      hollow: { size: '60%' },
+      dataLabels: { name: { color: '#0b1f33' }, value: { color: '#0b1f33', fontWeight: 600 } },
+    },
+    pie: {
+      donut: { size: '72%' },
+    },
+  },
+  tooltip: { theme: 'dark', style: { color: '#fff', fontWeight: 600 } },
+  fill: { colors: ['#1976d2', '#64b5f6', '#ffb74d'], type: 'gradient' },
+};
+
 // ----------------------------------------------------------------------
+
+function AppChartCard({ title, icon, total, percent, defaultType, colors, chartSeries, labels }) {
+  const [chartType, setChartType] = useState(defaultType || 'line');
+  const nextChartType = chartTypes[(chartTypes.indexOf(chartType) + 1) % chartTypes.length];
+
+  return (
+    <Card sx={{ ...cardStyle, borderRadius: 3, boxShadow: '0 20px 30px rgba(15, 76, 129, 0.08)', border: '1px solid rgba(25, 118, 210, 0.2)' }}>
+      <CardContent sx={{ p: 2 }}>
+        <Box display="flex" alignItems="center" justifyContent="space-between" mb={0.5}>
+          <Box display="flex" alignItems="center" gap={1}>
+            {icon}
+            <Typography variant="subtitle2" fontWeight={600}>
+              {title}
+            </Typography>
+          </Box>
+          <Button
+            size="small"
+            variant="outlined"
+            sx={{
+              backgroundColor: '#e3f2fd',
+              color: '#0b1f33',
+              borderColor: 'rgba(25,118,210,0.8)',
+              '&:hover': {
+                backgroundColor: '#e3f2fd',
+                color: '#0b1f33',
+                borderColor: 'rgba(25,118,210,0.8)',
+              },
+              '& .MuiSvgIcon-root': { transition: 'color 0.2s' },
+              '&:hover .MuiSvgIcon-root': { color: '#0b1f33' },
+            }}
+            startIcon={
+              nextChartType === 'line' ? (
+                <ShowChartIcon />
+              ) : nextChartType === 'bar' ? (
+                <BarChartIcon />
+              ) : (
+                <DonutLargeIcon />
+              )
+            }
+            onClick={() => setChartType(nextChartType)}
+          >
+            {nextChartType.charAt(0).toUpperCase() + nextChartType.slice(1)}
+          </Button>
+        </Box>
+        <Typography variant="h5" fontWeight={700} sx={{ color: '#0b1f33', letterSpacing: '0.4px' }}>
+          {total}
+        </Typography>
+        <Typography variant="caption" sx={{ color: 'rgba(11,31,51,0.7)' }}>
+          {percent}
+        </Typography>
+
+        <Box sx={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {chartType === 'donut' ? (
+            <Chart
+              key={chartType}
+              type="donut"
+              width="100%"
+              height={200}
+              series={chartSeries.donut || [62, 28]} // Fallback or passed data
+              options={{
+                labels: labels || ['Series A', 'Series B'],
+                chart: {
+                  toolbar: { show: false },
+                  background: 'transparent',
+                  animations: {
+                    enabled: true,
+                    easing: 'easeinout',
+                    speed: 800,
+                    animateGradually: { enabled: true, delay: 150 },
+                    dynamicAnimation: { enabled: true, speed: 350 },
+                  },
+                },
+                legend: { position: 'bottom', labels: { color: '#0b1f33' } },
+                dataLabels: { enabled: false },
+                tooltip: { theme: 'dark', fillSeriesColor: false },
+                plotOptions: {
+                  pie: {
+                    donut: {
+                      size: '70%',
+                      labels: {
+                        show: true,
+                        name: { color: '#0b1f33', fontSize: '14px' },
+                        value: { color: '#0b1f33', fontWeight: 700, fontSize: '16px' },
+                      },
+                    },
+                  },
+                },
+                colors: colors, // Apply passed colors
+                fill: { opacity: 1, type: 'solid' },
+              }}
+            />
+          ) : (
+            <Chart
+              key={chartType}
+              type={chartType === 'line' ? 'area' : chartType}
+              width="100%"
+              height={170}
+              series={chartSeries.lineBar || []}
+              options={{
+                chart: { toolbar: { show: false }, zoom: { enabled: false }, background: '#fff' },
+                plotOptions: {
+                  bar: { columnWidth: '100%', borderRadius: 3 },
+                },
+                dataLabels: { enabled: false },
+                colors: colors, // Apply passed colors
+                stroke: { curve: 'smooth', width: 3 },
+                grid: {
+                  show: true,
+                  borderColor: 'rgba(28,123,184,0.1)',
+                  strokeDashArray: 4,
+                  xaxis: { lines: { show: false } },
+                  yaxis: { lines: { show: false } },
+                },
+                xaxis: { labels: { show: false }, axisBorder: { show: false } },
+                yaxis: { show: false },
+                legend: { show: true, fontSize: '12px', markers: { width: 8, height: 8 } },
+                tooltip: { theme: 'dark' },
+                fill: {
+                  type: 'gradient',
+                  gradient: {
+                    shade: 'light',
+                    type: 'vertical',
+                    opacityFrom: 0.8,
+                    opacityTo: 0.2,
+                    stops: [0, 70, 100],
+                  },
+                },
+              }}
+            />
+          )}
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function OverviewAppView() {
   const { user } = useMockedUser();
   const theme = useTheme();
   const settings = useSettingsContext();
+
+  // Data for cards
+  const openOrderData = {
+    donut: [62, 28],
+    lineBar: [{ name: 'Open Orders', data: [70, 32, 22, 91, 99] }, { name: 'Qty Booked', data: [80, 42, 15, 55, 72] }]
+  };
+
+  const qtyBookedData = {
+    donut: [45, 55],
+    lineBar: [{ name: 'Qty Booked', data: [20, 41, 63, 33, 28, 35, 50, 46, 11, 26] }]
+  };
+
+  const qtyBookedThisWeekData = {
+    donut: [44, 55, 13, 33],
+    lineBar: [{ name: 'Booked This Week', data: [44, 55, 13, 33, 40] }]
+  };
+
+  const qtyShipThisWeekData = {
+    donut: [76, 24],
+    lineBar: [{ name: 'Shipped', data: [30, 45, 50, 60, 76] }]
+  };
+
 
   const chartOptions = {
     chart: {
@@ -259,142 +490,60 @@ export default function OverviewAppView() {
         {/* 🔹 REPLACED CARDS SECTION - 9 New Cards */}
 
         {/* 🔹 1. Open Orders */}
+        {/* 🔹 1. Open Orders */}
         <Grid item xs={12} md={4}>
-          <Card sx={cardStyle}>
-            <CardContent sx={{ p: 2 }}>
-              <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                <AssessmentIcon color="primary" fontSize="small" />
-                <Typography variant="subtitle2" fontWeight={600}>
-                  Open Orders
-                </Typography>
-              </Box>
-              <Typography variant="h6" fontWeight={700}>
-                112
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                +2.6% from last week
-              </Typography>
-              <Chart
-                type="line"
-                height={100}
-                series={[{ name: 'Orders', data: [5, 18, 12, 51, 68, 11, 39, 37] }]}
-                options={{
-                  chart: { toolbar: { show: false }, zoom: { enabled: false } },
-                  stroke: { curve: 'smooth', width: 2 },
-                  grid: { show: false },
-                  xaxis: { labels: { show: false }, axisBorder: { show: false } },
-                  yaxis: { show: false },
-                }}
-              />
-            </CardContent>
-          </Card>
+          <AppChartCard
+            title="Open Orders"
+            icon={<AssessmentIcon color="primary" fontSize="small" />}
+            total="112"
+            percent="+2.6% from last week"
+            defaultType="line"
+            colors={['#1ae8aaff', '#42a5f5']}
+            chartSeries={openOrderData}
+            labels={['Shipped On Time', 'Delayed']}
+          />
         </Grid>
 
-        {/* 🔹 2. Qty Booked */}
+        {/* 🔹 2. Qty Booked - Default Donut */}
         <Grid item xs={12} md={4}>
-          <Card sx={cardStyle}>
-            <CardContent sx={{ p: 2 }}>
-              <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                <ScienceIcon color="info" fontSize="small" />
-                <Typography variant="subtitle2" fontWeight={600}>
-                  Qty Booked
-                </Typography>
-              </Box>
-              <Typography variant="h6" fontWeight={700}>
-                309,210
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                +0.2% this week
-              </Typography>
-              <Chart
-                type="bar"
-                height={100}
-                series={[{ data: [20, 41, 63, 33, 28, 35, 50, 46, 11, 26] }]}
-                options={{
-                  chart: { toolbar: { show: false } },
-                  plotOptions: { bar: { borderRadius: 4, columnWidth: '45%' } },
-                  xaxis: { show: false },
-                  yaxis: { show: false },
-                  grid: { show: false },
-                  colors: ['#2196f3'],
-                }}
-              />
-            </CardContent>
-          </Card>
+          <AppChartCard
+            title="Qty Booked"
+            icon={<ScienceIcon color="info" fontSize="small" />}
+            total="309,210"
+            percent="+0.2% this week"
+            defaultType="donut"
+            colors={['#42a5f5', '#90caf9']}
+            chartSeries={qtyBookedData}
+            labels={['Booked', 'Remaining']}
+          />
         </Grid>
 
-        {/* 🔹 3. Qty Booked This Week */}
+        {/* 🔹 3. Qty Booked This Week - Default Bar */}
         <Grid item xs={12} md={4}>
-          <Card sx={cardStyle}>
-            <CardContent sx={{ p: 2 }}>
-              <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                <FactCheckIcon color="warning" fontSize="small" />
-                <Typography variant="subtitle2" fontWeight={600}>
-                  Qty Booked This Week
-                </Typography>
-              </Box>
-              <Typography variant="h6" fontWeight={700}>
-                12,450
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                -0.1% vs last week
-              </Typography>
-              <Chart
-                type="donut"
-                height={120}
-                series={[44, 55, 13, 33]}
-                options={{
-                  chart: { toolbar: { show: false } },
-                  legend: { show: false },
-                  dataLabels: { enabled: false },
-                  colors: ['#fbbf24', '#f59e0b', '#fcd34d', '#fde68a'],
-                }}
-              />
-            </CardContent>
-          </Card>
+          <AppChartCard
+            title="Qty Booked This Week"
+            icon={<FactCheckIcon color="warning" fontSize="small" />}
+            total="12,450"
+            percent="-0.1% vs last week"
+            defaultType="bar"
+            colors={['#fbbf24', '#f59e0b', '#fcd34d', '#fde68a']}
+            chartSeries={qtyBookedThisWeekData}
+            labels={['Pending', 'Approved', 'Rejected', 'Other']}
+          />
         </Grid>
 
-        {/* 🔹 4. Qty Ship This Week */}
+        {/* 🔹 4. Qty Ship This Week - Default Line */}
         <Grid item xs={12} md={4}>
-          <Card sx={cardStyle}>
-            <CardContent sx={{ p: 2 }}>
-              <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                <LocalShippingIcon color="success" fontSize="small" />
-                <Typography variant="subtitle2" fontWeight={600}>
-                  Qty Ship This Week
-                </Typography>
-              </Box>
-
-              <Chart
-                type="radialBar"
-                height={160}
-                series={[76]}
-                options={{
-                  plotOptions: {
-                    radialBar: {
-                      hollow: { size: '55%' },
-                      dataLabels: {
-                        name: { show: false },
-                        value: {
-                          show: true,
-                          fontSize: '20px',
-                          fontWeight: 600,
-                          color: '#4caf50',
-                          offsetY: 10, // 👈 Center vertically
-                          formatter: (val) => `${val}%`, // 👈 Show with %
-                        },
-                      },
-                    },
-                  },
-                  colors: ['#4caf50'],
-                }}
-              />
-
-              <Typography align="center" variant="caption" color="text.secondary">
-                +2.6% this week
-              </Typography>
-            </CardContent>
-          </Card>
+          <AppChartCard
+            title="Qty Ship This Week"
+            icon={<LocalShippingIcon color="success" fontSize="small" />}
+            total="76%"
+            percent="+2.6% this week"
+            defaultType="line"
+            colors={['#66bb6a', '#a5d6a7']}
+            chartSeries={qtyShipThisWeekData}
+            labels={['Shipped', 'Pending']}
+          />
         </Grid>
         {/* 🔹 5. Qty Booked Last Week */}
         <Grid item xs={12} md={4}>
@@ -409,16 +558,34 @@ export default function OverviewAppView() {
               <Typography variant="h6">28,380</Typography>
               <Chart
                 type="area"
-                height={100}
+                height={160}
                 series={[{ data: [10, 41, 35, 51, 49, 62, 69, 91] }]}
                 options={{
-                  chart: { toolbar: { show: false } },
+                  chart: { toolbar: { show: false }, background: '#f8fbff' },
                   dataLabels: { enabled: false },
-                  stroke: { curve: 'smooth' },
-                  grid: { show: false },
+                  stroke: { curve: 'smooth', width: 3 },
+                  grid: {
+                    show: true,
+                    borderColor: 'rgba(28,123,184,0.1)',
+                    strokeDashArray: 4,
+                  },
                   xaxis: { show: false },
                   yaxis: { show: false },
-                  colors: ['#0288d1'],
+                  colors: ['#1a73e8'],
+                  fill: {
+                    type: 'gradient',
+                    gradient: {
+                      shade: 'light',
+                      type: 'vertical',
+                      opacityFrom: 0.8,
+                      opacityTo: 0.2,
+                      stops: [0, 70, 100],
+                    },
+                  },
+                  tooltip: {
+                    theme: 'dark',
+                    style: { color: '#fff', fontWeight: 600 },
+                  },
                 }}
               />
             </CardContent>

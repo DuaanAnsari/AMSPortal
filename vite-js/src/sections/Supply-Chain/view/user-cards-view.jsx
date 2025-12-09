@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import axios from 'axios';
@@ -31,7 +31,7 @@ import BuildIcon from '@mui/icons-material/Build';
 import { format } from 'date-fns';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs'; // ✅ make sure this import path matches your project
 
-export default function POSearchEngine({ settings }) {
+export default function POSearchEngine({ settings, isDialog, onClose }) {
   const [buyer, setBuyer] = useState('');
   const [vendor, setVendor] = useState('');
   const [searchBy, setSearchBy] = useState('PO No');
@@ -56,6 +56,12 @@ export default function POSearchEngine({ settings }) {
 
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+
+  // Drag scrolling state
+  const tableContainerRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
 
   // ✅ Fetch customers
   useEffect(() => {
@@ -141,9 +147,8 @@ export default function POSearchEngine({ settings }) {
       const token = localStorage.getItem('accessToken');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-      let url = `${API_BASE_URL}/api/QuickSearch/LoadData?customerId=${buyer || 0}&vendorId=${
-        vendor || 0
-      }`;
+      let url = `${API_BASE_URL}/api/QuickSearch/LoadData?customerId=${buyer || 0}&vendorId=${vendor || 0
+        }`;
 
       if (searchBy === 'PO No') {
         url += `&type=pono`;
@@ -174,22 +179,39 @@ export default function POSearchEngine({ settings }) {
       }
 
       const res = await axios.get(url, { headers });
-      setResults(Array.isArray(res.data) ? res.data : []);
+      const data = Array.isArray(res.data) ? res.data : [];
+      setResults(data);
+      setError(null); // Clear any previous errors on successful fetch
       setPage(0);
     } catch (err) {
       console.error(err);
-      setError('Failed to fetch data');
-      setResults([]);
+      // Check if it's a 404 - this means no data found, not an error
+      if (err.response && err.response.status === 404) {
+        // 404 means no data found - this is expected, not an error
+        setResults([]);
+        setError(null); // Don't show error for no data
+      } else if (err.response) {
+        // Other API errors (500, 403, etc.)
+        setError(`Error: ${err.response.status} - ${err.response.statusText}`);
+        setResults([]);
+      } else if (err.request) {
+        // Request made but no response received
+        setError('Failed to connect to server');
+        setResults([]);
+      } else {
+        // Something else happened
+        setError('Failed to fetch data');
+        setResults([]);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const sortedResults = stableSort(results, getComparator(order, orderBy));
-  const paginatedResults = sortedResults.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
+  const paginatedResults = isDialog
+    ? sortedResults
+    : sortedResults.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
   const notFound = !loading && !error && results.length === 0;
 
   // Icon handlers
@@ -201,38 +223,79 @@ export default function POSearchEngine({ settings }) {
   const handleMilestoneClick = useCallback(
     (id) => {
       enqueueSnackbar(`Opening Milestone for PO ID: ${id}`, { variant: 'info' });
+      if (onClose) onClose();
       navigate(`/dashboard/supply-chain/milestone/${id}`);
     },
-    [enqueueSnackbar, navigate]
+    [enqueueSnackbar, navigate, onClose]
   );
 
   const handleViewOrder = useCallback(
     (id) => {
       enqueueSnackbar(`Viewing details for PO ID: ${id}`, { variant: 'success' });
+      if (onClose) onClose();
       navigate(`/dashboard/supply-chain/view/${id}`);
     },
-    [enqueueSnackbar, navigate]
+    [enqueueSnackbar, navigate, onClose]
   );
 
-  // Small stub for PDF click so code doesn't break if previously expecting onPdfClick
-  const handlePdfClick = useCallback((id, field) => {
-    // you can replace this with real pdf logic
-    console.log('PDF click for', id, field);
-    enqueueSnackbar(`Opening PDF for PO ID: ${id}`, { variant: 'info' });
-  }, [enqueueSnackbar]);
+  // PDF click handler - navigates to PDF page
+  const handlePdfClick = useCallback((id, type = 'pdf') => {
+    if (type === 'pdf') {
+      enqueueSnackbar(`Opening PDF document for PO ID: ${id}`, { variant: 'info' });
+    } else if (type === 'ssPdf') {
+      enqueueSnackbar(`Opening SS PDF document for PO ID: ${id}`, { variant: 'info' });
+    }
+
+    // Close dialog if open
+    if (onClose) onClose();
+
+    // Navigate to PDF page with ID in URL
+    const pdfPath = type === 'ssPdf'
+      ? `/dashboard/supply-chain/purchase-order-sspdf/${id}`
+      : `/dashboard/supply-chain/purchase-order-pdf/${id}`;
+    navigate(pdfPath, {
+      state: { type } // optional type parameter
+    });
+  }, [enqueueSnackbar, navigate, onClose]);
+
+  // Drag scrolling handlers
+  const handleMouseDown = useCallback((e) => {
+    if (!tableContainerRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - tableContainerRef.current.offsetLeft);
+    setScrollLeft(tableContainerRef.current.scrollLeft);
+  }, []);
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging || !tableContainerRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - tableContainerRef.current.offsetLeft;
+    const walk = (x - startX) * 2; // Scroll speed multiplier
+    tableContainerRef.current.scrollLeft = scrollLeft - walk;
+  }, [isDragging, startX, scrollLeft]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsDragging(false);
+  }, []);
 
   return (
-    <Container maxWidth={settings?.themeStretch ? false : 'xl'} sx={{ py: 2 }}>
-      <CustomBreadcrumbs
-        heading="PO SEARCH ENGINE"
-        links={[{ name: 'Dashboard', href: '/dashboard' }, { name: 'PO SEARCH ' }]}
-        sx={{ mb: { xs: 2, md: 3 } }}
-      />
+    <Container maxWidth={settings?.themeStretch ? false : 'xl'} sx={{ py: isDialog ? 0 : 2 }} disableGutters={isDialog}>
+      {!isDialog && (
+        <CustomBreadcrumbs
+          heading="PO SEARCH ENGINE"
+          links={[{ name: 'Dashboard', href: '/dashboard' }, { name: 'PO SEARCH ' }]}
+          sx={{ mb: { xs: 2, md: 3 } }}
+        />
+      )}
 
       <LocalizationProvider dateAdapter={AdapterDateFns}>
         <Box
           sx={{
-            p: 3,
+            p: isDialog ? 2 : 3,
             border: '1px solid #ddd',
             borderRadius: 1,
             background: '#fff',
@@ -249,15 +312,28 @@ export default function POSearchEngine({ settings }) {
           </Typography> */}
 
           {/* Filters Section */}
-          <Box sx={{ mb: 3 }}>
-            <Grid container spacing={3} alignItems="center">
-              <Grid item xs={12} md={6}>
+          {/* Filters Section */}
+          <Box sx={{ mb: isDialog ? 1.5 : 3 }}>
+            <Grid container spacing={isDialog ? 1 : 2} alignItems="center">
+              {/* Field 1: Customer */}
+              <Grid item xs={12} md={isDialog ? 6 : 6}>
                 <TextField
                   select
                   label="All Customer"
                   fullWidth
+                  size={isDialog ? "medium" : "medium"}
                   value={buyer}
                   onChange={(e) => setBuyer(e.target.value)}
+                  SelectProps={{
+                    MenuProps: {
+                      disablePortal: isDialog,
+                      PaperProps: {
+                        sx: {
+                          maxHeight: 300,
+                        },
+                      },
+                    },
+                  }}
                 >
                   <MenuItem value="">All Customers</MenuItem>
                   {customerOptions.map((c) => (
@@ -268,13 +344,25 @@ export default function POSearchEngine({ settings }) {
                 </TextField>
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              {/* Field 2: Vendor */}
+              <Grid item xs={12} md={isDialog ? 6 : 6}>
                 <TextField
                   select
                   label="All Vendor"
                   fullWidth
+                  size={isDialog ? "medium" : "medium"}
                   value={vendor}
                   onChange={(e) => setVendor(e.target.value)}
+                  SelectProps={{
+                    MenuProps: {
+                      disablePortal: isDialog,
+                      PaperProps: {
+                        sx: {
+                          maxHeight: 300,
+                        },
+                      },
+                    },
+                  }}
                 >
                   <MenuItem value="">All Vendor</MenuItem>
                   {vendorOptions.map((v) => (
@@ -285,11 +373,13 @@ export default function POSearchEngine({ settings }) {
                 </TextField>
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              {/* Field 3: Search By */}
+              <Grid item xs={12} md={isDialog ? 6 : 6}>
                 <TextField
                   select
                   label="Search By"
                   fullWidth
+                  size={isDialog ? "medium" : "medium"}
                   value={searchBy}
                   onChange={(e) => setSearchBy(e.target.value)}
                 >
@@ -299,11 +389,13 @@ export default function POSearchEngine({ settings }) {
                 </TextField>
               </Grid>
 
+              {/* Field 4: Search term (PO, Style, or Date Range) */}
               {searchBy === 'PO No' && (
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} md={isDialog ? 6 : 6}>
                   <TextField
                     label="PO No"
                     fullWidth
+                    size={isDialog ? "medium" : "medium"}
                     value={poNo}
                     onChange={(e) => setPoNo(e.target.value)}
                   />
@@ -311,10 +403,11 @@ export default function POSearchEngine({ settings }) {
               )}
 
               {searchBy === 'Style' && (
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} md={isDialog ? 6 : 6}>
                   <TextField
                     label="Style No"
                     fullWidth
+                    size={isDialog ? "small" : "medium"}
                     value={styleNo}
                     onChange={(e) => setStyleNo(e.target.value)}
                   />
@@ -322,30 +415,27 @@ export default function POSearchEngine({ settings }) {
               )}
 
               {searchBy === 'Date' && (
-                <>
-                  <Grid item xs={12} md={3}>
-                    <DatePicker
-                      label="From Date"
-                      value={fromDate}
-                      onChange={(newValue) => setFromDate(newValue)}
-                      slotProps={{ textField: { fullWidth: true } }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <DatePicker
-                      label="To Date"
-                      value={toDate}
-                      onChange={(newValue) => setToDate(newValue)}
-                      slotProps={{ textField: { fullWidth: true } }}
-                    />
-                  </Grid>
-                </>
+                <Grid item xs={12} md={isDialog ? 6 : 6} display="flex" gap={1}>
+                  <DatePicker
+                    label="From"
+                    value={fromDate}
+                    onChange={(newValue) => setFromDate(newValue)}
+                    slotProps={{ textField: { fullWidth: true, size: isDialog ? "small" : "medium" } }}
+                  />
+                  <DatePicker
+                    label="To"
+                    value={toDate}
+                    onChange={(newValue) => setToDate(newValue)}
+                    slotProps={{ textField: { fullWidth: true, size: isDialog ? "small" : "medium" } }}
+                  />
+                </Grid>
               )}
 
-              <Grid item xs={12} display="flex" justifyContent="flex-end">
+              <Grid item xs={12} display="flex" justifyContent={isDialog ? "stretch" : "flex-end"}>
                 <Button
                   variant="contained"
-                  sx={{ backgroundColor: '#3b2c6d', '&:hover': { backgroundColor: '#2c2152' } }}
+                  fullWidth={isDialog}
+                  sx={{ backgroundColor: '#5098d3ff', '&:hover': { backgroundColor: '#3283c5ff' } }}
                   onClick={handleSearch}
                 >
                   Search
@@ -365,9 +455,21 @@ export default function POSearchEngine({ settings }) {
                 {error}
               </Typography>
             ) : (
-              <Card sx={{ mt: 3 }}>
-                <TableContainer sx={{ maxHeight: 500 }}>
-                  <Table stickyHeader size="small">
+              <Card sx={{ mt: isDialog ? 1 : 3 }}>
+                <TableContainer
+                  ref={tableContainerRef}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseLeave}
+                  sx={{
+                    maxHeight: isDialog ? 'none' : 500,
+                    overflowX: 'auto',
+                    cursor: isDragging ? 'grabbing' : 'grab',
+                    userSelect: 'none',
+                  }}
+                >
+                  <Table stickyHeader size="small" sx={{ minWidth: 1800 }}>
                     <TableHead>
                       <TableRow>
                         {[
@@ -420,7 +522,7 @@ export default function POSearchEngine({ settings }) {
                             <TableCell align="center">{row.etaNewJerseyDate}</TableCell>
                             <TableCell align="center">{row.etaWarehouseDate}</TableCell>
                             <TableCell align="center">
-                              <IconButton size="small" onClick={() => handlePdfClick(row.id, null)} sx={{ p: 0.5 }}>
+                              <IconButton size="small" onClick={() => handlePdfClick(row.poid, null)} sx={{ p: 0.5 }}>
                                 <img src="/assets/icons/files/pdf.png" alt="PDF" width={16} height={16} />
                               </IconButton>
                             </TableCell>
@@ -449,7 +551,7 @@ export default function POSearchEngine({ settings }) {
                                   e.target.style.backgroundColor = '#FFF4E5';
                                   e.target.style.boxShadow = 'none';
                                 }}
-                             onClick={() => handleMilestoneClick(row.poid)}
+                                onClick={() => handleMilestoneClick(row.poid)}
                               >
                                 Milestone
                               </span>
@@ -479,7 +581,7 @@ export default function POSearchEngine({ settings }) {
                                   e.target.style.backgroundColor = '#E8F0FE';
                                   e.target.style.boxShadow = 'none';
                                 }}
-                                onClick={() => handleViewOrder(row.id)}
+                                onClick={() => handleViewOrder(row.poid)}
                               >
                                 View
                               </span>
@@ -563,7 +665,7 @@ export default function POSearchEngine({ settings }) {
                         ))
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={17} align="center" sx={{ py: 3 }}>
+                          <TableCell colSpan={17} align="left" sx={{ py: 3 }}>
                             {notFound ? 'No records found' : null}
                           </TableCell>
                         </TableRow>
@@ -572,15 +674,17 @@ export default function POSearchEngine({ settings }) {
                   </Table>
                 </TableContainer>
 
-                <TablePagination
-                  rowsPerPageOptions={[10, 25, 50]}
-                  component="div"
-                  count={results.length}
-                  rowsPerPage={rowsPerPage}
-                  page={page}
-                  onPageChange={handleChangePage}
-                  onRowsPerPageChange={handleChangeRowsPerPage}
-                />
+                {!isDialog && (
+                  <TablePagination
+                    rowsPerPageOptions={[10, 25, 50]}
+                    component="div"
+                    count={results.length}
+                    rowsPerPage={rowsPerPage}
+                    page={page}
+                    onPageChange={handleChangePage}
+                    onRowsPerPageChange={handleChangeRowsPerPage}
+                  />
+                )}
               </Card>
             ))}
         </Box>
