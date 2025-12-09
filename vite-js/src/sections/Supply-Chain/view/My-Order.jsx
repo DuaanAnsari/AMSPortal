@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import isEqual from 'lodash/isEqual';
 import { useNavigate } from 'react-router-dom';
 
@@ -181,6 +181,34 @@ export default function PurchaseOrderView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchText, setSearchText] = useState('');
+
+  // Drag to scroll state
+  const tableContainerRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+
+  const handleMouseDown = (e) => {
+    setIsDragging(true);
+    setStartX(e.pageX - tableContainerRef.current.offsetLeft);
+    setScrollLeft(tableContainerRef.current.scrollLeft);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    const x = e.pageX - tableContainerRef.current.offsetLeft;
+    const walk = (x - startX) * 2; // Scroll-fast
+    tableContainerRef.current.scrollLeft = scrollLeft - walk;
+  };
 
   // Dynamic dropdown options
   const [statusOptions, setStatusOptions] = useState(STATUS_OPTIONS);
@@ -763,7 +791,29 @@ export default function PurchaseOrderView() {
       {/* Main Table Card */}
       {!loading && !error && (
         <Card>
-          <TableContainer sx={{ maxHeight: 600 }}>
+          <TableContainer
+            ref={tableContainerRef}
+            onMouseDown={handleMouseDown}
+            onMouseLeave={handleMouseLeave}
+            onMouseUp={handleMouseUp}
+            onMouseMove={handleMouseMove}
+            sx={{
+              maxHeight: 600,
+              cursor: isDragging ? 'grabbing' : 'grab',
+              overflowX: 'auto', // Ensure horizontal scroll is enabled
+              '&::-webkit-scrollbar': {
+                height: 8,
+              },
+              '&::-webkit-scrollbar-thumb': {
+                borderRadius: 2,
+                bgcolor: (theme) => alpha(theme.palette.grey[600], 0.24),
+              },
+              '&::-webkit-scrollbar-track': {
+                borderRadius: 2,
+                bgcolor: (theme) => alpha(theme.palette.grey[500], 0.16),
+              },
+            }}
+          >
             <Table
               stickyHeader
               sx={{
@@ -874,7 +924,16 @@ function PurchaseOrderTableRow({
   };
 
   return (
-    <TableRow hover selected={selected} sx={{ '& td': { py: 1 } }}>
+    <TableRow
+      hover
+      selected={selected}
+      sx={{
+        '& td': { py: 1 },
+        cursor: 'grab',
+        '&:hover': { cursor: 'grab' },
+        '&:active': { cursor: 'grabbing' },
+      }}
+    >
       {/* Checkbox Column */}
       <TableCell padding="checkbox">
         <Checkbox
