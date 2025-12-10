@@ -316,6 +316,21 @@ function SimpleImageUploadField({ name, label = "Image" }) {
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const imageValue = watch(name);
 
+  // Derive display source dynamically
+  let displaySrc = '';
+  if (imageValue && typeof imageValue === 'object') {
+    // New file selected
+    displaySrc = previewUrl;
+  } else if (typeof imageValue === 'string' && imageValue) {
+    // Existing image string
+    if (imageValue.startsWith('http') || imageValue.startsWith('data:')) {
+      displaySrc = imageValue;
+    } else {
+      // Assume base64 and prepend data URI
+      displaySrc = `data:image/png;base64,${imageValue}`;
+    }
+  }
+
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -340,7 +355,7 @@ function SimpleImageUploadField({ name, label = "Image" }) {
   };
 
   const handlePreviewClick = () => {
-    if (previewUrl) {
+    if (displaySrc) {
       setFullScreenOpen(true);
     }
   };
@@ -349,6 +364,7 @@ function SimpleImageUploadField({ name, label = "Image" }) {
     setFullScreenOpen(false);
   };
 
+  // Reset local preview if value is cleared externally
   useEffect(() => {
     if (!imageValue) {
       setPreviewUrl('');
@@ -363,9 +379,9 @@ function SimpleImageUploadField({ name, label = "Image" }) {
             fullWidth
             disabled
             label={label}
-            value={imageValue?.name || ''}
+            value={typeof imageValue === 'string' ? (imageValue ? 'Current Image' : '') : (imageValue?.name || '')}
             InputProps={{
-              endAdornment: previewUrl && (
+              endAdornment: displaySrc && (
                 <IconButton
                   size="small"
                   onClick={handleRemoveImage}
@@ -395,7 +411,7 @@ function SimpleImageUploadField({ name, label = "Image" }) {
         </Grid>
       </Grid>
 
-      {previewUrl && (
+      {displaySrc && (
         <Box sx={{ mt: 2, textAlign: 'center', position: 'relative' }}>
           <Box
             sx={{
@@ -409,7 +425,7 @@ function SimpleImageUploadField({ name, label = "Image" }) {
             onClick={handlePreviewClick}
           >
             <img
-              src={previewUrl}
+              src={displaySrc}
               alt="Preview"
               style={{
                 maxWidth: '200px',
@@ -446,7 +462,7 @@ function SimpleImageUploadField({ name, label = "Image" }) {
 
       <FullScreenImagePreview
         open={fullScreenOpen}
-        imageUrl={previewUrl}
+        imageUrl={displaySrc}
         onClose={handleCloseFullScreen}
       />
     </Box>
@@ -1242,6 +1258,7 @@ export default function CompletePurchaseOrderFormEdit() {
           reset({
             // Basic Order Info
             masterPo: orderData.masterPO || '',
+            image: orderData.poImage || null,
             customerPo: orderData.pono || '',
             internalPo: orderData.internalPONO || '',
             amsRef: orderData.amsRefNo || '',
@@ -1556,18 +1573,18 @@ export default function CompletePurchaseOrderFormEdit() {
       'prodImgFileName',
       'poImgFileName',
     ];
-    
+
     imageFieldsToCheck.forEach(field => {
       // If it's a File object (from new upload), revert to original string or empty string
       // We cannot send File objects to this endpoint
       if (payload[field] && typeof payload[field] === 'object' && payload[field].name) {
-         // It's likely a File object
-         payload[field] = apiData[field] || ''; 
+        // It's likely a File object
+        payload[field] = apiData[field] || '';
       }
       // If it's undefined/null, ensure it's at least an empty string if required (though null might be valid for some)
       // But for "Must declare", the key must exist.
       if (payload[field] === undefined) {
-         payload[field] = apiData[field] || '';
+        payload[field] = apiData[field] || '';
       }
     });
 
