@@ -118,7 +118,7 @@ export const paths = {
       root: `${ROOTS.DASHBOARD}/supply-chain`,
       new: `${ROOTS.DASHBOARD}/supply-chain/new`,
       list: `${ROOTS.DASHBOARD}/supply-chain/list`,
-      cards: `${ROOTS.DASHBOARD}/supply-chain/cards`,
+      cards: `${ROOTS.DASHBOARD}/supply-chain/quick-search`,
       profile: `${ROOTS.DASHBOARD}/supply-chain/profile`,
       account: `${ROOTS.DASHBOARD}/supply-chain/account`,
       edit: (id) => `${ROOTS.DASHBOARD}/supply-chain/${id}/edit`,
@@ -134,7 +134,7 @@ export const paths = {
       editOrder: `${ROOTS.DASHBOARD}/supply-chain/edit-order`,
 
 
-        purchaseOrderPDF: `${ROOTS.DASHBOARD}/supply-chain/purchase-order-pdf`,
+      purchaseOrderPDF: `${ROOTS.DASHBOARD}/supply-chain/purchase-order-pdf`,
 
       demo: {
         edit: `${ROOTS.DASHBOARD}/supply-chain/${MOCK_ID}/edit`,

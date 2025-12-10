@@ -23,7 +23,7 @@ import Iconify from 'src/components/iconify';
 import Scrollbar from 'src/components/scrollbar';
 import SearchNotFound from 'src/components/search-not-found';
 
-import POSearchEngine from 'src/sections/Supply-Chain/view/user-cards-view';
+import POSearchEngine from 'src/sections/Supply-Chain/view/Quick-Search';
 
 import ResultItem from './result-item';
 import { useNavData } from '../../dashboard/config-navigation';

@@ -34,7 +34,7 @@ const InvoiceCreatePage = lazy(() => import('src/pages/dashboard/invoice/new'));
 const InvoiceEditPage = lazy(() => import('src/pages/dashboard/invoice/edit'));
 // ✅ SUPPLY CHAIN PAGES
 const UserProfilePage = lazy(() => import('src/sections/Supply-Chain/view/My-Order'));
-const UserCardsPage = lazy(() => import('src/sections/Supply-Chain/view/user-cards-view'));
+const UserCardsPage = lazy(() => import('src/sections/Supply-Chain/view/Quick-Search'));
 const UserListPage = lazy(() => import('src/sections/Supply-Chain/view/user-list-view'));
 // const UserAccountPage = lazy(() => import('src/sections/Supply-Chain/view/Account')); // Agar Account.jsx hai
 const UserCreatePage = lazy(() => import('src/sections/Supply-Chain/view/user-create-view'));
@@ -135,7 +135,7 @@ export const dashboardRoutes = [
           { element: <UserProfilePage />, index: true },
           { path: 'profile', element: <UserProfilePage /> },
           { path: 'add-order', element: <AddOrderPage /> },
-          { path: 'cards', element: <UserCardsPage /> },
+          { path: 'quick-search', element: <UserCardsPage /> },
           { path: 'list', element: <UserListPage /> },
           { path: 'new', element: <UserCreatePage /> },
           { path: ':id/edit', element: <UserEditPage /> },
