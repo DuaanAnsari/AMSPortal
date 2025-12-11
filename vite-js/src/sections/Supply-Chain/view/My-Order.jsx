@@ -10,6 +10,7 @@ import Container from '@mui/material/Container';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableRow from '@mui/material/TableRow';
+import TableHead from '@mui/material/TableHead';
 import TableContainer from '@mui/material/TableContainer';
 import TextField from '@mui/material/TextField';
 import Stack from '@mui/material/Stack';
@@ -24,6 +25,10 @@ import Typography from '@mui/material/Typography';
 import Grid from '@mui/material/Grid';
 import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
 import { useSnackbar } from 'src/components/snackbar';
 import { useSettingsContext } from 'src/components/settings';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
@@ -214,6 +219,12 @@ export default function PurchaseOrderView() {
   const [statusOptions, setStatusOptions] = useState(STATUS_OPTIONS);
   const [supplierOptions, setSupplierOptions] = useState([]);
   const [customerOptions, setCustomerOptions] = useState([]);
+
+  // Inspection dialog state
+  const [inspectionOpen, setInspectionOpen] = useState(false);
+  const [inspectionLoading, setInspectionLoading] = useState(false);
+  const [inspectionRows, setInspectionRows] = useState([]);
+  const [inspectionPoNo, setInspectionPoNo] = useState('');
 
   // Check restricted access
   const isRestrictedUser = hasRestrictedAccess();
@@ -425,6 +436,37 @@ export default function PurchaseOrderView() {
       }
     },
     [handleSearchSubmit]
+  );
+
+  // Clear search text and reset search filter
+  const handleClearSearch = useCallback(() => {
+    setSearchText('');
+    setFilters((prev) => ({ ...prev, search: '' }));
+    table.onResetPage();
+  }, [table]);
+
+  // Retry button for error state – re-fetch all data
+  const handleRetry = useCallback(() => {
+    fetchSuppliers();
+    fetchCustomers();
+    fetchPurchaseOrders();
+  }, [fetchSuppliers, fetchCustomers, fetchPurchaseOrders]);
+
+  // Open Inspection popup for selected PO
+  const handleInspectionClick = useCallback(
+    (row) => {
+      setInspectionPoNo(row.poNo || '');
+      setInspectionOpen(true);
+
+      // Placeholder: when backend API is available, fetch inspection data here.
+      // For now, we simply clear and show "No records to display".
+      setInspectionLoading(true);
+      setInspectionRows([]);
+      setTimeout(() => {
+        setInspectionLoading(false);
+      }, 300);
+    },
+    []
   );
 
   const handleAddOrder = useCallback(() => {
@@ -867,6 +909,7 @@ export default function PurchaseOrderView() {
                     onMilestoneClick={handleMilestoneClick}
                     onRevisedClick={handleRevisedClick}
                     onSizeSpecsClick={handleSizeSpecsClick}
+                    onInspectionClick={handleInspectionClick}
                     isRestrictedUser={isRestrictedUser}
                   />
                 ))}
@@ -894,6 +937,66 @@ export default function PurchaseOrderView() {
           />
         </Card>
       )}
+
+      {/* Inspection Popup */}
+      <Dialog
+        open={inspectionOpen}
+        onClose={() => setInspectionOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Inspection</DialogTitle>
+        <DialogContent sx={{ mt: 1 }}>
+          {inspectionPoNo && (
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              PO No: {inspectionPoNo}
+            </Typography>
+          )}
+
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 'bold' }}>PDF</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Inspection Date</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Insp No.</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>AQL System</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>AQL Range</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {inspectionLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      <CircularProgress size={20} sx={{ mr: 1 }} />
+                      Loading...
+                    </TableCell>
+                  </TableRow>
+                ) : inspectionRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      No records to display
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  inspectionRows.map((row, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{row.pdf || ''}</TableCell>
+                      <TableCell>{row.inspectionDate || ''}</TableCell>
+                      <TableCell>{row.inspectionNo || ''}</TableCell>
+                      <TableCell>{row.aqlSystem || ''}</TableCell>
+                      <TableCell>{row.aqlRange || ''}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setInspectionOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }
@@ -910,6 +1013,7 @@ function PurchaseOrderTableRow({
   onMilestoneClick,
   onRevisedClick,
   onSizeSpecsClick,
+  onInspectionClick,
   isRestrictedUser,
 }) {
   const renderPdfIcon = (field) => {
@@ -1086,6 +1190,7 @@ function PurchaseOrderTableRow({
             e.target.style.backgroundColor = '#E8F5E9';
             e.target.style.boxShadow = 'none';
           }}
+          onClick={() => onInspectionClick?.(row)}
         >
           Inspection
         </span>
@@ -1234,14 +1339,47 @@ function transformApiData(apiData) {
 
     // API response ke exact field names use karo
     return {
-      id: item.poid || item.POID || index + 1,
-      poNo: item.poNo || item.PONo || `PO-${index + 1}`,
-      styleNo: item.styleNo || item.StyleNo || `STYLE-${index + 1}`,
-      customer: item.customer || item.Customer || 'Unknown Customer',
-      supplier: item.vendor || item.Vender || 'Unknown Supplier',
-      placementDate: item.placementDate || item.PlacementDate || 'Not Set',
-      shipmentDate: item.shipmentDate || item.ShipmentDate || 'Not Set',
-      amount: parseFloat((item.amount || item.Amount || '0').replace('$', '').trim()) || 0,
+      // Prefer explicit PO ID from API, fallback to index
+      id: item.poid || item.POID || item.POId || index + 1,
+
+      // PO number: cover multiple possible API field names
+      poNo:
+        item.pono || // common in your other APIs
+        item.PONO ||
+        item.poNo ||
+        item.PONo ||
+        item.PO_No ||
+        `PO-${index + 1}`,
+
+      // Style number
+      styleNo: item.styleNo || item.StyleNo || item.Style || `STYLE-${index + 1}`,
+
+      // Customer / Buyer
+      customer:
+        item.customer ||
+        item.Customer ||
+        item.buyer ||
+        item.Buyer ||
+        item.customerName ||
+        'Unknown Customer',
+
+      // Supplier / Vendor
+      supplier:
+        item.supplier ||
+        item.Supplier ||
+        item.vendor ||
+        item.Vender ||
+        item.vendorName ||
+        item.venderName ||
+        'Unknown Supplier',
+
+      // Dates
+      placementDate: item.placementDate || item.PlacementDate || item.placementDt || 'Not Set',
+      shipmentDate: item.shipmentDate || item.ShipmentDate || item.shipmentDt || 'Not Set',
+
+      // Amount
+      amount:
+        parseFloat((item.amount || item.Amount || '0').toString().replace('$', '').trim()) || 0,
       milestone: 'Milestone', // Default value
       pdf: 'Available', // Default value
       copy: false, // Default value

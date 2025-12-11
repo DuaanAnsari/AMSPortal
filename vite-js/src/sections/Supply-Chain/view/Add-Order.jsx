@@ -1060,6 +1060,8 @@ export default function CompletePurchaseOrderForm() {
     control,
     setValue,
     watch,
+    setError,
+    clearErrors,
   } = methods;
 
   
@@ -1118,12 +1120,79 @@ export default function CompletePurchaseOrderForm() {
   const calculationField1 = watch('calculationField1');
   const calculationField2 = watch('calculationField2');
 
-  // NEW: Auto-fill internalPo when customerPo changes
+  // Customer PO uniqueness check
+  const [checkingCustomerPo, setCheckingCustomerPo] = useState(false);
+  const [customerPoExists, setCustomerPoExists] = useState(false);
+
+  // Auto-fill internalPo when customerPo changes (for new orders)
   useEffect(() => {
     if (customerPoValue) {
       setValue('internalPo', customerPoValue);
     }
   }, [customerPoValue, setValue]);
+
+  // Validate Customer PO against backend (AlreadyExistPONumber)
+  useEffect(() => {
+    // If field is empty, clear state and errors
+    if (!customerPoValue) {
+      setCustomerPoExists(false);
+      clearErrors('customerPo');
+      return;
+    }
+
+    let isActive = true;
+    setCheckingCustomerPo(true);
+
+    const handler = setTimeout(async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+        // Use base URL from env, do NOT hard-code IP
+        const response = await axios.get(
+          `${API_BASE_URL}/api/MyOrders/AlreadyExistPONumber`,
+          {
+            // Backend expects query param "PONO"
+            params: { PONO: customerPoValue },
+            headers,
+          }
+        );
+
+        if (!isActive) return;
+
+        const data = response.data;
+        console.log('AlreadyExistPONumber response:', data);
+
+        // API contract (from you):
+        // { "message": "YES" }  -> PO already exists
+        const exists = String(data?.message || '').toUpperCase() === 'YES';
+
+        setCustomerPoExists(!!exists);
+
+        if (exists) {
+          setError('customerPo', {
+            type: 'manual',
+            message: 'This PO already exists.',
+          });
+        } else {
+          clearErrors('customerPo');
+        }
+      } catch (error) {
+        console.error('AlreadyExistPONumber check error:', error);
+        // Network / server error pe user ko block nahi karte,
+        // bas console me log karte hain; field error clear rehne dete.
+      } finally {
+        if (isActive) {
+          setCheckingCustomerPo(false);
+        }
+      }
+    }, 500); // debounce to avoid calling API on every single keystroke immediately
+
+    return () => {
+      isActive = false;
+      clearTimeout(handler);
+    };
+  }, [customerPoValue, clearErrors, setError]);
 
   // Handle file changes
   const handleFileChangeWithBase64 = async (field, file) => {
@@ -1774,12 +1843,19 @@ export default function CompletePurchaseOrderForm() {
                   <Controller
                     name={item.name}
                     control={control}
-                    render={({ field }) => (
+                    render={({ field, fieldState }) => (
                       <TextField
                         {...field}
                         label={item.label}
                         fullWidth
                         disabled={item.name === 'amsRef'}
+                        error={!!fieldState.error}
+                        helperText={
+                          fieldState.error?.message ||
+                          (item.name === 'customerPo' && customerPoExists
+                            ? 'This PO already exists'
+                            : '')
+                        }
                       />
                     )}
                   />

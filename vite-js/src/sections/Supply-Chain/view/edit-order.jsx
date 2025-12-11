@@ -127,6 +127,9 @@ const transformGridRowToAPIPayload = (row) => {
     // Start with original data to preserve unmapped fields
     const payload = row.originalData ? { ...row.originalData } : {};
 
+  // Shortcuts to original values so we don't accidentally wipe them out
+  const original = row.originalData || {};
+
     // Helper for safe parsing
     const safeParseInt = (val) => {
         const parsed = parseInt(val, 10);
@@ -139,8 +142,15 @@ const transformGridRowToAPIPayload = (row) => {
 
     // Overwrite with grid values
     Object.assign(payload, {
-        pono: row.customerPo || '',
-        internalPONO: row.internalPo || '',
+        // PO numbers:
+        // - If user provided a non-empty value in grid → use it
+        // - If cell is empty/untouched → keep original DB value
+        pono: row.customerPo !== undefined && row.customerPo !== null && row.customerPo !== ''
+          ? row.customerPo
+          : (original.pono || payload.pono || ''),
+        internalPONO: row.internalPo !== undefined && row.internalPo !== null && row.internalPo !== ''
+          ? row.internalPo
+          : (original.internalPONO || payload.internalPONO || ''),
         masterPO: row.masterPo || '',
         amsRefNo: row.amsRef || '',
         rnNo: row.rnNo || '',
