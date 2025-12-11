@@ -1384,12 +1384,11 @@ export default function CompletePurchaseOrderFormEdit() {
     }
   }, [id, reset, customers, suppliers, merchants, productPortfolios]);
 
-  // Auto-fill internal PO when customer PO changes
-  useEffect(() => {
-    if (customerPoValue) {
-      setValue('internalPo', customerPoValue);
-    }
-  }, [customerPoValue, setValue]);
+  // NOTE:
+  // Previously, whenever the Customer PO changed, we were auto-copying it
+  // into Internal PO via a useEffect. That caused both fields to always
+  // stay the same, even when the user wanted different values.
+  // To keep them independent, we intentionally removed that auto-fill logic.
 
   const handleOpenItemDialog = () => {
     setOpenItemDialog(true);

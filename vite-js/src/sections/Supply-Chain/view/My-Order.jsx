@@ -10,6 +10,7 @@ import Container from '@mui/material/Container';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableRow from '@mui/material/TableRow';
+import TableHead from '@mui/material/TableHead';
 import TableContainer from '@mui/material/TableContainer';
 import TextField from '@mui/material/TextField';
 import Stack from '@mui/material/Stack';
@@ -24,6 +25,10 @@ import Typography from '@mui/material/Typography';
 import Grid from '@mui/material/Grid';
 import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
 import { useSnackbar } from 'src/components/snackbar';
 import { useSettingsContext } from 'src/components/settings';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
@@ -214,6 +219,21 @@ export default function PurchaseOrderView() {
   const [statusOptions, setStatusOptions] = useState(STATUS_OPTIONS);
   const [supplierOptions, setSupplierOptions] = useState([]);
   const [customerOptions, setCustomerOptions] = useState([]);
+
+  // Inspection dialog state
+  const [inspectionOpen, setInspectionOpen] = useState(false);
+  const [inspectionLoading, setInspectionLoading] = useState(false);
+  const [inspectionRows, setInspectionRows] = useState([]);
+  const [inspectionPoNo, setInspectionPoNo] = useState('');
+
+  // Revised Shipment popup state
+  const [revisedOpen, setRevisedOpen] = useState(false);
+  const [revisedRow, setRevisedRow] = useState(null);
+  const [buyerRevisedDate, setBuyerRevisedDate] = useState('');
+  const [vendorRevisedDate, setVendorRevisedDate] = useState('');
+  const [revisedLoading, setRevisedLoading] = useState(false);
+  const [revisedError, setRevisedError] = useState(null);
+  const [revisedItems, setRevisedItems] = useState([]);
 
   // Check restricted access
   const isRestrictedUser = hasRestrictedAccess();
@@ -427,6 +447,37 @@ export default function PurchaseOrderView() {
     [handleSearchSubmit]
   );
 
+  // Clear search text and reset search filter
+  const handleClearSearch = useCallback(() => {
+    setSearchText('');
+    setFilters((prev) => ({ ...prev, search: '' }));
+    table.onResetPage();
+  }, [table]);
+
+  // Retry button for error state – re-fetch all data
+  const handleRetry = useCallback(() => {
+    fetchSuppliers();
+    fetchCustomers();
+    fetchPurchaseOrders();
+  }, [fetchSuppliers, fetchCustomers, fetchPurchaseOrders]);
+
+  // Open Inspection popup for selected PO
+  const handleInspectionClick = useCallback(
+    (row) => {
+      setInspectionPoNo(row.poNo || '');
+      setInspectionOpen(true);
+
+      // Placeholder: when backend API is available, fetch inspection data here.
+      // For now, we simply clear and show "No records to display".
+      setInspectionLoading(true);
+      setInspectionRows([]);
+      setTimeout(() => {
+        setInspectionLoading(false);
+      }, 300);
+    },
+    []
+  );
+
   const handleAddOrder = useCallback(() => {
     navigate('/BusinessProcess/PurchaseOrderAdd');
     enqueueSnackbar('Navigating to Add Purchase Order page!');
@@ -479,17 +530,154 @@ export default function PurchaseOrderView() {
   );
 
   const handleRevisedClick = useCallback(
-    (id) => {
-      enqueueSnackbar(`Opening Revised for PO ID: ${id}`);
+    async (row) => {
+      if (!row) return;
+
+      setRevisedRow(row);
+      setBuyerRevisedDate('');
+      setVendorRevisedDate('');
+      setRevisedItems([]);
+      setRevisedError(null);
+      setRevisedOpen(true);
+
+      try {
+        setRevisedLoading(true);
+        const token = localStorage.getItem('accessToken');
+        if (!token) {
+          throw new Error('No token found, please login again.');
+        }
+
+        const url = `${API_BASE_URL}/api/MyOrders/GetPurchaseOrder/${row.id}`;
+        console.log('Fetching revised shipment PO details from:', url);
+
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('Revised shipment PO details response:', data);
+
+        const order = Array.isArray(data) ? data[0] : data;
+
+        // Try to pre-fill revised dates if backend sends them
+        const buyerDateValue =
+          order?.buyerRevisedShipmentDate ||
+          order?.BuyerRevisedShipmentDate ||
+          order?.revisedShipmentDateBuyer ||
+          order?.RevisedShipmentDateBuyer ||
+          '';
+
+        const vendorDateValue =
+          order?.vendorRevisedShipmentDate ||
+          order?.VendorRevisedShipmentDate ||
+          order?.revisedShipmentDateVendor ||
+          order?.RevisedShipmentDateVendor ||
+          '';
+
+        if (buyerDateValue) {
+          setBuyerRevisedDate(buyerDateValue.substring(0, 10));
+        }
+        if (vendorDateValue) {
+          setVendorRevisedDate(vendorDateValue.substring(0, 10));
+        }
+
+        // Enrich revisedRow with header-level info for popup labels (API-based)
+        setRevisedRow((prev) => ({
+          ...(prev || {}),
+          poNoFromApi: order?.pono ?? prev?.poNoFromApi,
+          productGroup: order?.productGroup ?? prev?.productGroup,
+          seasonName: order?.season ?? prev?.seasonName,
+          orderType: order?.pOtype ?? prev?.orderType,
+          leadTimeMargin: order?.timeSpame ?? prev?.leadTimeMargin,
+          transactionCurrency: order?.currency ?? prev?.transactionCurrency,
+          toleranceDays: order?.toleranceindays ?? prev?.toleranceDays,
+          merchandiserId: order?.marchandID ?? prev?.merchandiserId,
+        }));
+
+        // Normalize items for "Items to be sourced" table (best-effort)
+        const rawItems =
+          order?.items ||
+          order?.Items ||
+          order?.poItems ||
+          order?.POItems ||
+          order?.orderItems ||
+          order?.OrderItems ||
+          [];
+
+        if (Array.isArray(rawItems)) {
+          const normalizedItems = rawItems.map((item, index) => ({
+            id: item.id || item.itemId || item.ItemId || index,
+            style: item.style || item.Style || item.styleNo || item.StyleNo || '',
+            articleNo: item.articleNo || item.ArticleNo || '',
+            description:
+              item.description ||
+              item.Description ||
+              item.itemDescription ||
+              item.ItemDescription ||
+              '',
+            colourway:
+              item.colourway ||
+              item.Colourway ||
+              item.colorway ||
+              item.Colorway ||
+              item.color ||
+              item.Color ||
+              '',
+            size: item.size || item.Size || '',
+            poQuantity:
+              item.poQuantity ||
+              item.POQuantity ||
+              item.quantity ||
+              item.Quantity ||
+              0,
+            itemPrice:
+              item.itemPrice ||
+              item.ItemPrice ||
+              item.price ||
+              item.Price ||
+              0,
+            value:
+              item.value ||
+              item.Value ||
+              item.amount ||
+              item.Amount ||
+              0,
+          }));
+
+          setRevisedItems(normalizedItems);
+        } else {
+          setRevisedItems([]);
+        }
+      } catch (err) {
+        console.error('Error fetching revised shipment PO details:', err);
+        setRevisedError(err.message || 'Failed to load revised shipment data');
+      } finally {
+        setRevisedLoading(false);
+      }
     },
-    [enqueueSnackbar]
+    []
   );
 
   const handleSizeSpecsClick = useCallback(
-    (id) => {
-      enqueueSnackbar(`Opening Size Specs for PO ID: ${id}`);
+    (row) => {
+      if (!row) return;
+      navigate(`/dashboard/supply-chain/size-specs/${row.id}`, {
+        state: {
+          poNo: row.poNo,
+          styleNo: row.styleNo,
+          buyer: row.customer,
+        },
+      });
     },
-    [enqueueSnackbar]
+    [navigate]
   );
 
   useEffect(() => {
@@ -867,6 +1055,7 @@ export default function PurchaseOrderView() {
                     onMilestoneClick={handleMilestoneClick}
                     onRevisedClick={handleRevisedClick}
                     onSizeSpecsClick={handleSizeSpecsClick}
+                    onInspectionClick={handleInspectionClick}
                     isRestrictedUser={isRestrictedUser}
                   />
                 ))}
@@ -894,6 +1083,332 @@ export default function PurchaseOrderView() {
           />
         </Card>
       )}
+
+      {/* Inspection Popup */}
+      <Dialog
+        open={inspectionOpen}
+        onClose={() => setInspectionOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Inspection</DialogTitle>
+        <DialogContent sx={{ mt: 1 }}>
+          {inspectionPoNo && (
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              PO No: {inspectionPoNo}
+            </Typography>
+          )}
+
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 'bold' }}>PDF</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Inspection Date</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Insp No.</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>AQL System</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>AQL Range</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {inspectionLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      <CircularProgress size={20} sx={{ mr: 1 }} />
+                      Loading...
+                    </TableCell>
+                  </TableRow>
+                ) : inspectionRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      No records to display
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  inspectionRows.map((row, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{row.pdf || ''}</TableCell>
+                      <TableCell>{row.inspectionDate || ''}</TableCell>
+                      <TableCell>{row.inspectionNo || ''}</TableCell>
+                      <TableCell>{row.aqlSystem || ''}</TableCell>
+                      <TableCell>{row.aqlRange || ''}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setInspectionOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Revised Shipment Popup */}
+      <Dialog
+        open={revisedOpen}
+        onClose={() => setRevisedOpen(false)}
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle>
+          {revisedRow
+            ? `PO No. ${
+                revisedRow.poNoFromApi || revisedRow.poNo || ''
+              }${revisedRow.productGroup ? ` / ${revisedRow.productGroup}` : ''} - Revised Shipment`
+            : 'Revised Shipment'}
+        </DialogTitle>
+        <DialogContent sx={{ mt: 1 }}>
+          {revisedRow && (
+            <Box>
+              <Grid container spacing={4}>
+                {/* Left: Purchase Order Detail */}
+                <Grid item xs={12} md={6}>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 'bold', mb: 1 }}
+                  >
+                    Purchase Order Detail
+                  </Typography>
+
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: '170px 1fr',
+                      rowGap: 1,
+                    }}
+                  >
+                    <Typography variant="body2">Season Name</Typography>
+                    <Typography variant="body2">
+                      {revisedRow.seasonName || '-'}
+                    </Typography>
+
+                    <Typography variant="body2">Order Type</Typography>
+                    <Typography variant="body2">
+                      {revisedRow.orderType || '-'}
+                    </Typography>
+
+                    <Typography variant="body2">Order Placement Date</Typography>
+                    <Typography variant="body2">
+                      {revisedRow.placementDate || '-'}
+                    </Typography>
+
+                    <Typography variant="body2">Shipment Date</Typography>
+                    <Typography variant="body2">
+                      {revisedRow.shipmentDate || '-'}
+                    </Typography>
+
+                    <Typography variant="body2">Lead Time Margin</Typography>
+                    <Typography variant="body2">
+                      {revisedRow.leadTimeMargin
+                        ? `${revisedRow.leadTimeMargin} Days`
+                        : '-'}
+                    </Typography>
+
+                    <Typography variant="body2">Transaction should be in</Typography>
+                    <Typography variant="body2">
+                      {revisedRow.transactionCurrency || '-'}
+                    </Typography>
+
+                    <Typography variant="body2">Tolerance</Typography>
+                    <Typography variant="body2">
+                      {revisedRow.toleranceDays
+                        ? `+/-${revisedRow.toleranceDays}%`
+                        : '+/-5%'}
+                    </Typography>
+                  </Box>
+
+                  {/* Revised Shipment Dates */}
+                  <Box
+                    sx={{
+                      mt: 3,
+                      display: 'grid',
+                      gridTemplateColumns: '220px auto',
+                      rowGap: 2,
+                      columnGap: 1,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Typography
+                      variant="body2"
+                      sx={{ color: 'error.main', fontWeight: 'bold' }}
+                    >
+                      Revised Shipment Date [Buyer]
+                    </Typography>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                      }}
+                    >
+                      <TextField
+                        type="date"
+                        size="small"
+                        value={buyerRevisedDate}
+                        onChange={(e) => setBuyerRevisedDate(e.target.value)}
+                        InputLabelProps={{ shrink: true }}
+                        sx={{ width: 200 }}
+                      />
+                      <Button variant="contained" size="small">
+                        Update
+                      </Button>
+                    </Box>
+
+                    <Typography
+                      variant="body2"
+                      sx={{ color: 'error.main', fontWeight: 'bold' }}
+                    >
+                      Revised Shipment Date [Vendor]
+                    </Typography>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                      }}
+                    >
+                      <TextField
+                        type="date"
+                        size="small"
+                        value={vendorRevisedDate}
+                        onChange={(e) => setVendorRevisedDate(e.target.value)}
+                        InputLabelProps={{ shrink: true }}
+                        sx={{ width: 200 }}
+                      />
+                      <Button variant="contained" size="small">
+                        Update
+                      </Button>
+                    </Box>
+                  </Box>
+                </Grid>
+
+                {/* Right: Buyer / Supplier / Merchandiser info */}
+                <Grid item xs={12} md={6}>
+                  <Box sx={{ mb: 3 }}>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{ fontWeight: 'bold', mb: 1 }}
+                    >
+                      Buyer Information
+                    </Typography>
+                    <Typography variant="body2">
+                      {revisedRow.customer || '-'}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ mb: 3 }}>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{ fontWeight: 'bold', mb: 1 }}
+                    >
+                      Supplier Information
+                    </Typography>
+                    <Typography variant="body2">
+                      {revisedRow.supplier || '-'}
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{ fontWeight: 'bold', mb: 1 }}
+                    >
+                      Merchandiser Information
+                    </Typography>
+                    <Typography variant="body2">
+                      {revisedRow.merchandiserId
+                        ? `Merchandiser ID: ${revisedRow.merchandiserId}`
+                        : '-'}
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+
+              {/* Items to be sourced */}
+              <Box sx={{ mt: 4 }}>
+                <Typography
+                  variant="subtitle1"
+                  sx={{ fontWeight: 'bold', mb: 1 }}
+                >
+                  Items to be sourced
+                </Typography>
+
+                <TableContainer
+                  sx={{
+                    border: '1px solid',
+                    borderColor: 'divider',
+                  }}
+                >
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Style</TableCell>
+                        <TableCell>Article No</TableCell>
+                        <TableCell>Item Description</TableCell>
+                        <TableCell>Colourway</TableCell>
+                        <TableCell>Size</TableCell>
+                        <TableCell>PO Quantity</TableCell>
+                        <TableCell>Item Price</TableCell>
+                        <TableCell>Value</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {revisedLoading ? (
+                        <TableRow>
+                          <TableCell colSpan={8} align="center">
+                            <CircularProgress size={20} sx={{ mr: 1 }} />
+                            Loading items...
+                          </TableCell>
+                        </TableRow>
+                      ) : revisedError ? (
+                        <TableRow>
+                          <TableCell colSpan={8} align="center" sx={{ color: 'error.main' }}>
+                            {revisedError}
+                          </TableCell>
+                        </TableRow>
+                      ) : revisedItems.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} align="center">
+                            No items to display
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        revisedItems.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell>{item.style}</TableCell>
+                            <TableCell>{item.articleNo}</TableCell>
+                            <TableCell>{item.description}</TableCell>
+                            <TableCell>{item.colourway}</TableCell>
+                            <TableCell>{item.size}</TableCell>
+                            <TableCell>{item.poQuantity}</TableCell>
+                            <TableCell>{item.itemPrice}</TableCell>
+                            <TableCell>{item.value}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+
+              {/* Delivery Schedule */}
+              <Box sx={{ mt: 4 }}>
+                <Typography
+                  variant="subtitle1"
+                  sx={{ fontWeight: 'bold', mb: 1 }}
+                >
+                  Delivery Schedule
+                </Typography>
+                <Typography variant="body2">No schedule data.</Typography>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRevisedOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }
@@ -910,6 +1425,7 @@ function PurchaseOrderTableRow({
   onMilestoneClick,
   onRevisedClick,
   onSizeSpecsClick,
+  onInspectionClick,
   isRestrictedUser,
 }) {
   const renderPdfIcon = (field) => {
@@ -1022,7 +1538,7 @@ function PurchaseOrderTableRow({
                 e.target.style.backgroundColor = '#FFFFFF';
                 e.target.style.boxShadow = 'none';
               }}
-              onClick={() => onRevisedClick(row.id)}
+              onClick={() => onRevisedClick?.(row)}
             >
               Revised
             </span>
@@ -1086,6 +1602,7 @@ function PurchaseOrderTableRow({
             e.target.style.backgroundColor = '#E8F5E9';
             e.target.style.boxShadow = 'none';
           }}
+          onClick={() => onInspectionClick?.(row)}
         >
           Inspection
         </span>
@@ -1115,7 +1632,7 @@ function PurchaseOrderTableRow({
             e.target.style.backgroundColor = '#FFFFFF';
             e.target.style.boxShadow = 'none';
           }}
-          onClick={() => onSizeSpecsClick(row.id)}
+          onClick={() => onSizeSpecsClick?.(row)}
         >
           Size Specs
         </span>
@@ -1234,14 +1751,47 @@ function transformApiData(apiData) {
 
     // API response ke exact field names use karo
     return {
-      id: item.poid || item.POID || index + 1,
-      poNo: item.poNo || item.PONo || `PO-${index + 1}`,
-      styleNo: item.styleNo || item.StyleNo || `STYLE-${index + 1}`,
-      customer: item.customer || item.Customer || 'Unknown Customer',
-      supplier: item.vendor || item.Vender || 'Unknown Supplier',
-      placementDate: item.placementDate || item.PlacementDate || 'Not Set',
-      shipmentDate: item.shipmentDate || item.ShipmentDate || 'Not Set',
-      amount: parseFloat((item.amount || item.Amount || '0').replace('$', '').trim()) || 0,
+      // Prefer explicit PO ID from API, fallback to index
+      id: item.poid || item.POID || item.POId || index + 1,
+
+      // PO number: cover multiple possible API field names
+      poNo:
+        item.pono || // common in your other APIs
+        item.PONO ||
+        item.poNo ||
+        item.PONo ||
+        item.PO_No ||
+        `PO-${index + 1}`,
+
+      // Style number
+      styleNo: item.styleNo || item.StyleNo || item.Style || `STYLE-${index + 1}`,
+
+      // Customer / Buyer
+      customer:
+        item.customer ||
+        item.Customer ||
+        item.buyer ||
+        item.Buyer ||
+        item.customerName ||
+        'Unknown Customer',
+
+      // Supplier / Vendor
+      supplier:
+        item.supplier ||
+        item.Supplier ||
+        item.vendor ||
+        item.Vender ||
+        item.vendorName ||
+        item.venderName ||
+        'Unknown Supplier',
+
+      // Dates
+      placementDate: item.placementDate || item.PlacementDate || item.placementDt || 'Not Set',
+      shipmentDate: item.shipmentDate || item.ShipmentDate || item.shipmentDt || 'Not Set',
+
+      // Amount
+      amount:
+        parseFloat((item.amount || item.Amount || '0').toString().replace('$', '').trim()) || 0,
       milestone: 'Milestone', // Default value
       pdf: 'Available', // Default value
       copy: false, // Default value

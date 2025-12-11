@@ -56,6 +56,8 @@ const AddInquiryPage = lazy(() => import('src/sections/Supply-Chain/view/Add-inq
 const AddOrderDetailPage = lazy(() => import('src/sections/Supply-Chain/view/Add-order-detail'));
 const PurchaseOrderPDF = lazy(() => import('src/sections/Supply-Chain/PurchaseOrderPDF'));
 const PurchaseOrderSSPDF = lazy(() => import('src/sections/Supply-Chain/PurchaseOrderSSPDF'));
+const SizeSpecsPage = lazy(() => import('src/sections/Supply-Chain/view/Size-Specs'));
+const PORevisedShipmentPage = lazy(() => import('src/sections/Supply-Chain/view/PORevisedShipment'));
 const EditOrder = lazy(() =>
   import('src/sections/Supply-Chain/view/edit-order')
 );
@@ -152,6 +154,8 @@ export const dashboardRoutes = [
           { path: 'view/:id', element: <CompletePurchaseOrderFormEdit /> },
           { path: 'purchase-order-pdf/:id', element: <PurchaseOrderPDF /> },
           { path: 'purchase-order-sspdf/:id', element: <PurchaseOrderSSPDF /> },
+          { path: 'size-specs/:id', element: <SizeSpecsPage /> },
+          { path: 'po-revised-shipment/:id', element: <PORevisedShipmentPage /> },
           { path: 'edit-order', element: <EditOrder /> },
           { path: 'purchase-order-edit/:id', element: <CompletePurchaseOrderFormEdit /> },
         ],
