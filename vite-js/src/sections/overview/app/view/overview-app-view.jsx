@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import { Link } from 'react-router-dom';
@@ -51,14 +51,18 @@ import InventoryIcon from '@mui/icons-material/Inventory';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import DonutLargeIcon from '@mui/icons-material/DonutLarge';
+import PieChartIcon from '@mui/icons-material/PieChart';
 
 
 // ✅ Compact card style
 const cardStyle = {
   borderRadius: 2,
   boxShadow: '0px 3px 12px rgba(0,0,0,0.05)',
-  background: '#fff',
+  bgcolor: 'background.paper',
   transition: '0.3s',
+};
+
+const cardHoverSx = {
   '&:hover': {
     boxShadow: '0px 5px 18px rgba(0,0,0,0.1)',
     transform: 'translateY(-3px)',
@@ -68,9 +72,9 @@ const cardStyle = {
 const openOrdersCardSx = {
   borderRadius: 3,
   boxShadow: '0 20px 30px rgba(15, 76, 129, 0.08)',
-  background: '#fff',
+  bgcolor: 'background.paper',
   border: '1px solid rgba(25, 118, 210, 0.2)',
-  color: '#0b1f33',
+  color: 'text.primary',
 };
 
 const premiumChart = {
@@ -92,7 +96,7 @@ const premiumChart = {
 const chartTypes = ['line', 'bar', 'donut'];
 
 const lineBarOptions = {
-  chart: { toolbar: { show: false }, zoom: { enabled: false }, background: '#f8fbff' },
+  chart: { toolbar: { show: false }, zoom: { enabled: false }, background: 'transparent' },
   stroke: { curve: 'smooth', width: 3 },
   grid: {
     show: true,
@@ -122,11 +126,11 @@ const lineBarOptions = {
 const circularOptions = {
   labels: ['Shipped On Time', 'Delayed', 'Other'],
   chart: { toolbar: { show: false }, background: 'transparent' },
-  legend: { position: 'bottom', labels: { colors: ['#0b1f33'] } },
+  legend: { position: 'bottom', labels: { colors: ['text.primary'] } },
   plotOptions: {
     radialBar: {
       hollow: { size: '60%' },
-      dataLabels: { name: { color: '#0b1f33' }, value: { color: '#0b1f33', fontWeight: 600 } },
+      dataLabels: { name: { color: 'text.primary' }, value: { color: 'text.primary', fontWeight: 600 } },
     },
     pie: {
       donut: { size: '72%' },
@@ -138,12 +142,20 @@ const circularOptions = {
 
 // ----------------------------------------------------------------------
 
-function AppChartCard({ title, icon, total, percent, defaultType, colors, chartSeries, labels }) {
-  const [chartType, setChartType] = useState(defaultType || 'line');
-  const nextChartType = chartTypes[(chartTypes.indexOf(chartType) + 1) % chartTypes.length];
+function AppChartCard({ title, icon, total, percent, defaultType, colors, chartSeries, labels, disableHover, chartOptions = {}, availableTypes = ['line', 'bar', 'donut'] }) {
+  const theme = useTheme();
+  const [chartType, setChartType] = useState(defaultType || availableTypes[0]);
+
+  const handleToggleChart = () => {
+    const currentIndex = availableTypes.indexOf(chartType);
+    const nextIndex = (currentIndex + 1) % availableTypes.length;
+    setChartType(availableTypes[nextIndex]);
+  };
+
+  const nextChartType = availableTypes[(availableTypes.indexOf(chartType) + 1) % availableTypes.length];
 
   return (
-    <Card sx={{ ...cardStyle, borderRadius: 3, boxShadow: '0 20px 30px rgba(15, 76, 129, 0.08)', border: '1px solid rgba(25, 118, 210, 0.2)' }}>
+    <Card sx={{ ...cardStyle, borderRadius: 3, boxShadow: '0 10px 40px -10px rgba(0,0,0,0.2)', border: '1px solid rgba(145, 158, 171, 0.24)', ...(!disableHover && cardHoverSx) }}>
       <CardContent sx={{ p: 2 }}>
         <Box display="flex" alignItems="center" justifyContent="space-between" mb={0.5}>
           <Box display="flex" alignItems="center" gap={1}>
@@ -172,30 +184,32 @@ function AppChartCard({ title, icon, total, percent, defaultType, colors, chartS
                 <ShowChartIcon />
               ) : nextChartType === 'bar' ? (
                 <BarChartIcon />
-              ) : (
+              ) : nextChartType === 'donut' ? (
                 <DonutLargeIcon />
+              ) : (
+                <PieChartIcon />
               )
             }
-            onClick={() => setChartType(nextChartType)}
+            onClick={handleToggleChart}
           >
             {nextChartType.charAt(0).toUpperCase() + nextChartType.slice(1)}
           </Button>
         </Box>
-        <Typography variant="h5" fontWeight={700} sx={{ color: '#0b1f33', letterSpacing: '0.4px' }}>
+        <Typography variant="h5" fontWeight={700} sx={{ color: 'text.primary', letterSpacing: '0.4px' }}>
           {total}
         </Typography>
-        <Typography variant="caption" sx={{ color: 'rgba(11,31,51,0.7)' }}>
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           {percent}
         </Typography>
 
-        <Box sx={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {chartType === 'donut' ? (
+        <Box sx={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: disableHover ? 'none' : 'auto' }}>
+          {chartType === 'donut' || chartType === 'pie' ? (
             <Chart
               key={chartType}
-              type="donut"
+              type={chartType === 'pie' ? 'pie' : 'donut'}
               width="100%"
               height={200}
-              series={chartSeries.donut || [62, 28]} // Fallback or passed data
+              series={chartSeries.donut || []} // Fallback or passed data
               options={{
                 labels: labels || ['Series A', 'Series B'],
                 chart: {
@@ -208,18 +222,31 @@ function AppChartCard({ title, icon, total, percent, defaultType, colors, chartS
                     animateGradually: { enabled: true, delay: 150 },
                     dynamicAnimation: { enabled: true, speed: 350 },
                   },
+                  selection: { enabled: false },
+                  events: disableHover ? { click: (c, w, e) => e.preventDefault(), mouseMove: (c, w, e) => e.preventDefault() } : {},
                 },
-                legend: { position: 'bottom', labels: { color: '#0b1f33' } },
+                legend: {
+                  position: 'bottom',
+                  labels: { colors: theme.palette.text.primary },
+                  onItemClick: { toggleDataSeries: !disableHover },
+                  onItemHover: { highlightDataSeries: !disableHover },
+                },
                 dataLabels: { enabled: false },
-                tooltip: { theme: 'dark', fillSeriesColor: false },
+                tooltip: { theme: 'dark', fillSeriesColor: false, enabled: !disableHover },
+                states: disableHover ? {
+                  normal: { filter: { type: 'none' } },
+                  hover: { filter: { type: 'none' } },
+                  active: { allowMultipleDataPointsSelection: false, filter: { type: 'none' } }
+                } : undefined,
                 plotOptions: {
                   pie: {
+                    expandOnClick: !disableHover,
                     donut: {
-                      size: '70%',
+                      size: chartType === 'donut' ? '70%' : '0%',
                       labels: {
-                        show: true,
-                        name: { color: '#0b1f33', fontSize: '14px' },
-                        value: { color: '#0b1f33', fontWeight: 700, fontSize: '16px' },
+                        show: chartType === 'donut',
+                        name: { color: theme.palette.text.primary, fontSize: '14px' },
+                        value: { color: theme.palette.text.primary, fontWeight: 700, fontSize: '16px' },
                       },
                     },
                   },
@@ -236,9 +263,15 @@ function AppChartCard({ title, icon, total, percent, defaultType, colors, chartS
               height={170}
               series={chartSeries.lineBar || []}
               options={{
-                chart: { toolbar: { show: false }, zoom: { enabled: false }, background: '#fff' },
+                chart: {
+                  toolbar: { show: false },
+                  zoom: { enabled: false },
+                  background: 'transparent',
+                  selection: { enabled: false },
+                  events: disableHover ? { click: (c, w, e) => e.preventDefault(), mouseMove: (c, w, e) => e.preventDefault() } : {},
+                },
                 plotOptions: {
-                  bar: { columnWidth: '100%', borderRadius: 3 },
+                  bar: { columnWidth: '100%', borderRadius: 3, distributed: true },
                 },
                 dataLabels: { enabled: false },
                 colors: colors, // Apply passed colors
@@ -251,9 +284,21 @@ function AppChartCard({ title, icon, total, percent, defaultType, colors, chartS
                   yaxis: { lines: { show: false } },
                 },
                 xaxis: { labels: { show: false }, axisBorder: { show: false } },
-                yaxis: { show: false },
-                legend: { show: true, fontSize: '12px', markers: { width: 8, height: 8 } },
-                tooltip: { theme: 'dark' },
+                yaxis: { show: false, ...chartOptions?.yaxis },
+                legend: {
+                  show: true,
+                  fontSize: '12px',
+                  markers: { width: 8, height: 8 },
+                  labels: { colors: 'text.primary' },
+                  onItemClick: { toggleDataSeries: !disableHover },
+                  onItemHover: { highlightDataSeries: !disableHover },
+                },
+                tooltip: { theme: 'dark', enabled: !disableHover },
+                states: disableHover ? {
+                  normal: { filter: { type: 'none' } },
+                  hover: { filter: { type: 'none' } },
+                  active: { allowMultipleDataPointsSelection: false, filter: { type: 'none' } }
+                } : undefined,
                 fill: {
                   type: 'gradient',
                   gradient: {
@@ -278,10 +323,73 @@ export default function OverviewAppView() {
   const theme = useTheme();
   const settings = useSettingsContext();
 
+  const [cardData, setCardData] = useState({
+    lblChart1V: 112,
+    lblChart2V: 309210,
+    lblChart3V: 0,
+    lblChart4V: 0,
+    lblChart5V: 0,
+    lblChart6V: 0,
+    lblChart7V: 0,
+    lblChart8V: 0
+  });
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const headers = {
+          'Content-Type': 'application/json'
+        };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const response = await fetch('http://192.168.18.13/api/MyOrders/DashboardCardsCount', { headers });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            console.error("Unauthorized");
+          }
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("Dashboard Card API Response:", data);
+
+        let stats = data;
+        if (Array.isArray(data) && data.length > 0) {
+          stats = data[0];
+        }
+
+        // Safe update with null checks
+        if (stats) {
+          setCardData({
+            lblChart1V: stats.lblChart1V ?? 0,
+            lblChart2V: stats.lblChart2V ?? 0,
+            lblChart3V: stats.lblChart3V ?? 0,
+            lblChart4V: stats.lblChart4V ?? 0,
+            lblChart5V: stats.lblChart5V ?? 0,
+            lblChart6V: stats.lblChart6V ?? 0,
+            lblChart7V: stats.lblChart7V ?? 0,
+            lblChart8V: stats.lblChart8V ?? 0
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching dashboard card data:", error);
+      }
+    };
+
+    fetchData();
+  }, []);
+
   // Data for cards
   const openOrderData = {
     donut: [62, 28],
-    lineBar: [{ name: 'Open Orders', data: [70, 32, 22, 91, 99] }, { name: 'Qty Booked', data: [80, 42, 15, 55, 72] }]
+    lineBar: [
+      { name: `Open Orders: ${cardData.lblChart1V}`, data: [70, 32, 22, 91, 99] },
+      { name: `Qty Booked: ${cardData.lblChart2V?.toLocaleString() ?? "0"}`, data: [80, 42, 15, 55, 72] }
+    ]
   };
 
   const qtyBookedData = {
@@ -289,14 +397,78 @@ export default function OverviewAppView() {
     lineBar: [{ name: 'Qty Booked', data: [20, 41, 63, 33, 28, 35, 50, 46, 11, 26] }]
   };
 
-  const qtyBookedThisWeekData = {
-    donut: [44, 55, 13, 33],
-    lineBar: [{ name: 'Booked This Week', data: [44, 55, 13, 33, 40] }]
+  // Generate linear trend data from 0 to 7 (8 points)
+  const steps = 8;
+  const trendData = Array.from({ length: steps }, (_, i) => {
+    return cardData.lblChart4V ? Math.round((cardData.lblChart4V / 7) * i) : 0;
+  });
+
+  const value = Number(cardData.lblChart4V);
+  const value2 = Number(cardData.lblChart3V);
+
+  let stepsArray = [];
+  let stepsArray2 = [];
+
+
+  if (value2 === 0) {
+    // 0 case → 7 zeros
+    stepsArray2 = [0, 0, 0, 0, 0, 0, 0, 0];
+  } else {
+    const step2 = value2 / 8;
+    for (let i = 1; i <= 8; i++) {
+      stepsArray2.push(step2 * i);
+    }
+  }
+
+  if (value === 0) {
+    // 0 case → 7 zeros
+    stepsArray = [0, 0, 0, 0, 0, 0, 0, 0];
+  } else {
+    const step = value / 8;
+    for (let i = 1; i <= 8; i++) {
+      stepsArray.push(step * i);
+    }
+  }
+
+  console.log(stepsArray);
+
+  const weeklyComparisonData = {
+    donut: [cardData.lblChart4V, cardData.lblChart3V],
+    // lineBar: [{ name: 'Booked', data: trendData }]
+    lineBar: [
+      { name: `Booked : ${cardData.lblChart4V?.toLocaleString() ?? "0"}`, data: stepsArray },
+      { name: `Shipped: ${cardData.lblChart3V?.toLocaleString() ?? "0"}`, data: stepsArray2 }]
   };
 
+  const value3 = Number(cardData.lblChart5V) || 0;
+  const value4 = Number(cardData.lblChart6V) || 0;
+
+  let stepsArray3 = [];
+  let stepsArray4 = [];
+
+  if (value4 === 0) {
+    stepsArray4 = [0, 0, 0, 0, 0, 0, 0, 0];
+  } else {
+    const step4 = value4 / 8;
+    for (let i = 1; i <= 8; i++) {
+      stepsArray4.push(step4 * i);
+    }
+  }
+
+  if (value3 === 0) {
+    stepsArray3 = [0, 0, 0, 0, 0, 0, 0, 0];
+  } else {
+    const step3 = value3 / 8;
+    for (let i = 1; i <= 8; i++) {
+      stepsArray3.push(step3 * i);
+    }
+  }
+
   const qtyShipThisWeekData = {
-    donut: [76, 24],
-    lineBar: [{ name: 'Shipped', data: [30, 45, 50, 60, 76] }]
+    donut: [cardData.lblChart5V, cardData.lblChart6V],
+    lineBar: [
+      { name: `Booked : ${cardData.lblChart5V?.toLocaleString() ?? "0"}`, data: stepsArray3 },
+      { name: `Shipped: ${cardData.lblChart6V?.toLocaleString() ?? "0"}`, data: stepsArray4 }]
   };
 
 
@@ -324,6 +496,39 @@ export default function OverviewAppView() {
       markers: { radius: 12 },
     },
     grid: { strokeDashArray: 4 },
+  };
+
+  const value5 = Number(cardData.lblChart7V) || 0;
+  const value6 = Number(cardData.lblChart8V) || 0;
+
+  let stepsArray5 = [];
+  let stepsArray6 = [];
+
+  if (value6 === 0) {
+    stepsArray6 = [0, 0, 0, 0, 0, 0, 0, 0];
+  } else {
+    const step6 = value6 / 8;
+    for (let i = 1; i <= 8; i++) {
+      stepsArray6.push(step6 * i);
+    }
+  }
+
+  if (value5 === 0) {
+    stepsArray5 = [0, 0, 0, 0, 0, 0, 0, 0];
+  } else {
+    const step5 = value5 / 8;
+    for (let i = 1; i <= 8; i++) {
+      stepsArray5.push(step5 * i);
+    }
+  }
+
+  // Renaming to match usage context or replacing existing if needed. 
+  // User asked for "Qty Booked Last Week". 
+  const qtyBookedLastWeekData = {
+    donut: [cardData.lblChart7V, cardData.lblChart8V],
+    lineBar: [
+      { name: `This week : ${cardData.lblChart7V?.toLocaleString() ?? "0"}`, data: stepsArray5 },
+      { name: `Last week: ${cardData.lblChart8V?.toLocaleString() ?? "0"}`, data: stepsArray6 }]
   };
 
   const chartSeries = [
@@ -490,344 +695,82 @@ export default function OverviewAppView() {
         {/* 🔹 REPLACED CARDS SECTION - 9 New Cards */}
 
         {/* 🔹 1. Open Orders */}
-        {/* 🔹 1. Open Orders */}
         <Grid item xs={12} md={4}>
           <AppChartCard
             title="Open Orders"
             icon={<AssessmentIcon color="primary" fontSize="small" />}
-            total="112"
-            percent="+2.6% from last week"
+            total={cardData.lblChart1V}
+            percent={`${cardData.lblChart2V?.toLocaleString() ?? 0} Quantity in these orders`}
             defaultType="line"
             colors={['#1ae8aaff', '#42a5f5']}
             chartSeries={openOrderData}
-            labels={['Shipped On Time', 'Delayed']}
+            labels={[`Open Orders: ${cardData.lblChart1V}`, `Qty Booked: ${cardData.lblChart2V?.toLocaleString() ?? "0"}`]}
+            disableHover={true}
+            availableTypes={['line', 'donut', 'pie']}
           />
         </Grid>
-
-        {/* 🔹 2. Qty Booked - Default Donut */}
         <Grid item xs={12} md={4}>
           <AppChartCard
-            title="Qty Booked"
-            icon={<ScienceIcon color="info" fontSize="small" />}
-            total="309,210"
-            percent="+0.2% this week"
+            title="Booked this week"
+            icon={<AssessmentIcon color="primary" fontSize="small" />}
+            total={cardData.lblChart4V}
+            percent={`${cardData.lblChart3V?.toLocaleString() ?? 0} Quantity Shipped this week`}
             defaultType="donut"
-            colors={['#42a5f5', '#90caf9']}
-            chartSeries={qtyBookedData}
-            labels={['Booked', 'Remaining']}
+            colors={['#1ae8aaff', '#42a5f5']}
+            chartSeries={weeklyComparisonData}
+            labels={[`Booked: ${cardData.lblChart4V}`, `Shipped: ${cardData.lblChart3V?.toLocaleString() ?? "0"}`]}
+            disableHover={true}
+            availableTypes={['line', 'donut', 'pie']}
           />
         </Grid>
 
-        {/* 🔹 3. Qty Booked This Week - Default Bar */}
-        <Grid item xs={12} md={4}>
+        {/* 🔹 3. Weekly Status: Booked vs Shipped */}
+        {/* <Grid item xs={12} md={4}>
           <AppChartCard
-            title="Qty Booked This Week"
+            title="Weekly Status"
             icon={<FactCheckIcon color="warning" fontSize="small" />}
-            total="12,450"
-            percent="-0.1% vs last week"
+            total={cardData.lblChart4V?.toLocaleString() ?? 0}
+            percent={`Shipped: ${cardData.lblChart3V?.toLocaleString() ?? 0}`}
             defaultType="bar"
             colors={['#fbbf24', '#f59e0b', '#fcd34d', '#fde68a']}
-            chartSeries={qtyBookedThisWeekData}
-            labels={['Pending', 'Approved', 'Rejected', 'Other']}
+            chartSeries={weeklyComparisonData}
+            labels={['Start', 'Current']}
+            chartOptions={{ yaxis: { min: 0 } }}
           />
-        </Grid>
+        </Grid> */}
 
         {/* 🔹 4. Qty Ship This Week - Default Line */}
         <Grid item xs={12} md={4}>
           <AppChartCard
-            title="Qty Ship This Week"
+            title="Booked Last week"
             icon={<LocalShippingIcon color="success" fontSize="small" />}
-            total="76%"
-            percent="+2.6% this week"
+            total={cardData.lblChart5V}
+            percent={`${cardData.lblChart6V?.toLocaleString() ?? 0} Shipped Last week`}
             defaultType="line"
-            colors={['#66bb6a', '#a5d6a7']}
+            colors={['#1ae8aaff', '#42a5f5']}
             chartSeries={qtyShipThisWeekData}
-            labels={['Shipped', 'Pending']}
+            labels={[`Booked: ${cardData.lblChart5V}`, `Shipped: ${cardData.lblChart6V?.toLocaleString() ?? "0"}`]}
+            disableHover={true}
+            availableTypes={['line', 'donut', 'pie']}
           />
         </Grid>
         {/* 🔹 5. Qty Booked Last Week */}
         <Grid item xs={12} md={4}>
-          <Card sx={cardStyle}>
-            <CardContent sx={{ p: 2 }}>
-              <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                <ShowChartIcon color="info" fontSize="small" />
-                <Typography variant="subtitle2" fontWeight={600}>
-                  Qty Booked Last Week
-                </Typography>
-              </Box>
-              <Typography variant="h6">28,380</Typography>
-              <Chart
-                type="area"
-                height={160}
-                series={[{ data: [10, 41, 35, 51, 49, 62, 69, 91] }]}
-                options={{
-                  chart: { toolbar: { show: false }, background: '#f8fbff' },
-                  dataLabels: { enabled: false },
-                  stroke: { curve: 'smooth', width: 3 },
-                  grid: {
-                    show: true,
-                    borderColor: 'rgba(28,123,184,0.1)',
-                    strokeDashArray: 4,
-                  },
-                  xaxis: { show: false },
-                  yaxis: { show: false },
-                  colors: ['#1a73e8'],
-                  fill: {
-                    type: 'gradient',
-                    gradient: {
-                      shade: 'light',
-                      type: 'vertical',
-                      opacityFrom: 0.8,
-                      opacityTo: 0.2,
-                      stops: [0, 70, 100],
-                    },
-                  },
-                  tooltip: {
-                    theme: 'dark',
-                    style: { color: '#fff', fontWeight: 600 },
-                  },
-                }}
-              />
-            </CardContent>
-          </Card>
+          <AppChartCard
+            title="Booked Ship this Week"
+            icon={<ShowChartIcon color="info" fontSize="small" />}
+            total={cardData.lblChart7V}
+            percent={`${cardData.lblChart8V?.toLocaleString() ?? 0} Booked Shipped Last week`}
+            defaultType="pie"
+            colors={['#1ae8aaff', '#42a5f5']}
+            chartSeries={qtyBookedLastWeekData}
+            labels={[`This Week: ${cardData.lblChart7V}`, `Last Week: ${cardData.lblChart8V?.toLocaleString() ?? "0"}`]}
+            disableHover={true}
+            availableTypes={['line', 'donut', 'pie']}
+          />
         </Grid>
 
-        {/* 🔹 6. Qty Ship Last Week */}
-        <Grid item xs={12} md={4}>
-          <Card sx={cardStyle}>
-            <CardContent sx={{ p: 2 }}>
-              <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                <TrendingUpIcon color="secondary" fontSize="small" />
-                <Typography variant="subtitle2" fontWeight={600}>
-                  Qty Ship Last Week
-                </Typography>
-              </Box>
-              <Typography variant="h6">38,484</Typography>
-              <Chart
-                type="pie"
-                height={120}
-                series={[44, 55, 13, 43, 22]}
-                options={{
-                  chart: { toolbar: { show: false } },
-                  legend: { show: false },
-                  dataLabels: { enabled: false },
-                  colors: ['#42a5f5', '#26c6da', '#66bb6a', '#ffa726', '#ab47bc'],
-                }}
-              />
-            </CardContent>
-          </Card>
-        </Grid>
 
-        {/* 🔹 7. Pending Deliveries */}
-        <Grid item xs={12} md={4}>
-          <Card sx={cardStyle}>
-            <CardContent sx={{ p: 2 }}>
-              <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                <InventoryIcon color="error" fontSize="small" />
-                <Typography variant="subtitle2" fontWeight={600}>
-                  Pending Deliveries
-                </Typography>
-              </Box>
-              <Typography variant="h6">92</Typography>
-              <Chart
-                type="bar"
-                height={100}
-                series={[{ data: [10, 15, 20, 30, 50, 60, 45] }]}
-                options={{
-                  chart: { toolbar: { show: false } },
-                  plotOptions: { bar: { borderRadius: 6, columnWidth: '45%' } },
-                  xaxis: { show: false },
-                  yaxis: { show: false },
-                  grid: { show: false },
-                  colors: ['#ef5350'],
-                }}
-              />
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* 🔹 8. Monthly Performance */}
-        <Grid item xs={12} md={4}>
-          <Card sx={cardStyle}>
-            <CardContent sx={{ p: 2 }}>
-              <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                <QueryStatsIcon color="info" fontSize="small" />
-                <Typography variant="subtitle2" fontWeight={600}>
-                  Monthly Performance
-                </Typography>
-              </Box>
-
-              <Chart
-                type="radialBar"
-                height={180}
-                series={[87]}
-                options={{
-                  plotOptions: {
-                    radialBar: {
-                      hollow: { size: '60%' },
-                      dataLabels: {
-                        name: { show: false },
-                        value: {
-                          show: true,
-                          fontSize: '20px',
-                          fontWeight: 600,
-                          color: '#0288d1',
-                          offsetY: 10, // 👈 Center vertically
-                          formatter: (val) => `${val}%`, // 👈 Add percentage symbol
-                        },
-                      },
-                    },
-                  },
-                  colors: ['#0288d1'],
-                }}
-              />
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* 🔹 9. Total Revenue */}
-        <Grid item xs={12} md={4}>
-          <Card sx={cardStyle}>
-            <CardContent sx={{ p: 2 }}>
-              <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                <AnalyticsIcon color="success" fontSize="small" />
-                <Typography variant="subtitle2" fontWeight={600}>
-                  Total Revenue
-                </Typography>
-              </Box>
-              <Typography variant="h6">$120,890</Typography>
-              <Chart
-                type="area"
-                height={100}
-                series={[{ data: [20, 40, 35, 60, 70, 90, 110] }]}
-                options={{
-                  chart: { toolbar: { show: false } },
-                  dataLabels: { enabled: false },
-                  stroke: { curve: 'smooth' },
-                  grid: { show: false },
-                  xaxis: { show: false },
-                  yaxis: { show: false },
-                  colors: ['#4caf50'],
-                }}
-              />
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* REST OF THE ORIGINAL CODE REMAINS SAME */}
-        {/* Quick Search & Weekly Shipment */}
-        <Grid container spacing={3} alignItems="stretch">
-          <Grid xs={12} md={5} lg={4.8} display="flex">
-            <Card
-              sx={{
-                boxShadow: 3,
-                borderRadius: 2,
-                height: '100%',
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-              }}
-            >
-              <CardContent
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  height: '100%',
-                  p: 3.5,
-                }}
-              >
-                <Typography
-                  variant="h6"
-                  sx={{
-                    mb: 8,
-                    fontWeight: 700,
-                    color: '#1a1a1a',
-                    textAlign: 'left',
-                    letterSpacing: '0.3px',
-                  }}
-                >
-                  Quick Search
-                </Typography>
-                <Grid container spacing={2.5} sx={{ flexGrow: 1, alignContent: 'flex-start' }}>
-                  <Grid xs={12} sm={6}>
-                    <TextField
-                      select
-                      fullWidth
-                      label="Customer"
-                      defaultValue="All Customer"
-                      size="small"
-                    >
-                      <MenuItem value="All Customer">All Customer</MenuItem>
-                    </TextField>
-                  </Grid>
-                  <Grid xs={12} sm={6}>
-                    <TextField
-                      select
-                      fullWidth
-                      label="Supplier"
-                      defaultValue="All Vendor"
-                      size="small"
-                    >
-                      <MenuItem value="All Vendor">All Vendor</MenuItem>
-                    </TextField>
-                  </Grid>
-                  <Grid xs={12} sm={6}>
-                    <TextField fullWidth label="PO No" size="small" />
-                  </Grid>
-                  <Grid xs={12} sm={6}>
-                    <TextField fullWidth label="Style No" size="small" />
-                  </Grid>
-                  <Grid xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      type="date"
-                      label="From Date"
-                      size="small"
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </Grid>
-                  <Grid xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      type="date"
-                      label="To Date"
-                      size="small"
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </Grid>
-                </Grid>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  sx={{
-                    backgroundColor: '#1976d2',
-                    textTransform: 'none',
-                    fontWeight: 'bold',
-                    marginBottom: '30px',
-                    py: 1.4,
-                    borderRadius: 1.5,
-                    fontSize: '1rem',
-                  }}
-                >
-                  Search
-                </Button>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid xs={12} md={7} lg={7.2} display="flex">
-            <Card sx={{ boxShadow: 2, borderRadius: 2, height: '100%', flex: 1 }}>
-              <CardContent sx={{ height: '100%' }}>
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: '#333' }}>
-                  Weekly Shipment
-                </Typography>
-                <Chart options={chartOptions} series={chartSeries} type="line" height={320} />
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
 
         {/* Tables and other components remain exactly the same */}
         <Grid container spacing={3}>
@@ -838,7 +781,8 @@ export default function OverviewAppView() {
               sx={{
                 p: 3,
                 borderRadius: 3,
-                backgroundColor: '#fff',
+                bgcolor: 'background.paper',
+                color: 'text.primary',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
                 height: '520px',
                 display: 'flex',
@@ -850,7 +794,7 @@ export default function OverviewAppView() {
                 sx={{
                   mb: 2,
                   fontWeight: 700,
-                  color: '#4682B4',
+                  color: 'primary.main',
                   letterSpacing: '0.3px',
                   borderBottom: '2px solid #e0e0e0',
                   pb: 1,
@@ -883,8 +827,8 @@ export default function OverviewAppView() {
                           key={col}
                           sx={{
                             fontWeight: 'bold',
-                            color: 'black',
-                            background: '#f4efef',
+                            color: 'text.primary',
+                            background: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f4efef',
                             fontSize: '0.9rem',
                             py: 1,
                           }}
@@ -928,7 +872,8 @@ export default function OverviewAppView() {
               sx={{
                 p: 3,
                 borderRadius: 3,
-                backgroundColor: '#fff',
+                bgcolor: 'background.paper',
+                color: 'text.primary',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
                 height: '520px',
                 display: 'flex',
@@ -940,7 +885,7 @@ export default function OverviewAppView() {
                 sx={{
                   mb: 2,
                   fontWeight: 700,
-                  color: '#4682B4',
+                  color: 'primary.main',
                   letterSpacing: '0.3px',
                   borderBottom: '2px solid #e0e0e0',
                   pb: 1,
@@ -977,8 +922,8 @@ export default function OverviewAppView() {
                           key={col}
                           sx={{
                             fontWeight: 'bold',
-                            color: 'black',
-                            background: '#f4efef',
+                            color: 'text.primary',
+                            background: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f4efef',
                             fontSize: '0.9rem',
                             py: 1,
                           }}
@@ -1028,7 +973,8 @@ export default function OverviewAppView() {
               sx={{
                 p: 3,
                 borderRadius: 3,
-                backgroundColor: '#fff',
+                bgcolor: 'background.paper',
+                color: 'text.primary',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
                 height: '520px',
                 display: 'flex',
@@ -1040,7 +986,7 @@ export default function OverviewAppView() {
                 sx={{
                   mb: 2,
                   fontWeight: 700,
-                  color: '#4682B4',
+                  color: 'primary.main',
                   letterSpacing: '0.3px',
                   borderBottom: '2px solid #e0e0e0',
                   pb: 1,
@@ -1075,8 +1021,8 @@ export default function OverviewAppView() {
                           key={col}
                           sx={{
                             fontWeight: 'bold',
-                            color: 'black',
-                            background: '#f4efef',
+                            color: 'text.primary',
+                            background: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f4efef',
                             fontSize: '0.9rem',
                             py: 1,
                           }}
@@ -1121,7 +1067,8 @@ export default function OverviewAppView() {
               sx={{
                 p: 3,
                 borderRadius: 3,
-                backgroundColor: '#fff',
+                bgcolor: 'background.paper',
+                color: 'text.primary',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
                 height: '520px',
                 display: 'flex',
@@ -1133,7 +1080,7 @@ export default function OverviewAppView() {
                 sx={{
                   mb: 2,
                   fontWeight: 700,
-                  color: '#4682B4',
+                  color: 'primary.main',
                   letterSpacing: '0.3px',
                   borderBottom: '2px solid #e0e0e0',
                   pb: 1,
@@ -1170,8 +1117,8 @@ export default function OverviewAppView() {
                           key={col}
                           sx={{
                             fontWeight: 'bold',
-                            color: 'black',
-                            background: '#f4efef',
+                            color: 'text.primary',
+                            background: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f4efef',
                             fontSize: '0.9rem',
                             py: 1,
                           }}
@@ -1219,20 +1166,21 @@ export default function OverviewAppView() {
             sx={{
               p: 3,
               borderRadius: 2,
-              background: '#fff',
-              color: '#333',
-              border: '1px solid #eee',
+              borderRadius: 2,
+              bgcolor: 'background.paper',
+              color: 'text.primary',
+              border: (theme) => `1px solid ${theme.palette.divider}`,
             }}
           >
             <Box
               sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}
             >
-              <Typography variant="h5" fontWeight={400} sx={{ color: '#555' }}>
+              <Typography variant="h5" fontWeight={400} sx={{ color: 'text.secondary' }}>
                 Vendor Capacity Utilization
               </Typography>
               <Typography
                 variant="subtitle1"
-                sx={{ color: '#555', fontWeight: 500, fontSize: '1.0rem' }}
+                sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '1.0rem' }}
               >
                 Total Balance Capacity: {totalBalanceCapacity.toLocaleString()}
               </Typography>
@@ -1244,30 +1192,30 @@ export default function OverviewAppView() {
                   data={data}
                   margin={{ top: 10, right: 30, left: 20, bottom: 0 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} vertical={false} />
                   <XAxis
                     type="number"
-                    stroke="#666"
+                    stroke={theme.palette.text.secondary}
                     tick={{ fontSize: 12 }}
                     tickFormatter={(value) => value.toLocaleString()}
                   />
                   <YAxis
                     dataKey="name"
                     type="category"
-                    tick={{ fontSize: 12, fill: '#333' }}
+                    tick={{ fontSize: 12, fill: theme.palette.text.primary }}
                     width={100}
                   />
                   <Tooltip
                     contentStyle={{
-                      background: '#fff',
-                      border: '1px solid #ccc',
+                      backgroundColor: theme.palette.background.paper,
+                      border: `1px solid ${theme.palette.divider}`,
                       borderRadius: '4px',
-                      color: '#333',
+                      color: theme.palette.text.primary,
                     }}
                   />
                   <Legend
                     wrapperStyle={{
-                      color: '#555',
+                      color: theme.palette.text.secondary,
                       fontSize: '0.8rem',
                       paddingTop: '10px',
                       display: 'flex',
@@ -1330,15 +1278,16 @@ export default function OverviewAppView() {
                           contentStyle={{
                             fontSize: 13,
                             borderRadius: '8px',
-                            background: '#fff',
-                            border: '1px solid #ddd',
+                            backgroundColor: theme.palette.background.paper,
+                            border: `1px solid ${theme.palette.divider}`,
+                            color: theme.palette.text.primary,
                           }}
                         />
                         <Legend
                           verticalAlign="bottom"
                           align="center"
                           formatter={(value) => (
-                            <span style={{ fontSize: 13, color: '#555' }}>{value}</span>
+                            <span style={{ fontSize: 13, color: theme.palette.text.secondary }}>{value}</span>
                           )}
                         />
                       </PieChart>
