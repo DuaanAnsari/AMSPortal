@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import { Link } from 'react-router-dom';
@@ -689,6 +689,64 @@ export default function OverviewAppView() {
 
   const COLORS = ['#1976d2', '#ff7300'];
 
+// Draggable horizontal scroll TableContainer (like My-Order.jsx)
+function DraggableTableContainer({ children, sx, ...other }) {
+  const containerRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+
+  const handleMouseDown = (e) => {
+    if (!containerRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - containerRef.current.offsetLeft);
+    setScrollLeft(containerRef.current.scrollLeft);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging || !containerRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - containerRef.current.offsetLeft;
+    const walk = (x - startX) * 2; // same scroll speed as My-Order
+    containerRef.current.scrollLeft = scrollLeft - walk;
+  };
+
+  return (
+    <TableContainer
+      ref={containerRef}
+      onMouseDown={handleMouseDown}
+      onMouseLeave={handleMouseLeave}
+      onMouseUp={handleMouseUp}
+      onMouseMove={handleMouseMove}
+      sx={{
+        cursor: isDragging ? 'grabbing' : 'grab',
+        overflowX: 'auto',
+        '&::-webkit-scrollbar': { height: 8 },
+        '&::-webkit-scrollbar-thumb': (theme) => ({
+          borderRadius: 2,
+          backgroundColor: theme.palette.grey[600],
+        }),
+        '&::-webkit-scrollbar-track': (theme) => ({
+          borderRadius: 2,
+          backgroundColor: theme.palette.grey[500],
+        }),
+        ...sx,
+      }}
+      {...other}
+    >
+      {children}
+    </TableContainer>
+  );
+}
+
   return (
     <Container maxWidth={settings.themeStretch ? false : 'xl'}>
       <Grid container spacing={3}>
@@ -770,7 +828,92 @@ export default function OverviewAppView() {
           />
         </Grid>
 
-
+        {/* 🔹 Vendor Capacity Utilization - Moved here to fill empty space */}
+        <Grid item xs={12} md={8}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              borderRadius: 3,
+              bgcolor: 'background.paper',
+              color: 'text.primary',
+              border: '1px solid rgba(145, 158, 171, 0.24)',
+              boxShadow: '0 10px 40px -10px rgba(0,0,0,0.2)',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+            }}
+          >
+            <Box
+              sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}
+            >
+              <Typography variant="subtitle2" fontWeight={600} sx={{ color: 'text.primary' }}>
+                Vendor Capacity Utilization
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{ color: 'text.secondary', fontWeight: 500 }}
+              >
+                Total Balance: {totalBalanceCapacity.toLocaleString()}
+              </Typography>
+            </Box>
+            <Box sx={{ width: '100%', height: 230, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  layout="vertical"
+                  data={data}
+                  margin={{ top: 20, right: 10, left: 0, bottom: 20 }}
+                  barSize={52}
+                  barCategoryGap={50} // increased gap between Comfort apparel / K-TEX / M.A Enterprises
+                  barGap={10}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} vertical={false} />
+                  <XAxis
+                    type="number"
+                    stroke={theme.palette.text.secondary}
+                    tick={{ fontSize: 13 }}
+                    tickFormatter={(value) => value.toLocaleString()}
+                  />
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    tick={{ fontSize: 13, fill: theme.palette.text.primary, fontWeight: 600, textAnchor: 'end', verticalAnchor: 'middle' }}
+                    width={120}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: theme.palette.background.paper,
+                      border: `1px solid ${theme.palette.divider}`,
+                      borderRadius: '4px',
+                      color: theme.palette.text.primary,
+                      fontSize: '14px',
+                      fontWeight: 600,
+                    }}
+                  />
+                  <Legend
+                    wrapperStyle={{
+                      color: theme.palette.text.secondary,
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      paddingTop: '3px',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      textAlign: 'center',
+                    }}
+                    verticalAlign="bottom"
+                    align="center"
+                    height={14}
+                    iconSize={10}
+                  />
+                  <Bar dataKey="Capacity" fill="#4682B4" name="Capacity" radius={[0, 6, 6, 0]} />
+                  <Bar dataKey="Qty Booked" fill="#3CB371" name="Qty Booked" radius={[0, 6, 6, 0]} />
+                  <Bar dataKey="Balance Capacity" fill="#aad1d1ff" name="Balance Capacity" radius={[0, 6, 6, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Box>
+          </Paper>
+        </Grid>
 
         {/* Tables and other components remain exactly the same */}
         <Grid container spacing={3}>
@@ -802,7 +945,7 @@ export default function OverviewAppView() {
               >
                 Next 21 Days Upcoming Shipment
               </Typography>
-              <TableContainer
+              <DraggableTableContainer
                 sx={{
                   flex: 1,
                   overflowY: 'auto',
@@ -861,7 +1004,7 @@ export default function OverviewAppView() {
                     ))}
                   </TableBody>
                 </Table>
-              </TableContainer>
+              </DraggableTableContainer>
             </Paper>
           </Grid>
 
@@ -893,7 +1036,7 @@ export default function OverviewAppView() {
               >
                 Shipment Delay Status
               </Typography>
-              <TableContainer
+              <DraggableTableContainer
                 sx={{
                   flex: 1,
                   overflowY: 'auto',
@@ -960,7 +1103,7 @@ export default function OverviewAppView() {
                     ))}
                   </TableBody>
                 </Table>
-              </TableContainer>
+              </DraggableTableContainer>
             </Paper>
           </Grid>
         </Grid>
@@ -994,7 +1137,7 @@ export default function OverviewAppView() {
               >
                 Next 7 Days Up Coming PP Samples to Buyer
               </Typography>
-              <TableContainer
+              <DraggableTableContainer
                 sx={{
                   flex: 1,
                   overflowY: 'auto',
@@ -1057,7 +1200,7 @@ export default function OverviewAppView() {
                     ))}
                   </TableBody>
                 </Table>
-              </TableContainer>
+              </DraggableTableContainer>
             </Paper>
           </Grid>
 
@@ -1088,7 +1231,7 @@ export default function OverviewAppView() {
               >
                 PP Samples to Buyer Delay Status
               </Typography>
-              <TableContainer
+              <DraggableTableContainer
                 sx={{
                   flex: 1,
                   overflowY: 'auto',
@@ -1155,84 +1298,9 @@ export default function OverviewAppView() {
                     ))}
                   </TableBody>
                 </Table>
-              </TableContainer>
+              </DraggableTableContainer>
             </Paper>
           </Grid>
-        </Grid>
-
-        <Grid item xs={12}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: 3,
-              borderRadius: 2,
-              borderRadius: 2,
-              bgcolor: 'background.paper',
-              color: 'text.primary',
-              border: (theme) => `1px solid ${theme.palette.divider}`,
-            }}
-          >
-            <Box
-              sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}
-            >
-              <Typography variant="h5" fontWeight={400} sx={{ color: 'text.secondary' }}>
-                Vendor Capacity Utilization
-              </Typography>
-              <Typography
-                variant="subtitle1"
-                sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '1.0rem' }}
-              >
-                Total Balance Capacity: {totalBalanceCapacity.toLocaleString()}
-              </Typography>
-            </Box>
-            <Box sx={{ width: '100%', height: 400 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  layout="vertical"
-                  data={data}
-                  margin={{ top: 10, right: 30, left: 20, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} vertical={false} />
-                  <XAxis
-                    type="number"
-                    stroke={theme.palette.text.secondary}
-                    tick={{ fontSize: 12 }}
-                    tickFormatter={(value) => value.toLocaleString()}
-                  />
-                  <YAxis
-                    dataKey="name"
-                    type="category"
-                    tick={{ fontSize: 12, fill: theme.palette.text.primary }}
-                    width={100}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: theme.palette.background.paper,
-                      border: `1px solid ${theme.palette.divider}`,
-                      borderRadius: '4px',
-                      color: theme.palette.text.primary,
-                    }}
-                  />
-                  <Legend
-                    wrapperStyle={{
-                      color: theme.palette.text.secondary,
-                      fontSize: '0.8rem',
-                      paddingTop: '10px',
-                      display: 'flex',
-                      justifyContent: 'center',
-                      paddingBottom: '10px',
-                    }}
-                    verticalAlign="top"
-                    align="center"
-                    height={36}
-                  />
-                  <Bar dataKey="Capacity" fill="#4682B4" name="Capacity" />
-                  <Bar dataKey="Qty Booked" fill="#3CB371" name="Qty Booked" />
-                  <Bar dataKey="Balance Capacity" fill="#aad1d1ff" name="Balance Capacity" />
-                </BarChart>
-              </ResponsiveContainer>
-            </Box>
-          </Paper>
         </Grid>
 
         <Box sx={{ mt: 5, width: '100%' }}>

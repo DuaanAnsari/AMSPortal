@@ -2,7 +2,7 @@ import * as Yup from 'yup';
 import { useRef, useState, useEffect } from 'react';
 import { useForm, Controller, FormProvider, useFormContext } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { Autocomplete } from '@mui/material';
 import CalculateIcon from '@mui/icons-material/Calculate';
@@ -986,6 +986,7 @@ const defaultValues = {
   shipmentTerm: 'CNF',
   destination: 'New York',
   shipmentMode: '',
+  naField: '',
 
   bankName: '',
   routingNo: '',
@@ -999,6 +1000,67 @@ const defaultValues = {
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+// Normalize dropdown data from various master APIs
+const normalizePaymentModes = (list = []) =>
+  list
+    .map((p) => ({
+      id: String(
+        p.paymentModeID ??
+          p.PaymentModeID ??
+          p.id ??
+          p.code ??
+          p.value ??
+          ''
+      ),
+      name:
+        p.paymentMode ??
+        p.PaymentMode ??
+        p.name ??
+        p.description ??
+        '',
+    }))
+    .filter((p) => p.id && p.name);
+
+const normalizeShipmentTerms = (list = []) =>
+  list
+    .map((s) => ({
+      id: String(
+        s.deliveryTypeID ??
+          s.shipmentTermID ??
+          s.id ??
+          s.code ??
+          s.value ??
+          ''
+      ),
+      name:
+        s.deliveryType ??
+        s.shipmentTerm ??
+        s.name ??
+        s.description ??
+        '',
+    }))
+    .filter((s) => s.id && s.name);
+
+const normalizeShipmentModes = (list = []) =>
+  list
+    .map((d) => ({
+      id: String(
+        d.shipmentModeID ??
+          d.DeliveryModeID ??
+          d.id ??
+          d.code ??
+          d.value ??
+          ''
+      ),
+      name:
+        d.shipmentMode ??
+        d.shipmentModeName ??
+        d.name ??
+        d.description ??
+        '',
+    }))
+    .filter((d) => d.id && d.name);
 
 // -------------------- Merchant Multiple Select Component --------------------
 function MerchantMultipleSelect({ name, label, options, loading, error }) {
@@ -1015,7 +1077,11 @@ function MerchantMultipleSelect({ name, label, options, loading, error }) {
             {...field}
             multiple
             input={<OutlinedInput label={label} />}
-            renderValue={(selected) => selected.join(', ')}
+            renderValue={(selected) => {
+              if (!selected || selected.length === 0) return '';
+              if (selected.length === 1) return selected[0];
+              return `${selected.length} Items Checked`;
+            }}
           >
             {loading ? (
               <MenuItem disabled>
@@ -1049,6 +1115,9 @@ function MerchantMultipleSelect({ name, label, options, loading, error }) {
 // -------------------- Main Component --------------------
 export default function CompletePurchaseOrderForm() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const copyFromPo = location.state?.copyFromPo || null;
+  const copyFromPoId = location.state?.copyFromPoId || copyFromPo?.id || null;
   const methods = useForm({
     resolver: yupResolver(Schema),
     defaultValues,
@@ -1084,6 +1153,224 @@ export default function CompletePurchaseOrderForm() {
   const [supplierOptions, setSupplierOptions] = useState([]);
   const [supplierLoading, setSupplierLoading] = useState(false);
   const [supplierError, setSupplierError] = useState(null);
+
+  // For mapping merchant ID from copied PO to merchant select options
+  const [copiedMarchandId, setCopiedMarchandId] = useState(null);
+  const [copiedCustomerId, setCopiedCustomerId] = useState(null);
+  const [copiedSupplierId, setCopiedSupplierId] = useState(null);
+
+  // If navigated from My-Order "Copy" icon, pre-fill fields from full Purchase Order API
+  useEffect(() => {
+    if (!copyFromPoId && !copyFromPo) return;
+
+    const toDateOnly = (value) => {
+      if (!value || typeof value !== 'string') return '';
+      if (value.includes('T')) return value.split('T')[0];
+      return value.length >= 10 ? value.substring(0, 10) : value;
+    };
+
+    const prefillFromRowFallback = () => {
+      if (!copyFromPo) return;
+      const fallback = {
+        ...defaultValues,
+        customerPo: copyFromPo.poNo || '',
+        customer: copyFromPo.customer || '',
+        supplier: copyFromPo.supplier || '',
+        placementDate: toDateOnly(copyFromPo.placementDate),
+        buyerShipInitial: toDateOnly(copyFromPo.shipmentDate),
+        buyerShipLast: toDateOnly(copyFromPo.shipmentDate),
+        vendorShipInitial: toDateOnly(copyFromPo.shipmentDate),
+        vendorShipLast: toDateOnly(copyFromPo.shipmentDate),
+      };
+      methods.reset(fallback);
+    };
+
+    const fetchAndPrefill = async () => {
+      if (!copyFromPoId) {
+        prefillFromRowFallback();
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem('accessToken');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await axios.get(
+          `${API_BASE_URL}/api/MyOrders/GetPurchaseOrder/${copyFromPoId}`,
+          { headers }
+        );
+
+        const data = Array.isArray(res.data) ? res.data[0] : res.data;
+        if (!data) {
+          prefillFromRowFallback();
+          return;
+        }
+
+        const order = data;
+
+        const prefilled = {
+          ...defaultValues,
+
+          // Basic Order Info
+          masterPo: order.masterPO || order.masterPo || '',
+          image: order.poImage || null,
+          customerPo: order.pono || order.PONO || order.poNo || '',
+          internalPo: order.internalPONO || order.internalPo || '',
+          amsRef: order.amsRefNo || order.amsRef || '',
+          rnNo: order.rnNo || '',
+          consignee: order.consignee || '',
+
+          // Customer & Supplier - fall back to row data if API doesn't include names
+          customer:
+            order.customerName ||
+            order.customer ||
+            order.buyer ||
+            (copyFromPo?.customer ?? ''),
+          supplier:
+            order.venderName ||
+            order.vendorName ||
+            order.supplier ||
+            order.vendor ||
+            (copyFromPo?.supplier ?? ''),
+
+          proceedings: order.proceedings || '',
+          orderType: order.pOtype || order.orderType || defaultValues.orderType,
+          transactions: order.transactions || defaultValues.transactions,
+          version: order.version || defaultValues.version,
+          commission: order.commission ?? defaultValues.commission,
+          vendorCommission: order.vendorCommission ?? defaultValues.vendorCommission,
+
+          // Dates
+          placementDate: toDateOnly(order.placementDate || order.PlacementDate),
+          etaNewJerseyDate: toDateOnly(order.etanjDate || order.etaNewJerseyDate),
+          etaWarehouseDate: toDateOnly(order.etaWarehouseDate),
+          finalInspectionDate: toDateOnly(order.finalInspDate),
+
+          // Buyer Shipment Dates
+          buyerShipInitial: toDateOnly(order.tolerance || order.buyerShipInitial),
+          buyerShipLast: toDateOnly(order.buyerExIndiaTolerance || order.buyerShipLast),
+
+          // Vendor Shipment Dates
+          vendorShipInitial: toDateOnly(order.shipmentDate || order.vendorShipInitial),
+          vendorShipLast: toDateOnly(order.vendorExIndiaShipmentDate || order.vendorShipLast),
+
+          // Product Information
+          productPortfolio: order.productPortfolioID ?? defaultValues.productPortfolio,
+          productCategory: order.productCategoriesID ?? defaultValues.productCategory,
+          productGroup: order.productGroupID ?? defaultValues.productGroup,
+          season: order.season || '',
+          fabric: order.fabric || '',
+          item: order.item || '',
+          design: order.design || '',
+          otherFabric: order.otherFabric || '',
+          construction: order.construction || '',
+          status: order.status || defaultValues.status,
+          styleSource: order.styleSource || '',
+          brand: order.brand || '',
+          assortment: order.assortment || '',
+          ratio: order.ration || '',
+          cartonMarking: order.cartonMarking || '',
+          poSpecialInstructions: order.pO_Special_Instructions || '',
+          washingCareLabel:
+            order.washingCareLabelInstructions || defaultValues.washingCareLabel,
+          importantNote: order.importantNote || '',
+          moreInfo: order.moreInfo || '',
+          samplingRequirements: order.samplingReq || '',
+          pcsPerCarton: order.pcPerCarton ?? defaultValues.pcsPerCarton,
+          grossWeight: order.grossWeight ?? defaultValues.grossWeight,
+          netWeight: order.netWeight ?? defaultValues.netWeight,
+          unit: order.grossAndNetWeight || defaultValues.unit,
+          packingList: order.packingList || '',
+          embEmbellishment:
+            order.embAndEmbellishment || defaultValues.embEmbellishment,
+          buyerCustomer: order.buyerCustomer || '',
+          itemDescriptionShippingInvoice:
+            order.itemDescriptionShippingInvoice || '',
+
+          // Product Specific Information
+          currency: order.currency || defaultValues.currency,
+          exchangeRate: order.exchangeRate ?? defaultValues.exchangeRate,
+          style: order.styleNo || order.design || defaultValues.style,
+
+          // Shipping and Payment Terms
+          paymentMode: order.paymentMode || defaultValues.paymentMode,
+          shipmentTerm: order.shipmentMode || defaultValues.shipmentTerm,
+          destination: order.destination || defaultValues.destination,
+          shipmentMode: order.deliveryType || defaultValues.shipmentMode,
+
+          // Bank Details
+          bankName: order.bankName || '',
+          bankBranch: order.bankBranch || '',
+          titleOfAccount: order.titleOfAccount || '',
+          accountNo: order.accountNo || '',
+          bankID:
+            order.bankID !== undefined && order.bankID !== null
+              ? String(order.bankID)
+              : defaultValues.bankID,
+
+          // Other numeric fields
+          tolQuantity: order.toleranceindays ?? defaultValues.tolQuantity,
+          set: order.poQtyUnit || defaultValues.set,
+          qualityComposition: order.quality ?? defaultValues.qualityComposition,
+          gsm: order.gms ?? defaultValues.gsm,
+          gsmOF: order.costingMstID ?? defaultValues.gsmOF,
+          poSpecialOperation: order.pO_Special_Operation || '',
+          poSpecialTreatment: order.pO_Special_Treatement || '',
+          inquiryNo: order.inquiryMstID
+            ? `INQ${order.inquiryMstID}`
+            : defaultValues.inquiryNo,
+        };
+
+        methods.reset(prefilled);
+
+        // Save IDs for later dropdown mapping
+        if (order.marchandID) {
+          setCopiedMarchandId(order.marchandID);
+        }
+        if (order.customerID) {
+          setCopiedCustomerId(order.customerID);
+        }
+        if (order.supplierID) {
+          setCopiedSupplierId(order.supplierID);
+        }
+
+        // Ensure dependent dropdown options are loaded for pre-selected IDs
+        try {
+          const token = localStorage.getItem('accessToken');
+          const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+          // Load product categories for selected portfolio
+          if (order.productPortfolioID) {
+            setLoadingCategory(true);
+            const catRes = await axios.get(
+              `${API_BASE_URL}/api/MyOrders/GetProductCategories/${order.productPortfolioID}`,
+              { headers }
+            );
+            setProductCategories(catRes.data || []);
+          }
+
+          // Load product groups for selected category
+          if (order.productCategoriesID) {
+            setLoadingGroup(true);
+            const grpRes = await axios.get(
+              `${API_BASE_URL}/api/MyOrders/GetProductGroups/${order.productCategoriesID}`,
+              { headers }
+            );
+            setProductGroups(grpRes.data || []);
+          }
+        } catch (err) {
+          console.error('Error pre-loading product category/group options:', err);
+        } finally {
+          setLoadingCategory(false);
+          setLoadingGroup(false);
+        }
+      } catch (error) {
+        console.error('Error pre-filling Add Order from existing PO:', error);
+        prefillFromRowFallback();
+      }
+    };
+
+    fetchAndPrefill();
+  }, [copyFromPoId, copyFromPo, methods]);
   
   const [merchantOptions, setMerchantOptions] = useState([]);
   const [merchantLoading, setMerchantLoading] = useState(false);
@@ -1115,6 +1402,37 @@ export default function CompletePurchaseOrderForm() {
   const [bankLoading, setBankLoading] = useState(false);
   const [bankError, setBankError] = useState(null);
 
+  // Once merchants are loaded, map copied marchandID to merchant names for select
+  useEffect(() => {
+    if (!copiedMarchandId || !merchantOptions.length) return;
+    const merchant = merchantOptions.find((m) => m.userId === copiedMarchandId);
+    if (merchant) {
+      setValue('merchant', [merchant.userName]);
+    }
+  }, [copiedMarchandId, merchantOptions, setValue]);
+
+  // Once customers are loaded, map copied customerID to customer name for select
+  useEffect(() => {
+    if (!copiedCustomerId || !customerOptions.length) return;
+    const customer = customerOptions.find(
+      (c) => c.customerID === copiedCustomerId
+    );
+    if (customer) {
+      setValue('customer', customer.customerName);
+    }
+  }, [copiedCustomerId, customerOptions, setValue]);
+
+  // Once suppliers are loaded, map copied supplierID to supplier name for select
+  useEffect(() => {
+    if (!copiedSupplierId || !supplierOptions.length) return;
+    const supplier = supplierOptions.find(
+      (s) => s.venderLibraryID === copiedSupplierId
+    );
+    if (supplier) {
+      setValue('supplier', supplier.venderName);
+    }
+  }, [copiedSupplierId, supplierOptions, setValue]);
+
   const selectedCustomer = watch('customer');
   const customerPoValue = watch('customerPo');
   const calculationField1 = watch('calculationField1');
@@ -1123,13 +1441,6 @@ export default function CompletePurchaseOrderForm() {
   // Customer PO uniqueness check
   const [checkingCustomerPo, setCheckingCustomerPo] = useState(false);
   const [customerPoExists, setCustomerPoExists] = useState(false);
-
-  // Auto-fill internalPo when customerPo changes (for new orders)
-  useEffect(() => {
-    if (customerPoValue) {
-      setValue('internalPo', customerPoValue);
-    }
-  }, [customerPoValue, setValue]);
 
   // Validate Customer PO against backend (AlreadyExistPONumber)
   useEffect(() => {
@@ -1271,26 +1582,26 @@ export default function CompletePurchaseOrderForm() {
           setLoading: setInquiryLoading,
           setError: setInquiryError
         },
-        { 
-          name: 'paymentModes', 
+        {
+          name: 'paymentModes',
           url: `${API_BASE_URL}/api/MyOrders/GetPaymentModes`,
-          setter: setPaymentOptions,
+          setter: (data) => setPaymentOptions(normalizePaymentModes(data)),
           setLoading: setPaymentLoading,
-          setError: setPaymentError
+          setError: setPaymentError,
         },
-        { 
-          name: 'shipmentModes', 
+        {
+          name: 'shipmentModes',
           url: `${API_BASE_URL}/api/MyOrders/GetDeliveryTypes`,
-          setter: setShipmentOptions,
+          setter: (data) => setShipmentOptions(normalizeShipmentTerms(data)),
           setLoading: setShipmentLoading,
-          setError: setShipmentError
+          setError: setShipmentError,
         },
-        { 
-          name: 'deliveryTypes', 
+        {
+          name: 'deliveryTypes',
           url: `${API_BASE_URL}/api/MyOrders/GetShipmentModes`,
-          setter: setDeliveryOptions,
+          setter: (data) => setDeliveryOptions(normalizeShipmentModes(data)),
           setLoading: setDeliveryLoading,
-          setError: setDeliveryError
+          setError: setDeliveryError,
         },
         { 
           name: 'banks', 
@@ -1449,6 +1760,66 @@ export default function CompletePurchaseOrderForm() {
   const handleSaveItemData = (data) => {
     setSavedItemData(data);
   };
+
+  // Prefill Item Details grid from existing PO items when copying
+  useEffect(() => {
+    if (!copyFromPoId) return;
+
+    const prefillItemsFromExistingPO = async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await axios.get(
+          `${API_BASE_URL}/api/MyOrders/GetPurchaseOrder/${copyFromPoId}`,
+          { headers }
+        );
+
+        const data = Array.isArray(res.data) ? res.data[0] : res.data;
+        if (!data) return;
+
+        // Backend usually sends item details in POItems / items etc.
+        const rawItems =
+          data.poItems ||
+          data.POItems ||
+          data.items ||
+          data.Items ||
+          [];
+
+        if (!Array.isArray(rawItems) || rawItems.length === 0) return;
+
+        const rows = rawItems.map((it) => ({
+          styleNo: it.styleNo || it.StyleNo || it.style || '',
+          colorway: it.colorway || it.Colorway || it.colourway || '',
+          productCode: it.productCode || it.ProductCode || '',
+          sizeRange: it.sizeRange || it.SizeRange || '',
+          size: it.size || it.Size || '',
+          quantity: Number(it.poQty || it.POQty || it.quantity || it.Quantity || 0),
+          itemPrice: Number(it.itemPrice || it.ItemPrice || it.price || it.Price || 0),
+          value: Number(it.value || it.Value || it.amount || it.Amount || 0),
+          ldpPrice: Number(it.ldpPrice || it.LDPPrice || 0),
+          ldpValue: Number(it.ldpValue || it.LDPValue || 0),
+        }));
+
+        const totals = {
+          totalQuantity: rows.reduce((sum, r) => sum + (r.quantity || 0), 0),
+          totalValue: rows.reduce((sum, r) => sum + (r.value || 0), 0),
+          totalLdpValue: rows.reduce((sum, r) => sum + (r.ldpValue || 0), 0),
+        };
+
+        setSavedItemData({ rows, totals });
+
+        // Also set Style field for top bar like old system
+        const styleNumbers = [...new Set(rows.map((r) => r.styleNo))].join(', ');
+        if (styleNumbers) {
+          setValue('style', styleNumbers);
+        }
+      } catch (err) {
+        console.error('Error pre-filling item grid from existing PO:', err);
+      }
+    };
+
+    prefillItemsFromExistingPO();
+  }, [copyFromPoId, setValue]);
 
   const handleShowSelections = () => {
     if (!showSelections && savedItemData) {
@@ -2636,11 +3007,18 @@ export default function CompletePurchaseOrderForm() {
                           <Typography color="error">{paymentError}</Typography>
                         ) : (
                           <Select {...field} label="Payment Mode" value={field.value || ''}>
-                            {paymentOptions.map((p) => (
-                              <MenuItem key={p.id} value={p.id}>
-                                {p.name}
-                              </MenuItem>
-                            ))}
+                            {paymentOptions.length > 0 ? (
+                              paymentOptions.map((p) => (
+                                <MenuItem key={p.id} value={p.id}>
+                                  {p.name}
+                                </MenuItem>
+                              ))
+                            ) : (
+                              <>
+                                <MenuItem value="2">DP</MenuItem>
+                                <MenuItem value="3">Dp/ap</MenuItem>
+                              </>
+                            )}
                           </Select>
                         )}
                       </FormControl>
@@ -2655,19 +3033,10 @@ export default function CompletePurchaseOrderForm() {
                     render={({ field }) => (
                       <FormControl fullWidth>
                         <InputLabel>Shipment Term</InputLabel>
-                        {shipmentLoading ? (
-                          <CircularProgress size={24} />
-                        ) : shipmentError ? (
-                          <Typography color="error">{shipmentError}</Typography>
-                        ) : (
-                          <Select {...field} label="Shipment Term" value={field.value || ''}>
-                            {shipmentOptions.map((s) => (
-                              <MenuItem key={s.id} value={s.id}>
-                                {s.name}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        )}
+                        <Select {...field} label="Shipment Term" value={field.value || ''}>
+                          <MenuItem value="4">CNF</MenuItem>
+                          <MenuItem value="5">FOB</MenuItem>
+                        </Select>
                       </FormControl>
                     )}
                   />
@@ -2687,21 +3056,19 @@ export default function CompletePurchaseOrderForm() {
                     render={({ field }) => (
                       <FormControl fullWidth>
                         <InputLabel>Shipment Mode</InputLabel>
-                        {deliveryLoading ? (
-                          <CircularProgress size={24} />
-                        ) : deliveryError ? (
-                          <Typography color="error">{deliveryError}</Typography>
-                        ) : (
-                          <Select {...field} label="Shipment Mode" value={field.value || ''}>
-                            {deliveryOptions.map((d) => (
-                              <MenuItem key={d.id} value={d.id}>
-                                {d.name}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        )}
+                        <Select {...field} label="Shipment Mode" value={field.value || ''}>
+                          <MenuItem value="1">Air</MenuItem>
+                          <MenuItem value="7">Sea</MenuItem>
+                          <MenuItem value="8">courier</MenuItem>
+                        </Select>
                       </FormControl>
                     )}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={3}>
+                  <Controller
+                    name="naField"
+                    render={({ field }) => <TextField {...field} fullWidth label="N/A" />}
                   />
                 </Grid>
               </Grid>

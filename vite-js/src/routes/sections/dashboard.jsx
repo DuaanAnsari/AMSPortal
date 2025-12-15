@@ -8,7 +8,7 @@ import { LoadingScreen } from 'src/components/loading-screen';
 import Milestone from 'src/sections/Supply-Chain/view/Milestone';
 import { View } from '@react-pdf/renderer';
 import CompletePurchaseOrderForm from 'src/sections/Supply-Chain/view/Add-Order';
-import CompletePurchaseOrderFormEdit from 'src/sections/Supply-Chain/view/purchase-order-edit';
+import CompletePurchaseOrderFormEdit from 'src/sections/Supply-Chain/view/Purchase-order-edit';
 
 // ----------------------------------------------------------------------
 

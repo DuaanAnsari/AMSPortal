@@ -519,6 +519,17 @@ export default function PurchaseOrderView() {
     [enqueueSnackbar, navigate]
   );
 
+  // Navigate to Add Order page with selected PO data for copying
+  const handleCopyClick = useCallback(
+    (row) => {
+      if (!row) return;
+      navigate('/dashboard/supply-chain/add-order', {
+        state: { copyFromPo: row, copyFromPoId: row.id },
+      });
+      enqueueSnackbar(`Copying PO ${row.poNo} to Add Order form`, { variant: 'info' });
+    },
+    [enqueueSnackbar, navigate]
+  );
 
   // New handlers for text links
   const handleMilestoneClick = useCallback(
@@ -1051,6 +1062,7 @@ export default function PurchaseOrderView() {
                     onSelectRow={() => table.onSelectRow(row.id)}
                     onToggleCheckbox={handleToggleCheckbox}
                     onPdfClick={handlePdfClick}
+                    onCopyClick={handleCopyClick}
                     onViewOrder={handleViewOrder}
                     onMilestoneClick={handleMilestoneClick}
                     onRevisedClick={handleRevisedClick}
@@ -1421,6 +1433,7 @@ function PurchaseOrderTableRow({
   onSelectRow,
   onToggleCheckbox,
   onPdfClick,
+  onCopyClick,
   onViewOrder,
   onMilestoneClick,
   onRevisedClick,
@@ -1510,7 +1523,14 @@ function PurchaseOrderTableRow({
           {/* Copy */}
           <TableCell>
             {row.ssPdf === 'Available' && (
-              <img src="/assets/icons/files/copy.jpg" alt="copy" width={16} height={16} />
+              <img
+                src="/assets/icons/files/copy.jpg"
+                alt="Copy PO to Add Order"
+                width={16}
+                height={16}
+                style={{ cursor: 'pointer' }}
+                onClick={() => onCopyClick?.(row)}
+              />
             )}
           </TableCell>
 

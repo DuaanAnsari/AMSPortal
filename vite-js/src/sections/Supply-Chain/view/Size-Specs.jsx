@@ -40,19 +40,19 @@ export default function SizeSpecsView() {
       />
 
       <Card
-        sx={{
+        sx={(theme) => ({
           p: 3,
           minHeight: 400,
-          bgcolor: '#f5f8fc',
-        }}
+          bgcolor: theme.palette.background.default,
+        })}
       >
         {/* Top Bar mimicking legacy layout */}
         <Box
-          sx={{
-            border: '1px solid #dcdcdc',
-            bgcolor: '#ffffff',
+          sx={(theme) => ({
+            border: `1px solid ${theme.palette.divider}`,
+            bgcolor: theme.palette.background.paper,
             p: 3,
-          }}
+          })}
         >
           {/* PO / Style / Buyer row */}
           <Grid container spacing={2} alignItems="center" sx={{ mb: 4 }}>
@@ -118,17 +118,6 @@ export default function SizeSpecsView() {
             </Grid>
           </Grid>
         </Box>
-
-        {/* Placeholder content area to visually match blank body in screenshot */}
-        <Box
-          sx={{
-            mt: 3,
-            flexGrow: 1,
-            minHeight: 200,
-            border: '1px solid #e0e0e0',
-            bgcolor: '#ffffff',
-          }}
-        />
 
         <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
           <Button variant="outlined" onClick={() => navigate(-1)}>
