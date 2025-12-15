@@ -626,7 +626,7 @@ export default function PurchaseOrderView() {
         if (Array.isArray(rawItems)) {
           const normalizedItems = rawItems.map((item, index) => ({
             id: item.id || item.itemId || item.ItemId || index,
-            style: item.style || item.Style || item.styleNo || item.StyleNo || '',
+            style: item.styleNo || '',
             articleNo: item.articleNo || item.ArticleNo || '',
             description:
               item.description ||
@@ -1165,9 +1165,8 @@ export default function PurchaseOrderView() {
       >
         <DialogTitle>
           {revisedRow
-            ? `PO No. ${
-                revisedRow.poNoFromApi || revisedRow.poNo || ''
-              }${revisedRow.productGroup ? ` / ${revisedRow.productGroup}` : ''} - Revised Shipment`
+            ? `PO No. ${revisedRow.poNoFromApi || revisedRow.poNo || ''
+            }${revisedRow.productGroup ? ` / ${revisedRow.productGroup}` : ''} - Revised Shipment`
             : 'Revised Shipment'}
         </DialogTitle>
         <DialogContent sx={{ mt: 1 }}>
@@ -1772,46 +1771,20 @@ function transformApiData(apiData) {
     // API response ke exact field names use karo
     return {
       // Prefer explicit PO ID from API, fallback to index
-      id: item.poid || item.POID || item.POId || index + 1,
+      id: item.poid || '',
 
-      // PO number: cover multiple possible API field names
-      poNo:
-        item.pono || // common in your other APIs
-        item.PONO ||
-        item.poNo ||
-        item.PONo ||
-        item.PO_No ||
-        `PO-${index + 1}`,
+      poNo: item.poNo || '',
 
-      // Style number
-      styleNo: item.styleNo || item.StyleNo || item.Style || `STYLE-${index + 1}`,
+      styleNo: item.styleNo || '',
 
-      // Customer / Buyer
-      customer:
-        item.customer ||
-        item.Customer ||
-        item.buyer ||
-        item.Buyer ||
-        item.customerName ||
-        'Unknown Customer',
+      customer: item.customer || '',
 
-      // Supplier / Vendor
-      supplier:
-        item.supplier ||
-        item.Supplier ||
-        item.vendor ||
-        item.Vender ||
-        item.vendorName ||
-        item.venderName ||
-        'Unknown Supplier',
+      supplier: item.vendor || '',
 
-      // Dates
-      placementDate: item.placementDate || item.PlacementDate || item.placementDt || 'Not Set',
-      shipmentDate: item.shipmentDate || item.ShipmentDate || item.shipmentDt || 'Not Set',
+      placementDate: item.placementDate || '',
+      shipmentDate: item.shipmentDate || '',
 
-      // Amount
-      amount:
-        parseFloat((item.amount || item.Amount || '0').toString().replace('$', '').trim()) || 0,
+      amount: item.amount || '',
       milestone: 'Milestone', // Default value
       pdf: 'Available', // Default value
       copy: false, // Default value

@@ -93,7 +93,7 @@ function FullScreenImagePreview({ open, imageUrl, onClose }) {
         >
           <CloseIcon />
         </IconButton>
-        
+
         {imageUrl && (
           <img
             src={imageUrl}
@@ -123,7 +123,7 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
     const file = event.target.files?.[0];
     if (file) {
       setValue(name, file, { shouldValidate: true });
-      
+
       // Create preview URL for images
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
@@ -181,7 +181,7 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
           onChange={handleFileChange}
         />
       </Button>
-      
+
       {fileValue && (
         <Box sx={{ mt: 1, p: 1, border: '1px solid #ddd', borderRadius: 1 }}>
           <Grid container alignItems="center" justifyContent="space-between">
@@ -194,8 +194,8 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
               </Typography>
             </Grid>
             <Grid item>
-              <IconButton 
-                size="small" 
+              <IconButton
+                size="small"
                 onClick={handleRemoveFile}
                 color="error"
               >
@@ -273,12 +273,12 @@ function SimpleImageUploadField({ name, label = "Image" }) {
   const [previewUrl, setPreviewUrl] = useState('');
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const imageValue = watch(name);
- 
+
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
     if (file) {
       setValue(name, file, { shouldValidate: true });
-      
+
       // Create preview URL
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
@@ -326,8 +326,8 @@ function SimpleImageUploadField({ name, label = "Image" }) {
             value={imageValue?.name || ''}
             InputProps={{
               endAdornment: previewUrl && (
-                <IconButton 
-                  size="small" 
+                <IconButton
+                  size="small"
                   onClick={handleRemoveImage}
                   color="error"
                 >
@@ -346,15 +346,15 @@ function SimpleImageUploadField({ name, label = "Image" }) {
             ref={fileInputRef}
             onChange={handleFileChange}
           />
-          <Button 
-            variant="contained" 
+          <Button
+            variant="contained"
             onClick={() => fileInputRef.current?.click()}
           >
             Select
           </Button>
         </Grid>
       </Grid>
-      
+
       {/* Image Preview */}
       {previewUrl && (
         <Box sx={{ mt: 2, textAlign: 'center', position: 'relative' }}>
@@ -465,7 +465,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
         const token = localStorage.getItem('accessToken');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
         const res = await axios.get(`${API_BASE_URL}/api/MyOrders/GetSizeRange`, { headers });
-        
+
         if (Array.isArray(res.data)) {
           setSizeRangeData(res.data);
           const uniqueSizeRanges = [...new Set(res.data.map(item => item.sizeRange))];
@@ -493,7 +493,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
     }
 
     const sizes = generateSizes(data.sizeRange);
-    
+
     const newRows = sizes.map(size => ({
       styleNo: data.styleNo || '',
       colorway: data.colorway || '',
@@ -506,9 +506,9 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       ldpPrice: parseFloat(data.ldpPrice) || 0,
       ldpValue: 0,
     }));
-    
+
     setRows([...rows, ...newRows]);
-    
+
     reset({
       styleNo: data.styleNo || '',
       colorway: data.colorway || '',
@@ -522,11 +522,11 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
 
   const generateSizes = (selectedSizeRange) => {
     if (!selectedSizeRange) return [''];
-    
+
     const sizesForRange = sizeRangeData
       .filter(item => item.sizeRange === selectedSizeRange)
       .map(item => item.sizes);
-    
+
     return sizesForRange.length > 0 ? sizesForRange : [selectedSizeRange];
   };
 
@@ -556,7 +556,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
         totalLdpValue
       }
     };
-    
+
     onSaveData(savedData);
     setFormError('');
   };
@@ -579,7 +579,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
         totalLdpValue
       }
     };
-    
+
     onSaveData(savedData);
     onClose();
   };
@@ -600,18 +600,18 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
             {formError}
           </Alert>
         )}
-        
+
         <Grid container spacing={2} sx={{ mt: 1 }}>
           <Grid item xs={6} sm={4}>
             <Controller
               name="styleNo"
               control={control}
               render={({ field, fieldState }) => (
-                <TextField 
-                  {...field} 
-                  label="Style No" 
-                  fullWidth 
-                  size="small" 
+                <TextField
+                  {...field}
+                  label="Style No"
+                  fullWidth
+                  size="small"
                   error={!!fieldState.error}
                   helperText={fieldState.error?.message}
                   required
@@ -624,11 +624,11 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="colorway"
               control={control}
               render={({ field, fieldState }) => (
-                <TextField 
-                  {...field} 
-                  label="Colorway" 
-                  fullWidth 
-                  size="small" 
+                <TextField
+                  {...field}
+                  label="Colorway"
+                  fullWidth
+                  size="small"
                   error={!!fieldState.error}
                   helperText={fieldState.error?.message}
                   required
@@ -641,11 +641,11 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="productCode"
               control={control}
               render={({ field, fieldState }) => (
-                <TextField 
-                  {...field} 
-                  label="Product Code" 
-                  fullWidth 
-                  size="small" 
+                <TextField
+                  {...field}
+                  label="Product Code"
+                  fullWidth
+                  size="small"
                   error={!!fieldState.error}
                   helperText={fieldState.error?.message}
                   required
@@ -658,12 +658,12 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="itemPrice"
               control={control}
               render={({ field, fieldState }) => (
-                <TextField 
-                  {...field} 
-                  label="Item Price" 
-                  type="number" 
-                  fullWidth 
-                  size="small" 
+                <TextField
+                  {...field}
+                  label="Item Price"
+                  type="number"
+                  fullWidth
+                  size="small"
                   error={!!fieldState.error}
                   helperText={fieldState.error?.message}
                   required
@@ -676,12 +676,12 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="ldpPrice"
               control={control}
               render={({ field, fieldState }) => (
-                <TextField 
-                  {...field} 
-                  label="LDP Price" 
-                  type="number" 
-                  fullWidth 
-                  size="small" 
+                <TextField
+                  {...field}
+                  label="LDP Price"
+                  type="number"
+                  fullWidth
+                  size="small"
                   error={!!fieldState.error}
                   helperText={fieldState.error?.message}
                   required
@@ -718,9 +718,9 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
           </Grid>
         </Grid>
 
-        <Button 
-          variant="contained" 
-          sx={{ mt: 2 }} 
+        <Button
+          variant="contained"
+          sx={{ mt: 2 }}
           onClick={handleSubmit(onSubmit)}
           disabled={!isValid}
         >
@@ -796,17 +796,17 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       </DialogContent>
 
       <DialogActions>
-        <Button 
-          onClick={handleSave} 
-          variant="contained" 
+        <Button
+          onClick={handleSave}
+          variant="contained"
           color="primary"
           disabled={rows.length === 0}
         >
           Save
         </Button>
-        <Button 
-          onClick={handleSaveAndClose} 
-          variant="contained" 
+        <Button
+          onClick={handleSaveAndClose}
+          variant="contained"
           color="success"
           disabled={rows.length === 0}
         >
@@ -1007,11 +1007,11 @@ const normalizePaymentModes = (list = []) =>
     .map((p) => ({
       id: String(
         p.paymentModeID ??
-          p.PaymentModeID ??
-          p.id ??
-          p.code ??
-          p.value ??
-          ''
+        p.PaymentModeID ??
+        p.id ??
+        p.code ??
+        p.value ??
+        ''
       ),
       name:
         p.paymentMode ??
@@ -1027,11 +1027,11 @@ const normalizeShipmentTerms = (list = []) =>
     .map((s) => ({
       id: String(
         s.deliveryTypeID ??
-          s.shipmentTermID ??
-          s.id ??
-          s.code ??
-          s.value ??
-          ''
+        s.shipmentTermID ??
+        s.id ??
+        s.code ??
+        s.value ??
+        ''
       ),
       name:
         s.deliveryType ??
@@ -1047,11 +1047,11 @@ const normalizeShipmentModes = (list = []) =>
     .map((d) => ({
       id: String(
         d.shipmentModeID ??
-          d.DeliveryModeID ??
-          d.id ??
-          d.code ??
-          d.value ??
-          ''
+        d.DeliveryModeID ??
+        d.id ??
+        d.code ??
+        d.value ??
+        ''
       ),
       name:
         d.shipmentMode ??
@@ -1133,7 +1133,7 @@ export default function CompletePurchaseOrderForm() {
     clearErrors,
   } = methods;
 
-  
+
   const [files, setFiles] = useState({});
   const [openItemDialog, setOpenItemDialog] = useState(false);
   const [savedItemData, setSavedItemData] = useState(null);
@@ -1145,11 +1145,11 @@ export default function CompletePurchaseOrderForm() {
   const [costingOptions, setCostingOptions] = useState([]);
   const [costingLoading, setCostingLoading] = useState(false);
   const [costingError, setCostingError] = useState(null);
-  
+
   const [customerOptions, setCustomerOptions] = useState([]);
   const [customerLoading, setCustomerLoading] = useState(false);
   const [customerError, setCustomerError] = useState(null);
-  
+
   const [supplierOptions, setSupplierOptions] = useState([]);
   const [supplierLoading, setSupplierLoading] = useState(false);
   const [supplierError, setSupplierError] = useState(null);
@@ -1371,33 +1371,33 @@ export default function CompletePurchaseOrderForm() {
 
     fetchAndPrefill();
   }, [copyFromPoId, copyFromPo, methods]);
-  
+
   const [merchantOptions, setMerchantOptions] = useState([]);
   const [merchantLoading, setMerchantLoading] = useState(false);
-  
+
   const [productPortfolios, setProductPortfolios] = useState([]);
   const [productCategories, setProductCategories] = useState([]);
   const [productGroups, setProductGroups] = useState([]);
   const [loadingPortfolio, setLoadingPortfolio] = useState(false);
   const [loadingCategory, setLoadingCategory] = useState(false);
   const [loadingGroup, setLoadingGroup] = useState(false);
-  
+
   const [inquiryOptions, setInquiryOptions] = useState([]);
   const [inquiryLoading, setInquiryLoading] = useState(false);
   const [inquiryError, setInquiryError] = useState(null);
-  
+
   const [paymentOptions, setPaymentOptions] = useState([]);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentError, setPaymentError] = useState(null);
-  
+
   const [shipmentOptions, setShipmentOptions] = useState([]);
   const [shipmentLoading, setShipmentLoading] = useState(false);
   const [shipmentError, setShipmentError] = useState(null);
-  
+
   const [deliveryOptions, setDeliveryOptions] = useState([]);
   const [deliveryLoading, setDeliveryLoading] = useState(false);
   const [deliveryError, setDeliveryError] = useState(null);
-  
+
   const [bankOptions, setBankOptions] = useState([]);
   const [bankLoading, setBankLoading] = useState(false);
   const [bankError, setBankError] = useState(null);
@@ -1525,9 +1525,9 @@ export default function CompletePurchaseOrderForm() {
           };
           reader.onerror = error => reject(error);
         });
-        
+
         console.log(`File "${file.name}" converted to base64 successfully! Length: ${base64.length} characters`);
-        
+
       } catch (error) {
         console.error(`Error converting ${field} to base64:`, error);
         showSnackbar(`Error converting file to base64: ${error.message}`, 'error');
@@ -1542,41 +1542,41 @@ export default function CompletePurchaseOrderForm() {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
       const apis = [
-        { 
-          name: 'costingRefs', 
+        {
+          name: 'costingRefs',
           url: `${API_BASE_URL}/api/MyOrders/CostingRefNo`,
           setter: setCostingOptions,
           setLoading: setCostingLoading,
           setError: setCostingError
         },
-        { 
-          name: 'customers', 
+        {
+          name: 'customers',
           url: `${API_BASE_URL}/api/MyOrders/GetCustomer`,
           setter: setCustomerOptions,
           setLoading: setCustomerLoading,
           setError: setCustomerError
         },
-        { 
-          name: 'suppliers', 
+        {
+          name: 'suppliers',
           url: `${API_BASE_URL}/api/MyOrders/GetSupplier`,
           setter: setSupplierOptions,
           setLoading: setSupplierLoading,
           setError: setSupplierError
         },
-        { 
-          name: 'merchants', 
+        {
+          name: 'merchants',
           url: `${API_BASE_URL}/api/MyOrders/GetMerchants`,
           setter: setMerchantOptions,
           setLoading: setMerchantLoading
         },
-        { 
-          name: 'portfolios', 
+        {
+          name: 'portfolios',
           url: `${API_BASE_URL}/api/MyOrders/GetProductPortfolio`,
           setter: setProductPortfolios,
           setLoading: setLoadingPortfolio
         },
-        { 
-          name: 'inquiries', 
+        {
+          name: 'inquiries',
           url: `${API_BASE_URL}/api/MyOrders/GetInquirySamples`,
           setter: setInquiryOptions,
           setLoading: setInquiryLoading,
@@ -1603,8 +1603,8 @@ export default function CompletePurchaseOrderForm() {
           setLoading: setDeliveryLoading,
           setError: setDeliveryError,
         },
-        { 
-          name: 'banks', 
+        {
+          name: 'banks',
           url: `${API_BASE_URL}/api/MyOrders/GetBanks`,
           setter: (data) => setBankOptions(data.map(b => ({ id: b.bankID, name: b.bankName }))),
           setLoading: setBankLoading,
@@ -1617,7 +1617,7 @@ export default function CompletePurchaseOrderForm() {
           api.setLoading(true);
           const res = await axios.get(api.url, { headers });
           const data = res.data;
-          
+
           if (Array.isArray(data)) {
             api.setter(data);
           } else if (data) {
@@ -1889,14 +1889,14 @@ export default function CompletePurchaseOrderForm() {
 
   // Map form data to API format - COMPLETELY UPDATED FOR IMAGE HANDLING
   const mapFormDataToAPI = async (data) => {
-    
+
     const selectedCustomerObj = customerOptions.find(c => c.customerName === data.customer);
     const selectedSupplierObj = supplierOptions.find(s => s.venderName === data.supplier);
-    
+
     // Handle multiple merchants - take the first one for API compatibility
     const selectedMerchantNames = Array.isArray(data.merchant) ? data.merchant : [data.merchant];
     const selectedMerchantObj = merchantOptions.find(m => selectedMerchantNames.includes(m.userName));
-    
+
     const selectedInquiryObj = inquiryOptions.find(i => i.sampleNo === data.inquiryNo);
 
     // Convert all files to base64
@@ -1931,21 +1931,21 @@ export default function CompletePurchaseOrderForm() {
       creationDate: new Date().toISOString(),
       status: data.status || '',
       pOtype: data.orderType || '',
-      
+
       // Convert IDs to numbers
       customerID: selectedCustomerObj?.customerID ? safeParseInt(selectedCustomerObj.customerID) : 0,
       supplierID: selectedSupplierObj?.venderLibraryID ? safeParseInt(selectedSupplierObj.venderLibraryID) : 0,
       marchandID: selectedMerchantObj?.userId ? safeParseInt(selectedMerchantObj.userId) : 0,
-      
+
       placementDate: formatDate(data.placementDate),
       shipmentDate: formatDate(data.buyerShipInitial),
       vendorExIndiaShipmentDate: formatDate(data.vendorShipInitial),
-      
+
       commission: safeParseFloat(data.commission),
       toleranceindays: data.tolQuantity || '',
       tolerance: formatDate(data.buyerShipLast),
       buyerExIndiaTolerance: formatDate(data.buyerShipLast),
-      
+
       timeSpame: 0,
       productGroup: data.productGroup || '',
       season: data.season || '',
@@ -1962,7 +1962,7 @@ export default function CompletePurchaseOrderForm() {
       exchangeRate: safeParseFloat(data.exchangeRate),
       exchangeDate: new Date().toISOString(),
       lastUpdate: new Date().toISOString(),
-      
+
       xmlFileName: '',
       buyerName: data.customer || '',
       buyingDepartment: '',
@@ -1980,12 +1980,12 @@ export default function CompletePurchaseOrderForm() {
       deliveryCity: '',
       airFreight: '',
       seaFreight: '',
-      
+
       // Convert portfolio/category/group IDs to numbers
       productPortfolioID: safeParseInt(data.productPortfolio),
       productCategoriesID: safeParseInt(data.productCategory),
       productGroupID: safeParseInt(data.productGroup),
-      
+
       proceedings: data.proceedings || '',
       transactions: data.transactions || '',
       destination: data.destination || '',
@@ -2056,11 +2056,11 @@ export default function CompletePurchaseOrderForm() {
       barCodeTFPO: '',
       etanjDate: formatDate(data.etaNewJerseyDate),
       etaWarehouseDate: formatDate(data.etaWarehouseDate),
-      
+
       // Convert inquiry and bank IDs to numbers
       inquiryMstID: selectedInquiryObj?.inquiryMstID ? safeParseInt(selectedInquiryObj.inquiryMstID) : 0,
       bankID: safeParseInt(data.bankID),
-      
+
       prodImgFileName: files.productImage ? files.productImage.name : '',
       originalPDFName: files.originalPurchaseOrder ? files.originalPurchaseOrder.name : '',
       buyerCustomer: data.buyerCustomer || '',
@@ -2077,31 +2077,31 @@ export default function CompletePurchaseOrderForm() {
 
   const onSubmit = async (data) => {
     console.log('🔍 DEBUG START ==================');
-    
+
     try {
       const token = localStorage.getItem('accessToken');
-      const headers = token ? { 
+      const headers = token ? {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       } : { 'Content-Type': 'application/json' };
-      
+
       const apiData = await mapFormDataToAPI(data);
-      
+
       console.log('📤 Sending to API:', apiData);
-      
+
       const response = await axios.post(
         `${API_BASE_URL}/api/MyOrders/AddPurchaseOrder`,
         apiData,
-        { 
+        {
           headers,
           timeout: 30000
         }
       );
-      
+
       if (response.status === 200 || response.status === 201) {
         showSnackbar('Purchase Order saved successfully!', 'success');
         console.log('✅ API Response:', response.data);
-        
+
         // Reset form after successful submission
         methods.reset(defaultValues);
         setSavedItemData(null);
@@ -2111,23 +2111,23 @@ export default function CompletePurchaseOrderForm() {
       }
     } catch (error) {
       console.error('❌ Error submitting form:', error);
-      
+
       let errorMessage = 'Error saving purchase order. Please try again.';
-      
+
       if (error.response) {
         console.error('📞 Server Error Details:', error.response.data);
-        errorMessage = error.response.data.message || 
-                      error.response.data.title || 
-                      `Server Error: ${error.response.status} - ${error.response.statusText}`;
+        errorMessage = error.response.data.message ||
+          error.response.data.title ||
+          `Server Error: ${error.response.status} - ${error.response.statusText}`;
       } else if (error.request) {
         errorMessage = 'No response from server. Please check your connection.';
       } else {
         errorMessage = error.message;
       }
-      
+
       showSnackbar(errorMessage, 'error');
     }
-    
+
     console.log('🔍 DEBUG END ==================');
   };
 
@@ -2144,7 +2144,7 @@ export default function CompletePurchaseOrderForm() {
     <FormProvider {...methods}>
       <Container maxWidth="xl">
         <form onSubmit={handleSubmit(onSubmit)}>
-          
+
           {/* ----------------- Section: Basic Order Info ----------------- */}
           <Card sx={{ p: 3, mb: 4 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -2736,7 +2736,7 @@ export default function CompletePurchaseOrderForm() {
               <Grid item xs={12} sm={4}>
                 <Controller name="pcsPerCarton" render={({ field }) => <TextField {...field} fullWidth label="Pcs Per Carton" />} />
               </Grid>
-              
+
               {/* Item Description at Shipping Invoice Field */}
               <Grid item xs={12} sm={6}>
                 <Controller
@@ -2937,9 +2937,9 @@ export default function CompletePurchaseOrderForm() {
                   </Box>
 
                   <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-                    <Button 
-                      variant="contained" 
-                      color="secondary" 
+                    <Button
+                      variant="contained"
+                      color="secondary"
                       startIcon={<CalculateIcon />}
                       onClick={handleShowCalculationFields}
                     >
@@ -3092,10 +3092,10 @@ export default function CompletePurchaseOrderForm() {
                   { name: "sizeSetComment", label: "Size Set Comment" },
                 ].map(({ name, label }) => (
                   <Grid item xs={12} sm={6} key={name}>
-                    <FileUploadWithPreview 
-                      name={name} 
-                      label={label} 
-                      accept="image/*,.pdf,.doc,.docx" 
+                    <FileUploadWithPreview
+                      name={name}
+                      label={label}
+                      accept="image/*,.pdf,.doc,.docx"
                     />
                   </Grid>
                 ))}
@@ -3175,26 +3175,26 @@ export default function CompletePurchaseOrderForm() {
               </Grid>
 
               <Stack direction="row" justifyContent="flex-end" spacing={2} sx={{ mt: 3 }}>
-                <LoadingButton 
-                  type="submit" 
-                  variant="contained" 
+                <LoadingButton
+                  type="submit"
+                  variant="contained"
                   color="primary"
                   loading={isSubmitting}
                 >
                   Save
                 </LoadingButton>
-                <LoadingButton 
-                  type="button" 
-                  variant="contained" 
+                <LoadingButton
+                  type="button"
+                  variant="contained"
                   color="primary"
                   loading={isSubmitting}
                   onClick={handleSubmit(handleSaveAndEmail)}
                 >
                   Save & Email
                 </LoadingButton>
-                <Button 
-                  type="button" 
-                  variant="outlined" 
+                <Button
+                  type="button"
+                  variant="outlined"
                   color="primary"
                   onClick={() => navigate('/dashboard/supply-chain')}
                 >
@@ -3223,7 +3223,7 @@ export default function CompletePurchaseOrderForm() {
         <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
           {snackbar.message}
         </Alert>
-        
+
       </Snackbar>
     </FormProvider>
   );
