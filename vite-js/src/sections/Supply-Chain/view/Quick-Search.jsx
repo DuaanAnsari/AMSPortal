@@ -480,7 +480,7 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
                           { id: 'placementDate', label: 'Placement' },
                           { id: 'customershipdate', label: 'Cust Ship Date' },
                           { id: 'shipmentDate', label: 'Shipment' },
-                          { id: 'etaNewJerseyDate', label: 'ETA NJ' },
+                          { id: 'etanjDate', label: 'ETA NJ' },
                           { id: 'etaWarehouseDate', label: 'ETA WH' },
                           { id: 'pdf', label: 'PDF' },
                           { id: 'milestone', label: 'Milestone' },
@@ -519,7 +519,7 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
                             <TableCell align="center">{row.placementDate}</TableCell>
                             <TableCell align="center">{row.buyerExIndiaTolerance || '-'}</TableCell>
                             <TableCell align="center">{row.shipmentDate}</TableCell>
-                            <TableCell align="center">{row.etaNewJerseyDate}</TableCell>
+                            <TableCell align="center">{row.etanjDate}</TableCell>
                             <TableCell align="center">{row.etaWarehouseDate}</TableCell>
                             <TableCell align="center">
                               <IconButton size="small" onClick={() => handlePdfClick(row.poid, null)} sx={{ p: 0.5 }}>
