@@ -162,6 +162,7 @@ export const paths = {
       costSheetView: `${ROOTS.DASHBOARD}/power-tool/cost-sheet-view`,
       costSheetEntry: `${ROOTS.DASHBOARD}/power-tool/cost-sheet-entry`,
       courierPackagingEntry: `${ROOTS.DASHBOARD}/power-tool/courier-packaging-entry`,
+      courierPackagingView: `${ROOTS.DASHBOARD}/power-tool/courier-packaging-view`,
     },
 
     product: {

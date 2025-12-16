@@ -89,6 +89,7 @@ const AddUserPage = lazy(() => import('src/sections/power-tool/view/add-user'));
 const CostSheetViewPage = lazy(() => import('src/sections/power-tool/view/cost-sheet-view'));
 const CostSheetEntryPage = lazy(() => import('src/sections/power-tool/view/cost-sheet-entry'));
 const CourierPackagingEntryPage = lazy(() => import('src/sections/power-tool/view/courier-packaging-entry'));
+const CourierPackagingViewPage = lazy(() => import('src/sections/power-tool/view/courier-packaging-view'));
 
 // BLOG
 const BlogPostsPage = lazy(() => import('src/pages/dashboard/post/list'));
@@ -192,6 +193,7 @@ export const dashboardRoutes = [
           { path: 'cost-sheet-view', element: <CostSheetViewPage /> },
           { path: 'cost-sheet-entry', element: <CostSheetEntryPage /> },
           { path: 'courier-packaging-entry', element: <CourierPackagingEntryPage /> },
+          { path: 'courier-packaging-view', element: <CourierPackagingViewPage /> },
         ],
       },
 

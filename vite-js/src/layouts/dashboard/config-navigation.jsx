@@ -145,7 +145,7 @@ export function useNavData() {
               { title: t('Po Mix Qty'), path: paths.dashboard.powerTool.qrView },
               { title: t('View Users'), path: paths.dashboard.powerTool.viewUsers },
               { title: t('Cost Sheet View'), path: paths.dashboard.powerTool.costSheetView },
-              { title: t('Courier Packaging'), path: paths.dashboard.powerTool.courierPackagingEntry },
+              { title: t('Courier Packaging'), path: paths.dashboard.powerTool.courierPackagingView },
             ],
           },
 

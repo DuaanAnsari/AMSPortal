@@ -118,7 +118,7 @@ export default function ViewUsersPage() {
                 >
                     Update User
                 </Button>
-                <Button
+                <Button 
                     variant="contained"
                     onClick={() => navigate('/dashboard/power-tool/add-user')}
                     sx={{
