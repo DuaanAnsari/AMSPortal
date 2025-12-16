@@ -155,6 +155,13 @@ export const paths = {
       advancePayment: `${ROOTS.DASHBOARD}/power-tool/advance-payment`,
       addAdvance: `${ROOTS.DASHBOARD}/power-tool/add-advance`,
       icrForm: `${ROOTS.DASHBOARD}/power-tool/icr-form`,
+      qrView: `${ROOTS.DASHBOARD}/power-tool/qr-view`,
+      mixCartonEntry: `${ROOTS.DASHBOARD}/power-tool/mix-carton-entry`,
+      viewUsers: `${ROOTS.DASHBOARD}/power-tool/view-users`,
+      addUser: `${ROOTS.DASHBOARD}/power-tool/add-user`,
+      costSheetView: `${ROOTS.DASHBOARD}/power-tool/cost-sheet-view`,
+      costSheetEntry: `${ROOTS.DASHBOARD}/power-tool/cost-sheet-entry`,
+      courierPackagingEntry: `${ROOTS.DASHBOARD}/power-tool/courier-packaging-entry`,
     },
 
     product: {

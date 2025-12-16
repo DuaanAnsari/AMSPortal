@@ -142,6 +142,10 @@ export function useNavData() {
               },
               { title: t('Advance Payment'), path: paths.dashboard.powerTool.advancePayment },
               { title: t('ICR Form'), path: paths.dashboard.powerTool.icrForm },
+              { title: t('Po Mix Qty'), path: paths.dashboard.powerTool.qrView },
+              { title: t('View Users'), path: paths.dashboard.powerTool.viewUsers },
+              { title: t('Cost Sheet View'), path: paths.dashboard.powerTool.costSheetView },
+              { title: t('Courier Packaging'), path: paths.dashboard.powerTool.courierPackagingEntry },
             ],
           },
 

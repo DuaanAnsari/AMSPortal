@@ -82,6 +82,13 @@ const AddSizePage = lazy(() => import('src/sections/power-tool/view/Add-Size'));
 const AdvancePaymentPage = lazy(() => import('src/sections/power-tool/view/Advance-payment'));
 const AddAdvancePage = lazy(() => import('src/sections/power-tool/view/Add-Advance'));
 const ICRFormPage = lazy(() => import('src/sections/power-tool/view/ICR-Form'));
+const QRViewPage = lazy(() => import('src/sections/power-tool/view/qr-view'));
+const MixCartonEntryPage = lazy(() => import('src/sections/power-tool/view/mix-carton-entry'));
+const ViewUsersPage = lazy(() => import('src/sections/power-tool/view/view-users'));
+const AddUserPage = lazy(() => import('src/sections/power-tool/view/add-user'));
+const CostSheetViewPage = lazy(() => import('src/sections/power-tool/view/cost-sheet-view'));
+const CostSheetEntryPage = lazy(() => import('src/sections/power-tool/view/cost-sheet-entry'));
+const CourierPackagingEntryPage = lazy(() => import('src/sections/power-tool/view/courier-packaging-entry'));
 
 // BLOG
 const BlogPostsPage = lazy(() => import('src/pages/dashboard/post/list'));
@@ -178,6 +185,13 @@ export const dashboardRoutes = [
           { path: 'advance-payment', element: <AdvancePaymentPage /> },
           { path: 'add-advance', element: <AddAdvancePage /> },
           { path: 'icr-form', element: <ICRFormPage /> },
+          { path: 'qr-view', element: <QRViewPage /> },
+          { path: 'mix-carton-entry', element: <MixCartonEntryPage /> },
+          { path: 'view-users', element: <ViewUsersPage /> },
+          { path: 'add-user', element: <AddUserPage /> },
+          { path: 'cost-sheet-view', element: <CostSheetViewPage /> },
+          { path: 'cost-sheet-entry', element: <CostSheetEntryPage /> },
+          { path: 'courier-packaging-entry', element: <CourierPackagingEntryPage /> },
         ],
       },
 
