@@ -54,6 +54,9 @@ import DonutLargeIcon from '@mui/icons-material/DonutLarge';
 import PieChartIcon from '@mui/icons-material/PieChart';
 
 
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 // ✅ Compact card style
 const cardStyle = {
   borderRadius: 2,
@@ -345,7 +348,7 @@ export default function OverviewAppView() {
           headers['Authorization'] = `Bearer ${token}`;
         }
 
-        const response = await fetch('http://192.168.18.13/api/MyOrders/DashboardCardsCount', { headers });
+        const response = await fetch(`${API_BASE_URL}/api/MyOrders/DashboardCardsCount`, { headers });
 
         if (!response.ok) {
           if (response.status === 401) {
@@ -689,63 +692,63 @@ export default function OverviewAppView() {
 
   const COLORS = ['#1976d2', '#ff7300'];
 
-// Draggable horizontal scroll TableContainer (like My-Order.jsx)
-function DraggableTableContainer({ children, sx, ...other }) {
-  const containerRef = useRef(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
+  // Draggable horizontal scroll TableContainer (like My-Order.jsx)
+  function DraggableTableContainer({ children, sx, ...other }) {
+    const containerRef = useRef(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [startX, setStartX] = useState(0);
+    const [scrollLeft, setScrollLeft] = useState(0);
 
-  const handleMouseDown = (e) => {
-    if (!containerRef.current) return;
-    setIsDragging(true);
-    setStartX(e.pageX - containerRef.current.offsetLeft);
-    setScrollLeft(containerRef.current.scrollLeft);
-  };
+    const handleMouseDown = (e) => {
+      if (!containerRef.current) return;
+      setIsDragging(true);
+      setStartX(e.pageX - containerRef.current.offsetLeft);
+      setScrollLeft(containerRef.current.scrollLeft);
+    };
 
-  const handleMouseLeave = () => {
-    setIsDragging(false);
-  };
+    const handleMouseLeave = () => {
+      setIsDragging(false);
+    };
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
 
-  const handleMouseMove = (e) => {
-    if (!isDragging || !containerRef.current) return;
-    e.preventDefault();
-    const x = e.pageX - containerRef.current.offsetLeft;
-    const walk = (x - startX) * 2; // same scroll speed as My-Order
-    containerRef.current.scrollLeft = scrollLeft - walk;
-  };
+    const handleMouseMove = (e) => {
+      if (!isDragging || !containerRef.current) return;
+      e.preventDefault();
+      const x = e.pageX - containerRef.current.offsetLeft;
+      const walk = (x - startX) * 2; // same scroll speed as My-Order
+      containerRef.current.scrollLeft = scrollLeft - walk;
+    };
 
-  return (
-    <TableContainer
-      ref={containerRef}
-      onMouseDown={handleMouseDown}
-      onMouseLeave={handleMouseLeave}
-      onMouseUp={handleMouseUp}
-      onMouseMove={handleMouseMove}
-      sx={{
-        cursor: isDragging ? 'grabbing' : 'grab',
-        overflowX: 'auto',
-        '&::-webkit-scrollbar': { height: 8 },
-        '&::-webkit-scrollbar-thumb': (theme) => ({
-          borderRadius: 2,
-          backgroundColor: theme.palette.grey[600],
-        }),
-        '&::-webkit-scrollbar-track': (theme) => ({
-          borderRadius: 2,
-          backgroundColor: theme.palette.grey[500],
-        }),
-        ...sx,
-      }}
-      {...other}
-    >
-      {children}
-    </TableContainer>
-  );
-}
+    return (
+      <TableContainer
+        ref={containerRef}
+        onMouseDown={handleMouseDown}
+        onMouseLeave={handleMouseLeave}
+        onMouseUp={handleMouseUp}
+        onMouseMove={handleMouseMove}
+        sx={{
+          cursor: isDragging ? 'grabbing' : 'grab',
+          overflowX: 'auto',
+          '&::-webkit-scrollbar': { height: 8 },
+          '&::-webkit-scrollbar-thumb': (theme) => ({
+            borderRadius: 2,
+            backgroundColor: theme.palette.grey[600],
+          }),
+          '&::-webkit-scrollbar-track': (theme) => ({
+            borderRadius: 2,
+            backgroundColor: theme.palette.grey[500],
+          }),
+          ...sx,
+        }}
+        {...other}
+      >
+        {children}
+      </TableContainer>
+    );
+  }
 
   return (
     <Container maxWidth={settings.themeStretch ? false : 'xl'}>

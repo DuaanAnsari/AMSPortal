@@ -22,7 +22,7 @@ export default function POSizeWiseView() {
   const rows = [
     {
       id: 1,
-      description: 'SHORTS',
+      description: 'SHORT',
       color: '1- (DENIM_300) 2- (DENIM_600)',
       mainCareLabel: '',
       hangtag: '',
