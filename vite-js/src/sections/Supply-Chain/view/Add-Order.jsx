@@ -1129,6 +1129,7 @@ export default function CompletePurchaseOrderForm() {
     control,
     setValue,
     watch,
+    getValues,
     setError,
     clearErrors,
   } = methods;
@@ -1163,6 +1164,9 @@ export default function CompletePurchaseOrderForm() {
   useEffect(() => {
     if (!copyFromPoId && !copyFromPo) return;
 
+    // Preserve whatever AMS Ref No is currently set (usually from GetNextAMSRefNo)
+    const currentAmsRef = getValues('amsRef');
+
     const toDateOnly = (value) => {
       if (!value || typeof value !== 'string') return '';
       if (value.includes('T')) return value.split('T')[0];
@@ -1176,13 +1180,10 @@ export default function CompletePurchaseOrderForm() {
         customerPo: copyFromPo.poNo || '',
         customer: copyFromPo.customer || '',
         supplier: copyFromPo.supplier || '',
-        placementDate: toDateOnly(copyFromPo.placementDate),
-        buyerShipInitial: toDateOnly(copyFromPo.shipmentDate),
-        buyerShipLast: toDateOnly(copyFromPo.shipmentDate),
-        vendorShipInitial: toDateOnly(copyFromPo.shipmentDate),
-        vendorShipLast: toDateOnly(copyFromPo.shipmentDate),
       };
       methods.reset(fallback);
+      // Restore AMS Ref so it stays as newly generated value
+      setValue('amsRef', currentAmsRef);
     };
 
     const fetchAndPrefill = async () => {
@@ -1215,7 +1216,6 @@ export default function CompletePurchaseOrderForm() {
           image: order.poImage || null,
           customerPo: order.pono || order.PONO || order.poNo || '',
           internalPo: order.internalPONO || order.internalPo || '',
-          amsRef: order.amsRefNo || order.amsRef || '',
           rnNo: order.rnNo || '',
           consignee: order.consignee || '',
 
@@ -1238,20 +1238,6 @@ export default function CompletePurchaseOrderForm() {
           version: order.version || defaultValues.version,
           commission: order.commission ?? defaultValues.commission,
           vendorCommission: order.vendorCommission ?? defaultValues.vendorCommission,
-
-          // Dates
-          placementDate: toDateOnly(order.placementDate || order.PlacementDate),
-          etaNewJerseyDate: toDateOnly(order.etanjDate || order.etaNewJerseyDate),
-          etaWarehouseDate: toDateOnly(order.etaWarehouseDate),
-          finalInspectionDate: toDateOnly(order.finalInspDate),
-
-          // Buyer Shipment Dates
-          buyerShipInitial: toDateOnly(order.tolerance || order.buyerShipInitial),
-          buyerShipLast: toDateOnly(order.buyerExIndiaTolerance || order.buyerShipLast),
-
-          // Vendor Shipment Dates
-          vendorShipInitial: toDateOnly(order.shipmentDate || order.vendorShipInitial),
-          vendorShipLast: toDateOnly(order.vendorExIndiaShipmentDate || order.vendorShipLast),
 
           // Product Information
           productPortfolio: order.productPortfolioID ?? defaultValues.productPortfolio,
@@ -1292,10 +1278,12 @@ export default function CompletePurchaseOrderForm() {
           style: order.styleNo || order.design || defaultValues.style,
 
           // Shipping and Payment Terms
+          // We save: shipmentMode <- shipmentMode (Air/Sea/etc)
+          //          deliveryType <- shipmentTerm (CNF/FOB/etc)
           paymentMode: order.paymentMode || defaultValues.paymentMode,
-          shipmentTerm: order.shipmentMode || defaultValues.shipmentTerm,
+          shipmentTerm: order.deliveryType || order.shipmentTerm || defaultValues.shipmentTerm,
           destination: order.destination || defaultValues.destination,
-          shipmentMode: order.deliveryType || defaultValues.shipmentMode,
+          shipmentMode: order.shipmentMode || defaultValues.shipmentMode,
 
           // Bank Details
           bankName: order.bankName || '',
@@ -1321,6 +1309,8 @@ export default function CompletePurchaseOrderForm() {
         };
 
         methods.reset(prefilled);
+        // Restore AMS Ref so it continues to use the newly generated number
+        setValue('amsRef', currentAmsRef);
 
         // Save IDs for later dropdown mapping
         if (order.marchandID) {
@@ -1866,6 +1856,12 @@ export default function CompletePurchaseOrderForm() {
   const formatDate = (dateString) => {
     if (!dateString) return null;
     try {
+      // If it's a plain HTML date input value (YYYY-MM-DD), send it as-is with fixed time
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+        // Send pure date string, let backend treat it as date-only (no timezone shift)
+        return dateString;
+      }
+
       const date = new Date(dateString);
       return isNaN(date.getTime()) ? null : date.toISOString();
     } catch {
