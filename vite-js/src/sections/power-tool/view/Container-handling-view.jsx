@@ -179,10 +179,21 @@ export default function ContainerHandlingViewPage() {
                 backgroundColor: theme.palette.primary.main,
                 color: '#ffffff',
                 borderBottom: 'none',
+                alignItems: 'stretch',
               },
               '& .MuiDataGrid-columnHeaderTitle': {
                 color: '#ffffff',
                 fontWeight: 600,
+                fontSize: {
+                  xs: 10, // very small screens
+                  sm: 11,
+                  md: 12,
+                  lg: 13,
+                },
+                whiteSpace: 'normal',
+                lineHeight: 1.3,
+                textOverflow: 'clip',
+                overflow: 'visible',
               },
               '& .MuiDataGrid-columnHeaders .MuiDataGrid-columnSeparator, & .MuiDataGrid-columnHeaders .MuiSvgIcon-root':
                 {

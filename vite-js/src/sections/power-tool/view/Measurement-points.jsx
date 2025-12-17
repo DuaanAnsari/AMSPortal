@@ -1,19 +1,6 @@
 import React, { useState } from 'react';
-import {
-  Box,
-  Card,
-  Grid,
-  Typography,
-  TextField,
-  MenuItem,
-  IconButton,
-  Button,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-} from '@mui/material';
+import { Box, Card, Grid, Typography, TextField, MenuItem, IconButton, Button } from '@mui/material';
+import { DataGrid } from '@mui/x-data-grid';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 import Iconify from 'src/components/iconify';
 import { paths } from 'src/routes/paths';
@@ -132,60 +119,61 @@ export default function MeasurementPointsPage() {
               </Button>
             </Box>
 
-            <Box sx={{ border: '1px solid', borderColor: 'divider' }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell
-                      sx={(theme) => ({
-                        bgcolor: theme.palette.primary.main,
-                        color: '#fff',
-                        fontWeight: 600,
-                      })}
-                    >
-                      Sequence
-                    </TableCell>
-                    <TableCell
-                      sx={(theme) => ({
-                        bgcolor: theme.palette.primary.main,
-                        color: '#fff',
-                        fontWeight: 600,
-                      })}
-                    >
-                      Measurement Points
-                    </TableCell>
-                    <TableCell
-                      sx={(theme) => ({
-                        bgcolor: theme.palette.primary.main,
-                        color: '#fff',
-                        fontWeight: 600,
-                      })}
-                      align="left"
-                    >
-                      Type
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {TSHIRT_MEASUREMENT_ROWS.map((row, index) => (
-                    <TableRow
-                      key={row.sequence}
-                      sx={
-                        index === 0
-                          ? (theme) => ({
-                              bgcolor: theme.palette.primary.dark,
-                              '& td': { color: '#fff' },
-                            })
-                          : undefined
-                      }
-                    >
-                      <TableCell>{row.sequence}</TableCell>
-                      <TableCell>{row.point}</TableCell>
-                      <TableCell>{row.type}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 0 }}>
+              <DataGrid
+                autoHeight
+                rows={TSHIRT_MEASUREMENT_ROWS.map((row) => ({ id: row.sequence, ...row }))}
+                columns={[
+                  {
+                    field: 'sequence',
+                    headerName: 'Sequence',
+                    flex: 0.6,
+                    headerAlign: 'center',
+                    align: 'center',
+                    sortable: false,
+                  },
+                  {
+                    field: 'point',
+                    headerName: 'Measurement Points',
+                    flex: 2,
+                    headerAlign: 'center',
+                    align: 'center',
+                    sortable: false,
+                  },
+                  {
+                    field: 'type',
+                    headerName: 'Type',
+                    flex: 1,
+                    headerAlign: 'center',
+                    align: 'center',
+                    sortable: false,
+                  },
+                ]}
+                hideFooter
+                disableRowSelectionOnClick
+                density="compact"
+                sx={(theme) => ({
+                  border: 'none',
+                  '& .MuiDataGrid-columnHeaders': {
+                    backgroundColor: theme.palette.primary.main,
+                    color: '#ffffff',
+                    borderBottom: 'none',
+                  },
+                  '& .MuiDataGrid-columnHeaderTitle': {
+                    color: '#ffffff',
+                    fontWeight: 600,
+                  },
+                  // Column-wise vertical lines
+                  '& .MuiDataGrid-columnHeaders .MuiDataGrid-columnHeader': {
+                    borderRight: '1px solid rgba(224,224,224,1)',
+                    '&:last-of-type': { borderRight: 'none' },
+                  },
+                  '& .MuiDataGrid-row .MuiDataGrid-cell': {
+                    borderRight: '1px solid rgba(224,224,224,1)',
+                    '&:last-of-type': { borderRight: 'none' },
+                  },
+                })}
+              />
             </Box>
 
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
