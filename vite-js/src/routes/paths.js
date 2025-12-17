@@ -163,6 +163,12 @@ export const paths = {
       costSheetEntry: `${ROOTS.DASHBOARD}/power-tool/cost-sheet-entry`,
       courierPackagingEntry: `${ROOTS.DASHBOARD}/power-tool/courier-packaging-entry`,
       courierPackagingView: `${ROOTS.DASHBOARD}/power-tool/courier-packaging-view`,
+      consigneeView: `${ROOTS.DASHBOARD}/power-tool/consignee`,
+      addConsignee: `${ROOTS.DASHBOARD}/power-tool/add-consignee`,
+      containerHandling: `${ROOTS.DASHBOARD}/power-tool/container-handling`,
+      containerHandlingReport: `${ROOTS.DASHBOARD}/power-tool/container-handling-report`,
+      containerHandlingExpenses: `${ROOTS.DASHBOARD}/power-tool/container-handling-expenses`,
+      measurementPoints: `${ROOTS.DASHBOARD}/power-tool/measurement-points`,
     },
 
     product: {

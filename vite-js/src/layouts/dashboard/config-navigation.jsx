@@ -146,6 +146,9 @@ export function useNavData() {
               { title: t('View Users'), path: paths.dashboard.powerTool.viewUsers },
               { title: t('Cost Sheet View'), path: paths.dashboard.powerTool.costSheetView },
               { title: t('Courier Packaging'), path: paths.dashboard.powerTool.courierPackagingView },
+              { title: t('Consignee'), path: paths.dashboard.powerTool.consigneeView },
+              { title: t('Container handling'), path: paths.dashboard.powerTool.containerHandling },
+              { title: t('Measurement Points'), path: paths.dashboard.powerTool.measurementPoints },
             ],
           },
 

@@ -90,6 +90,20 @@ const CostSheetViewPage = lazy(() => import('src/sections/power-tool/view/cost-s
 const CostSheetEntryPage = lazy(() => import('src/sections/power-tool/view/cost-sheet-entry'));
 const CourierPackagingEntryPage = lazy(() => import('src/sections/power-tool/view/courier-packaging-entry'));
 const CourierPackagingViewPage = lazy(() => import('src/sections/power-tool/view/courier-packaging-view'));
+const ConsigneeViewPage = lazy(() => import('src/sections/power-tool/view/Consignee-view'));
+const AddConsigneePage = lazy(() => import('src/sections/power-tool/view/Add-Consignee'));
+const ContainerHandlingViewPage = lazy(
+  () => import('src/sections/power-tool/view/Container-handling-view')
+);
+const ContainerHandlingReportPage = lazy(
+  () => import('src/sections/power-tool/view/Container-handling-report')
+);
+const ContainerHandlingExpensesPage = lazy(
+  () => import('src/sections/power-tool/view/Container-handling-expenses')
+);
+const MeasurementPointsPage = lazy(
+  () => import('src/sections/power-tool/view/Measurement-points')
+);
 
 // BLOG
 const BlogPostsPage = lazy(() => import('src/pages/dashboard/post/list'));
@@ -194,6 +208,12 @@ export const dashboardRoutes = [
           { path: 'cost-sheet-entry', element: <CostSheetEntryPage /> },
           { path: 'courier-packaging-entry', element: <CourierPackagingEntryPage /> },
           { path: 'courier-packaging-view', element: <CourierPackagingViewPage /> },
+          { path: 'consignee', element: <ConsigneeViewPage /> },
+          { path: 'add-consignee', element: <AddConsigneePage /> },
+          { path: 'container-handling', element: <ContainerHandlingViewPage /> },
+          { path: 'container-handling-report', element: <ContainerHandlingReportPage /> },
+          { path: 'container-handling-expenses', element: <ContainerHandlingExpensesPage /> },
+          { path: 'measurement-points', element: <MeasurementPointsPage /> },
         ],
       },
 
