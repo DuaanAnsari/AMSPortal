@@ -103,6 +103,7 @@ export function useNavData() {
             icon: ICONS.booking,
             children: [
               { title: t('My Orders'), path: paths.dashboard.supplyChain.root },
+              { title: t('TNA Chart'), path: paths.dashboard.supplyChain.tnaChart },
               { title: t('Quick Search'), path: paths.dashboard.supplyChain.cards },
               { title: t('My Shipments'), path: paths.dashboard.supplyChain.list },
               { title: t('Merchandisers Backlog'), path: paths.dashboard.supplyChain.new },

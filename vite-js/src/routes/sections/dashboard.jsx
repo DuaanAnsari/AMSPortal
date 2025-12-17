@@ -180,6 +180,7 @@ export const dashboardRoutes = [
           { path: 'po-revised-shipment/:id', element: <PORevisedShipmentPage /> },
           { path: 'edit-order', element: <EditOrder /> },
           { path: 'purchase-order-edit/:id', element: <CompletePurchaseOrderFormEdit /> },
+          { path: 'tna-chart', element: <EditOrder /> },
         ],
       },
 

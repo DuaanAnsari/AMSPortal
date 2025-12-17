@@ -132,6 +132,7 @@ export const paths = {
       milestone: `${ROOTS.DASHBOARD}/supply-chain/milestone`,
       view: `${ROOTS.DASHBOARD}/supply-chain/view`,
       editOrder: `${ROOTS.DASHBOARD}/supply-chain/edit-order`,
+      tnaChart: `${ROOTS.DASHBOARD}/supply-chain/tna-chart`,
 
 
       purchaseOrderPDF: `${ROOTS.DASHBOARD}/supply-chain/purchase-order-pdf`,
