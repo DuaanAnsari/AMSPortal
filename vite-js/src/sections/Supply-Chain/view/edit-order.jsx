@@ -37,22 +37,65 @@ apiClient.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
+// Normalize dropdown data helpers
+const normalizePaymentModes = (list = []) =>
+    list.map((p) => ({
+        id: String(p.paymentModeID ?? p.PaymentModeID ?? p.id ?? p.code ?? p.value ?? ''),
+        name: p.paymentMode ?? p.PaymentMode ?? p.name ?? p.description ?? '',
+    })).filter((p) => p.id && p.name);
+
+const normalizeShipmentTerms = (list = []) =>
+    list.map((s) => ({
+        id: String(s.deliveryTypeID ?? s.shipmentTermID ?? s.id ?? s.code ?? s.value ?? ''),
+        name: s.deliveryType ?? s.shipmentTerm ?? s.name ?? s.description ?? '',
+    })).filter((s) => s.id && s.name);
+
+const normalizeShipmentModes = (list = []) =>
+    list.map((d) => ({
+        id: String(d.shipmentModeID ?? d.DeliveryModeID ?? d.id ?? d.code ?? d.value ?? ''),
+        name: d.shipmentMode ?? d.shipmentModeName ?? d.name ?? d.description ?? '',
+    })).filter((d) => d.id && d.name);
+
 // Helper function to transform API data to grid format
-const transformPODataToGridRow = (orderData) => {
+const transformPODataToGridRow = (orderData, options = {}) => {
+    // Helper to find name by ID
+    const findName = (list, id, idField, nameField) => {
+        if (!id && id !== 0) return '';
+        const item = list.find(x => String(x[idField]) === String(id));
+        return item ? item[nameField] : String(id);
+    };
+
+    const findNameSimple = (list, id) => {
+        if (!id && id !== 0) return '';
+        const item = list.find(x => String(x.id) === String(id));
+        return item ? item.name : String(id);
+    };
+
     return {
         // Store original data for payload construction
         originalData: orderData,
         // Keep the original PO ID for update
         poid: orderData.poid || orderData.POID || orderData.id || orderData.purchaseOrderId || '',
         // Basic Order Info
-        costingRef: orderData.costingMstID ? String(orderData.costingMstID) : '',
+        costingRef: (() => {
+            // Priority 1: Use poRefNo if available (Since Add-Order saves to this field)
+            if (orderData.poRefNo && orderData.poRefNo !== '0') return orderData.poRefNo;
+
+            // Priority 2: Look up by ID only if ID is non-zero
+            if (orderData.costingMstID && String(orderData.costingMstID) !== '0') {
+                // Try to find name, if not found return ID
+                const found = options.costingOptions?.find(x => String(x.costingMstID) === String(orderData.costingMstID));
+                return found ? found.costingNo : String(orderData.costingMstID);
+            }
+            return '';
+        })(),
         masterPo: orderData.masterPO || '',
         amsRef: orderData.amsRefNo || '',
         customerPo: orderData.pono || '',
         internalPo: orderData.internalPONO || '',
         rnNo: orderData.rnNo || '',
         consignee: orderData.consignee || '',
-        merchant: orderData.marchandID ? String(orderData.marchandID) : '',
+        merchant: findName(options.merchantOptions || [], orderData.marchandID, 'userId', 'userName') || (orderData.marchandID ? String(orderData.marchandID) : ''),
         proceedings: orderData.proceedings || '',
         orderType: orderData.pOtype || '',
         version: orderData.version || '',
@@ -69,9 +112,9 @@ const transformPODataToGridRow = (orderData) => {
         vendorShipLast: orderData.vendorExIndiaShipmentDate ? orderData.vendorExIndiaShipmentDate.split('T')[0] : '',
         finalInspectionDate: orderData.finalInspDate ? orderData.finalInspDate.split('T')[0] : '',
         // Product Information
-        productPortfolio: orderData.productPortfolioID ? String(orderData.productPortfolioID) : '',
-        productCategory: orderData.productCategoriesID ? String(orderData.productCategoriesID) : '',
-        productGroup: orderData.productGroupID ? String(orderData.productGroupID) : '',
+        productPortfolio: findName(options.productPortfolios || [], orderData.productPortfolioID, 'productPortfolioID', 'productPortfolio') || (orderData.productPortfolioID ? String(orderData.productPortfolioID) : ''),
+        productCategory: findName(options.productCategories || [], orderData.productCategoriesID, 'productCategoriesID', 'productCategories') || (orderData.productCategoriesID ? String(orderData.productCategoriesID) : ''),
+        productGroup: findName(options.productGroups || [], orderData.productGroupID, 'productGroupID', 'productGroup') || (orderData.productGroupID ? String(orderData.productGroupID) : ''),
         season: orderData.season || '',
         tolQuantity: orderData.toleranceindays || '',
         set: orderData.poQtyUnit || '',
@@ -103,33 +146,49 @@ const transformPODataToGridRow = (orderData) => {
         unit: orderData.grossAndNetWeight || '',
         packingList: orderData.packingList || '',
         embEmbellishment: orderData.embAndEmbellishment || '',
-        inquiryNo: orderData.inquiryMstID ? `INQ${orderData.inquiryMstID}` : '',
+        inquiryNo: findName(options.inquiryOptions || [], orderData.inquiryMstID, 'inquiryMstID', 'sampleNo') || (orderData.inquiryMstID ? String(orderData.inquiryMstID) : ''),
         buyerCustomer: orderData.buyerCustomer || '',
+        // Customer Dropdown mapping
+        customer: findName(options.customerOptions || [], orderData.customerID, 'customerID', 'customerName') || (orderData.customerName || ''),
+        supplier: findName(options.supplierOptions || [], orderData.supplierID, 'venderLibraryID', 'venderName') || (orderData.venderName || ''),
+
         // Product Specific Information
         currency: orderData.currency || '',
         exchangeRate: orderData.exchangeRate ?? '',
         style: orderData.styleNo || orderData.design || '',
         // Shipping and Payment Terms
-        paymentMode: orderData.paymentMode || '',
-        shipmentTerm: orderData.shipmentMode || '',
+        paymentMode: findNameSimple(options.paymentOptions || [], orderData.paymentMode) || orderData.paymentMode || '',
+        shipmentTerm: findNameSimple(options.shipmentOptions || [], orderData.deliveryType) || orderData.deliveryType || '',
         destination: orderData.destination || '',
-        shipmentMode: orderData.deliveryType || '',
+        shipmentMode: findNameSimple(options.deliveryOptions || [], orderData.shipmentMode) || orderData.shipmentMode || '',
     };
 };
 
 // Helper to convert grid row back to API payload
-const transformGridRowToAPIPayload = (row) => {
+const transformGridRowToAPIPayload = (row, options = {}) => {
     const toIsoOrNull = (dateStr) => {
         if (!dateStr) return null;
         const d = new Date(dateStr);
         return Number.isNaN(d.getTime()) ? null : d.toISOString();
     };
 
+    // Helper to find ID by Name
+    const findId = (list, name, nameField, idField) => {
+        if (!name) return 0;
+        const item = list.find(x => x[nameField] === name);
+        return item ? item[idField] : 0;
+    };
+    const findIdSimple = (list, name) => {
+        if (!name) return '';
+        const item = list.find(x => x.name === name);
+        return item ? item.id : name;
+    };
+
     // Start with original data to preserve unmapped fields
     const payload = row.originalData ? { ...row.originalData } : {};
 
-  // Shortcuts to original values so we don't accidentally wipe them out
-  const original = row.originalData || {};
+    // Shortcuts to original values so we don't accidentally wipe them out
+    const original = row.originalData || {};
 
     // Helper for safe parsing
     const safeParseInt = (val) => {
@@ -141,17 +200,29 @@ const transformGridRowToAPIPayload = (row) => {
         return isNaN(parsed) ? 0 : parsed;
     };
 
+    // Map Names back to IDs
+    const costingID = findId(options.costingOptions || [], row.costingRef, 'costingNo', 'costingMstID');
+    const merchantID = findId(options.merchantOptions || [], row.merchant, 'userName', 'userId');
+    const portfolioID = findId(options.productPortfolios || [], row.productPortfolio, 'productPortfolio', 'productPortfolioID');
+    const inquiryID = findId(options.inquiryOptions || [], row.inquiryNo, 'sampleNo', 'inquiryMstID');
+    const customerID = findId(options.customerOptions || [], row.customer, 'customerName', 'customerID');
+    const supplierID = findId(options.supplierOptions || [], row.supplier, 'venderName', 'venderLibraryID');
+
+    const paymentModeID = findIdSimple(options.paymentOptions || [], row.paymentMode);
+    const shipmentTermID = findIdSimple(options.shipmentOptions || [], row.shipmentTerm);
+    const shipmentModeID = findIdSimple(options.deliveryOptions || [], row.shipmentMode);
+
     // Overwrite with grid values
     Object.assign(payload, {
         // PO numbers:
         // - If user provided a non-empty value in grid → use it
         // - If cell is empty/untouched → keep original DB value
         pono: row.customerPo !== undefined && row.customerPo !== null && row.customerPo !== ''
-          ? row.customerPo
-          : (original.pono || payload.pono || ''),
+            ? row.customerPo
+            : (original.pono || payload.pono || ''),
         internalPONO: row.internalPo !== undefined && row.internalPo !== null && row.internalPo !== ''
-          ? row.internalPo
-          : (original.internalPONO || payload.internalPONO || ''),
+            ? row.internalPo
+            : (original.internalPONO || payload.internalPONO || ''),
         masterPO: row.masterPo || '',
         amsRefNo: row.amsRef || '',
         rnNo: row.rnNo || '',
@@ -214,18 +285,21 @@ const transformGridRowToAPIPayload = (row) => {
         style: row.style || '',
 
         // Shipping and Payment Terms
-        paymentMode: row.paymentMode || '',
-        shipmentMode: row.shipmentTerm || '',
+        paymentMode: paymentModeID || '',
+        shipmentMode: shipmentModeID || '',
+        deliveryType: shipmentTermID || '',
+        shipmentModeText: shipmentModeID || '',
         destination: row.destination || '',
-        deliveryType: row.shipmentMode || '',
 
         // IDs (parse as numbers if present)
-        productPortfolioID: row.productPortfolio ? safeParseInt(row.productPortfolio) : (payload.productPortfolioID || 0),
-        productCategoriesID: row.productCategory ? safeParseInt(row.productCategory) : (payload.productCategoriesID || 0),
-        productGroupID: row.productGroup ? safeParseInt(row.productGroup) : (payload.productGroupID || 0),
-        costingMstID: row.costingRef ? safeParseInt(row.costingRef) : (payload.costingMstID || 0),
-        marchandID: row.merchant ? safeParseInt(row.merchant) : (payload.marchandID || 0),
-        inquiryMstID: row.inquiryNo ? safeParseInt(row.inquiryNo.replace('INQ', '')) : (payload.inquiryMstID || 0),
+        productPortfolioID: portfolioID || (payload.productPortfolioID || 0),
+        productCategoriesID: payload.productCategoriesID || 0,
+        productGroupID: payload.productGroupID || 0,
+        costingMstID: costingID || (payload.costingMstID || 0),
+        marchandID: merchantID || (payload.marchandID || 0),
+        inquiryMstID: inquiryID || (payload.inquiryMstID || 0),
+        customerID: customerID || (payload.customerID || 0),
+        supplierID: supplierID || (payload.supplierID || 0),
 
         // Keep last update
         lastUpdate: new Date().toISOString(),
@@ -283,12 +357,83 @@ const EditOrderPage = () => {
     const gridRef = useRef(null);
 
     // Get selected PO IDs from navigation state
+    // Get selected PO IDs from navigation state
     const selectedPOIds = location.state?.selectedPOIds || [];
 
+    const [rawData, setRawData] = useState([]);
     const [tableData, setTableData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+    // Options States
+    const [costingOptions, setCostingOptions] = useState([]);
+    const [customerOptions, setCustomerOptions] = useState([]);
+    const [supplierOptions, setSupplierOptions] = useState([]);
+    const [merchantOptions, setMerchantOptions] = useState([]);
+    const [productPortfolios, setProductPortfolios] = useState([]);
+    const [productCategories, setProductCategories] = useState([]);
+    const [productGroups, setProductGroups] = useState([]);
+    const [inquiryOptions, setInquiryOptions] = useState([]);
+    const [paymentOptions, setPaymentOptions] = useState([]);
+    const [shipmentOptions, setShipmentOptions] = useState([]); // Delivery Types
+    const [deliveryOptions, setDeliveryOptions] = useState([]); // Shipment Modes
+    const [bankOptions, setBankOptions] = useState([]);
+
+    // Combined options object for helpers
+    const allOptions = useMemo(() => ({
+        costingOptions,
+        customerOptions,
+        supplierOptions,
+        merchantOptions,
+        productPortfolios,
+        productCategories,
+        productGroups,
+        inquiryOptions,
+        paymentOptions,
+        shipmentOptions,
+        deliveryOptions,
+        bankOptions
+    }), [costingOptions, customerOptions, supplierOptions, merchantOptions, productPortfolios, productCategories, productGroups, inquiryOptions, paymentOptions, shipmentOptions, deliveryOptions, bankOptions]);
+
+    // Fetch Options
+    useEffect(() => {
+        const fetchOptions = async () => {
+            const apis = [
+                { name: 'costingRefs', url: '/MyOrders/CostingRefNo', setter: setCostingOptions },
+                { name: 'customers', url: '/MyOrders/GetCustomer', setter: setCustomerOptions },
+                { name: 'suppliers', url: '/MyOrders/GetSupplier', setter: setSupplierOptions },
+                { name: 'merchants', url: '/MyOrders/GetMerchants', setter: setMerchantOptions },
+                { name: 'portfolios', url: '/MyOrders/GetProductPortfolio', setter: setProductPortfolios },
+                { name: 'inquiries', url: '/MyOrders/GetInquirySamples', setter: setInquiryOptions },
+                { name: 'paymentModes', url: '/MyOrders/GetPaymentModes', setter: (d) => setPaymentOptions(normalizePaymentModes(d)) },
+                { name: 'shipmentModes', url: '/MyOrders/GetDeliveryTypes', setter: (d) => setShipmentOptions(normalizeShipmentTerms(d)) }, // Term/DeliveryType
+                { name: 'deliveryTypes', url: '/MyOrders/GetShipmentModes', setter: (d) => setDeliveryOptions(normalizeShipmentModes(d)) }, // Mode
+                { name: 'banks', url: '/MyOrders/GetBanks', setter: setBankOptions },
+            ];
+
+            try {
+                const promises = apis.map(api => apiClient.get(api.url).catch(e => ({ error: e, api })));
+                const results = await Promise.all(promises);
+
+                results.forEach((res, index) => {
+                    const api = apis[index];
+                    if (res && res.data) {
+                        const data = Array.isArray(res.data) ? res.data : [res.data];
+                        api.setter(data);
+                    } else {
+                        console.warn(`Failed to fetch ${api.name}`, res?.error);
+                        api.setter([]);
+                    }
+                });
+
+            } catch (err) {
+                console.error('Error fetching dropdown options:', err);
+            }
+        };
+
+        fetchOptions();
+    }, []);
 
     // Dynamic height based on row count (header + rows + pagination)
     const containerStyle = useMemo(() => {
@@ -329,6 +474,8 @@ const EditOrderPage = () => {
 
                 const responses = await Promise.all(fetchPromises);
                 const allPOData = [];
+                const portfoliosToFetch = new Set();
+                const categoriesToFetch = new Set();
 
                 responses.forEach((response, index) => {
                     if (response.data && response.data.length > 0) {
@@ -340,13 +487,58 @@ const EditOrderPage = () => {
                             gridRow.poid = selectedPOIds[index];
                         }
 
+                        // Collect IDs for dependent fetches
+                        if (orderData.productPortfolioID) portfoliosToFetch.add(orderData.productPortfolioID);
+                        if (orderData.productCategoriesID) categoriesToFetch.add(orderData.productCategoriesID);
+
                         allPOData.push(gridRow);
                     } else {
                         console.warn(`No data found for PO ID: ${selectedPOIds[index]}`);
                     }
                 });
 
-                setTableData(allPOData);
+                // Fetch dependent dropdown options dynamically based on data
+                try {
+                    // 1. Fetch Categories for found Portfolios
+                    if (portfoliosToFetch.size > 0) {
+                        const categoryPromises = Array.from(portfoliosToFetch).map(pid =>
+                            apiClient.get(`/MyOrders/GetProductCategories/${pid}`).catch(e => ({ error: e, pid }))
+                        );
+                        const categoryResponses = await Promise.all(categoryPromises);
+                        const allCategories = [];
+                        categoryResponses.forEach(res => {
+                            if (res && res.data && Array.isArray(res.data)) {
+                                allCategories.push(...res.data);
+                            }
+                        });
+                        // Use functional update to avoid stale state if needed, though here we replace
+                        setProductCategories(prev => {
+                            // Merge with existing if any, or just set. For now setting all found is safer for this view.
+                            // But usually we want to merge unique. 
+                            const newCats = [...allCategories];
+                            return newCats;
+                        });
+                    }
+
+                    // 2. Fetch Groups for found Categories
+                    if (categoriesToFetch.size > 0) {
+                        const groupPromises = Array.from(categoriesToFetch).map(cid =>
+                            apiClient.get(`/MyOrders/GetProductGroups/${cid}`).catch(e => ({ error: e, cid }))
+                        );
+                        const groupResponses = await Promise.all(groupPromises);
+                        const allGroups = [];
+                        groupResponses.forEach(res => {
+                            if (res && res.data && Array.isArray(res.data)) {
+                                allGroups.push(...res.data);
+                            }
+                        });
+                        setProductGroups(allGroups);
+                    }
+                } catch (depError) {
+                    console.warn('Error fetching dependent options:', depError);
+                }
+
+                setRawData(allPOData);
                 showSnackbar(`Loaded ${allPOData.length} Purchase Order(s)`, 'success');
             } catch (error) {
                 console.error('Error fetching PO data:', error);
@@ -359,24 +551,72 @@ const EditOrderPage = () => {
         fetchSelectedPOsData();
     }, [selectedPOIds]);
 
+    // Update Table Data when Options or Raw Data changes
+    useEffect(() => {
+        if (rawData.length > 0) {
+            // Re-run transformation with available options
+            // Note: rawData currently holds the INITIAL transformed rows (with IDs) because we used transformPODataToGridRow in fetch
+            // But we preserved originalData in it. So we can re-transform.
+            const updatedTableData = rawData.map(row => {
+                // Ensure we pass the *original* data to the transformer, not the already transformed row
+                return transformPODataToGridRow(row.originalData || row, allOptions);
+            });
+            setTableData(updatedTableData);
+        }
+    }, [rawData, allOptions]);
+
 
     // Column definitions
-    const [columnDefs] = useState([
+    const columnDefs = useMemo(() => [
         // PO ID (hidden but needed for update)
         { headerName: "PO ID", field: "poid", hide: true, editable: false },
         // Basic Order Info
-        { headerName: "Customer PO No.", field: "customerPo", rowDrag: true },
-        { headerName: "Internal PO No.", field: "internalPo" },
-        { headerName: "Master PO No.", field: "masterPo" },
-        { headerName: "AMS Ref No.", field: "amsRef" },
+        {
+            headerName: "Costing Ref No.", field: "costingRef", editable: false
+        },
+        { headerName: "Master PO No.", field: "masterPo", editable: false },
+        { headerName: "Customer PO No.", field: "customerPo", rowDrag: true, editable: false },
+        { headerName: "Internal PO No.", field: "internalPo", editable: false },
+        { headerName: "AMS Ref No.", field: "amsRef", editable: false },
         { headerName: "RN No.", field: "rnNo" },
+        {
+            headerName: "Customer", field: "customer",
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: {
+                values: customerOptions.map(o => o.customerName)
+            }
+        },
+        {
+            headerName: "Supplier", field: "supplier",
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: {
+                values: supplierOptions.map(o => o.venderName)
+            }
+        },
         { headerName: "Consignee", field: "consignee" },
 
-
-        { headerName: "Merchant", field: "merchant" },
-        { headerName: "Proceedings", field: "proceedings" },
-        { headerName: "Order Type", field: "orderType" },
-        { headerName: "Version", field: "version" },
+        {
+            headerName: "Merchant", field: "merchant",
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: {
+                values: merchantOptions.map(o => o.userName)
+            }
+        },
+        {
+            headerName: "Proceedings", field: "proceedings",
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: { values: ['Supply Chain', 'Inspection Only'] }
+        },
+        {
+            headerName: "Order Type", field: "orderType",
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: { values: ['New', 'Repeat'] }
+        },
+        {
+            headerName: "Version", field: "version",
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: { values: ['Regular', 'Promotion', 'Advertising', 'On-line'] }
+        },
 
         // Important Dates
         { headerName: "Placement Date", field: "placementDate" },
@@ -390,9 +630,23 @@ const EditOrderPage = () => {
         { headerName: "Vendor Ship. Dt. (Last)", field: "vendorShipLast" },
         { headerName: "Final Inspection Date", field: "finalInspectionDate" },
         // Product Information
+        {
+            headerName: "Product Portfolio", field: "productPortfolio",
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: {
+                values: productPortfolios.map(o => o.productPortfolio)
+            }
+        },
+        { headerName: "Product Category", field: "productCategory" },
+        { headerName: "Product Group", field: "productGroup" },
+
         { headerName: "Season", field: "season" },
         { headerName: "Tol. Quantity", field: "tolQuantity" },
-        { headerName: "Set", field: "set" },
+        {
+            headerName: "Set", field: "set",
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: { values: ['Set', 'PCS', 'KG'] }
+        },
         { headerName: "Fabric", field: "fabric" },
         { headerName: "Item", field: "item" },
         { headerName: "Quality / Composition", field: "qualityComposition" },
@@ -401,11 +655,19 @@ const EditOrderPage = () => {
         { headerName: "Other Fabric", field: "otherFabric" },
         { headerName: "Construction", field: "construction" },
         { headerName: "PO Special Operation", field: "poSpecialOperation" },
-        { headerName: "Status", field: "status" },
+        {
+            headerName: "Status", field: "status",
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: { values: ['Confirm', 'Cancel', 'Close'] }
+        },
         { headerName: "PO Special Treatment", field: "poSpecialTreatment" },
         { headerName: "Style Source", field: "styleSource" },
         { headerName: "Brand", field: "brand" },
-        { headerName: "Assortment", field: "assortment" },
+        {
+            headerName: "Assortment", field: "assortment",
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: { values: ['Solid', 'Ratio'] }
+        },
         { headerName: "Ratio", field: "ratio" },
         { headerName: "Carton Marking", field: "cartonMarking" },
         { headerName: "PO Special Instructions", field: "poSpecialInstructions" },
@@ -417,21 +679,53 @@ const EditOrderPage = () => {
         { headerName: "Item Description (Shipping)", field: "itemDescriptionShipping" },
         { headerName: "Gross Weight", field: "grossWeight" },
         { headerName: "Net Weight", field: "netWeight" },
-        { headerName: "Unit", field: "unit" },
+        {
+            headerName: "Unit", field: "unit",
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: { values: ['KG', 'DZN', 'LBS'] }
+        },
         { headerName: "Packing List", field: "packingList" },
         { headerName: "Emb & Embellishment", field: "embEmbellishment" },
-        { headerName: "Inquiry No", field: "inquiryNo" },
+        {
+            headerName: "Inquiry No", field: "inquiryNo",
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: {
+                values: inquiryOptions.map(o => o.sampleNo)
+            }
+        },
         { headerName: "Buyer Customer", field: "buyerCustomer" },
         // Product Specific Information
-        { headerName: "Currency", field: "currency" },
+        {
+            headerName: "Currency", field: "currency",
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: { values: ['Dollar', 'PKR', 'Euro'] }
+        },
         { headerName: "Exchange Rate", field: "exchangeRate" },
         { headerName: "Style", field: "style" },
         // Shipping and Payment Terms
-        { headerName: "Payment Mode", field: "paymentMode" },
-        { headerName: "Shipment Term", field: "shipmentTerm" },
+        {
+            headerName: "Payment Mode", field: "paymentMode",
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: {
+                values: paymentOptions.map(o => o.name)
+            }
+        },
+        {
+            headerName: "Shipment Term", field: "shipmentTerm",
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: {
+                values: shipmentOptions.map(o => o.name)
+            }
+        },
         { headerName: "Destination", field: "destination" },
-        { headerName: "Shipment Mode", field: "shipmentMode" },
-    ]);
+        {
+            headerName: "Shipment Mode", field: "shipmentMode",
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: {
+                values: deliveryOptions.map(o => o.name)
+            }
+        },
+    ], [allOptions]);
 
     // Default column settings - all columns editable for drag-fill
     const defaultColDef = useMemo(() => ({
@@ -496,7 +790,7 @@ const EditOrderPage = () => {
                 }
 
                 try {
-                    const payload = transformGridRowToAPIPayload(row);
+                    const payload = transformGridRowToAPIPayload(row, allOptions);
                     const apiUrl = `/MyOrders/UpdatePurchaseOrder?poid=${row.poid}`;
                     console.log(`API URL: ${apiUrl}`);
                     console.log(`Payload for PO ${row.poid}:`, JSON.stringify(payload, null, 2));
@@ -547,50 +841,50 @@ const EditOrderPage = () => {
     return (
         <Container maxWidth="xl" sx={{ py: 3 }}>
             {/* Header */}
-                <Card sx={{ p: 3, mb: 3 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <ArrowBackIosIcon
-                                sx={{
-                                    cursor: 'pointer',
-                                    mr: 1,
-                                    fontSize: '1.2rem',
-                                    color: 'primary.main',
-                                    '&:hover': { color: 'primary.dark' },
-                                }}
-                                onClick={() => navigate('/dashboard/supply-chain')}
-                            />
-                            <Typography variant="h4">
-                                {`EDIT PURCHASE ORDERS (${tableData.length} Selected)`}
-                            </Typography>
-                        </Box>
-
-                        <Stack direction="row" spacing={2}>
-                            <LoadingButton
-                                variant="contained"
-                                color="primary"
-                                startIcon={<SaveIcon />}
-                                loading={saving}
-                                onClick={handleSaveAll}
-                                disabled={tableData.length === 0}
-                            >
-                                Save All Changes
-                            </LoadingButton>
-                            <Button
-                                variant="outlined"
-                                onClick={() => navigate('/dashboard/supply-chain')}
-                            >
-                                Cancel
-                            </Button>
-                        </Stack>
+            <Card sx={{ p: 3, mb: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <ArrowBackIosIcon
+                            sx={{
+                                cursor: 'pointer',
+                                mr: 1,
+                                fontSize: '1.2rem',
+                                color: 'primary.main',
+                                '&:hover': { color: 'primary.dark' },
+                            }}
+                            onClick={() => navigate('/dashboard/supply-chain')}
+                        />
+                        <Typography variant="h4">
+                            {`EDIT PURCHASE ORDERS (${tableData.length} Selected)`}
+                        </Typography>
                     </Box>
 
-                    {tableData.length === 0 && (
-                        <Alert severity="warning" sx={{ mt: 2 }}>
-                            No Purchase Orders selected. Please go back to the Purchase Order list and select POs to edit.
-                        </Alert>
-                    )}
-                </Card>
+                    <Stack direction="row" spacing={2}>
+                        <LoadingButton
+                            variant="contained"
+                            color="primary"
+                            startIcon={<SaveIcon />}
+                            loading={saving}
+                            onClick={handleSaveAll}
+                            disabled={tableData.length === 0}
+                        >
+                            Save All Changes
+                        </LoadingButton>
+                        <Button
+                            variant="outlined"
+                            onClick={() => navigate('/dashboard/supply-chain')}
+                        >
+                            Cancel
+                        </Button>
+                    </Stack>
+                </Box>
+
+                {tableData.length === 0 && (
+                    <Alert severity="warning" sx={{ mt: 2 }}>
+                        No Purchase Orders selected. Please go back to the Purchase Order list and select POs to edit.
+                    </Alert>
+                )}
+            </Card>
 
             {/* AG Grid */}
             {tableData.length > 0 && (
