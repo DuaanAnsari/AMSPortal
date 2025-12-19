@@ -81,16 +81,33 @@ const AddAdvancePage = lazy(() => import('src/sections/power-tool/view/Add-Advan
 const ICRFormPage = lazy(() => import('src/sections/power-tool/view/ICR-Form'));
 const QRViewPage = lazy(() => import('src/sections/power-tool/view/QR-View'));
 const CostSheetViewPage = lazy(() => import('src/sections/power-tool/view/Cost-Sheet-View'));
+const CostSheetEntryPage = lazy(() => import('src/sections/power-tool/view/cost-sheet-entry'));
 const CourierPackagingViewPage = lazy(
   () => import('src/sections/power-tool/view/Courier-packaging-view')
 );
+const CourierPackagingEntryPage = lazy(
+  () => import('src/sections/power-tool/view/courier-packaging-entry')
+);
 const ViewUsersPage = lazy(() => import('src/sections/power-tool/view/view-users'));
 const ConsigneeViewPage = lazy(() => import('src/sections/power-tool/view/Consignee-view'));
+const AddConsigneePage = lazy(() => import('src/sections/power-tool/view/Add-Consignee'));
 const ContainerHandlingViewPage = lazy(
   () => import('src/sections/power-tool/view/Container-handling-view')
 );
+const ContainerHandlingReportPage = lazy(
+  () => import('src/sections/power-tool/view/Container-handling-report')
+);
+const ContainerHandlingExpensesPage = lazy(
+  () => import('src/sections/power-tool/view/Container-handling-expenses')
+);
 const MeasurementPointsPage = lazy(
   () => import('src/sections/power-tool/view/Measurement-points')
+);
+const MixCartonEntryPage = lazy(
+  () => import('src/sections/power-tool/view/mix-carton-entry')
+);
+const AddUserPage = lazy(
+  () => import('src/sections/power-tool/view/add-user')
 );
 
 // BLOG
@@ -190,10 +207,17 @@ export const dashboardRoutes = [
           { path: 'qr-view', element: <QRViewPage /> },
           { path: 'view-users', element: <ViewUsersPage /> },
           { path: 'cost-sheet-view', element: <CostSheetViewPage /> },
+          { path: 'cost-sheet-entry', element: <CostSheetEntryPage /> },
           { path: 'courier-packaging-view', element: <CourierPackagingViewPage /> },
+          { path: 'courier-packaging-entry', element: <CourierPackagingEntryPage /> },
           { path: 'consignee', element: <ConsigneeViewPage /> },
+          { path: 'add-consignee', element: <AddConsigneePage /> },
           { path: 'container-handling', element: <ContainerHandlingViewPage /> },
+          { path: 'container-handling-report', element: <ContainerHandlingReportPage /> },
+          { path: 'container-handling-expenses', element: <ContainerHandlingExpensesPage /> },
           { path: 'measurement-points', element: <MeasurementPointsPage /> },
+          { path: 'mix-carton-entry', element: <MixCartonEntryPage /> },
+          { path: 'add-user', element: <AddUserPage /> },
         ],
       },
 
