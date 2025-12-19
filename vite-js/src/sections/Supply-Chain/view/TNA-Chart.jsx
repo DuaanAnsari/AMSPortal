@@ -7,6 +7,8 @@ import {
   Typography,
   TextField,
   MenuItem,
+  Button,
+  CircularProgress,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 
@@ -65,13 +67,6 @@ const STATIC_TNA_ROWS = [
     unit: '',
     status: '',
     remarks: '',
-    details: [
-      { step: 'Machine Allocation', owner: 'Factory', note: 'Assign drilling machines' },
-      { step: 'Tool Changeover', owner: 'Maintenance', note: 'Set correct drill bits' },
-      { step: 'Pilot Holes', owner: 'Factory', note: 'Drill pilot holes on all pieces' },
-      { step: 'Final Drilling', owner: 'Factory', note: 'Drill to final diameter' },
-      { step: 'Final QC Check', owner: 'QA', note: 'Sign-off for next process' },
-    ],
   },
   {
     id: 2,
@@ -84,13 +79,6 @@ const STATIC_TNA_ROWS = [
     unit: '',
     status: '',
     remarks: '',
-    details: [
-      { step: 'Pre-Cutting', owner: 'Factory', note: 'Rough cut to near size' },
-      { step: 'Trimming', owner: 'Factory', note: 'Trim edges for equal shape' },
-      { step: 'Edge Rounding', owner: 'Factory', note: 'Smooth all sharp corners' },
-      { step: 'Template Check', owner: 'QA', note: 'Match with approved template' },
-      { step: 'Final Measurement', owner: 'QA', note: 'Confirm final dimensions' },
-    ],
   },
   {
     id: 3,
@@ -103,13 +91,6 @@ const STATIC_TNA_ROWS = [
     unit: '',
     status: '',
     remarks: '',
-    details: [
-      { step: 'Pre-Wash', owner: 'Factory', note: 'Remove dust before main wash' },
-      { step: 'Detergent Prep', owner: 'Factory', note: 'Prepare chemical mix' },
-      { step: 'Main Wash', owner: 'Factory', note: 'Run programmed wash cycle' },
-      { step: 'Rinse', owner: 'Factory', note: 'Rinse to remove chemicals' },
-      { step: 'Shade Approval', owner: 'QA', note: 'Confirm shade and appearance' },
-    ],
   },
   {
     id: 4,
@@ -122,13 +103,6 @@ const STATIC_TNA_ROWS = [
     unit: '',
     status: '',
     remarks: '',
-    details: [
-      { step: 'Fixture Setup', owner: 'Factory', note: 'Set jig for both ends' },
-      { step: 'Left End Drilling', owner: 'Factory', note: 'Drill left side holes' },
-      { step: 'Right End Drilling', owner: 'Factory', note: 'Drill right side holes' },
-      { step: 'Hole Alignment Check', owner: 'QA', note: 'Check alignment across ends' },
-      { step: 'QC Sign-off', owner: 'QA', note: 'Approve for next operation' },
-    ],
   },
   {
     id: 5,
@@ -141,13 +115,6 @@ const STATIC_TNA_ROWS = [
     unit: '',
     status: '',
     remarks: '',
-    details: [
-      { step: 'Warp Planning', owner: 'Planning', note: 'Issue warp plan to production' },
-      { step: 'Warp Preparation', owner: 'Factory', note: 'Prepare warp threads' },
-      { step: 'Beam Loading', owner: 'Factory', note: 'Load warp beams on machine' },
-      { step: 'Tension Setting', owner: 'Factory', note: 'Set correct tension' },
-      { step: 'Quality Check', owner: 'QA', note: 'Inspect trial sample' },
-    ],
   },
   {
     id: 6,
@@ -160,13 +127,6 @@ const STATIC_TNA_ROWS = [
     unit: '',
     status: '',
     remarks: '',
-    details: [
-      { step: 'Material Check', owner: 'QA', note: 'Verify base material quality' },
-      { step: 'Base Cutting', owner: 'Factory', note: 'Cut base to size' },
-      { step: 'Edge Finishing', owner: 'Factory', note: 'Smooth base edges' },
-      { step: 'Pre-Assembly', owner: 'Factory', note: 'Dry fit base with structure' },
-      { step: 'Final Inspection', owner: 'QA', note: 'Approve base assembly' },
-    ],
   },
   {
     id: 7,
@@ -179,13 +139,6 @@ const STATIC_TNA_ROWS = [
     unit: '',
     status: '',
     remarks: '',
-    details: [
-      { step: 'Wrap Material Check', owner: 'QA', note: 'Verify wrap thickness' },
-      { step: 'Wrap Preparation', owner: 'Factory', note: 'Prepare bubble wrap' },
-      { step: 'Primary Wrapping', owner: 'Factory', note: 'Wrap corners and edges' },
-      { step: 'Secondary Wrapping', owner: 'Factory', note: 'Cover full product' },
-      { step: 'Dispatch Ready', owner: 'Store', note: 'Move to dispatch area' },
-    ],
   },
   {
     id: 8,
@@ -198,13 +151,6 @@ const STATIC_TNA_ROWS = [
     unit: '',
     status: '',
     remarks: '',
-    details: [
-      { step: 'Components Check', owner: 'Factory', note: 'Verify all components available' },
-      { step: 'Soldering', owner: 'Factory', note: 'Solder joints where required' },
-      { step: 'Harness Fixing', owner: 'Factory', note: 'Fix wiring harness' },
-      { step: 'Functional Test', owner: 'QA', note: 'Power on and test functions' },
-      { step: 'Packing Approval', owner: 'QA', note: 'Approve for packing' },
-    ],
   },
 ];
 
@@ -212,105 +158,14 @@ const STATIC_TNA_ROWS = [
 // Detail renderer: transpose rows ↔ columns
 // ----------------------------------------------------------------------
 
-function TnaDetailTransposeRenderer(props) {
-  const theme = useTheme();
-  const details = props.data?.details || [];
-
-  if (!details.length) {
-    return (
-      <Box sx={{ p: 2, fontSize: 12, color: 'text.secondary' }}>
-        No detail data available.
-      </Box>
-    );
-  }
-
-  const rows = [
-    {
-      label: 'Step',
-      values: details.map((d) => d.step || ''),
-    },
-    {
-      label: 'Owner',
-      values: details.map((d) => d.owner || ''),
-    },
-    {
-      label: 'Planned Date',
-      values: details.map(() => 'Dec 10, 2025'),
-    },
-    {
-      label: 'Actual Date',
-      values: details.map(() => 'Dec 12, 2025'),
-    },
-    {
-      label: 'Qty %',
-      values: details.map(() => '75%'),
-    },
-    {
-      label: 'Status',
-      values: details.map(() => 'In Progress'),
-    },
-    {
-      label: 'Note',
-      values: details.map((d) => d.note || ''),
-    },
-  ];
-
-  return (
-    <Box sx={{ p: 1, overflowX: 'auto' }}>
-      <Box
-        component="table"
-        sx={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          '& th, & td': {
-            border: `1px solid ${theme.palette.divider}`,
-            padding: '4px 8px',
-            fontSize: 12,
-            whiteSpace: 'nowrap',
-          },
-          '& thead th': {
-            backgroundColor:
-              theme.palette.mode === 'light'
-                ? theme.palette.grey[100]
-                : theme.palette.grey[900],
-            fontWeight: 600,
-          },
-          '& tbody th': {
-            backgroundColor:
-              theme.palette.mode === 'light'
-                ? theme.palette.grey[50]
-                : theme.palette.grey[800],
-            fontWeight: 600,
-            textAlign: 'left',
-          },
-        }}
-      >
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.label}>
-              <th>{row.label}</th>
-              {row.values.map((val, idx) => (
-                <td key={idx}>{val}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </Box>
-    </Box>
-  );
-}
 
 // ----------------------------------------------------------------------
 
 export default function TNAChartPage() {
-  const [tableData, setTableData] = useState(STATIC_TNA_ROWS);
+  const [tableData, setTableData] = useState([]);
   const [productPortfolios, setProductPortfolios] = useState([]);
   const [selectedPortfolio, setSelectedPortfolio] = useState('');
-  const [productCategories, setProductCategories] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [productGroups, setProductGroups] = useState([]);
-  const [selectedGroup, setSelectedGroup] = useState('');
-  const [quickFilterText, setQuickFilterText] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const containerStyle = useMemo(
     () => ({
@@ -320,24 +175,8 @@ export default function TNAChartPage() {
     []
   );
 
-  const columnDefs = useMemo(
-    () => [
-      {
-        headerName: 'Process Route',
-        field: 'processRoute',
-        cellRenderer: 'agGroupCellRenderer',
-      },
-      { headerName: 'Target Date', field: 'targetDate' },
-      { headerName: 'Factory Commitment Date', field: 'factoryCommitmentDate' },
-      { headerName: 'Submission Date', field: 'submissionDate' },
-      { headerName: 'Approval Date', field: 'approvalDate' },
-      { headerName: 'Quantity Completed', field: 'quantityCompleted' },
-      { headerName: 'Unit', field: 'unit' },
-      { headerName: 'Status', field: 'status' },
-      { headerName: 'Remarks', field: 'remarks' },
-    ],
-    []
-  );
+  const [columnDefs, setColumnDefs] = useState([]);
+
 
   // Fetch product portfolios for filter
   useEffect(() => {
@@ -356,66 +195,77 @@ export default function TNAChartPage() {
   }, []);
 
   const handlePortfolioChange = (event) => {
-    const value = event.target.value;
-    setSelectedPortfolio(value);
-    // Reset dependent dropdowns when portfolio changes
-    setSelectedCategory('');
-    setProductCategories([]);
-    setSelectedGroup('');
-    setProductGroups([]);
+    setSelectedPortfolio(event.target.value);
+  };
 
-    if (!value) {
-      setTableData(STATIC_TNA_ROWS);
+  const handleSearch = async () => {
+    if (!selectedPortfolio) {
+      setTableData([]);
+      setColumnDefs([]);
     } else {
-      setTableData(
-        STATIC_TNA_ROWS.filter((row) => String(row.productPortfolio) === String(value))
-      );
+      setLoading(true);
+      try {
+        const [processRes, poRes] = await Promise.all([
+          apiClient.get(`/Milestone/GetprocessByPortfolio?productPortfolioId=${selectedPortfolio}`).catch(err => { console.error("Process API Error", err); return { data: [] }; }),
+          apiClient.get(`/Milestone/GetTNAandPO?PortfolioID=${selectedPortfolio}`).catch(err => { console.error("TNA API Error", err); return { data: [] }; }),
+        ]);
+
+        const processList = (processRes.data || []).filter(p => !!p);
+        const poData = poRes.data || [];
+
+        // 1. Construct Columns
+        const newColDefs = [
+          { headerName: 'PO No', field: 'poNo', pinned: 'left', minWidth: 100 },
+          ...processList.map((proc) => ({
+            headerName: proc,
+            children: [
+              { headerName: 'Ideal Date', field: `${proc}_idealDate`, minWidth: 85 },
+              { headerName: 'Actual Date', field: `${proc}_actualDate`, minWidth: 85 },
+              { headerName: 'Approval Date', field: `${proc}_approvalDatee`, minWidth: 100 },
+              { headerName: 'Est. Date', field: `${proc}_estimatedDate`, minWidth: 85 },
+              { headerName: 'Date Span', field: `${proc}_dateSpan`, minWidth: 70 },
+            ],
+          })),
+          { headerName: 'Status', field: 'status', minWidth: 90 },
+          { headerName: 'Qty Completed', field: 'qtyCompleted', minWidth: 100 },
+          { headerName: 'Freeze Cond PP Sample', field: 'freezeCondPPSample', minWidth: 140 },
+        ];
+        setColumnDefs(newColDefs);
+
+        // 2. Pivot Data
+        const rowMap = new Map();
+
+        poData.forEach((item) => {
+          if (!item.poid) return;
+
+          if (!rowMap.has(item.poid)) {
+            rowMap.set(item.poid, {
+              poid: item.poid,
+              poNo: item.poNo,
+              status: item.status,
+              qtyCompleted: item.qtyCompleted,
+              freezeCondPPSample: item.freezeCondPPSample,
+            });
+          }
+          const row = rowMap.get(item.poid);
+          if (item.process) {
+            row[`${item.process}_idealDate`] = item.idealDate;
+            row[`${item.process}_actualDate`] = item.actualDate;
+            row[`${item.process}_approvalDatee`] = item.approvalDatee;
+            row[`${item.process}_estimatedDate`] = item.estimatedDate;
+            row[`${item.process}_dateSpan`] = item.dateSpan;
+          }
+        });
+
+        setTableData(Array.from(rowMap.values()));
+      } catch (error) {
+        console.error('Error fetching TNA data:', error);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
-  // Load product categories when portfolio changes
-  useEffect(() => {
-    const loadCategories = async () => {
-      if (!selectedPortfolio) {
-        setProductCategories([]);
-        return;
-      }
-
-      try {
-        const response = await apiClient.get(
-          `/MyOrders/GetProductCategories/${selectedPortfolio}`
-        );
-        setProductCategories(response.data || []);
-      } catch (error) {
-        console.error('Error fetching product categories for TNA Chart:', error);
-        setProductCategories([]);
-      }
-    };
-
-    loadCategories();
-  }, [selectedPortfolio]);
-
-  // Load product groups when category changes
-  useEffect(() => {
-    const loadGroups = async () => {
-      if (!selectedCategory) {
-        setProductGroups([]);
-        return;
-      }
-
-      try {
-        const response = await apiClient.get(
-          `/MyOrders/GetProductGroups/${selectedCategory}`
-        );
-        setProductGroups(response.data || []);
-      } catch (error) {
-        console.error('Error fetching product groups for TNA Chart:', error);
-        setProductGroups([]);
-      }
-    };
-
-    loadGroups();
-  }, [selectedCategory]);
 
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
@@ -460,84 +310,17 @@ export default function TNAChartPage() {
             </TextField>
           </Box>
 
-          {/* Product Category → All Customer */}
-          <Box sx={{ minWidth: 260 }}>
-            <TextField
-              select
-              fullWidth
-              size="small"
-              label="All Customer"
-              value={selectedCategory}
-              onChange={(e) => {
-                setSelectedCategory(e.target.value);
-                setSelectedGroup('');
-                setProductGroups([]);
-              }}
-              disabled={!selectedPortfolio}
-              SelectProps={{
-                MenuProps: {
-                  PaperProps: {
-                    sx: { maxHeight: 300 },
-                  },
-                },
-              }}
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Button
+              variant="contained"
+              onClick={handleSearch}
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
             >
-              <MenuItem value="">
-                All Customers
-              </MenuItem>
-              {productCategories.map((c) => (
-                <MenuItem key={c.productCategoriesID} value={c.productCategoriesID}>
-                  {c.productCategories}
-                </MenuItem>
-              ))}
-            </TextField>
+              {loading ? 'Searching...' : 'Search'}
+            </Button>
           </Box>
 
-          {/* Product Group → All Vendor */}
-          <Box sx={{ minWidth: 260 }}>
-            <TextField
-              select
-              fullWidth
-              size="small"
-              label="All Vendor"
-              value={selectedGroup}
-              onChange={(e) => setSelectedGroup(e.target.value)}
-              disabled={!selectedCategory}
-              SelectProps={{
-                MenuProps: {
-                  PaperProps: {
-                    sx: { maxHeight: 300 },
-                  },
-                },
-              }}
-            >
-              <MenuItem value="">
-                All Vendor
-              </MenuItem>
-              {productGroups.map((g) => (
-                <MenuItem key={g.productGroupID} value={g.productGroupID}>
-                  {g.productGroup}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Box>
-
-          {/* Global search - full width, 2nd row */}
-          <Box sx={{ minWidth: 260, flexBasis: '100%', maxWidth: 480 }}>
-            <Typography
-              variant="caption"
-              sx={{ color: 'text.secondary', mb: 0.5, display: 'block' }}
-            >
-              Search (all columns)
-            </Typography>
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="Search..."
-              value={quickFilterText}
-              onChange={(e) => setQuickFilterText(e.target.value)}
-            />
-          </Box>
         </Box>
       </Card>
 
@@ -546,11 +329,35 @@ export default function TNAChartPage() {
         <Box
           style={containerStyle}
           sx={(theme) => ({
+            '& .ag-header-cell, & .ag-header-group-cell': {
+              paddingLeft: '4px !important',
+              paddingRight: '4px !important',
+            },
+            '& .ag-header-cell-label, & .ag-header-group-cell-label': {
+              justifyContent: 'center',
+            },
+            '& .ag-header-group-cell': {
+              borderBottom: `1px solid ${theme.palette.divider} !important`,
+            },
+            '& .ag-cell': {
+              paddingLeft: '4px !important',
+              paddingRight: '4px !important',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '12px',
+            },
+            '& .ag-header-cell-text': {
+              fontSize: '12px',
+              textAlign: 'center',
+              lineHeight: '1.2',
+              whiteSpace: 'normal',
+            },
             '& .ag-root-wrapper, & .ag-root, & .ag-body-viewport, & .ag-header, & .ag-header-viewport, & .ag-center-cols-viewport':
-              {
-                backgroundColor: theme.palette.background.paper,
-                color: theme.palette.text.primary,
-              },
+            {
+              backgroundColor: theme.palette.background.paper,
+              color: theme.palette.text.primary,
+            },
             '& .ag-row, & .ag-cell': {
               backgroundColor: 'inherit',
               color: 'inherit',
@@ -561,31 +368,30 @@ export default function TNAChartPage() {
               borderTop: `1px solid ${theme.palette.divider}`,
             },
             '& .ag-paging-panel .ag-input-field-input, & .ag-paging-panel .ag-picker-field-wrapper':
-              {
-                backgroundColor: theme.palette.background.paper,
-                color: theme.palette.text.primary,
-                borderColor: theme.palette.divider,
-              },
+            {
+              backgroundColor: theme.palette.background.paper,
+              color: theme.palette.text.primary,
+              borderColor: theme.palette.divider,
+            },
           })}
         >
           <div style={{ width: '100%', height: '100%' }}>
             <AgGridReact
               rowData={tableData}
               columnDefs={columnDefs}
+              headerHeight={40}
+              groupHeaderHeight={40}
               defaultColDef={{
                 sortable: true,
                 filter: true,
                 resizable: true,
+                suppressHeaderMenuButton: true,
               }}
               rowDragManaged={false}
               animateRows
-              masterDetail
-              isRowMaster={(data) => !!(data && data.details && data.details.length)}
-              detailCellRenderer={TnaDetailTransposeRenderer}
               pagination
               paginationPageSize={10}
               paginationPageSizeSelector={[10, 20, 30]}
-              quickFilterText={quickFilterText}
             />
           </div>
         </Box>
