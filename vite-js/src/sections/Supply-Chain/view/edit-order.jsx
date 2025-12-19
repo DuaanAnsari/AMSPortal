@@ -12,8 +12,7 @@ LicenseManager.setLicenseKey("Using_this_{AG_Charts_and_AG_Grid}_Enterprise_key_
 ModuleRegistry.registerModules([AllCommunityModule, AllEnterpriseModule]);
 
 import { useNavigate, useLocation } from "react-router-dom";
-import { Alert, Box, Button, Card, CircularProgress, Container, Snackbar, Stack, Typography, TextField, MenuItem } from "@mui/material";
-import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
+import { Alert, Box, Button, Card, CircularProgress, Container, Snackbar, Stack, Typography } from "@mui/material";
 import { LoadingButton } from "@mui/lab";
 import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
 import SaveIcon from '@mui/icons-material/Save';
@@ -277,72 +276,6 @@ const transformGridRowToAPIPayload = (row) => {
     return payload;
 };
 
-// ----------------------------------------------------------------------
-// Static demo data for TNA Chart (no API)
-// ----------------------------------------------------------------------
-
-const STATIC_TNA_ROWS = [
-    {
-        poid: 1,
-        customerPo: 'PO-001',
-        internalPo: 'INT-001',
-        masterPo: 'M-001',
-        amsRef: 'AMS-001',
-        rnNo: 'RN-001',
-        consignee: 'Customer A',
-        merchant: 'Merchandiser 1',
-        proceedings: 'Supply Chain',
-        orderType: 'New',
-        version: 'Regular',
-        placementDate: '2025-01-01',
-        etaNewJerseyDate: '2025-02-15',
-        etaWarehouseDate: '2025-02-20',
-        buyerShipInitial: '2025-02-01',
-        buyerShipLast: '2025-02-10',
-        vendorShipInitial: '2025-01-20',
-        vendorShipLast: '2025-01-25',
-        finalInspectionDate: '2025-01-30',
-        productPortfolio: '3',
-        productCategory: '1',
-        productGroup: '4',
-        season: 'Spring',
-        style: 'STYLE-001',
-        currency: 'Dollar',
-        destination: 'NEW YORK',
-        status: 'Confirmed',
-        productPortfolio: '3',
-    },
-    {
-        poid: 2,
-        customerPo: 'PO-002',
-        internalPo: 'INT-002',
-        masterPo: 'M-002',
-        amsRef: 'AMS-002',
-        rnNo: 'RN-002',
-        consignee: 'Customer B',
-        merchant: 'Merchandiser 2',
-        proceedings: 'Supply Chain',
-        orderType: 'Repeat',
-        version: 'Revised',
-        placementDate: '2025-03-05',
-        etaNewJerseyDate: '2025-04-10',
-        etaWarehouseDate: '2025-04-15',
-        buyerShipInitial: '2025-04-01',
-        buyerShipLast: '2025-04-05',
-        vendorShipInitial: '2025-03-20',
-        vendorShipLast: '2025-03-25',
-        finalInspectionDate: '2025-03-28',
-        productPortfolio: '3',
-        productCategory: '2',
-        productGroup: '5',
-        season: 'Fall',
-        style: 'STYLE-002',
-        currency: 'Dollar',
-        destination: 'NEW JERSEY',
-        status: 'In Progress',
-        productPortfolio: '3',
-    },
-];
 
 const EditOrderPage = () => {
     const navigate = useNavigate();
@@ -379,21 +312,8 @@ const EditOrderPage = () => {
         setSnackbar({ ...snackbar, open: false });
     };
 
-    const isTNAChart = location.pathname.includes('tna-chart');
-    const [productPortfolios, setProductPortfolios] = useState([]);
-    const [selectedPortfolio, setSelectedPortfolio] = useState('');
-
-    // For TNA Chart, use static demo data (no API)
+    // Fetch PO data for selected IDs (Edit Order)
     useEffect(() => {
-        if (!isTNAChart) return;
-        setTableData(STATIC_TNA_ROWS);
-        setLoading(false);
-    }, [isTNAChart]);
-
-    // Fetch PO data for selected IDs (Edit Order only)
-    useEffect(() => {
-        if (isTNAChart) return;
-
         const fetchSelectedPOsData = async () => {
             if (selectedPOIds.length === 0) {
                 setLoading(false);
@@ -437,26 +357,8 @@ const EditOrderPage = () => {
         };
 
         fetchSelectedPOsData();
-    }, [selectedPOIds, isTNAChart]);
+    }, [selectedPOIds]);
 
-    // Fetch product portfolios for TNA Chart filter
-    useEffect(() => {
-        if (!isTNAChart) return;
-
-        const fetchProductPortfolios = async () => {
-            try {
-                const response = await apiClient.get('/MyOrders/GetProductPortfolio');
-                if (response.data) {
-                    setProductPortfolios(response.data);
-                }
-            } catch (error) {
-                console.error('Error fetching product portfolios for TNA Chart:', error);
-                showSnackbar('Error loading product portfolios', 'error');
-            }
-        };
-
-        fetchProductPortfolios();
-    }, [isTNAChart]);
 
     // Column definitions
     const [columnDefs] = useState([
@@ -628,8 +530,8 @@ const EditOrderPage = () => {
         }
     };
 
-    // Loading state (skip spinner for static TNA chart)
-    if (loading && !isTNAChart) {
+    // Loading state
+    if (loading) {
         return (
             <Container maxWidth="xl" sx={{ py: 3 }}>
                 <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -645,19 +547,6 @@ const EditOrderPage = () => {
     return (
         <Container maxWidth="xl" sx={{ py: 3 }}>
             {/* Header */}
-            {isTNAChart && (
-                <CustomBreadcrumbs
-                    heading="TNA Chart"
-                    links={[
-                        { name: 'Dashboard', href: '/dashboard' },
-                        { name: 'Purchase Orders', href: paths.dashboard.supplyChain.root },
-                        { name: 'TNA Chart' },
-                    ]}
-                    sx={{ mb: { xs: 2, md: 3 } }}
-                />
-            )}
-
-            {!isTNAChart && (
                 <Card sx={{ p: 3, mb: 3 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -702,79 +591,11 @@ const EditOrderPage = () => {
                         </Alert>
                     )}
                 </Card>
-            )}
-
-            {/* TNA Chart filters */}
-            {isTNAChart && (
-                <Card sx={{ p: 2, mb: 2 }}>
-                    <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                        <Box sx={{ minWidth: 260 }}>
-                            <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, display: 'block' }}>
-                                Product Portfolio
-                            </Typography>
-                            <TextField
-                                select
-                                fullWidth
-                                size="small"
-                                value={selectedPortfolio}
-                                onChange={(e) => {
-                                    const value = e.target.value;
-                                    setSelectedPortfolio(value);
-                                    if (!value) {
-                                        setTableData(STATIC_TNA_ROWS);
-                                    } else {
-                                        setTableData(
-                                            STATIC_TNA_ROWS.filter(
-                                                (row) => String(row.productPortfolio) === String(value)
-                                            )
-                                        );
-                                    }
-                                }}
-                                placeholder="Product Portfolio"
-                            >
-                                <MenuItem value="">
-                                    <em>Product Portfolio</em>
-                                </MenuItem>
-                                {productPortfolios.map((p) => (
-                                    <MenuItem key={p.productPortfolioID} value={p.productPortfolioID}>
-                                        {p.productPortfolio}
-                                    </MenuItem>
-                                ))}
-                            </TextField>
-                        </Box>
-                    </Box>
-                </Card>
-            )}
 
             {/* AG Grid */}
             {tableData.length > 0 && (
                 <Card sx={{ p: 2 }}>
-                    <Box
-                        style={containerStyle}
-                        sx={(theme) => ({
-                            '& .ag-root-wrapper, & .ag-root, & .ag-body-viewport, & .ag-header, & .ag-header-viewport, & .ag-center-cols-viewport':
-                                {
-                                    backgroundColor: theme.palette.background.paper,
-                                    color: theme.palette.text.primary,
-                                },
-                            '& .ag-row, & .ag-cell': {
-                                backgroundColor: 'inherit',
-                                color: 'inherit',
-                            },
-                            // Pagination "Page Size" area
-                            '& .ag-paging-panel': {
-                                backgroundColor: theme.palette.background.paper,
-                                color: theme.palette.text.primary,
-                                borderTop: `1px solid ${theme.palette.divider}`,
-                            },
-                            '& .ag-paging-panel .ag-input-field-input, & .ag-paging-panel .ag-picker-field-wrapper':
-                                {
-                                    backgroundColor: theme.palette.background.paper,
-                                    color: theme.palette.text.primary,
-                                    borderColor: theme.palette.divider,
-                                },
-                        })}
-                    >
+                    <div style={containerStyle}>
                         <div style={{ width: '100%', height: '100%' }}>
                             <AgGridReact
                                 ref={gridRef}
@@ -796,7 +617,7 @@ const EditOrderPage = () => {
                                 paginationPageSizeSelector={[10, 20, 30,]}
                             />
                         </div>
-                    </Box>
+                    </div>
                 </Card>
             )}
 

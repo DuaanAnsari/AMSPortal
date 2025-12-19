@@ -8,7 +8,7 @@ import { LoadingScreen } from 'src/components/loading-screen';
 import Milestone from 'src/sections/Supply-Chain/view/Milestone';
 import { View } from '@react-pdf/renderer';
 import CompletePurchaseOrderForm from 'src/sections/Supply-Chain/view/Add-Order';
-import CompletePurchaseOrderFormEdit from 'src/sections/Supply-Chain/view/Purchase-order-edit';
+import CompletePurchaseOrderFormEdit from 'src/sections/Supply-Chain/view/purchase-order-edit';
 
 // ----------------------------------------------------------------------
 
@@ -42,8 +42,7 @@ const UserEditPage = lazy(() => import('src/sections/Supply-Chain/view/user-edit
 const AddOrderPage = lazy(() => import('src/sections/Supply-Chain/view/Add-Order'));
 const MilestonePage = lazy(() => import('src/sections/Supply-Chain/view/Milestone'));
 const view = lazy(() => import('src/sections/Supply-Chain/view/'));
-
-
+const TNAChartPage = lazy(() => import('src/sections/Supply-Chain/view/TNA-Chart'));
 const CancellationsPage = lazy(() => import('src/sections/Supply-Chain/view/Cancellations'));
 const OrderTrackingPage = lazy(() => import('src/sections/Supply-Chain/view/Orders-tracking'));
 const MerchantInquiryPage = lazy(() => import('src/sections/Supply-Chain/view/Merchant-inquiry'));
@@ -56,8 +55,6 @@ const AddInquiryPage = lazy(() => import('src/sections/Supply-Chain/view/Add-inq
 const AddOrderDetailPage = lazy(() => import('src/sections/Supply-Chain/view/Add-order-detail'));
 const PurchaseOrderPDF = lazy(() => import('src/sections/Supply-Chain/PurchaseOrderPDF'));
 const PurchaseOrderSSPDF = lazy(() => import('src/sections/Supply-Chain/PurchaseOrderSSPDF'));
-const SizeSpecsPage = lazy(() => import('src/sections/Supply-Chain/view/Size-Specs'));
-const PORevisedShipmentPage = lazy(() => import('src/sections/Supply-Chain/view/PORevisedShipment'));
 const EditOrder = lazy(() =>
   import('src/sections/Supply-Chain/view/edit-order')
 );
@@ -82,24 +79,15 @@ const AddSizePage = lazy(() => import('src/sections/power-tool/view/Add-Size'));
 const AdvancePaymentPage = lazy(() => import('src/sections/power-tool/view/Advance-payment'));
 const AddAdvancePage = lazy(() => import('src/sections/power-tool/view/Add-Advance'));
 const ICRFormPage = lazy(() => import('src/sections/power-tool/view/ICR-Form'));
-const QRViewPage = lazy(() => import('src/sections/power-tool/view/qr-view'));
-const MixCartonEntryPage = lazy(() => import('src/sections/power-tool/view/mix-carton-entry'));
+const QRViewPage = lazy(() => import('src/sections/power-tool/view/QR-View'));
+const CostSheetViewPage = lazy(() => import('src/sections/power-tool/view/Cost-Sheet-View'));
+const CourierPackagingViewPage = lazy(
+  () => import('src/sections/power-tool/view/Courier-packaging-view')
+);
 const ViewUsersPage = lazy(() => import('src/sections/power-tool/view/view-users'));
-const AddUserPage = lazy(() => import('src/sections/power-tool/view/add-user'));
-const CostSheetViewPage = lazy(() => import('src/sections/power-tool/view/cost-sheet-view'));
-const CostSheetEntryPage = lazy(() => import('src/sections/power-tool/view/cost-sheet-entry'));
-const CourierPackagingEntryPage = lazy(() => import('src/sections/power-tool/view/courier-packaging-entry'));
-const CourierPackagingViewPage = lazy(() => import('src/sections/power-tool/view/courier-packaging-view'));
 const ConsigneeViewPage = lazy(() => import('src/sections/power-tool/view/Consignee-view'));
-const AddConsigneePage = lazy(() => import('src/sections/power-tool/view/Add-Consignee'));
 const ContainerHandlingViewPage = lazy(
   () => import('src/sections/power-tool/view/Container-handling-view')
-);
-const ContainerHandlingReportPage = lazy(
-  () => import('src/sections/power-tool/view/Container-handling-report')
-);
-const ContainerHandlingExpensesPage = lazy(
-  () => import('src/sections/power-tool/view/Container-handling-expenses')
 );
 const MeasurementPointsPage = lazy(
   () => import('src/sections/power-tool/view/Measurement-points')
@@ -173,14 +161,12 @@ export const dashboardRoutes = [
           { path: 'add-inquiry', element: <AddInquiryPage /> },
           { path: 'add-order-detail', element: <AddOrderDetailPage /> },
           { path: 'milestone/:id', element: <Milestone /> },
+          { path: 'tna-chart', element: <TNAChartPage /> },
           { path: 'view/:id', element: <CompletePurchaseOrderFormEdit /> },
           { path: 'purchase-order-pdf/:id', element: <PurchaseOrderPDF /> },
           { path: 'purchase-order-sspdf/:id', element: <PurchaseOrderSSPDF /> },
-          { path: 'size-specs/:id', element: <SizeSpecsPage /> },
-          { path: 'po-revised-shipment/:id', element: <PORevisedShipmentPage /> },
           { path: 'edit-order', element: <EditOrder /> },
           { path: 'purchase-order-edit/:id', element: <CompletePurchaseOrderFormEdit /> },
-          { path: 'tna-chart', element: <EditOrder /> },
         ],
       },
 
@@ -202,18 +188,11 @@ export const dashboardRoutes = [
           { path: 'add-advance', element: <AddAdvancePage /> },
           { path: 'icr-form', element: <ICRFormPage /> },
           { path: 'qr-view', element: <QRViewPage /> },
-          { path: 'mix-carton-entry', element: <MixCartonEntryPage /> },
           { path: 'view-users', element: <ViewUsersPage /> },
-          { path: 'add-user', element: <AddUserPage /> },
           { path: 'cost-sheet-view', element: <CostSheetViewPage /> },
-          { path: 'cost-sheet-entry', element: <CostSheetEntryPage /> },
-          { path: 'courier-packaging-entry', element: <CourierPackagingEntryPage /> },
           { path: 'courier-packaging-view', element: <CourierPackagingViewPage /> },
           { path: 'consignee', element: <ConsigneeViewPage /> },
-          { path: 'add-consignee', element: <AddConsigneePage /> },
           { path: 'container-handling', element: <ContainerHandlingViewPage /> },
-          { path: 'container-handling-report', element: <ContainerHandlingReportPage /> },
-          { path: 'container-handling-expenses', element: <ContainerHandlingExpensesPage /> },
           { path: 'measurement-points', element: <MeasurementPointsPage /> },
         ],
       },
