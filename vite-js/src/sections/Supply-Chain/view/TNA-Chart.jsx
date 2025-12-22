@@ -150,7 +150,7 @@ export default function TNAChartPage() {
           }
         });
 
-        const finalData = Array.from(rowMap.values());
+        const finalData = Array.from(rowMap.values()).sort((a, b) => b.poid - a.poid);
         console.log('Grid Data:', finalData);
         setTableData(finalData);
       } catch (error) {
