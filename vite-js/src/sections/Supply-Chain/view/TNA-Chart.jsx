@@ -52,114 +52,7 @@ apiClient.interceptors.request.use(
 );
 
 // ----------------------------------------------------------------------
-// Static demo data for TNA Chart (Process Routes)
-// ----------------------------------------------------------------------
 
-const STATIC_TNA_ROWS = [
-  {
-    id: 1,
-    processRoute: 'Driling of Holes',
-    targetDate: 'Dec 13, 2025',
-    factoryCommitmentDate: '12/13/2025',
-    submissionDate: '',
-    approvalDate: '',
-    quantityCompleted: '',
-    unit: '',
-    status: '',
-    remarks: '',
-  },
-  {
-    id: 2,
-    processRoute: 'Equal Shaping',
-    targetDate: 'Dec 13, 2025',
-    factoryCommitmentDate: '12/13/2025',
-    submissionDate: '',
-    approvalDate: '',
-    quantityCompleted: '',
-    unit: '',
-    status: '',
-    remarks: '',
-  },
-  {
-    id: 3,
-    processRoute: 'Washing',
-    targetDate: 'Dec 13, 2025',
-    factoryCommitmentDate: '12/13/2025',
-    submissionDate: '',
-    approvalDate: '',
-    quantityCompleted: '',
-    unit: '',
-    status: '',
-    remarks: '',
-  },
-  {
-    id: 4,
-    processRoute: 'Both end drilling for screws',
-    targetDate: 'Dec 13, 2025',
-    factoryCommitmentDate: '12/13/2025',
-    submissionDate: '',
-    approvalDate: '',
-    quantityCompleted: '',
-    unit: '',
-    status: '',
-    remarks: '',
-  },
-  {
-    id: 5,
-    processRoute: 'Skrn Warp',
-    targetDate: 'Dec 13, 2025',
-    factoryCommitmentDate: '12/13/2025',
-    submissionDate: '',
-    approvalDate: '',
-    quantityCompleted: '',
-    unit: '',
-    status: '',
-    remarks: '',
-  },
-  {
-    id: 6,
-    processRoute: 'Base Sitting',
-    targetDate: 'Dec 13, 2025',
-    factoryCommitmentDate: '12/13/2025',
-    submissionDate: '',
-    approvalDate: '',
-    quantityCompleted: '',
-    unit: '',
-    status: '',
-    remarks: '',
-  },
-  {
-    id: 7,
-    processRoute: 'Bubble Warp',
-    targetDate: 'Dec 13, 2025',
-    factoryCommitmentDate: '12/13/2025',
-    submissionDate: '',
-    approvalDate: '',
-    quantityCompleted: '',
-    unit: '',
-    status: '',
-    remarks: '',
-  },
-  {
-    id: 8,
-    processRoute: 'Electrical Components',
-    targetDate: 'Dec 13, 2025',
-    factoryCommitmentDate: '12/13/2025',
-    submissionDate: '',
-    approvalDate: '',
-    quantityCompleted: '',
-    unit: '',
-    status: '',
-    remarks: '',
-  },
-];
-
-// ----------------------------------------------------------------------
-// Detail renderer: transpose rows ↔ columns
-// ----------------------------------------------------------------------
-
-
-// ----------------------------------------------------------------------
 
 export default function TNAChartPage() {
   const [tableData, setTableData] = useState([]);
@@ -257,7 +150,9 @@ export default function TNAChartPage() {
           }
         });
 
-        setTableData(Array.from(rowMap.values()));
+        const finalData = Array.from(rowMap.values());
+        console.log('Grid Data:', finalData);
+        setTableData(finalData);
       } catch (error) {
         console.error('Error fetching TNA data:', error);
       } finally {
