@@ -8,7 +8,7 @@ import { LoadingScreen } from 'src/components/loading-screen';
 import Milestone from 'src/sections/Supply-Chain/view/Milestone';
 import { View } from '@react-pdf/renderer';
 import CompletePurchaseOrderForm from 'src/sections/Supply-Chain/view/Add-Order';
-import CompletePurchaseOrderFormEdit from 'src/sections/Supply-Chain/view/purchase-order-edit';
+import CompletePurchaseOrderFormEdit from 'src/sections/Supply-Chain/view/Purchase-order-edit';
 
 // ----------------------------------------------------------------------
 
@@ -79,11 +79,11 @@ const AddSizePage = lazy(() => import('src/sections/power-tool/view/Add-Size'));
 const AdvancePaymentPage = lazy(() => import('src/sections/power-tool/view/Advance-payment'));
 const AddAdvancePage = lazy(() => import('src/sections/power-tool/view/Add-Advance'));
 const ICRFormPage = lazy(() => import('src/sections/power-tool/view/ICR-Form'));
-const QRViewPage = lazy(() => import('src/sections/power-tool/view/QR-View'));
-const CostSheetViewPage = lazy(() => import('src/sections/power-tool/view/Cost-Sheet-View'));
+const QRViewPage = lazy(() => import('src/sections/power-tool/view/qr-view'));
+const CostSheetViewPage = lazy(() => import('src/sections/power-tool/view/cost-sheet-view'));
 const CostSheetEntryPage = lazy(() => import('src/sections/power-tool/view/cost-sheet-entry'));
 const CourierPackagingViewPage = lazy(
-  () => import('src/sections/power-tool/view/Courier-packaging-view')
+  () => import('src/sections/power-tool/view/courier-packaging-view')
 );
 const CourierPackagingEntryPage = lazy(
   () => import('src/sections/power-tool/view/courier-packaging-entry')
