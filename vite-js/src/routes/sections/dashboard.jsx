@@ -53,6 +53,7 @@ const AddSamplingProgramPage = lazy(
 );
 const AddInquiryPage = lazy(() => import('src/sections/Supply-Chain/view/Add-inquiry'));
 const AddOrderDetailPage = lazy(() => import('src/sections/Supply-Chain/view/Add-order-detail'));
+const SizeSpecsPage = lazy(() => import('src/sections/Supply-Chain/view/Size-Specs'));
 const PurchaseOrderPDF = lazy(() => import('src/sections/Supply-Chain/PurchaseOrderPDF'));
 const PurchaseOrderSSPDF = lazy(() => import('src/sections/Supply-Chain/PurchaseOrderSSPDF'));
 const EditOrder = lazy(() =>
@@ -177,6 +178,7 @@ export const dashboardRoutes = [
           { path: 'add-sampling-program', element: <AddSamplingProgramPage /> },
           { path: 'add-inquiry', element: <AddInquiryPage /> },
           { path: 'add-order-detail', element: <AddOrderDetailPage /> },
+          { path: 'size-specs/:id', element: <SizeSpecsPage /> },
           { path: 'milestone/:id', element: <Milestone /> },
           { path: 'tna-chart', element: <TNAChartPage /> },
           { path: 'view/:id', element: <CompletePurchaseOrderFormEdit /> },

@@ -7,7 +7,6 @@ import {
   Typography,
   TextField,
   MenuItem,
-  Button,
   CircularProgress,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -16,8 +15,6 @@ import { AgGridReact } from 'ag-grid-react';
 import {
   ModuleRegistry,
   AllCommunityModule,
-  themeBalham,
-  colorSchemeDarkBlue,
 } from 'ag-grid-community';
 import { AllEnterpriseModule, LicenseManager } from 'ag-grid-enterprise';
 import axios from 'axios';
@@ -44,6 +41,7 @@ apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('accessToken');
     if (token) {
+      // eslint-disable-next-line no-param-reassign
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -53,12 +51,15 @@ apiClient.interceptors.request.use(
 
 // ----------------------------------------------------------------------
 
-
 export default function TNAChartPage() {
+  const theme = useTheme();
+
   const [tableData, setTableData] = useState([]);
+  const [allTableData, setAllTableData] = useState([]);
   const [productPortfolios, setProductPortfolios] = useState([]);
   const [selectedPortfolio, setSelectedPortfolio] = useState('');
   const [loading, setLoading] = useState(false);
+  const [poSearch, setPoSearch] = useState('');
 
   const containerStyle = useMemo(
     () => ({
@@ -70,97 +71,143 @@ export default function TNAChartPage() {
 
   const [columnDefs, setColumnDefs] = useState([]);
 
-
   // Fetch product portfolios for filter
   useEffect(() => {
     const fetchProductPortfolios = async () => {
       try {
         const response = await apiClient.get('/MyOrders/GetProductPortfolio');
-        if (response.data) {
-          setProductPortfolios(response.data);
+        const list = response.data || [];
+        setProductPortfolios(list);
+        // Default: first portfolio + auto load
+        if (list.length && !selectedPortfolio) {
+          const firstId = list[0].productPortfolioID;
+          setSelectedPortfolio(firstId);
+          handleSearch(firstId);
         }
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Error fetching product portfolios for TNA Chart:', error);
       }
     };
 
     fetchProductPortfolios();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handlePortfolioChange = (event) => {
-    setSelectedPortfolio(event.target.value);
-  };
+  const handleSearch = async (portfolioId) => {
+    const idToUse = portfolioId || selectedPortfolio;
 
-  const handleSearch = async () => {
-    if (!selectedPortfolio) {
+    if (!idToUse) {
       setTableData([]);
+      setAllTableData([]);
       setColumnDefs([]);
-    } else {
-      setLoading(true);
-      try {
-        const [processRes, poRes] = await Promise.all([
-          apiClient.get(`/Milestone/GetprocessByPortfolio?productPortfolioId=${selectedPortfolio}`).catch(err => { console.error("Process API Error", err); return { data: [] }; }),
-          apiClient.get(`/Milestone/GetTNAandPO?PortfolioID=${selectedPortfolio}`).catch(err => { console.error("TNA API Error", err); return { data: [] }; }),
-        ]);
+      return;
+    }
 
-        const processList = (processRes.data || []).filter(p => !!p);
-        const poData = poRes.data || [];
+    setLoading(true);
+    try {
+      const [processRes, poRes] = await Promise.all([
+        apiClient
+          .get(`/Milestone/GetprocessByPortfolio?productPortfolioId=${idToUse}`)
+          .catch((err) => {
+            // eslint-disable-next-line no-console
+            console.error('Process API Error', err);
+            return { data: [] };
+          }),
+        apiClient
+          .get(`/Milestone/GetTNAandPO?PortfolioID=${idToUse}`)
+          .catch((err) => {
+            // eslint-disable-next-line no-console
+            console.error('TNA API Error', err);
+            return { data: [] };
+          }),
+      ]);
 
-        // 1. Construct Columns
-        const newColDefs = [
-          { headerName: 'PO No', field: 'poNo', pinned: 'left', minWidth: 100 },
-          ...processList.map((proc) => ({
-            headerName: proc,
-            children: [
-              { headerName: 'Ideal Date', field: `${proc}_idealDate`, minWidth: 85 },
-              { headerName: 'Actual Date', field: `${proc}_actualDate`, minWidth: 85 },
-              { headerName: 'Approval Date', field: `${proc}_approvalDatee`, minWidth: 100 },
-              { headerName: 'Est. Date', field: `${proc}_estimatedDate`, minWidth: 85 },
-              { headerName: 'Date Span', field: `${proc}_dateSpan`, minWidth: 70 },
-            ],
-          })),
-          { headerName: 'Status', field: 'status', minWidth: 90 },
-          { headerName: 'Qty Completed', field: 'qtyCompleted', minWidth: 100 },
-          { headerName: 'Freeze Cond PP Sample', field: 'freezeCondPPSample', minWidth: 140 },
-        ];
-        setColumnDefs(newColDefs);
+      const processList = (processRes.data || []).filter((p) => !!p);
+      const poData = poRes.data || [];
 
-        // 2. Pivot Data
-        const rowMap = new Map();
+      // 1. Construct Columns (group headers)
+      const newColDefs = [
+        { headerName: 'PO No', field: 'poNo', pinned: 'left', minWidth: 110 },
+        ...processList.map((proc) => ({
+          headerName: proc,
+          children: [
+            { headerName: 'Ideal Date', field: `${proc}_idealDate`, minWidth: 95 },
+            { headerName: 'Actual Date', field: `${proc}_actualDate`, minWidth: 95 },
+            { headerName: 'Approval Date', field: `${proc}_approvalDatee`, minWidth: 110 },
+            { headerName: 'Est. Date', field: `${proc}_estimatedDate`, minWidth: 110 },
+            { headerName: 'Date Span', field: `${proc}_dateSpan`, minWidth: 80 },
+          ],
+        })),
+        { headerName: 'Status', field: 'status', minWidth: 110 },
+        { headerName: 'Qty Completed', field: 'qtyCompleted', minWidth: 120 },
+        { headerName: 'Freeze Cond PP Sample', field: 'freezeCondPPSample', minWidth: 160 },
+      ];
+      setColumnDefs(newColDefs);
 
-        poData.forEach((item) => {
-          if (!item.poid) return;
+      // 2. Pivot Data: one row per PO, processes as column groups
+      const rowMap = new Map();
 
-          if (!rowMap.has(item.poid)) {
-            rowMap.set(item.poid, {
-              poid: item.poid,
-              poNo: item.poNo,
-              status: item.status,
-              qtyCompleted: item.qtyCompleted,
-              freezeCondPPSample: item.freezeCondPPSample,
-            });
-          }
-          const row = rowMap.get(item.poid);
-          if (item.process) {
-            row[`${item.process}_idealDate`] = item.idealDate;
-            row[`${item.process}_actualDate`] = item.actualDate;
-            row[`${item.process}_approvalDatee`] = item.approvalDatee;
-            row[`${item.process}_estimatedDate`] = item.estimatedDate;
-            row[`${item.process}_dateSpan`] = item.dateSpan;
-          }
-        });
+      poData.forEach((item) => {
+        if (!item.poid) return;
 
-        const finalData = Array.from(rowMap.values()).sort((a, b) => b.poid - a.poid);
-        console.log('Grid Data:', finalData);
+        if (!rowMap.has(item.poid)) {
+          rowMap.set(item.poid, {
+            poid: item.poid,
+            poNo: item.poNo,
+            status: item.status,
+            qtyCompleted: item.qtyCompleted,
+            freezeCondPPSample: item.freezeCondPPSample,
+          });
+        }
+        const row = rowMap.get(item.poid);
+        if (item.process) {
+          row[`${item.process}_idealDate`] = item.idealDate;
+          row[`${item.process}_actualDate`] = item.actualDate;
+          row[`${item.process}_approvalDatee`] = item.approvalDatee;
+          row[`${item.process}_estimatedDate`] = item.estimatedDate;
+          row[`${item.process}_dateSpan`] = item.dateSpan;
+        }
+      });
+
+      const finalData = Array.from(rowMap.values()).sort((a, b) => b.poid - a.poid);
+      // eslint-disable-next-line no-console
+      console.log('Grid Data:', finalData);
+      setAllTableData(finalData);
+
+      if (poSearch) {
+        const lowered = poSearch.toLowerCase();
+        setTableData(
+          finalData.filter((row) => String(row.poNo || '').toLowerCase().includes(lowered))
+        );
+      } else {
         setTableData(finalData);
-      } catch (error) {
-        console.error('Error fetching TNA data:', error);
-      } finally {
-        setLoading(false);
       }
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Error fetching TNA data:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
+  const handlePortfolioChange = (event) => {
+    const value = event.target.value;
+    setSelectedPortfolio(value);
+    handleSearch(value);
+  };
+
+  // Apply PO search filter on existing data
+  useEffect(() => {
+    if (!poSearch) {
+      setTableData(allTableData);
+      return;
+    }
+    const lowered = poSearch.toLowerCase();
+    setTableData(
+      allTableData.filter((row) => String(row.poNo || '').toLowerCase().includes(lowered))
+    );
+  }, [poSearch, allTableData]);
 
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
@@ -174,48 +221,53 @@ export default function TNAChartPage() {
         sx={{ mb: { xs: 2, md: 3 } }}
       />
 
-      {/* Filter card */}
+      {/* Filters */}
       <Card sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          {/* Product Portfolio */}
-          <Box sx={{ minWidth: 260 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Box sx={{ minWidth: 260, maxWidth: 320 }}>
+              <TextField
+                select
+                fullWidth
+                size="small"
+                label="Product Portfolio"
+                value={selectedPortfolio}
+                onChange={handlePortfolioChange}
+                SelectProps={{
+                  MenuProps: {
+                    PaperProps: {
+                      sx: { maxHeight: 300 },
+                    },
+                  },
+                }}
+              >
+                <MenuItem value="">
+                  Product Portfolio
+                </MenuItem>
+                {productPortfolios.map((p) => (
+                  <MenuItem key={p.productPortfolioID} value={p.productPortfolioID}>
+                    {p.productPortfolio}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
+          </Box>
+
+          <Box sx={{ maxWidth: 320 }}>
+            <Typography
+              variant="caption"
+              sx={{ color: 'text.secondary', mb: 0.5, display: 'block' }}
+            >
+              Search by PO No
+            </Typography>
             <TextField
-              select
               fullWidth
               size="small"
-              label="Product Portfolio"
-              value={selectedPortfolio}
-              onChange={handlePortfolioChange}
-              SelectProps={{
-                MenuProps: {
-                  PaperProps: {
-                    sx: { maxHeight: 300 },
-                  },
-                },
-              }}
-            >
-              <MenuItem value="">
-                Product Portfolio
-              </MenuItem>
-              {productPortfolios.map((p) => (
-                <MenuItem key={p.productPortfolioID} value={p.productPortfolioID}>
-                  {p.productPortfolio}
-                </MenuItem>
-              ))}
-            </TextField>
+              placeholder="Enter PO No"
+              value={poSearch}
+              onChange={(e) => setPoSearch(e.target.value)}
+            />
           </Box>
-
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Button
-              variant="contained"
-              onClick={handleSearch}
-              disabled={loading}
-              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
-            >
-              {loading ? 'Searching...' : 'Search'}
-            </Button>
-          </Box>
-
         </Box>
       </Card>
 
@@ -223,7 +275,8 @@ export default function TNAChartPage() {
       <Card sx={{ p: 2 }}>
         <Box
           style={containerStyle}
-          sx={(theme) => ({
+          sx={{
+            position: 'relative',
             '& .ag-header-cell, & .ag-header-group-cell': {
               paddingLeft: '4px !important',
               paddingRight: '4px !important',
@@ -262,14 +315,47 @@ export default function TNAChartPage() {
               color: theme.palette.text.primary,
               borderTop: `1px solid ${theme.palette.divider}`,
             },
-            '& .ag-paging-panel .ag-input-field-input, & .ag-paging-panel .ag-picker-field-wrapper':
-            {
+            '& .ag-paging-panel .ag-input-field-input, & .ag-paging-panel .ag-picker-field-wrapper': {
               backgroundColor: theme.palette.background.paper,
               color: theme.palette.text.primary,
               borderColor: theme.palette.divider,
             },
-          })}
+          }}
         >
+          {loading && (
+            <Box
+              sx={{
+                position: 'absolute',
+                inset: 0,
+                bgcolor:
+                  theme.palette.mode === 'dark'
+                    ? 'rgba(0,0,0,0.4)'
+                    : 'rgba(255,255,255,0.7)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 2,
+              }}
+            >
+              <Box
+                sx={{
+                  px: 3.5,
+                  py: 2.5,
+                  borderRadius: 2,
+                  bgcolor: theme.palette.background.paper,
+                  boxShadow: theme.shadows[6],
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 2,
+                }}
+              >
+                <CircularProgress size={28} />
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  Loading TNA data...
+                </Typography>
+              </Box>
+            </Box>
+          )}
           <div style={{ width: '100%', height: '100%' }}>
             <AgGridReact
               rowData={tableData}
@@ -294,5 +380,4 @@ export default function TNAChartPage() {
     </Container>
   );
 }
-
 
