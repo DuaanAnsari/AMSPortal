@@ -8,6 +8,13 @@ import {
   TextField,
   MenuItem,
   CircularProgress,
+  Checkbox,
+  ListItemText,
+  FormControl,
+  InputLabel,
+  Select,
+  OutlinedInput,
+  Autocomplete,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 
@@ -55,11 +62,14 @@ export default function TNAChartPage() {
   const theme = useTheme();
 
   const [tableData, setTableData] = useState([]);
-  const [allTableData, setAllTableData] = useState([]);
+  const [fullData, setFullData] = useState([]); // Store complete unfiltered data
   const [productPortfolios, setProductPortfolios] = useState([]);
   const [selectedPortfolio, setSelectedPortfolio] = useState('');
   const [loading, setLoading] = useState(false);
-  const [poSearch, setPoSearch] = useState('');
+  const [allPoNumbers, setAllPoNumbers] = useState([]);
+  const [selectedPoNumbers, setSelectedPoNumbers] = useState([]);
+  const [allCustomers, setAllCustomers] = useState([]);
+  const [selectedCustomers, setSelectedCustomers] = useState([]);
 
   const containerStyle = useMemo(
     () => ({
@@ -94,15 +104,51 @@ export default function TNAChartPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Re-filter data when selected PO numbers change (without re-fetching)
+  useEffect(() => {
+    if (fullData.length === 0) return;
+
+    let filteredData = fullData;
+
+    // First filter by customers if selected
+    if (selectedCustomers.length > 0) {
+      filteredData = filteredData.filter(row => selectedCustomers.includes(row.customer));
+    }
+
+    // Then filter by selected PO numbers if any
+    if (selectedPoNumbers.length > 0) {
+      filteredData = filteredData.filter(row => selectedPoNumbers.includes(row.poNo));
+    }
+
+    setTableData(filteredData);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPoNumbers]);
+
+  // Re-filter when customers change
+  useEffect(() => {
+    if (!selectedPortfolio) return;
+    handleSearch(selectedPortfolio);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCustomers]);
+
   const handleSearch = async (portfolioId) => {
     const idToUse = portfolioId || selectedPortfolio;
 
     if (!idToUse) {
       setTableData([]);
-      setAllTableData([]);
+      setFullData([]);
       setColumnDefs([]);
+      setAllCustomers([]);
+      setAllPoNumbers([]);
       return;
     }
+
+    // Clear previous data immediately to prevent showing stale data
+    setTableData([]);
+    setFullData([]);
+    setColumnDefs([]);
+    setAllCustomers([]);
+    setAllPoNumbers([]);
 
     setLoading(true);
     try {
@@ -128,21 +174,35 @@ export default function TNAChartPage() {
 
       // 1. Construct Columns (group headers)
       const newColDefs = [
-        { headerName: 'PO No', field: 'poNo', pinned: 'left', minWidth: 110 },
+        { headerName: 'PO No', field: 'poNo', pinned: 'left', minWidth: 70 },
+        { headerName: 'Customer', field: 'customer', pinned: 'left', minWidth: 110 },
         ...processList.map((proc) => ({
           headerName: proc,
           children: [
-            { headerName: 'Ideal Date', field: `${proc}_idealDate`, minWidth: 95 },
-            { headerName: 'Actual Date', field: `${proc}_actualDate`, minWidth: 95 },
-            { headerName: 'Approval Date', field: `${proc}_approvalDatee`, minWidth: 110 },
-            { headerName: 'Est. Date', field: `${proc}_estimatedDate`, minWidth: 110 },
-            { headerName: 'Date Span', field: `${proc}_dateSpan`, minWidth: 80 },
+            { headerName: 'Ideal Date', field: `${proc}_idealDate`, minWidth: 75 },
+            { headerName: 'Actual Date', field: `${proc}_actualDate`, minWidth: 75 },
+            { headerName: 'Approval Date', field: `${proc}_approvalDatee`, minWidth: 75 },
+            { headerName: 'Est. Date', field: `${proc}_estimatedDate`, minWidth: 75 },
+            { headerName: 'Date Span', field: `${proc}_dateSpan`, minWidth: 60 },
           ],
         })),
-        { headerName: 'Status', field: 'status', minWidth: 110 },
-        { headerName: 'Qty Completed', field: 'qtyCompleted', minWidth: 120 },
-        { headerName: 'Freeze Cond PP Sample', field: 'freezeCondPPSample', minWidth: 160 },
       ];
+
+      // Check if any data has these fields before adding columns
+      const hasStatus = poData.some(item => item.status);
+      const hasQtyCompleted = poData.some(item => item.qtyCompleted);
+      const hasFreezeCondPPSample = poData.some(item => item.freezeCondPPSample);
+
+      if (hasStatus) {
+        newColDefs.push({ headerName: 'Status', field: 'status', minWidth: 85 });
+      }
+      if (hasQtyCompleted) {
+        newColDefs.push({ headerName: 'Qty Completed', field: 'qtyCompleted', minWidth: 90 });
+      }
+      if (hasFreezeCondPPSample) {
+        newColDefs.push({ headerName: 'Freeze Cond PP Sample', field: 'freezeCondPPSample', minWidth: 120 });
+      }
+
       setColumnDefs(newColDefs);
 
       // 2. Pivot Data: one row per PO, processes as column groups
@@ -155,6 +215,7 @@ export default function TNAChartPage() {
           rowMap.set(item.poid, {
             poid: item.poid,
             poNo: item.poNo,
+            customer: item.customer || item.customerName || '',
             status: item.status,
             qtyCompleted: item.qtyCompleted,
             freezeCondPPSample: item.freezeCondPPSample,
@@ -173,16 +234,36 @@ export default function TNAChartPage() {
       const finalData = Array.from(rowMap.values()).sort((a, b) => b.poid - a.poid);
       // eslint-disable-next-line no-console
       console.log('Grid Data:', finalData);
-      setAllTableData(finalData);
 
-      if (poSearch) {
-        const lowered = poSearch.toLowerCase();
-        setTableData(
-          finalData.filter((row) => String(row.poNo || '').toLowerCase().includes(lowered))
-        );
-      } else {
-        setTableData(finalData);
+      // Store full data
+      setFullData(finalData);
+
+      // Extract unique customers for dropdown
+      const uniqueCustomers = [...new Set(finalData.map(row => row.customer))].filter(Boolean).sort();
+      setAllCustomers(uniqueCustomers);
+
+      // Extract unique PO numbers (filtered by customers if selected)
+      const customerFilteredData = selectedCustomers.length > 0
+        ? finalData.filter(row => selectedCustomers.includes(row.customer))
+        : finalData;
+
+      const uniquePoNumbers = [...new Set(customerFilteredData.map(row => row.poNo))].filter(Boolean).sort();
+      setAllPoNumbers(uniquePoNumbers);
+
+      // Filter data based on selected customers and PO numbers
+      let filteredData = finalData;
+
+      // First filter by customers if selected
+      if (selectedCustomers.length > 0) {
+        filteredData = filteredData.filter(row => selectedCustomers.includes(row.customer));
       }
+
+      // Then filter by selected PO numbers if any
+      if (selectedPoNumbers.length > 0) {
+        filteredData = filteredData.filter(row => selectedPoNumbers.includes(row.poNo));
+      }
+
+      setTableData(filteredData);
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Error fetching TNA data:', error);
@@ -194,20 +275,15 @@ export default function TNAChartPage() {
   const handlePortfolioChange = (event) => {
     const value = event.target.value;
     setSelectedPortfolio(value);
+    setSelectedCustomers([]); // Reset customers when portfolio changes
+    setSelectedPoNumbers([]); // Reset PO selection when portfolio changes
     handleSearch(value);
   };
 
-  // Apply PO search filter on existing data
-  useEffect(() => {
-    if (!poSearch) {
-      setTableData(allTableData);
-      return;
-    }
-    const lowered = poSearch.toLowerCase();
-    setTableData(
-      allTableData.filter((row) => String(row.poNo || '').toLowerCase().includes(lowered))
-    );
-  }, [poSearch, allTableData]);
+  const handleCustomerChange = (event, newValue) => {
+    setSelectedCustomers(newValue);
+    setSelectedPoNumbers([]); // Reset PO selection when customers change
+  };
 
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
@@ -251,23 +327,216 @@ export default function TNAChartPage() {
                 ))}
               </TextField>
             </Box>
+
+            <Box sx={{ minWidth: 260, maxWidth: 320 }}>
+              <Autocomplete
+                multiple
+                id="customer-autocomplete"
+                options={['__SELECT_ALL__', ...allCustomers]}
+                disableCloseOnSelect
+                value={selectedCustomers}
+                onChange={(event, newValue) => {
+                  // Filter out the __SELECT_ALL__ option from the value
+                  const filteredValue = newValue.filter(v => v !== '__SELECT_ALL__');
+                  handleCustomerChange(event, filteredValue);
+                }}
+                getOptionLabel={(option) => {
+                  if (option === '__SELECT_ALL__') return 'Select All';
+                  return option;
+                }}
+                disabled={!selectedPortfolio}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label={`Customer ${selectedCustomers.length > 0 ? `(${selectedCustomers.length})` : ''}`}
+                    placeholder={selectedCustomers.length === 0 ? "Search or select customers..." : ""}
+                    size="small"
+                  />
+                )}
+                renderOption={(props, option, { selected }) => {
+                  // Check if this is the "Select All" option
+                  if (option === '__SELECT_ALL__') {
+                    const allSelected = allCustomers.length > 0 && allCustomers.every(customer => selectedCustomers.includes(customer));
+                    const someSelected = allCustomers.some(customer => selectedCustomers.includes(customer));
+
+                    return (
+                      <li
+                        {...props}
+                        key="select-all"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (allSelected) {
+                            setSelectedCustomers([]);
+                            setSelectedPoNumbers([]);
+                          } else {
+                            setSelectedCustomers([...allCustomers]);
+                          }
+                        }}
+                        style={{
+                          ...props.style,
+                          backgroundColor: '#f5f5f5',
+                          borderBottom: '1px solid #e0e0e0',
+                          fontWeight: 500,
+                        }}
+                      >
+                        <Checkbox
+                          checked={allSelected}
+                          indeterminate={someSelected && !allSelected}
+                          style={{ marginRight: 8 }}
+                        />
+                        Select All
+                      </li>
+                    );
+                  }
+
+                  return (
+                    <li {...props} key={option}>
+                      <Checkbox
+                        checked={selected}
+                        style={{ marginRight: 8 }}
+                      />
+                      {option}
+                    </li>
+                  );
+                }}
+                renderTags={(value) => {
+                  if (value.length === 0) return null;
+                  if (value.length === 1) {
+                    return (
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontSize: '0.875rem',
+                          color: 'text.primary',
+                        }}
+                      >
+                        {value[0]}
+                      </Typography>
+                    );
+                  }
+                  return (
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontSize: '0.875rem',
+                        color: 'text.primary',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {value.length} selected
+                    </Typography>
+                  );
+                }}
+                ListboxProps={{
+                  style: { maxHeight: 300 },
+                }}
+              />
+            </Box>
+
+            <Box sx={{ minWidth: 260, maxWidth: 320 }}>
+              <Autocomplete
+                multiple
+                id="po-number-autocomplete"
+                options={['__SELECT_ALL__', ...allPoNumbers]}
+                disableCloseOnSelect
+                value={selectedPoNumbers}
+                onChange={(event, newValue) => {
+                  // Filter out the __SELECT_ALL__ option from the value
+                  const filteredValue = newValue.filter(v => v !== '__SELECT_ALL__');
+                  setSelectedPoNumbers(filteredValue);
+                }}
+                getOptionLabel={(option) => {
+                  if (option === '__SELECT_ALL__') return 'Select All';
+                  return option;
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label={`PO No ${selectedPoNumbers.length > 0 ? `(${selectedPoNumbers.length})` : ''}`}
+                    placeholder={selectedPoNumbers.length === 0 ? "Search or select PO..." : ""}
+                    size="small"
+                  />
+                )}
+                renderOption={(props, option, { selected }) => {
+                  // Check if this is the "Select All" option
+                  if (option === '__SELECT_ALL__') {
+                    const allSelected = allPoNumbers.length > 0 && allPoNumbers.every(poNo => selectedPoNumbers.includes(poNo));
+                    const someSelected = allPoNumbers.some(poNo => selectedPoNumbers.includes(poNo));
+
+                    return (
+                      <li
+                        {...props}
+                        key="select-all"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (allSelected) {
+                            setSelectedPoNumbers([]);
+                          } else {
+                            setSelectedPoNumbers([...allPoNumbers]);
+                          }
+                        }}
+                        style={{
+                          ...props.style,
+                          backgroundColor: '#f5f5f5',
+                          borderBottom: '1px solid #e0e0e0',
+                          fontWeight: 500,
+                        }}
+                      >
+                        <Checkbox
+                          checked={allSelected}
+                          indeterminate={someSelected && !allSelected}
+                          style={{ marginRight: 8 }}
+                        />
+                        Select All
+                      </li>
+                    );
+                  }
+
+                  return (
+                    <li {...props} key={option}>
+                      <Checkbox
+                        checked={selected}
+                        style={{ marginRight: 8 }}
+                      />
+                      {option}
+                    </li>
+                  );
+                }}
+                renderTags={(value) => {
+                  if (value.length === 0) return null;
+                  if (value.length === 1) {
+                    return (
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontSize: '0.875rem',
+                          color: 'text.primary',
+                        }}
+                      >
+                        {value[0]}
+                      </Typography>
+                    );
+                  }
+                  return (
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontSize: '0.875rem',
+                        color: 'text.primary',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {value.length} selected
+                    </Typography>
+                  );
+                }}
+                ListboxProps={{
+                  style: { maxHeight: 300 },
+                }}
+              />
+            </Box>
           </Box>
 
-          <Box sx={{ maxWidth: 320 }}>
-            <Typography
-              variant="caption"
-              sx={{ color: 'text.secondary', mb: 0.5, display: 'block' }}
-            >
-              Search by PO No
-            </Typography>
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="Enter PO No"
-              value={poSearch}
-              onChange={(e) => setPoSearch(e.target.value)}
-            />
-          </Box>
         </Box>
       </Card>
 
@@ -278,8 +547,8 @@ export default function TNAChartPage() {
           sx={{
             position: 'relative',
             '& .ag-header-cell, & .ag-header-group-cell': {
-              paddingLeft: '4px !important',
-              paddingRight: '4px !important',
+              paddingLeft: '2px !important',
+              paddingRight: '2px !important',
             },
             '& .ag-header-cell-label, & .ag-header-group-cell-label': {
               justifyContent: 'center',
@@ -288,17 +557,17 @@ export default function TNAChartPage() {
               borderBottom: `1px solid ${theme.palette.divider} !important`,
             },
             '& .ag-cell': {
-              paddingLeft: '4px !important',
-              paddingRight: '4px !important',
+              paddingLeft: '2px !important',
+              paddingRight: '2px !important',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '12px',
+              fontSize: '11px',
             },
             '& .ag-header-cell-text': {
-              fontSize: '12px',
+              fontSize: '10.5px',
               textAlign: 'center',
-              lineHeight: '1.2',
+              lineHeight: '1.1',
               whiteSpace: 'normal',
             },
             '& .ag-root-wrapper, & .ag-root, & .ag-body-viewport, & .ag-header, & .ag-header-viewport, & .ag-center-cols-viewport':
@@ -360,8 +629,9 @@ export default function TNAChartPage() {
             <AgGridReact
               rowData={tableData}
               columnDefs={columnDefs}
-              headerHeight={40}
-              groupHeaderHeight={40}
+              headerHeight={32}
+              groupHeaderHeight={32}
+              rowHeight={32}
               defaultColDef={{
                 sortable: true,
                 filter: true,
@@ -373,6 +643,12 @@ export default function TNAChartPage() {
               pagination
               paginationPageSize={10}
               paginationPageSizeSelector={[10, 20, 30]}
+              suppressNoRowsOverlay={loading}
+              noRowsOverlayComponent={() => (
+                <div style={{ padding: '20px', textAlign: 'center' }}>
+                  No data available
+                </div>
+              )}
             />
           </div>
         </Box>
