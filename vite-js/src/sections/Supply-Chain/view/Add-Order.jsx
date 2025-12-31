@@ -1,3 +1,4 @@
+
 import * as Yup from 'yup';
 import { useRef, useState, useEffect } from 'react';
 import { useForm, Controller, FormProvider, useFormContext } from 'react-hook-form';
@@ -42,6 +43,7 @@ import {
   ListItemText,
   OutlinedInput,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import LoadingButton from '@mui/lab/LoadingButton';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
@@ -93,7 +95,7 @@ function FullScreenImagePreview({ open, imageUrl, onClose }) {
         >
           <CloseIcon />
         </IconButton>
-        
+
         {imageUrl && (
           <img
             src={imageUrl}
@@ -123,7 +125,7 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
     const file = event.target.files?.[0];
     if (file) {
       setValue(name, file, { shouldValidate: true });
-      
+
       // Create preview URL for images
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
@@ -181,7 +183,7 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
           onChange={handleFileChange}
         />
       </Button>
-      
+
       {fileValue && (
         <Box sx={{ mt: 1, p: 1, border: '1px solid #ddd', borderRadius: 1 }}>
           <Grid container alignItems="center" justifyContent="space-between">
@@ -194,8 +196,8 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
               </Typography>
             </Grid>
             <Grid item>
-              <IconButton 
-                size="small" 
+              <IconButton
+                size="small"
                 onClick={handleRemoveFile}
                 color="error"
               >
@@ -273,12 +275,12 @@ function SimpleImageUploadField({ name, label = "Image" }) {
   const [previewUrl, setPreviewUrl] = useState('');
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const imageValue = watch(name);
- 
+
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
     if (file) {
       setValue(name, file, { shouldValidate: true });
-      
+
       // Create preview URL
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
@@ -326,8 +328,8 @@ function SimpleImageUploadField({ name, label = "Image" }) {
             value={imageValue?.name || ''}
             InputProps={{
               endAdornment: previewUrl && (
-                <IconButton 
-                  size="small" 
+                <IconButton
+                  size="small"
                   onClick={handleRemoveImage}
                   color="error"
                 >
@@ -346,15 +348,15 @@ function SimpleImageUploadField({ name, label = "Image" }) {
             ref={fileInputRef}
             onChange={handleFileChange}
           />
-          <Button 
-            variant="contained" 
+          <Button
+            variant="contained"
             onClick={() => fileInputRef.current?.click()}
           >
             Select
           </Button>
         </Grid>
       </Grid>
-      
+
       {/* Image Preview */}
       {previewUrl && (
         <Box sx={{ mt: 2, textAlign: 'center', position: 'relative' }}>
@@ -418,7 +420,9 @@ function SimpleImageUploadField({ name, label = "Image" }) {
 // -------------------- Validation Schema for Item Details --------------------
 const ItemDetailsSchema = Yup.object().shape({
   styleNo: Yup.string().required('Style No is required'),
-  colorway: Yup.string().required('Colorway is required'),
+  colorway: Yup.string()
+    .required('Colorway is required')
+    .matches(/^[A-Za-z\s-]+$/, 'Only alphabets are allowed in Colorway'),
   productCode: Yup.string().required('Product Code is required'),
   itemPrice: Yup.number()
     .required('Item Price is required')
@@ -465,7 +469,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
         const token = localStorage.getItem('accessToken');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
         const res = await axios.get(`${API_BASE_URL}/api/MyOrders/GetSizeRange`, { headers });
-        
+
         if (Array.isArray(res.data)) {
           setSizeRangeData(res.data);
           const uniqueSizeRanges = [...new Set(res.data.map(item => item.sizeRange))];
@@ -493,22 +497,29 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
     }
 
     const sizes = generateSizes(data.sizeRange);
-    
-    const newRows = sizes.map(size => ({
+
+    const newRows = sizes.map((size) => ({
       styleNo: data.styleNo || '',
       colorway: data.colorway || '',
       productCode: data.productCode || '',
       sizeRange: data.sizeRange || '',
-      size: size,
+      size,
+      // grid editable fields
+      barcode: '',
+      ratio: '',
       quantity: 0,
       itemPrice: parseFloat(data.itemPrice) || 0,
       value: 0,
+      vendorPrice: 0,
       ldpPrice: parseFloat(data.ldpPrice) || 0,
       ldpValue: 0,
+      cartonQty: 0,
+      grossWeight: 0,
+      netWeight: 0,
     }));
-    
+
     setRows([...rows, ...newRows]);
-    
+
     reset({
       styleNo: data.styleNo || '',
       colorway: data.colorway || '',
@@ -522,11 +533,11 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
 
   const generateSizes = (selectedSizeRange) => {
     if (!selectedSizeRange) return [''];
-    
+
     const sizesForRange = sizeRangeData
       .filter(item => item.sizeRange === selectedSizeRange)
       .map(item => item.sizes);
-    
+
     return sizesForRange.length > 0 ? sizesForRange : [selectedSizeRange];
   };
 
@@ -556,7 +567,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
         totalLdpValue
       }
     };
-    
+
     onSaveData(savedData);
     setFormError('');
   };
@@ -579,7 +590,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
         totalLdpValue
       }
     };
-    
+
     onSaveData(savedData);
     onClose();
   };
@@ -600,18 +611,18 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
             {formError}
           </Alert>
         )}
-        
+
         <Grid container spacing={2} sx={{ mt: 1 }}>
           <Grid item xs={6} sm={4}>
             <Controller
               name="styleNo"
               control={control}
               render={({ field, fieldState }) => (
-                <TextField 
-                  {...field} 
-                  label="Style No" 
-                  fullWidth 
-                  size="small" 
+                <TextField
+                  {...field}
+                  label="Style No"
+                  fullWidth
+                  size="small"
                   error={!!fieldState.error}
                   helperText={fieldState.error?.message}
                   required
@@ -624,11 +635,11 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="colorway"
               control={control}
               render={({ field, fieldState }) => (
-                <TextField 
-                  {...field} 
-                  label="Colorway" 
-                  fullWidth 
-                  size="small" 
+                <TextField
+                  {...field}
+                  label="Colorway"
+                  fullWidth
+                  size="small"
                   error={!!fieldState.error}
                   helperText={fieldState.error?.message}
                   required
@@ -641,11 +652,11 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="productCode"
               control={control}
               render={({ field, fieldState }) => (
-                <TextField 
-                  {...field} 
-                  label="Product Code" 
-                  fullWidth 
-                  size="small" 
+                <TextField
+                  {...field}
+                  label="Product Code"
+                  fullWidth
+                  size="small"
                   error={!!fieldState.error}
                   helperText={fieldState.error?.message}
                   required
@@ -658,12 +669,12 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="itemPrice"
               control={control}
               render={({ field, fieldState }) => (
-                <TextField 
-                  {...field} 
-                  label="Item Price" 
-                  type="number" 
-                  fullWidth 
-                  size="small" 
+                <TextField
+                  {...field}
+                  label="Item Price"
+                  type="number"
+                  fullWidth
+                  size="small"
                   error={!!fieldState.error}
                   helperText={fieldState.error?.message}
                   required
@@ -676,12 +687,12 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="ldpPrice"
               control={control}
               render={({ field, fieldState }) => (
-                <TextField 
-                  {...field} 
-                  label="LDP Price" 
-                  type="number" 
-                  fullWidth 
-                  size="small" 
+                <TextField
+                  {...field}
+                  label="LDP Price"
+                  type="number"
+                  fullWidth
+                  size="small"
                   error={!!fieldState.error}
                   helperText={fieldState.error?.message}
                   required
@@ -718,9 +729,9 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
           </Grid>
         </Grid>
 
-        <Button 
-          variant="contained" 
-          sx={{ mt: 2 }} 
+        <Button
+          variant="contained"
+          sx={{ mt: 2 }}
           onClick={handleSubmit(onSubmit)}
           disabled={!isValid}
         >
@@ -796,17 +807,17 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       </DialogContent>
 
       <DialogActions>
-        <Button 
-          onClick={handleSave} 
-          variant="contained" 
+        <Button
+          onClick={handleSave}
+          variant="contained"
           color="primary"
           disabled={rows.length === 0}
         >
           Save
         </Button>
-        <Button 
-          onClick={handleSaveAndClose} 
-          variant="contained" 
+        <Button
+          onClick={handleSaveAndClose}
+          variant="contained"
           color="success"
           disabled={rows.length === 0}
         >
@@ -906,9 +917,6 @@ const Schema = Yup.object().shape({
   bankID: Yup.string(),
   titleOfAccount: Yup.string(),
   accountNo: Yup.string(),
-
-  calculationField1: Yup.string(),
-  calculationField2: Yup.string(),
 });
 
 // -------------------- Default Values --------------------
@@ -994,9 +1002,6 @@ const defaultValues = {
   bankID: '',
   titleOfAccount: '',
   accountNo: '',
-
-  calculationField1: '',
-  calculationField2: '',
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -1114,6 +1119,7 @@ function MerchantMultipleSelect({ name, label, options, loading, error }) {
 
 // -------------------- Main Component --------------------
 export default function CompletePurchaseOrderForm() {
+  const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const copyFromPo = location.state?.copyFromPo || null;
@@ -1134,7 +1140,7 @@ export default function CompletePurchaseOrderForm() {
     clearErrors,
   } = methods;
 
-  
+
   const [files, setFiles] = useState({});
   const [openItemDialog, setOpenItemDialog] = useState(false);
   const [savedItemData, setSavedItemData] = useState(null);
@@ -1146,11 +1152,11 @@ export default function CompletePurchaseOrderForm() {
   const [costingOptions, setCostingOptions] = useState([]);
   const [costingLoading, setCostingLoading] = useState(false);
   const [costingError, setCostingError] = useState(null);
-  
+
   const [customerOptions, setCustomerOptions] = useState([]);
   const [customerLoading, setCustomerLoading] = useState(false);
   const [customerError, setCustomerError] = useState(null);
-  
+
   const [supplierOptions, setSupplierOptions] = useState([]);
   const [supplierLoading, setSupplierLoading] = useState(false);
   const [supplierError, setSupplierError] = useState(null);
@@ -1361,33 +1367,33 @@ export default function CompletePurchaseOrderForm() {
 
     fetchAndPrefill();
   }, [copyFromPoId, copyFromPo, methods]);
-  
+
   const [merchantOptions, setMerchantOptions] = useState([]);
   const [merchantLoading, setMerchantLoading] = useState(false);
-  
+
   const [productPortfolios, setProductPortfolios] = useState([]);
   const [productCategories, setProductCategories] = useState([]);
   const [productGroups, setProductGroups] = useState([]);
   const [loadingPortfolio, setLoadingPortfolio] = useState(false);
   const [loadingCategory, setLoadingCategory] = useState(false);
   const [loadingGroup, setLoadingGroup] = useState(false);
-  
+
   const [inquiryOptions, setInquiryOptions] = useState([]);
   const [inquiryLoading, setInquiryLoading] = useState(false);
   const [inquiryError, setInquiryError] = useState(null);
-  
+
   const [paymentOptions, setPaymentOptions] = useState([]);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentError, setPaymentError] = useState(null);
-  
+
   const [shipmentOptions, setShipmentOptions] = useState([]);
   const [shipmentLoading, setShipmentLoading] = useState(false);
   const [shipmentError, setShipmentError] = useState(null);
-  
+
   const [deliveryOptions, setDeliveryOptions] = useState([]);
   const [deliveryLoading, setDeliveryLoading] = useState(false);
   const [deliveryError, setDeliveryError] = useState(null);
-  
+
   const [bankOptions, setBankOptions] = useState([]);
   const [bankLoading, setBankLoading] = useState(false);
   const [bankError, setBankError] = useState(null);
@@ -1425,8 +1431,6 @@ export default function CompletePurchaseOrderForm() {
 
   const selectedCustomer = watch('customer');
   const customerPoValue = watch('customerPo');
-  const calculationField1 = watch('calculationField1');
-  const calculationField2 = watch('calculationField2');
 
   // Customer PO uniqueness check
   const [checkingCustomerPo, setCheckingCustomerPo] = useState(false);
@@ -1477,7 +1481,7 @@ export default function CompletePurchaseOrderForm() {
           });
         } else {
           clearErrors('customerPo');
-    }
+        }
       } catch (error) {
         console.error('AlreadyExistPONumber check error:', error);
         // Network / server error pe user ko block nahi karte,
@@ -1515,9 +1519,9 @@ export default function CompletePurchaseOrderForm() {
           };
           reader.onerror = error => reject(error);
         });
-        
+
         console.log(`File "${file.name}" converted to base64 successfully! Length: ${base64.length} characters`);
-        
+
       } catch (error) {
         console.error(`Error converting ${field} to base64:`, error);
         showSnackbar(`Error converting file to base64: ${error.message}`, 'error');
@@ -1532,69 +1536,69 @@ export default function CompletePurchaseOrderForm() {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
       const apis = [
-        { 
-          name: 'costingRefs', 
+        {
+          name: 'costingRefs',
           url: `${API_BASE_URL}/api/MyOrders/CostingRefNo`,
           setter: setCostingOptions,
           setLoading: setCostingLoading,
           setError: setCostingError
         },
-        { 
-          name: 'customers', 
+        {
+          name: 'customers',
           url: `${API_BASE_URL}/api/MyOrders/GetCustomer`,
           setter: setCustomerOptions,
           setLoading: setCustomerLoading,
           setError: setCustomerError
         },
-        { 
-          name: 'suppliers', 
+        {
+          name: 'suppliers',
           url: `${API_BASE_URL}/api/MyOrders/GetSupplier`,
           setter: setSupplierOptions,
           setLoading: setSupplierLoading,
           setError: setSupplierError
         },
-        { 
-          name: 'merchants', 
+        {
+          name: 'merchants',
           url: `${API_BASE_URL}/api/MyOrders/GetMerchants`,
           setter: setMerchantOptions,
           setLoading: setMerchantLoading
         },
-        { 
-          name: 'portfolios', 
+        {
+          name: 'portfolios',
           url: `${API_BASE_URL}/api/MyOrders/GetProductPortfolio`,
           setter: setProductPortfolios,
           setLoading: setLoadingPortfolio
         },
-        { 
-          name: 'inquiries', 
+        {
+          name: 'inquiries',
           url: `${API_BASE_URL}/api/MyOrders/GetInquirySamples`,
           setter: setInquiryOptions,
           setLoading: setInquiryLoading,
           setError: setInquiryError
         },
-        { 
-          name: 'paymentModes', 
+        {
+          name: 'paymentModes',
           url: `${API_BASE_URL}/api/MyOrders/GetPaymentModes`,
           setter: (data) => setPaymentOptions(normalizePaymentModes(data)),
           setLoading: setPaymentLoading,
           setError: setPaymentError,
         },
-        { 
-          name: 'shipmentModes', 
+        {
+          name: 'shipmentModes',
           url: `${API_BASE_URL}/api/MyOrders/GetDeliveryTypes`,
           setter: (data) => setShipmentOptions(normalizeShipmentTerms(data)),
           setLoading: setShipmentLoading,
           setError: setShipmentError,
         },
-        { 
-          name: 'deliveryTypes', 
+        {
+          name: 'deliveryTypes',
           url: `${API_BASE_URL}/api/MyOrders/GetShipmentModes`,
           setter: (data) => setDeliveryOptions(normalizeShipmentModes(data)),
           setLoading: setDeliveryLoading,
           setError: setDeliveryError,
         },
-        { 
-          name: 'banks', 
+        {
+          name: 'banks',
           url: `${API_BASE_URL}/api/MyOrders/GetBanks`,
           setter: (data) => setBankOptions(data.map(b => ({ id: b.bankID, name: b.bankName }))),
           setLoading: setBankLoading,
@@ -1607,7 +1611,7 @@ export default function CompletePurchaseOrderForm() {
           api.setLoading(true);
           const res = await axios.get(api.url, { headers });
           const data = res.data;
-          
+
           if (Array.isArray(data)) {
             api.setter(data);
           } else if (data) {
@@ -1783,11 +1787,18 @@ export default function CompletePurchaseOrderForm() {
           productCode: it.productCode || it.ProductCode || '',
           sizeRange: it.sizeRange || it.SizeRange || '',
           size: it.size || it.Size || '',
+          // editable / extended fields for grid
+          barcode: it.barCodeTFPO || it.barcode || it.Barcode || '',
+          ratio: it.ration || it.ratio || it.Ratio || '',
           quantity: Number(it.poQty || it.POQty || it.quantity || it.Quantity || 0),
           itemPrice: Number(it.itemPrice || it.ItemPrice || it.price || it.Price || 0),
           value: Number(it.value || it.Value || it.amount || it.Amount || 0),
+          vendorPrice: Number(it.vendorPrice || it.VendorPrice || it.vendorprice || 0),
           ldpPrice: Number(it.ldpPrice || it.LDPPrice || 0),
           ldpValue: Number(it.ldpValue || it.LDPValue || 0),
+          cartonQty: Number(it.cartonQty || it.CartonQty || it.cartonQuantity || 0),
+          grossWeight: Number(it.grossWeight || it.GrossWeight || 0),
+          netWeight: Number(it.netWeight || it.NetWeight || 0),
         }));
 
         const totals = {
@@ -1821,15 +1832,68 @@ export default function CompletePurchaseOrderForm() {
     setShowSelections(!showSelections);
   };
 
-  const handleShowCalculationFields = () => {
-    handleCalculate();
-    setShowCalculationFields(!showCalculationFields);
+  const recalculateItemTotals = (rows) => ({
+    totalQuantity: rows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0),
+    totalValue: rows.reduce((sum, r) => sum + (Number(r.value) || 0), 0),
+    totalLdpValue: rows.reduce((sum, r) => sum + (Number(r.ldpValue) || 0), 0),
+  });
+
+  const handleSelectionRowChange = (index, field, rawValue) => {
+    setSavedItemData((prev) => {
+      if (!prev) return prev;
+
+      const numericFields = new Set([
+        'quantity',
+        'itemPrice',
+        'vendorPrice',
+        'ldpPrice',
+        'cartonQty',
+        'grossWeight',
+        'netWeight',
+      ]);
+
+      const rows = prev.rows.map((row, i) => {
+        if (i !== index) return row;
+
+        const updated = { ...row };
+        if (numericFields.has(field)) {
+          const num = Number(rawValue);
+          updated[field] = Number.isNaN(num) ? 0 : num;
+        } else {
+          updated[field] = rawValue;
+        }
+
+        // Recalculate value & LDP value whenever quantity / prices change
+        const qty = Number(updated.quantity) || 0;
+        const itemPrice = Number(updated.itemPrice) || 0;
+        const ldpPrice = Number(updated.ldpPrice) || 0;
+        updated.value = qty * itemPrice;
+        updated.ldpValue = qty * ldpPrice;
+
+        return updated;
+      });
+
+      return {
+        rows,
+        totals: recalculateItemTotals(rows),
+      };
+    });
   };
 
-  const handleCalculate = () => {
-    const field1 = parseFloat(calculationField1) || 0;
-    const field2 = parseFloat(calculationField2) || 0;
-    const result = field1 + field2;
+  const handleSelectionRowRemove = (index) => {
+    setSavedItemData((prev) => {
+      if (!prev) return prev;
+      const rows = prev.rows.filter((_, i) => i !== index);
+      return {
+        rows,
+        totals: recalculateItemTotals(rows),
+      };
+    });
+  };
+
+  const handleShowCalculationFields = () => {
+    // Placeholder - previously used extra calculation fields, now removed
+    setShowCalculationFields(false);
   };
 
   const showSnackbar = (message, severity = 'success') => {
@@ -1883,16 +1947,40 @@ export default function CompletePurchaseOrderForm() {
     });
   };
 
+  // Map item grid rows to AddPurchaseOrderDetails API payload
+  const mapItemRowsToDetailsPayload = (rows = []) =>
+    rows.map((row) => ({
+      quantity: Number(row.quantity || 0),
+      rate: Number(row.itemPrice || 0),
+      remarks: '', // can be wired later if a remarks field is added per row
+      vendorRate: Number(row.vendorPrice || 0),
+      ldpRate: Number(row.ldpPrice || 0),
+      cartonPerPcs: Number(row.cartonQty || 0),
+      qrCodePOD: '', // no QR field per row yet
+      ratioPOD: Number(row.ratio || 0),
+      grossWeightD: Number(row.grossWeight || 0),
+      netWeightD: Number(row.netWeight || 0),
+      barCodeTF: row.barcode || '',
+      styleNo: row.styleNo || '',
+      itemDescription: '', // can be mapped from form later
+      article: '', // optional, not present in grid yet
+      colorway: row.colorway || '',
+      size: String(row.size ?? ''),
+      itemPrice: Number(row.itemPrice || 0),
+      sizeRangeDBID: 0, // backend can derive from sizeRange text if needed
+      productCode: row.productCode || '',
+    }));
+
   // Map form data to API format - COMPLETELY UPDATED FOR IMAGE HANDLING
   const mapFormDataToAPI = async (data) => {
-    
+
     const selectedCustomerObj = customerOptions.find(c => c.customerName === data.customer);
     const selectedSupplierObj = supplierOptions.find(s => s.venderName === data.supplier);
-    
+
     // Handle multiple merchants - take the first one for API compatibility
     const selectedMerchantNames = Array.isArray(data.merchant) ? data.merchant : [data.merchant];
     const selectedMerchantObj = merchantOptions.find(m => selectedMerchantNames.includes(m.userName));
-    
+
     const selectedInquiryObj = inquiryOptions.find(i => i.sampleNo === data.inquiryNo);
 
     // Convert all files to base64
@@ -1927,21 +2015,21 @@ export default function CompletePurchaseOrderForm() {
       creationDate: new Date().toISOString(),
       status: data.status || '',
       pOtype: data.orderType || '',
-      
+
       // Convert IDs to numbers
       customerID: selectedCustomerObj?.customerID ? safeParseInt(selectedCustomerObj.customerID) : 0,
       supplierID: selectedSupplierObj?.venderLibraryID ? safeParseInt(selectedSupplierObj.venderLibraryID) : 0,
       marchandID: selectedMerchantObj?.userId ? safeParseInt(selectedMerchantObj.userId) : 0,
-      
+
       placementDate: formatDate(data.placementDate),
       shipmentDate: formatDate(data.buyerShipInitial),
       vendorExIndiaShipmentDate: formatDate(data.vendorShipInitial),
-      
+
       commission: safeParseFloat(data.commission),
       toleranceindays: data.tolQuantity || '',
       tolerance: formatDate(data.buyerShipLast),
       buyerExIndiaTolerance: formatDate(data.buyerShipLast),
-      
+
       timeSpame: 0,
       productGroup: data.productGroup || '',
       season: data.season || '',
@@ -1958,7 +2046,7 @@ export default function CompletePurchaseOrderForm() {
       exchangeRate: safeParseFloat(data.exchangeRate),
       exchangeDate: new Date().toISOString(),
       lastUpdate: new Date().toISOString(),
-      
+
       xmlFileName: '',
       buyerName: data.customer || '',
       buyingDepartment: '',
@@ -1976,12 +2064,12 @@ export default function CompletePurchaseOrderForm() {
       deliveryCity: '',
       airFreight: '',
       seaFreight: '',
-      
+
       // Convert portfolio/category/group IDs to numbers
       productPortfolioID: safeParseInt(data.productPortfolio),
       productCategoriesID: safeParseInt(data.productCategory),
       productGroupID: safeParseInt(data.productGroup),
-      
+
       proceedings: data.proceedings || '',
       transactions: data.transactions || '',
       destination: data.destination || '',
@@ -2052,11 +2140,11 @@ export default function CompletePurchaseOrderForm() {
       barCodeTFPO: '',
       etanjDate: formatDate(data.etaNewJerseyDate),
       etaWarehouseDate: formatDate(data.etaWarehouseDate),
-      
+
       // Convert inquiry and bank IDs to numbers
       inquiryMstID: selectedInquiryObj?.inquiryMstID ? safeParseInt(selectedInquiryObj.inquiryMstID) : 0,
       bankID: safeParseInt(data.bankID),
-      
+
       prodImgFileName: files.productImage ? files.productImage.name : '',
       originalPDFName: files.originalPurchaseOrder ? files.originalPurchaseOrder.name : '',
       buyerCustomer: data.buyerCustomer || '',
@@ -2073,57 +2161,88 @@ export default function CompletePurchaseOrderForm() {
 
   const onSubmit = async (data) => {
     console.log('🔍 DEBUG START ==================');
-    
+
     try {
       const token = localStorage.getItem('accessToken');
-      const headers = token ? { 
+      const headers = token ? {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       } : { 'Content-Type': 'application/json' };
-      
+
       const apiData = await mapFormDataToAPI(data);
-      
+
       console.log('📤 Sending to API:', apiData);
-      
+
       const response = await axios.post(
         `${API_BASE_URL}/api/MyOrders/AddPurchaseOrder`,
         apiData,
-        { 
+        {
           headers,
           timeout: 30000
         }
       );
-      
-      if (response.status === 200 || response.status === 201) {
-        showSnackbar('Purchase Order saved successfully!', 'success');
-        console.log('✅ API Response:', response.data);
-        
-        // Reset form after successful submission
-        methods.reset(defaultValues);
-        setSavedItemData(null);
-        setFiles({});
-      } else {
+
+      if (!(response.status === 200 || response.status === 201)) {
         throw new Error(`Failed to save purchase order. Status: ${response.status}`);
       }
+
+      // If we have item grid data, save it using AddPurchaseOrderDetails
+      if (savedItemData?.rows?.length) {
+        const detailsPayload = mapItemRowsToDetailsPayload(savedItemData.rows);
+
+        console.log('📤 Sending PO Details to API:', detailsPayload);
+
+
+        const detailsResponse = await axios.post(
+          `${API_BASE_URL}/api/MyOrders/AddPurchaseOrderDetails`,
+          detailsPayload,
+          {
+            headers,
+            timeout: 30000,
+          }
+        );
+
+        if (!(detailsResponse.status === 200 || detailsResponse.status === 201)) {
+          throw new Error(
+            `Failed to save purchase order details. Status: ${detailsResponse.status}`
+          );
+        }
+      }
+
+      showSnackbar(
+        savedItemData?.rows?.length
+          ? 'Purchase Order and item details saved successfully!'
+          : 'Purchase Order saved successfully!',
+        'success'
+      );
+
+      console.log('✅ API Responses:', {
+        purchaseOrder: response.data,
+      });
+
+      // Reset form after successful submission
+      methods.reset(defaultValues);
+      setSavedItemData(null);
+      setFiles({});
     } catch (error) {
       console.error('❌ Error submitting form:', error);
-      
+
       let errorMessage = 'Error saving purchase order. Please try again.';
-      
+
       if (error.response) {
         console.error('📞 Server Error Details:', error.response.data);
-        errorMessage = error.response.data.message || 
-                      error.response.data.title || 
-                      `Server Error: ${error.response.status} - ${error.response.statusText}`;
+        errorMessage = error.response.data.message ||
+          error.response.data.title ||
+          `Server Error: ${error.response.status} - ${error.response.statusText}`;
       } else if (error.request) {
         errorMessage = 'No response from server. Please check your connection.';
       } else {
         errorMessage = error.message;
       }
-      
+
       showSnackbar(errorMessage, 'error');
     }
-    
+
     console.log('🔍 DEBUG END ==================');
   };
 
@@ -2140,7 +2259,7 @@ export default function CompletePurchaseOrderForm() {
     <FormProvider {...methods}>
       <Container maxWidth="xl">
         <form onSubmit={handleSubmit(onSubmit)}>
-          
+
           {/* ----------------- Section: Basic Order Info ----------------- */}
           <Card sx={{ p: 3, mb: 4 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -2732,7 +2851,7 @@ export default function CompletePurchaseOrderForm() {
               <Grid item xs={12} sm={4}>
                 <Controller name="pcsPerCarton" render={({ field }) => <TextField {...field} fullWidth label="Pcs Per Carton" />} />
               </Grid>
-              
+
               {/* Item Description at Shipping Invoice Field */}
               <Grid item xs={12} sm={6}>
                 <Controller
@@ -2877,35 +2996,169 @@ export default function CompletePurchaseOrderForm() {
 
               {showSelections && savedItemData && (
                 <Box sx={{ mt: 3 }}>
-                  <TableContainer component={Paper}>
+                  <TableContainer
+                    component={Paper}
+                    sx={{
+                      width: '100%',
+                      maxWidth: '100%',
+                      overflowX: 'auto',
+                    }}
+                  >
                     <Table size="small">
                       <TableHead>
-                        <TableRow>
-                          <TableCell>Style No</TableCell>
+                        <TableRow
+                          sx={{
+                            '& th': {
+                              backgroundColor: theme.palette.primary.main,
+                              color: theme.palette.primary.contrastText,
+                              fontWeight: 'bold',
+                              fontSize: 12,
+                              whiteSpace: 'nowrap',
+                            },
+                          }}
+                        >
+                          <TableCell>Style #</TableCell>
                           <TableCell>Colorway</TableCell>
-                          <TableCell>Product Code</TableCell>
+                          <TableCell>ProductCode</TableCell>
                           <TableCell>Size Range</TableCell>
-                          <TableCell>Sizes</TableCell>
-                          <TableCell>Quantity</TableCell>
+                          <TableCell>Size</TableCell>
+                          <TableCell>Barcode</TableCell>
+                          <TableCell>Ratio</TableCell>
+                          <TableCell>PO Quantity</TableCell>
                           <TableCell>Item Price</TableCell>
                           <TableCell>Value</TableCell>
+                          <TableCell>Vendor Price</TableCell>
                           <TableCell>LDP Price</TableCell>
                           <TableCell>LDP Value</TableCell>
+                          <TableCell>Carton Qty</TableCell>
+                          <TableCell>Gross Weight</TableCell>
+                          <TableCell>Net Weight</TableCell>
+                          <TableCell align="center">Remove</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {savedItemData.rows.map((row, index) => (
-                          <TableRow key={index}>
+                          <TableRow
+                            key={index}
+                            sx={{
+                              '&:nth-of-type(odd)': {
+                                backgroundColor: '#f7f3ff',
+                              },
+                            }}
+                          >
                             <TableCell>{row.styleNo}</TableCell>
                             <TableCell>{row.colorway}</TableCell>
                             <TableCell>{row.productCode}</TableCell>
                             <TableCell>{row.sizeRange}</TableCell>
                             <TableCell>{row.size}</TableCell>
-                            <TableCell>{row.quantity}</TableCell>
-                            <TableCell>{row.itemPrice}</TableCell>
-                            <TableCell>{row.value.toFixed(2)}</TableCell>
-                            <TableCell>{row.ldpPrice}</TableCell>
-                            <TableCell>{row.ldpValue.toFixed(2)}</TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.barcode || ''}
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'barcode', e.target.value)
+                                }
+                                sx={{ width: 90 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.ratio || ''}
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'ratio', e.target.value)
+                                }
+                                sx={{ width: 80 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.quantity ?? 0}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'quantity', e.target.value)
+                                }
+                                sx={{ width: 70 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.itemPrice ?? 0}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'itemPrice', e.target.value)
+                                }
+                                sx={{ width: 70 }}
+                              />
+                            </TableCell>
+                            <TableCell>{(row.value ?? 0).toFixed(2)}</TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.vendorPrice ?? 0}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'vendorPrice', e.target.value)
+                                }
+                                sx={{ width: 80 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.ldpPrice ?? 0}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'ldpPrice', e.target.value)
+                                }
+                                sx={{ width: 80 }}
+                              />
+                            </TableCell>
+                            <TableCell>{(row.ldpValue ?? 0).toFixed(2)}</TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.cartonQty ?? 0}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'cartonQty', e.target.value)
+                                }
+                                sx={{ width: 70 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.grossWeight ?? 0}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'grossWeight', e.target.value)
+                                }
+                                sx={{ width: 80 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.netWeight ?? 0}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'netWeight', e.target.value)
+                                }
+                                sx={{ width: 80 }}
+                              />
+                            </TableCell>
+                            <TableCell align="center">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleSelectionRowRemove(index)}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -2914,69 +3167,29 @@ export default function CompletePurchaseOrderForm() {
 
                   <Box sx={{ mt: 2, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
                     <Grid container spacing={3}>
-                      <Grid item xs={4}>
+                      <Grid item xs={6}>
                         <Typography variant="subtitle1" fontWeight="bold">
                           Total Qty: {savedItemData.totals.totalQuantity}
                         </Typography>
                       </Grid>
-                      <Grid item xs={4}>
+                      <Grid item xs={6}>
                         <Typography variant="subtitle1" fontWeight="bold">
                           Total Value: {savedItemData.totals.totalValue.toFixed(2)}
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={4}>
-                        <Typography variant="subtitle1" fontWeight="bold">
-                          Total LDP Value: {savedItemData.totals.totalLdpValue.toFixed(2)}
                         </Typography>
                       </Grid>
                     </Grid>
                   </Box>
 
                   <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-                    <Button 
-                      variant="contained" 
-                      color="secondary" 
+                    <Button
+                      variant="contained"
+                      color="secondary"
                       startIcon={<CalculateIcon />}
                       onClick={handleShowCalculationFields}
                     >
                       Calculate
                     </Button>
                   </Box>
-
-                  {showCalculationFields && (
-                    <Grid container spacing={2} sx={{ mt: 2 }}>
-                      <Grid item xs={12} sm={6}>
-                        <Controller
-                          name="calculationField1"
-                          control={control}
-                          render={({ field }) => (
-                            <TextField
-                              {...field}
-                              fullWidth
-                              label="Enter value for calculation"
-                              type="number"
-                              placeholder="0"
-                            />
-                          )}
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Controller
-                          name="calculationField2"
-                          control={control}
-                          render={({ field }) => (
-                            <TextField
-                              {...field}
-                              fullWidth
-                              label="Enter value for calculation"
-                              type="number"
-                              placeholder="0"
-                            />
-                          )}
-                        />
-                      </Grid>
-                    </Grid>
-                  )}
                 </Box>
               )}
             </CardContent>
@@ -3005,9 +3218,9 @@ export default function CompletePurchaseOrderForm() {
                           <Select {...field} label="Payment Mode" value={field.value || ''}>
                             {paymentOptions.length > 0 ? (
                               paymentOptions.map((p) => (
-                              <MenuItem key={p.id} value={p.id}>
-                                {p.name}
-                              </MenuItem>
+                                <MenuItem key={p.id} value={p.id}>
+                                  {p.name}
+                                </MenuItem>
                               ))
                             ) : (
                               <>
@@ -3029,10 +3242,10 @@ export default function CompletePurchaseOrderForm() {
                     render={({ field }) => (
                       <FormControl fullWidth>
                         <InputLabel>Shipment Term</InputLabel>
-                          <Select {...field} label="Shipment Term" value={field.value || ''}>
+                        <Select {...field} label="Shipment Term" value={field.value || ''}>
                           <MenuItem value="4">CNF</MenuItem>
                           <MenuItem value="5">FOB</MenuItem>
-                          </Select>
+                        </Select>
                       </FormControl>
                     )}
                   />
@@ -3052,11 +3265,11 @@ export default function CompletePurchaseOrderForm() {
                     render={({ field }) => (
                       <FormControl fullWidth>
                         <InputLabel>Shipment Mode</InputLabel>
-                          <Select {...field} label="Shipment Mode" value={field.value || ''}>
+                        <Select {...field} label="Shipment Mode" value={field.value || ''}>
                           <MenuItem value="1">Air</MenuItem>
                           <MenuItem value="7">Sea</MenuItem>
                           <MenuItem value="8">courier</MenuItem>
-                          </Select>
+                        </Select>
                       </FormControl>
                     )}
                   />
@@ -3088,10 +3301,10 @@ export default function CompletePurchaseOrderForm() {
                   { name: "sizeSetComment", label: "Size Set Comment" },
                 ].map(({ name, label }) => (
                   <Grid item xs={12} sm={6} key={name}>
-                    <FileUploadWithPreview 
-                      name={name} 
-                      label={label} 
-                      accept="image/*,.pdf,.doc,.docx" 
+                    <FileUploadWithPreview
+                      name={name}
+                      label={label}
+                      accept="image/*,.pdf,.doc,.docx"
                     />
                   </Grid>
                 ))}
@@ -3171,26 +3384,26 @@ export default function CompletePurchaseOrderForm() {
               </Grid>
 
               <Stack direction="row" justifyContent="flex-end" spacing={2} sx={{ mt: 3 }}>
-                <LoadingButton 
-                  type="submit" 
-                  variant="contained" 
+                <LoadingButton
+                  type="submit"
+                  variant="contained"
                   color="primary"
                   loading={isSubmitting}
                 >
                   Save
                 </LoadingButton>
-                <LoadingButton 
-                  type="button" 
-                  variant="contained" 
+                <LoadingButton
+                  type="button"
+                  variant="contained"
                   color="primary"
                   loading={isSubmitting}
                   onClick={handleSubmit(handleSaveAndEmail)}
                 >
                   Save & Email
                 </LoadingButton>
-                <Button 
-                  type="button" 
-                  variant="outlined" 
+                <Button
+                  type="button"
+                  variant="outlined"
                   color="primary"
                   onClick={() => navigate('/dashboard/supply-chain')}
                 >
@@ -3219,7 +3432,7 @@ export default function CompletePurchaseOrderForm() {
         <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
           {snackbar.message}
         </Alert>
-        
+
       </Snackbar>
     </FormProvider>
   );

@@ -1478,7 +1478,7 @@ function PurchaseOrderTableRow({
       <TableCell sx={{ fontSize: '0.75rem' }}>{row.placementDate}</TableCell>
       <TableCell sx={{ fontSize: '0.75rem' }}>{row.shipmentDate}</TableCell>
       <TableCell align="right" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
-        ${row.amount ? row.amount.toLocaleString() : '0'}
+        {row.amount ? row.amount.toLocaleString() : '0'}
       </TableCell>
 
       {/* Restricted Columns - Sirf normal users ke liye */}
