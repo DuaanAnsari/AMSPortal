@@ -70,6 +70,8 @@ export default function TNAChartPage() {
   const [selectedPoNumbers, setSelectedPoNumbers] = useState([]);
   const [allCustomers, setAllCustomers] = useState([]);
   const [selectedCustomers, setSelectedCustomers] = useState([]);
+  const [allColors, setAllColors] = useState([]);
+  const [selectedColors, setSelectedColors] = useState([]);
 
   const containerStyle = useMemo(
     () => ({
@@ -87,13 +89,8 @@ export default function TNAChartPage() {
       try {
         const response = await apiClient.get('/MyOrders/GetProductPortfolio');
         const list = response.data || [];
+        // Sirf list set karein; ab auto first select + search nahi hoga
         setProductPortfolios(list);
-        // Default: first portfolio + auto load
-        if (list.length && !selectedPortfolio) {
-          const firstId = list[0].productPortfolioID;
-          setSelectedPortfolio(firstId);
-          handleSearch(firstId);
-        }
       } catch (error) {
         // eslint-disable-next-line no-console
         console.error('Error fetching product portfolios for TNA Chart:', error);
@@ -104,32 +101,58 @@ export default function TNAChartPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-filter data when selected PO numbers change (without re-fetching)
+  // Recompute dropdown options and visible rows whenever selections or data change
   useEffect(() => {
     if (fullData.length === 0) return;
 
-    let filteredData = fullData;
-
-    // First filter by customers if selected
+    // Rebuild dependent dropdown options (PO No, Color) based on selected customers
+    let optionBase = fullData;
     if (selectedCustomers.length > 0) {
-      filteredData = filteredData.filter(row => selectedCustomers.includes(row.customer));
+      optionBase = optionBase.filter((row) =>
+        selectedCustomers.includes(row.customer)
+      );
     }
 
-    // Then filter by selected PO numbers if any
+    // PO list depends only on customer filter
+    const uniquePoNumbers = [...new Set(optionBase.map((row) => row.poNo))]
+      .filter(Boolean)
+      .sort();
+    setAllPoNumbers(uniquePoNumbers);
+
+    // Color list depends on customer + PO filter (same data as visible grid before color filter)
+    const colorBase =
+      selectedPoNumbers.length > 0
+        ? optionBase.filter((row) => selectedPoNumbers.includes(row.poNo))
+        : optionBase;
+
+    const uniqueColors = [...new Set(colorBase.map((row) => row.color))]
+      .filter(Boolean)
+      .sort();
+    setAllColors(uniqueColors);
+
+    // Now compute filtered grid data
+    let filteredData = fullData;
+
+    if (selectedCustomers.length > 0) {
+      filteredData = filteredData.filter((row) =>
+        selectedCustomers.includes(row.customer)
+      );
+    }
+
+    if (selectedColors.length > 0) {
+      filteredData = filteredData.filter((row) =>
+        selectedColors.includes(row.color)
+      );
+    }
+
     if (selectedPoNumbers.length > 0) {
-      filteredData = filteredData.filter(row => selectedPoNumbers.includes(row.poNo));
+      filteredData = filteredData.filter((row) =>
+        selectedPoNumbers.includes(row.poNo)
+      );
     }
 
     setTableData(filteredData);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPoNumbers]);
-
-  // Re-filter when customers change
-  useEffect(() => {
-    if (!selectedPortfolio) return;
-    handleSearch(selectedPortfolio);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCustomers]);
+  }, [fullData, selectedCustomers, selectedColors, selectedPoNumbers]);
 
   const handleSearch = async (portfolioId) => {
     const idToUse = portfolioId || selectedPortfolio;
@@ -174,8 +197,9 @@ export default function TNAChartPage() {
 
       // 1. Construct Columns (group headers)
       const newColDefs = [
-        { headerName: 'PO No', field: 'poNo', pinned: 'left', minWidth: 70 },
-        { headerName: 'Customer', field: 'customer', pinned: 'left', minWidth: 110 },
+        { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 100 },
+        { headerName: 'Customer', field: 'customer', pinned: 'left', maxWidth: 100 },
+        { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 100 },
         ...processList.map((proc) => ({
           headerName: proc,
           children: [
@@ -205,23 +229,35 @@ export default function TNAChartPage() {
 
       setColumnDefs(newColDefs);
 
-      // 2. Pivot Data: one row per PO, processes as column groups
+      // 2. Pivot Data: one row per PO + Color, processes as column groups
       const rowMap = new Map();
 
       poData.forEach((item) => {
         if (!item.poid) return;
 
-        if (!rowMap.has(item.poid)) {
-          rowMap.set(item.poid, {
+        const colorValue =
+          item.colourway ||
+          item.Colourway ||
+          item.colorway ||
+          item.Colorway ||
+          item.color ||
+          item.Color ||
+          '';
+
+        const key = `${item.poid}_${colorValue || ''}`;
+
+        if (!rowMap.has(key)) {
+          rowMap.set(key, {
             poid: item.poid,
             poNo: item.poNo,
             customer: item.customer || item.customerName || '',
+            color: colorValue,
             status: item.status,
             qtyCompleted: item.qtyCompleted,
             freezeCondPPSample: item.freezeCondPPSample,
           });
         }
-        const row = rowMap.get(item.poid);
+        const row = rowMap.get(key);
         if (item.process) {
           row[`${item.process}_idealDate`] = item.idealDate;
           row[`${item.process}_actualDate`] = item.actualDate;
@@ -235,35 +271,14 @@ export default function TNAChartPage() {
       // eslint-disable-next-line no-console
       console.log('Grid Data:', finalData);
 
-      // Store full data
+      // Store full data (filters & dropdown options are handled in useEffect)
       setFullData(finalData);
 
       // Extract unique customers for dropdown
-      const uniqueCustomers = [...new Set(finalData.map(row => row.customer))].filter(Boolean).sort();
+      const uniqueCustomers = [...new Set(finalData.map((row) => row.customer))]
+        .filter(Boolean)
+        .sort();
       setAllCustomers(uniqueCustomers);
-
-      // Extract unique PO numbers (filtered by customers if selected)
-      const customerFilteredData = selectedCustomers.length > 0
-        ? finalData.filter(row => selectedCustomers.includes(row.customer))
-        : finalData;
-
-      const uniquePoNumbers = [...new Set(customerFilteredData.map(row => row.poNo))].filter(Boolean).sort();
-      setAllPoNumbers(uniquePoNumbers);
-
-      // Filter data based on selected customers and PO numbers
-      let filteredData = finalData;
-
-      // First filter by customers if selected
-      if (selectedCustomers.length > 0) {
-        filteredData = filteredData.filter(row => selectedCustomers.includes(row.customer));
-      }
-
-      // Then filter by selected PO numbers if any
-      if (selectedPoNumbers.length > 0) {
-        filteredData = filteredData.filter(row => selectedPoNumbers.includes(row.poNo));
-      }
-
-      setTableData(filteredData);
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Error fetching TNA data:', error);
@@ -277,12 +292,18 @@ export default function TNAChartPage() {
     setSelectedPortfolio(value);
     setSelectedCustomers([]); // Reset customers when portfolio changes
     setSelectedPoNumbers([]); // Reset PO selection when portfolio changes
+    setSelectedColors([]); // Reset color selection when portfolio changes
     handleSearch(value);
   };
 
   const handleCustomerChange = (event, newValue) => {
     setSelectedCustomers(newValue);
     setSelectedPoNumbers([]); // Reset PO selection when customers change
+    setSelectedColors([]); // Reset color selection when customers change
+  };
+
+  const handleColorChange = (event, newValue) => {
+    setSelectedColors(newValue);
   };
 
   return (
@@ -301,7 +322,7 @@ export default function TNAChartPage() {
       <Card sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-            <Box sx={{ minWidth: 260, maxWidth: 320 }}>
+            <Box sx={{ flex: '1 1 22%', minWidth: 200 }}>
               <TextField
                 select
                 fullWidth
@@ -328,7 +349,7 @@ export default function TNAChartPage() {
               </TextField>
             </Box>
 
-            <Box sx={{ minWidth: 260, maxWidth: 320 }}>
+            <Box sx={{ flex: '1 1 22%', minWidth: 200 }}>
               <Autocomplete
                 multiple
                 id="customer-autocomplete"
@@ -433,7 +454,7 @@ export default function TNAChartPage() {
               />
             </Box>
 
-            <Box sx={{ minWidth: 260, maxWidth: 320 }}>
+            <Box sx={{ flex: '1 1 22%', minWidth: 200 }}>
               <Autocomplete
                 multiple
                 id="po-number-autocomplete"
@@ -442,7 +463,7 @@ export default function TNAChartPage() {
                 value={selectedPoNumbers}
                 onChange={(event, newValue) => {
                   // Filter out the __SELECT_ALL__ option from the value
-                  const filteredValue = newValue.filter(v => v !== '__SELECT_ALL__');
+                  const filteredValue = newValue.filter((v) => v !== '__SELECT_ALL__');
                   setSelectedPoNumbers(filteredValue);
                 }}
                 getOptionLabel={(option) => {
@@ -452,16 +473,23 @@ export default function TNAChartPage() {
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label={`PO No ${selectedPoNumbers.length > 0 ? `(${selectedPoNumbers.length})` : ''}`}
-                    placeholder={selectedPoNumbers.length === 0 ? "Search or select PO..." : ""}
+                    label={`PO No ${selectedPoNumbers.length > 0 ? `(${selectedPoNumbers.length})` : ''
+                      }`}
+                    placeholder={
+                      selectedPoNumbers.length === 0 ? 'Search or select PO...' : ''
+                    }
                     size="small"
                   />
                 )}
                 renderOption={(props, option, { selected }) => {
                   // Check if this is the "Select All" option
                   if (option === '__SELECT_ALL__') {
-                    const allSelected = allPoNumbers.length > 0 && allPoNumbers.every(poNo => selectedPoNumbers.includes(poNo));
-                    const someSelected = allPoNumbers.some(poNo => selectedPoNumbers.includes(poNo));
+                    const allSelected =
+                      allPoNumbers.length > 0 &&
+                      allPoNumbers.every((poNo) => selectedPoNumbers.includes(poNo));
+                    const someSelected = allPoNumbers.some((poNo) =>
+                      selectedPoNumbers.includes(poNo)
+                    );
 
                     return (
                       <li
@@ -535,6 +563,118 @@ export default function TNAChartPage() {
                 }}
               />
             </Box>
+
+            <Box sx={{ flex: '1 1 22%', minWidth: 200 }}>
+              <Autocomplete
+                multiple
+                id="color-autocomplete"
+                options={['__SELECT_ALL__', ...allColors]}
+                disableCloseOnSelect
+                value={selectedColors}
+                onChange={(event, newValue) => {
+                  // Filter out the __SELECT_ALL__ option from the value
+                  const filteredValue = newValue.filter((v) => v !== '__SELECT_ALL__');
+                  handleColorChange(event, filteredValue);
+                }}
+                getOptionLabel={(option) => {
+                  if (option === '__SELECT_ALL__') return 'Select All';
+                  return option;
+                }}
+                disabled={!selectedPortfolio}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label={`Color ${selectedColors.length > 0 ? `(${selectedColors.length})` : ''}`}
+                    placeholder={
+                      selectedColors.length === 0
+                        ? 'Search or select colors...'
+                        : ''
+                    }
+                    size="small"
+                  />
+                )}
+                renderOption={(props, option, { selected }) => {
+                  // Check if this is the "Select All" option
+                  if (option === '__SELECT_ALL__') {
+                    const allSelected =
+                      allColors.length > 0 &&
+                      allColors.every((color) => selectedColors.includes(color));
+                    const someSelected = allColors.some((color) =>
+                      selectedColors.includes(color)
+                    );
+
+                    return (
+                      <li
+                        {...props}
+                        key="select-all-color"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (allSelected) {
+                            setSelectedColors([]);
+                          } else {
+                            setSelectedColors([...allColors]);
+                          }
+                        }}
+                        style={{
+                          ...props.style,
+                          backgroundColor: '#f5f5f5',
+                          borderBottom: '1px solid #e0e0e0',
+                          fontWeight: 500,
+                        }}
+                      >
+                        <Checkbox
+                          checked={allSelected}
+                          indeterminate={someSelected && !allSelected}
+                          style={{ marginRight: 8 }}
+                        />
+                        Select All
+                      </li>
+                    );
+                  }
+
+                  return (
+                    <li {...props} key={option}>
+                      <Checkbox
+                        checked={selected}
+                        style={{ marginRight: 8 }}
+                      />
+                      {option}
+                    </li>
+                  );
+                }}
+                renderTags={(value) => {
+                  if (value.length === 0) return null;
+                  if (value.length === 1) {
+                    return (
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontSize: '0.875rem',
+                          color: 'text.primary',
+                        }}
+                      >
+                        {value[0]}
+                      </Typography>
+                    );
+                  }
+                  return (
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontSize: '0.875rem',
+                        color: 'text.primary',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {value.length} selected
+                    </Typography>
+                  );
+                }}
+                ListboxProps={{
+                  style: { maxHeight: 300 },
+                }}
+              />
+            </Box>
           </Box>
 
         </Box>
@@ -546,6 +686,14 @@ export default function TNAChartPage() {
           style={containerStyle}
           sx={{
             position: 'relative',
+            '& .ag-header, & .ag-header-viewport, & .ag-header-row': {
+              backgroundColor: theme.palette.primary.main,
+              color: theme.palette.primary.contrastText,
+            },
+            '& .ag-header-cell, & .ag-header-group-cell': {
+              backgroundColor: 'transparent',
+              color: 'inherit',
+            },
             '& .ag-header-cell, & .ag-header-group-cell': {
               paddingLeft: '2px !important',
               paddingRight: '2px !important',
