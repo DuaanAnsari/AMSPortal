@@ -939,6 +939,13 @@ export default function CompletePurchaseOrderFormEdit() {
   const [costingOptions, setCostingOptions] = useState([]);
   const [costingLoading, setCostingLoading] = useState(false);
 
+  // Helpers for Product Specific Information grid
+  const recalculateItemTotals = (rows) => ({
+    totalQuantity: rows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0),
+    totalValue: rows.reduce((sum, r) => sum + (Number(r.value) || 0), 0),
+    totalLdpValue: rows.reduce((sum, r) => sum + (Number(r.ldpValue) || 0), 0),
+  });
+
   const customerPoValue = watch('customerPo');
   const calculationField1 = watch('calculationField1');
   const calculationField2 = watch('calculationField2');
@@ -1384,6 +1391,72 @@ export default function CompletePurchaseOrderFormEdit() {
     }
   }, [id, reset, customers, suppliers, merchants, productPortfolios]);
 
+  // Load Product Specific Information grid data for view (styles / sizes per PO)
+  useEffect(() => {
+    const fetchStyleGrid = async () => {
+      if (!id) return;
+
+      try {
+        const response = await apiClient.get(`/Milestone/GetStyle?poid=${id}`);
+        const data = Array.isArray(response.data) ? response.data : [];
+        if (data.length === 0) return;
+
+        const rows = data.map((item) => {
+          const quantity = Number(item.quantity || 0);
+          const itemPrice = Number(
+            item.itemPrice ?? item.rate ?? 0
+          );
+          const ldpPrice = Number(
+            item.ldpRate ?? item.ldpPrice ?? 0
+          );
+
+          const value = quantity * itemPrice;
+          const ldpValue = quantity * ldpPrice;
+
+          return {
+            styleNo: item.styleNo || '',
+            colorway: item.colorway || '',
+            productCode: item.productCode || '',
+            // API me size range ka naam nahi aa raha, isliye abhi blank rakha hai
+            sizeRange: item.sizeRange || '',
+            size: item.size || '',
+            quantity,
+            itemPrice,
+            value,
+            ldpPrice,
+            ldpValue,
+
+            // Extra fields (future editable grid ke liye useful)
+            barcode: item.barCodeTF || '',
+            ratio: item.ratioPOD || 0,
+            vendorPrice: Number(item.vendorRate ?? 0),
+            cartonQty: Number(item.cartonPerPcs ?? 0),
+            grossWeight: Number(item.grossWeightD ?? 0),
+            netWeight: Number(item.netWeightD ?? 0),
+          };
+        });
+
+        const totals = {
+          totalQuantity: rows.reduce((sum, r) => sum + (r.quantity || 0), 0),
+          totalValue: rows.reduce((sum, r) => sum + (r.value || 0), 0),
+          totalLdpValue: rows.reduce((sum, r) => sum + (r.ldpValue || 0), 0),
+        };
+
+        setSavedItemData({ rows, totals });
+
+        // Style field ko bhi auto-fill kar dein, jaise Add Order me hai
+        const styleNumbers = [...new Set(rows.map((r) => r.styleNo))].join(', ');
+        if (styleNumbers) {
+          setValue('style', styleNumbers);
+        }
+      } catch (error) {
+        console.error('Error fetching style grid for PO:', error);
+      }
+    };
+
+    fetchStyleGrid();
+  }, [id, setValue]);
+
   // NOTE:
   // Previously, whenever the Customer PO changed, we were auto-copying it
   // into Internal PO via a useEffect. That caused both fields to always
@@ -1416,6 +1489,48 @@ export default function CompletePurchaseOrderFormEdit() {
 
   const showSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
+  };
+
+  const handleSelectionRowChange = (index, field, rawValue) => {
+    setSavedItemData((prev) => {
+      if (!prev) return prev;
+
+      const numericFields = new Set([
+        'quantity',
+        'itemPrice',
+        'vendorPrice',
+        'ldpPrice',
+        'cartonQty',
+        'grossWeight',
+        'netWeight',
+      ]);
+
+      const rows = prev.rows.map((row, i) => {
+        if (i !== index) return row;
+
+        const updated = { ...row };
+        if (numericFields.has(field)) {
+          const num = Number(rawValue);
+          updated[field] = Number.isNaN(num) ? 0 : num;
+        } else {
+          updated[field] = rawValue;
+        }
+
+        // Recalculate value & LDP value whenever quantity / prices change
+        const qty = Number(updated.quantity) || 0;
+        const itemPrice = Number(updated.itemPrice) || 0;
+        const ldpPrice = Number(updated.ldpPrice) || 0;
+        updated.value = qty * itemPrice;
+        updated.ldpValue = qty * ldpPrice;
+
+        return updated;
+      });
+
+      return {
+        rows,
+        totals: recalculateItemTotals(rows),
+      };
+    });
   };
 
   const handleCloseSnackbar = () => {
@@ -1590,6 +1705,33 @@ export default function CompletePurchaseOrderFormEdit() {
     return payload;
   };
 
+  // Build payload for Milestone/UpdateStyle from editable grid rows
+  const buildStyleUpdatePayload = (rows) => {
+    if (!rows || rows.length === 0) return null;
+
+    return rows.map((row) => ({
+      quantity: row.quantity ?? 0,
+      rate: row.itemPrice ?? 0,
+      remarks: row.remarks || '',
+      vendorRate: row.vendorPrice ?? 0,
+      ldpRate: row.ldpPrice ?? 0,
+      cartonPerPcs: row.cartonQty ?? 0,
+      qrCodePOD: row.qrCodePOD || '',
+      ratioPOD: row.ratio ?? 0,
+      grossWeightD: row.grossWeight ?? 0,
+      netWeightD: row.netWeight ?? 0,
+      barCodeTF: row.barcode || '',
+      styleNo: row.styleNo || '',
+      itemDescription: row.itemDescription || '',
+      article: row.article || '',
+      colorway: row.colorway || '',
+      size: row.size || '',
+      itemPrice: row.itemPrice ?? 0,
+      sizeRangeDBID: row.sizeRangeDBID ?? 0,
+      productCode: row.productCode || '',
+    }));
+  };
+
   const onSubmit = async (data) => {
     try {
       const payload = buildUpdatePayload(data, customers, suppliers, merchants, productPortfolios, productCategories, productGroups);
@@ -1602,7 +1744,13 @@ export default function CompletePurchaseOrderFormEdit() {
 
       await apiClient.post(`/MyOrders/UpdatePurchaseOrder?poid=${id}`, payload);
 
-      showSnackbar('Purchase Order updated successfully!', 'success');
+      // Also update Product Specific Information (style grid) if available
+      const stylePayload = buildStyleUpdatePayload(savedItemData?.rows || []);
+      if (stylePayload) {
+        await apiClient.post(`/Milestone/UpdateStyle?poid=${id}`, stylePayload);
+      }
+
+      showSnackbar('Purchase Order and item details updated successfully!', 'success');
     } catch (error) {
       console.error('Error submitting form:', error);
       showSnackbar('Error updating purchase order. Please try again.', 'error');
@@ -2339,16 +2487,22 @@ export default function CompletePurchaseOrderFormEdit() {
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Style No</TableCell>
+                          <TableCell>Style #</TableCell>
                           <TableCell>Colorway</TableCell>
-                          <TableCell>Product Code</TableCell>
+                          <TableCell>ProductCode</TableCell>
                           <TableCell>Size Range</TableCell>
-                          <TableCell>Sizes</TableCell>
-                          <TableCell>Quantity</TableCell>
+                          <TableCell>Size</TableCell>
+                          <TableCell>Barcode</TableCell>
+                          <TableCell>Ratio</TableCell>
+                          <TableCell>PO Quantity</TableCell>
                           <TableCell>Item Price</TableCell>
                           <TableCell>Value</TableCell>
+                          <TableCell>Vendor Price</TableCell>
                           <TableCell>LDP Price</TableCell>
                           <TableCell>LDP Value</TableCell>
+                          <TableCell>Carton Qty</TableCell>
+                          <TableCell>Gross Weight</TableCell>
+                          <TableCell>Net Weight</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2359,11 +2513,105 @@ export default function CompletePurchaseOrderFormEdit() {
                             <TableCell>{row.productCode}</TableCell>
                             <TableCell>{row.sizeRange}</TableCell>
                             <TableCell>{row.size}</TableCell>
-                            <TableCell>{row.quantity}</TableCell>
-                            <TableCell>{row.itemPrice}</TableCell>
-                            <TableCell>{row.value.toFixed(2)}</TableCell>
-                            <TableCell>{row.ldpPrice}</TableCell>
-                            <TableCell>{row.ldpValue.toFixed(2)}</TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.barcode || ''}
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'barcode', e.target.value)
+                                }
+                                sx={{ width: 90 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.ratio || ''}
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'ratio', e.target.value)
+                                }
+                                sx={{ width: 80 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.quantity ?? 0}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'quantity', e.target.value)
+                                }
+                                sx={{ width: 70 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.itemPrice ?? 0}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'itemPrice', e.target.value)
+                                }
+                                sx={{ width: 70 }}
+                              />
+                            </TableCell>
+                            <TableCell>{(row.value ?? 0).toFixed(2)}</TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.vendorPrice ?? 0}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'vendorPrice', e.target.value)
+                                }
+                                sx={{ width: 80 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.ldpPrice ?? 0}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'ldpPrice', e.target.value)
+                                }
+                                sx={{ width: 80 }}
+                              />
+                            </TableCell>
+                            <TableCell>{(row.ldpValue ?? 0).toFixed(2)}</TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.cartonQty ?? 0}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'cartonQty', e.target.value)
+                                }
+                                sx={{ width: 70 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.grossWeight ?? 0}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'grossWeight', e.target.value)
+                                }
+                                sx={{ width: 80 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.netWeight ?? 0}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'netWeight', e.target.value)
+                                }
+                                sx={{ width: 80 }}
+                              />
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

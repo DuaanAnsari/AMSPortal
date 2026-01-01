@@ -71,7 +71,7 @@ export default function MilestoneView() {
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
   // ✅ Fetch Process Data
   useEffect(() => {
@@ -113,7 +113,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
               submissionDate: item.submissionDate ? dayjs(item.submissionDate) : null,
               approvalDate: null,
               quantityCompleted: item.quantityCompleted || item.quantity || '',
-              unit: item.unit || '',
+              unit: item.units || '',
               status: item.status || '',
               remarks: item.remarks || '',
             };
@@ -313,45 +313,45 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
         {/* 🔹 Excel Links Section */}
         <Card sx={{ mb: 3, borderRadius: 2, boxShadow: 3, p: 2 }}>
           <Stack direction="row" spacing={7} justifyContent="flex-start" alignItems="center">
-            <Typography 
-              variant="body1" 
-              color="primary" 
-              sx={{ 
+            <Typography
+              variant="body1"
+              color="primary"
+              sx={{
                 cursor: 'pointer',
-              
+
                 '&:hover': { textDecoration: 'underline' }
               }}
             >
               Print Milestone | Excel
             </Typography>
-            <Typography 
-              variant="body1" 
-              color="primary" 
-              sx={{ 
+            <Typography
+              variant="body1"
+              color="primary"
+              sx={{
                 cursor: 'pointer',
-               
+
                 '&:hover': { textDecoration: 'underline' }
               }}
             >
               View Milestone | Excel
             </Typography>
-            <Typography 
-              variant="body1" 
-              color="primary" 
-              sx={{ 
+            <Typography
+              variant="body1"
+              color="primary"
+              sx={{
                 cursor: 'pointer',
-          
+
                 '&:hover': { textDecoration: 'underline' }
               }}
             >
               Print Milestone History | Excel
             </Typography>
-            <Typography 
-              variant="body1" 
-              color="primary" 
-              sx={{ 
+            <Typography
+              variant="body1"
+              color="primary"
+              sx={{
                 cursor: 'pointer',
-               
+
                 '&:hover': { textDecoration: 'underline' }
               }}
             >
@@ -607,7 +607,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
               {/* ✅ Updated Dropdown 1 - Multiple Selection */}
               <Grid item xs={12} md={4}>
                 <FormControl fullWidth>
-                 
+
                   <Select
                     multiple
                     displayEmpty
@@ -626,7 +626,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
                       },
                     }}
                   >
-                    {['37522-SS-RED', '37522-SS-BLUSH', '37522-SS-CREAM', '37522-SS-NAVY','37522-SS-SAGE','37522-SS-RED'].map((option) => (
+                    {['37522-SS-RED', '37522-SS-BLUSH', '37522-SS-CREAM', '37522-SS-NAVY', '37522-SS-SAGE', '37522-SS-RED'].map((option) => (
                       <MenuItem key={option} value={option}>
                         <Checkbox checked={form.dropdown1?.includes(option)} />
                         <ListItemText primary={option} />
@@ -639,7 +639,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
               {/* ✅ Updated Dropdown 2 - Multiple Selection */}
               <Grid item xs={12} md={4}>
                 <FormControl fullWidth>
-              
+
                   <Select
                     multiple
                     displayEmpty
@@ -660,7 +660,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
                   >
                     {['37522-SS-RED'].map((option) => (
                       <MenuItem key={option} value={option}>
-        
+
                         <ListItemText primary={option} />
                       </MenuItem>
                     ))}
@@ -670,15 +670,15 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
               <Stack direction="row" spacing={2} alignItems="flex-start">
                 {/* Annexure Button */}
-                <Typography variant="h6" color="primary"  onClick={() => window.open('#', '_blank')} sx={{ cursor: 'pointer',mt:8 ,marginLeft:4}}>
+                <Typography variant="h6" color="primary" onClick={() => window.open('#', '_blank')} sx={{ cursor: 'pointer', mt: 8, marginLeft: 4 }}>
                   Annexure
                 </Typography>
-                
+
                 {/* Link text */}
-                <Typography 
-                  variant="body2" 
-                  color="primary" 
-                  sx={{ 
+                <Typography
+                  variant="body2"
+                  color="primary"
+                  sx={{
                     cursor: 'pointer',
                     mt: 8.5 // Align with button
                   }}
@@ -709,7 +709,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
                   py: 1,
                   fontWeight: 600,
                   borderWidth: 2,
-                  textAlign:'right',
+                  textAlign: 'right',
                   '&:hover': {
                     borderWidth: 2,
                   },
@@ -724,16 +724,16 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
                 flexWrap="wrap"
                 useFlexGap
               >
-                <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1,mt:2 }}>
+                <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1, mt: 2 }}>
                   Not Applicable
                 </Button>
-                <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1,mt:2 }}>
+                <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1, mt: 2 }}>
                   Save This PO
                 </Button>
-                <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1,mt:2 }}>
+                <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1, mt: 2 }}>
                   Save All Child PO
                 </Button>
-                <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1,mt:2 }}>
+                <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1, mt: 2 }}>
                   Select All
                 </Button>
               </Stack>

@@ -208,6 +208,10 @@ export default function TNAChartPage() {
             { headerName: 'Approval Date', field: `${proc}_approvalDatee`, minWidth: 75 },
             { headerName: 'Est. Date', field: `${proc}_estimatedDate`, minWidth: 75 },
             { headerName: 'Date Span', field: `${proc}_dateSpan`, minWidth: 60 },
+            { headerName: 'Units', field: `${proc}_units`, minWidth: 70 },
+            { headerName: 'Status', field: `${proc}_status`, minWidth: 80 },
+            { headerName: 'Remarks', field: `${proc}_preFilledRemarks`, minWidth: 140 },
+            { headerName: 'Qty Completed', field: `${proc}_qtyCompleted`, minWidth: 100 },
           ],
         })),
       ];
@@ -264,6 +268,17 @@ export default function TNAChartPage() {
           row[`${item.process}_approvalDatee`] = item.approvalDatee;
           row[`${item.process}_estimatedDate`] = item.estimatedDate;
           row[`${item.process}_dateSpan`] = item.dateSpan;
+
+          // Additional per-process fields
+          row[`${item.process}_units`] = item.units || item.Units || '';
+          row[`${item.process}_status`] = item.status || '';
+          row[`${item.process}_preFilledRemarks`] =
+            item.preFilledRemarks ||
+            item.PreFilledRemarks ||
+            item.prefilledRemarks ||
+            '';
+          row[`${item.process}_qtyCompleted`] =
+            item.qtyCompleted || item.QtyCompleted || '';
         }
       });
 
