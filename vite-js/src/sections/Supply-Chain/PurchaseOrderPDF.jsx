@@ -245,14 +245,14 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
 
         const canvas = await html2canvas(page, {
           scale: 2, // High resolution
-          useCORS: true,
-          logging: false,
-          backgroundColor: '#FFFFFF'
-        });
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#FFFFFF'
+    });
 
-        const imgData = canvas.toDataURL('image/png');
-        const imgWidth = canvas.width;
-        const imgHeight = canvas.height;
+    const imgData = canvas.toDataURL('image/png');
+    const imgWidth = canvas.width;
+    const imgHeight = canvas.height;
 
         // Calculate ratio to fit A4 page width (maintaining aspect ratio)
         const ratio = pdfWidth / imgWidth;
@@ -267,7 +267,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
         }
       }
 
-      pdf.save(`Purchase_Order_${data.ref}.pdf`);
+    pdf.save(`Purchase_Order_${data.ref}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
     } finally {

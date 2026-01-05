@@ -15,6 +15,9 @@ import {
   Select,
   OutlinedInput,
   Autocomplete,
+  Button,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 
@@ -72,6 +75,13 @@ export default function TNAChartPage() {
   const [selectedCustomers, setSelectedCustomers] = useState([]);
   const [allColors, setAllColors] = useState([]);
   const [selectedColors, setSelectedColors] = useState([]);
+  const [modifiedRows, setModifiedRows] = useState(new Map());
+  const [saving, setSaving] = useState(false);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
 
   const containerStyle = useMemo(
     () => ({
@@ -82,6 +92,17 @@ export default function TNAChartPage() {
   );
 
   const [columnDefs, setColumnDefs] = useState([]);
+
+  // Format date value for grid display (dd/MM/yyyy)
+  const formatGridDate = (value) => {
+    if (!value) return '';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const yyyy = d.getUTCFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  };
 
   // Fetch product portfolios for filter
   useEffect(() => {
@@ -195,7 +216,7 @@ export default function TNAChartPage() {
       const processList = (processRes.data || []).filter((p) => !!p);
       const poData = poRes.data || [];
 
-      // 1. Construct Columns (group headers)
+      // 1. Construct Columns (group headers) - fixed sub‑columns per process
       const newColDefs = [
         { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 100 },
         { headerName: 'Customer', field: 'customer', pinned: 'left', maxWidth: 100 },
@@ -203,11 +224,42 @@ export default function TNAChartPage() {
         ...processList.map((proc) => ({
           headerName: proc,
           children: [
-            { headerName: 'Ideal Date', field: `${proc}_idealDate`, minWidth: 75 },
-            { headerName: 'Actual Date', field: `${proc}_actualDate`, minWidth: 75 },
-            { headerName: 'Approval Date', field: `${proc}_approvalDatee`, minWidth: 75 },
-            { headerName: 'Est. Date', field: `${proc}_estimatedDate`, minWidth: 75 },
+            {
+              headerName: 'Ideal Date',
+              field: `${proc}_idealDate`,
+              minWidth: 110,
+              cellEditor: 'agDateCellEditor',
+              valueFormatter: (params) => formatGridDate(params.value),
+            },
+            {
+              headerName: 'Actual Date',
+              field: `${proc}_actualDate`,
+              minWidth: 110,
+              cellEditor: 'agDateCellEditor',
+              valueFormatter: (params) => formatGridDate(params.value),
+            },
+            {
+              headerName: 'Approval Date',
+              field: `${proc}_approvalDatee`,
+              minWidth: 110,
+              cellEditor: 'agDateCellEditor',
+              valueFormatter: (params) => formatGridDate(params.value),
+            },
+            {
+              headerName: 'Est. Date',
+              field: `${proc}_estimatedDate`,
+              minWidth: 110,
+              cellEditor: 'agDateCellEditor',
+              valueFormatter: (params) => formatGridDate(params.value),
+            },
             { headerName: 'Date Span', field: `${proc}_dateSpan`, minWidth: 60 },
+            {
+              headerName: 'Freeze Cond PP Sample',
+              field: `${proc}_freezeCondPPSample`,
+              minWidth: 150,
+              cellEditor: 'agDateCellEditor',
+              valueFormatter: (params) => formatGridDate(params.value),
+            },
             { headerName: 'Units', field: `${proc}_units`, minWidth: 70 },
             { headerName: 'Status', field: `${proc}_status`, minWidth: 80 },
             { headerName: 'Remarks', field: `${proc}_preFilledRemarks`, minWidth: 140 },
@@ -263,22 +315,27 @@ export default function TNAChartPage() {
         }
         const row = rowMap.get(key);
         if (item.process) {
-          row[`${item.process}_idealDate`] = item.idealDate;
-          row[`${item.process}_actualDate`] = item.actualDate;
-          row[`${item.process}_approvalDatee`] = item.approvalDatee;
-          row[`${item.process}_estimatedDate`] = item.estimatedDate;
-          row[`${item.process}_dateSpan`] = item.dateSpan;
+          const proc = item.process;
+          // Per‑process fields mapped to fixed sub‑columns
+          row[`${proc}_idealDate`] = item.idealDate;
+          row[`${proc}_actualDate`] = item.actualDate;
+          row[`${proc}_approvalDatee`] = item.approvalDatee;
+          row[`${proc}_estimatedDate`] = item.estimatedDate;
+          row[`${proc}_dateSpan`] = item.dateSpan;
 
-          // Additional per-process fields
-          row[`${item.process}_units`] = item.units || item.Units || '';
-          row[`${item.process}_status`] = item.status || '';
-          row[`${item.process}_preFilledRemarks`] =
+          row[`${proc}_units`] = item.units || item.Units || '';
+          row[`${proc}_status`] = item.status || '';
+          row[`${proc}_preFilledRemarks`] =
             item.preFilledRemarks ||
             item.PreFilledRemarks ||
             item.prefilledRemarks ||
             '';
-          row[`${item.process}_qtyCompleted`] =
+          row[`${proc}_qtyCompleted`] =
             item.qtyCompleted || item.QtyCompleted || '';
+          row[`${proc}_freezeCondPPSample`] = item.freezeCondPPSample;
+          // IDs / sequence per process for UpdateTNA
+          row[`${proc}_tnaChartID`] = item.tnaChartID ?? item.tnaChartId ?? 0;
+          row[`${proc}_sequence`] = item.sequence ?? 0;
         }
       });
 
@@ -319,6 +376,171 @@ export default function TNAChartPage() {
 
   const handleColorChange = (event, newValue) => {
     setSelectedColors(newValue);
+  };
+
+  // Handle cell value change
+  const onCellValueChanged = (params) => {
+    const { data, colDef, newValue, oldValue } = params;
+    if (newValue === oldValue) return;
+
+    const rowKey = `${data.poid}_${data.color || ''}`;
+    setModifiedRows((prev) => {
+      const newMap = new Map(prev);
+      const fieldKey = colDef.field;
+
+      if (newMap.has(rowKey)) {
+        const existing = newMap.get(rowKey);
+        const changed = new Set(existing.__changedFields || []);
+        changed.add(fieldKey);
+
+        const updated = {
+          ...existing,
+          [fieldKey]: newValue,
+          __changedFields: Array.from(changed),
+        };
+        newMap.set(rowKey, updated);
+      } else {
+        newMap.set(rowKey, {
+          ...data,
+          [fieldKey]: newValue,
+          __changedFields: [fieldKey],
+        });
+      }
+      return newMap;
+    });
+  };
+
+  // Handle save changes
+  const handleSaveChanges = async () => {
+    if (modifiedRows.size === 0) return;
+
+    // Helper to normalise date strings to ISO; supports dd/MM/yyyy and ISO
+    const toIsoOrSame = (value) => {
+      if (!value) return value;
+
+      // If already looks like ISO (contains 'T'), return as is
+      if (typeof value === 'string' && value.includes('T')) {
+        return value;
+      }
+
+      // Handle dd/MM/yyyy format (e.g. 31/12/1999)
+      if (typeof value === 'string') {
+        const ddmmyyyy = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+        const match = value.match(ddmmyyyy);
+        if (match) {
+          const [, dd, mm, yyyy] = match;
+          const d = Number(dd);
+          const m = Number(mm);
+          const y = Number(yyyy);
+          if (
+            !Number.isNaN(d) &&
+            !Number.isNaN(m) &&
+            !Number.isNaN(y) &&
+            d >= 1 &&
+            d <= 31 &&
+            m >= 1 &&
+            m <= 12
+          ) {
+            const parsed = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+            return parsed.toISOString();
+          }
+        }
+      }
+
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return value;
+      return parsed.toISOString();
+    };
+
+    setSaving(true);
+    try {
+      const updates = [];
+
+      // Har modified grid row ko per‑process TNA objects me convert karo
+      modifiedRows.forEach((row) => {
+        const processesInRow = new Set();
+
+        const changedFields = new Set(row.__changedFields || []);
+
+        // Find all processes for which any editable field was actually changed
+        changedFields.forEach((key) => {
+          const underscoreIndex = key.indexOf('_');
+          if (underscoreIndex === -1) return;
+          const proc = key.slice(0, underscoreIndex);
+          const suffix = key.slice(underscoreIndex + 1);
+
+          const editableSuffixes = new Set([
+            'status',
+            'qtyCompleted',
+            'actualDate',
+            'idealDate',
+            'estimatedDate',
+            'approvalDatee',
+            'units',
+            'preFilledRemarks',
+            'tnaChartID',
+          ]);
+
+          if (editableSuffixes.has(suffix)) {
+            processesInRow.add(proc);
+          }
+        });
+
+        processesInRow.forEach((proc) => {
+          const tnaChartID = row[`${proc}_tnaChartID`] ?? 0;
+          if (!tnaChartID) return; // without ID we can't update
+
+          const payload = {
+            tnaChartID,
+            status: row[`${proc}_status`] ?? '',
+            qtyCompleted: Number(row[`${proc}_qtyCompleted`] ?? 0),
+            actualDate: toIsoOrSame(row[`${proc}_actualDate`]),
+            idealDate: toIsoOrSame(row[`${proc}_idealDate`]),
+            estimatedDate: toIsoOrSame(row[`${proc}_estimatedDate`]),
+            approvalDatee: toIsoOrSame(row[`${proc}_approvalDatee`]),
+            units: row[`${proc}_units`] ?? '',
+            preFilledRemarks: row[`${proc}_preFilledRemarks`] ?? '',
+          };
+
+          updates.push(payload);
+        });
+      });
+
+      // eslint-disable-next-line no-console
+      console.log('Saving TNA rows JSON:', JSON.stringify(updates, null, 2));
+
+      // API ab single object model expect kar raha hai; ek ek karke bhej dete hain
+      for (const payload of updates) {
+        // eslint-disable-next-line no-console
+        console.log('TNA Update payload JSON:', JSON.stringify(payload, null, 2));
+        await apiClient.post('/Milestone/UpdateTNA', payload);
+      }
+
+      // Clear modified rows after successful save
+      setModifiedRows(new Map());
+      // eslint-disable-next-line no-console
+      console.log('TNA data saved successfully!');
+      setSnackbar({
+        open: true,
+        message: 'Successfully changes',
+        severity: 'success',
+      });
+    } catch (error) {
+      // Log detailed server error (if available)
+      // eslint-disable-next-line no-console
+      console.error('Error saving TNA data:', error?.response?.data || error);
+      setSnackbar({
+        open: true,
+        message: 'Error saving TNA data',
+        severity: 'error',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSnackbarClose = () => {
+    setSnackbar((prev) => ({ ...prev, open: false }));
   };
 
   return (
@@ -800,6 +1022,22 @@ export default function TNAChartPage() {
                 filter: true,
                 resizable: true,
                 suppressHeaderMenuButton: true,
+                editable: (params) => {
+                  const field = params.colDef.field || '';
+                  const editableSuffixes = [
+                    '_preFilledRemarks',
+                    '_units',
+                    '_status',
+                    '_qtyCompleted',
+                    '_idealDate',
+                    '_actualDate',
+                    '_approvalDatee',
+                    '_estimatedDate',
+                    '_dateSpan',
+                    '_freezeCondPPSample',
+                  ];
+                  return editableSuffixes.some((suffix) => field.endsWith(suffix));
+                },
               }}
               rowDragManaged={false}
               animateRows
@@ -812,10 +1050,47 @@ export default function TNAChartPage() {
                   No data available
                 </div>
               )}
+              onCellValueChanged={onCellValueChanged}
             />
           </div>
         </Box>
       </Card>
+
+      {/* Save Button - shows when there are modified rows */}
+      {modifiedRows.size > 0 && (
+        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSaveChanges}
+            disabled={saving}
+            sx={{ minWidth: 150 }}
+          >
+            {saving ? (
+              <>
+                <CircularProgress size={20} sx={{ mr: 1, color: 'inherit' }} />
+                Saving...
+              </>
+            ) : (
+              `Save Changes (${modifiedRows.size})`
+            )}
+          </Button>
+        </Box>
+      )}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={handleSnackbarClose}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 }

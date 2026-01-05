@@ -34,6 +34,7 @@ import {
   ListItemText,
   OutlinedInput,
 } from '@mui/material';
+import Autocomplete from '@mui/material/Autocomplete';
 import LoadingButton from '@mui/lab/LoadingButton';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
@@ -488,19 +489,63 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
   });
 
   const [rows, setRows] = useState([]);
+  const [sizeRangeData, setSizeRangeData] = useState([]);
   const [sizeRangeOptions, setSizeRangeOptions] = useState([]);
   const [loadingSizeRanges, setLoadingSizeRanges] = useState(false);
   const [formError, setFormError] = useState('');
 
-  const onSubmit = (data) => {
-    const sizes = ['S', 'M', 'L', 'XL'];
+  // Fetch size ranges from API when dialog opens (same as Add-Order)
+  useEffect(() => {
+    const fetchSizeRanges = async () => {
+      setLoadingSizeRanges(true);
+      try {
+        const token = localStorage.getItem('accessToken');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await axios.get(`${API_BASE_URL}/api/MyOrders/GetSizeRange`, { headers });
 
-    const newRows = sizes.map(size => ({
+        if (Array.isArray(res.data)) {
+          setSizeRangeData(res.data);
+          const uniqueSizeRanges = [...new Set(res.data.map(item => item.sizeRange))];
+          setSizeRangeOptions(uniqueSizeRanges);
+        } else {
+          setSizeRangeData([]);
+          setSizeRangeOptions([]);
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('Size range fetch error (edit):', err);
+        setSizeRangeData([]);
+        setSizeRangeOptions([]);
+      } finally {
+        setLoadingSizeRanges(false);
+      }
+    };
+
+    if (open) {
+      fetchSizeRanges();
+      setFormError('');
+    }
+  }, [open]);
+
+  const generateSizes = (selectedSizeRange) => {
+    if (!selectedSizeRange) return [''];
+
+    const sizesForRange = sizeRangeData
+      .filter(item => item.sizeRange === selectedSizeRange)
+      .map(item => item.sizes);
+
+    return sizesForRange.length > 0 ? sizesForRange : [selectedSizeRange];
+  };
+
+  const onSubmit = (data) => {
+    const sizes = generateSizes(data.sizeRange);
+
+    const newRows = sizes.map((size) => ({
       styleNo: data.styleNo || '',
       colorway: data.colorway || '',
       productCode: data.productCode || '',
       sizeRange: data.sizeRange || '',
-      size: size,
+      size,
       quantity: 0,
       itemPrice: parseFloat(data.itemPrice) || 0,
       value: 0,
@@ -671,11 +716,19 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               control={control}
               render={({ field }) => (
                 <FormControl fullWidth size="small">
-                  <TextField
-                    {...field}
-                    label="Size Range"
-                    placeholder="Enter Size Range"
-                    size="small"
+                  <Autocomplete
+                    options={sizeRangeOptions}
+                    loading={loadingSizeRanges}
+                    value={field.value || ''}
+                    onChange={(_, newValue) => field.onChange(newValue || '')}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Size Range"
+                        placeholder="Select Size Range"
+                        size="small"
+                      />
+                    )}
                   />
                 </FormControl>
               )}
@@ -945,6 +998,30 @@ export default function CompletePurchaseOrderFormEdit() {
     totalValue: rows.reduce((sum, r) => sum + (Number(r.value) || 0), 0),
     totalLdpValue: rows.reduce((sum, r) => sum + (Number(r.ldpValue) || 0), 0),
   });
+
+  // Map item grid rows to AddPurchaseOrderDetails API payload (same structure as Add-Order)
+  const mapItemRowsToDetailsPayload = (rows = []) =>
+    rows.map((row) => ({
+      quantity: Number(row.quantity || 0),
+      rate: Number(row.itemPrice || 0),
+      remarks: row.remarks || '',
+      vendorRate: Number(row.vendorPrice || 0),
+      ldpRate: Number(row.ldpPrice || 0),
+      cartonPerPcs: Number(row.cartonQty || 0),
+      qrCodePOD: row.qrCodePOD || '',
+      ratioPOD: Number(row.ratio || 0),
+      grossWeightD: Number(row.grossWeight || 0),
+      netWeightD: Number(row.netWeight || 0),
+      barCodeTF: row.barcode || '',
+      styleNo: row.styleNo || '',
+      itemDescription: row.itemDescription || '',
+      article: row.article || '',
+      colorway: row.colorway || '',
+      size: String(row.size ?? ''),
+      itemPrice: Number(row.itemPrice || 0),
+      sizeRangeDBID: Number(row.sizeRangeDBID ?? 0),
+      productCode: row.productCode || '',
+    }));
 
   const customerPoValue = watch('customerPo');
   const calculationField1 = watch('calculationField1');
@@ -1414,6 +1491,7 @@ export default function CompletePurchaseOrderFormEdit() {
           const ldpValue = quantity * ldpPrice;
 
           return {
+            styleId: item.styleID || item.styleId || 0, // Map styleId for updates
             styleNo: item.styleNo || '',
             colorway: item.colorway || '',
             productCode: item.productCode || '',
@@ -1471,8 +1549,54 @@ export default function CompletePurchaseOrderFormEdit() {
     setOpenItemDialog(false);
   };
 
-  const handleSaveItemData = (data) => {
-    setSavedItemData(data);
+  // Build a simple uniqueness key for an item row (to avoid double-add)
+  const buildItemRowKey = (row) =>
+    [
+      row.styleNo || '',
+      row.colorway || '',
+      row.productCode || '',
+      row.sizeRange || '',
+      row.size || '',
+    ].join('|');
+
+  // When user saves from Item Details dialog, append new rows to grid
+  // and send them to AddPurchaseOrderDetails?poId={id}
+  const handleSaveItemData = async (data) => {
+    const newRows = data?.rows || [];
+    if (!newRows.length) return;
+
+    // Deduplicate: don't add rows that are already in the grid
+    const existingRows = savedItemData?.rows || [];
+    const existingKeys = new Set(existingRows.map((r) => buildItemRowKey(r)));
+
+    const rowsToAdd = newRows.filter((row) => {
+      const key = buildItemRowKey(row);
+      if (existingKeys.has(key)) return false;
+      existingKeys.add(key);
+      return true;
+    });
+
+    if (!rowsToAdd.length) {
+      // All rows already present (e.g. user clicked Save then Save & Close)
+      return;
+    }
+
+    const mergedRows = [...existingRows, ...rowsToAdd];
+    setSavedItemData({
+      rows: mergedRows,
+      totals: recalculateItemTotals(mergedRows),
+    });
+
+    // Call AddPurchaseOrderDetails API only for truly new rows
+    try {
+      const payload = mapItemRowsToDetailsPayload(rowsToAdd);
+      await apiClient.post(`/MyOrders/AddPurchaseOrderDetails?poId=${id}`, payload);
+      showSnackbar('Item details added successfully!', 'success');
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Error adding item details:', error);
+      showSnackbar('Error adding item details. Please try again.', 'error');
+    }
   };
 
   const handleShowSelections = () => {
@@ -1535,6 +1659,45 @@ export default function CompletePurchaseOrderFormEdit() {
 
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
+  };
+
+  // Update a single style row immediately when changed (onBlur)
+  const handleUpdateStyleRow = async (row) => {
+    if (!row || !row.styleId) return;
+
+    try {
+      // Build payload for single row - sending single object as body
+      const payload = {
+        styleID: row.styleId,
+        purchaseOrderID: Number(id),
+        quantity: Number(row.quantity ?? 0),
+        rate: Number(row.itemPrice ?? 0),
+        remarks: row.remarks || '',
+        vendorRate: Number(row.vendorPrice ?? 0),
+        ldpRate: Number(row.ldpPrice ?? 0),
+        cartonPerPcs: Number(row.cartonQty ?? 0),
+        qrCodePOD: row.qrCodePOD || '',
+        ratioPOD: row.ratio || '',
+        grossWeightD: Number(row.grossWeight ?? 0),
+        netWeightD: Number(row.netWeight ?? 0),
+        barCodeTF: row.barcode || '',
+        styleNo: row.styleNo || '',
+        itemDescription: row.itemDescription || '',
+        article: row.article || '',
+        colorway: row.colorway || '',
+        size: row.size || '',
+        itemPrice: Number(row.itemPrice ?? 0),
+        sizeRangeDBID: Number(row.sizeRangeDBID ?? 0),
+        productCode: row.productCode || '',
+      };
+
+      console.log(`Updating style row ${row.styleId} for PO ${id}`, payload);
+      await apiClient.post(`/Milestone/UpdateStyle?poid=${id}&styleId=${row.styleId}`, payload);
+
+    } catch (error) {
+      // console.error('Error updating style row:', error);
+      // // showSnackbar('Error updating item details', 'error');
+    }
   };
 
   // Build payload for UpdatePurchaseOrder API from form data + existing apiData
@@ -1710,24 +1873,26 @@ export default function CompletePurchaseOrderFormEdit() {
     if (!rows || rows.length === 0) return null;
 
     return rows.map((row) => ({
-      quantity: row.quantity ?? 0,
-      rate: row.itemPrice ?? 0,
+      styleID: row.styleId || 0,
+      purchaseOrderID: Number(id) || 0,
+      quantity: Number(row.quantity ?? 0),
+      rate: Number(row.itemPrice ?? 0),
       remarks: row.remarks || '',
-      vendorRate: row.vendorPrice ?? 0,
-      ldpRate: row.ldpPrice ?? 0,
-      cartonPerPcs: row.cartonQty ?? 0,
+      vendorRate: Number(row.vendorPrice ?? 0),
+      ldpRate: Number(row.ldpPrice ?? 0),
+      cartonPerPcs: Number(row.cartonQty ?? 0),
       qrCodePOD: row.qrCodePOD || '',
-      ratioPOD: row.ratio ?? 0,
-      grossWeightD: row.grossWeight ?? 0,
-      netWeightD: row.netWeight ?? 0,
+      ratioPOD: row.ratio || '',
+      grossWeightD: Number(row.grossWeight ?? 0),
+      netWeightD: Number(row.netWeight ?? 0),
       barCodeTF: row.barcode || '',
       styleNo: row.styleNo || '',
       itemDescription: row.itemDescription || '',
       article: row.article || '',
       colorway: row.colorway || '',
       size: row.size || '',
-      itemPrice: row.itemPrice ?? 0,
-      sizeRangeDBID: row.sizeRangeDBID ?? 0,
+      itemPrice: Number(row.itemPrice ?? 0),
+      sizeRangeDBID: Number(row.sizeRangeDBID ?? 0),
       productCode: row.productCode || '',
     }));
   };
@@ -1744,11 +1909,13 @@ export default function CompletePurchaseOrderFormEdit() {
 
       await apiClient.post(`/MyOrders/UpdatePurchaseOrder?poid=${id}`, payload);
 
-      // Also update Product Specific Information (style grid) if available
+      /* 
+      // Bulk update causing 400 error - disabled in favor of per-row onBlur update
       const stylePayload = buildStyleUpdatePayload(savedItemData?.rows || []);
       if (stylePayload) {
         await apiClient.post(`/Milestone/UpdateStyle?poid=${id}`, stylePayload);
       }
+      */
 
       showSnackbar('Purchase Order and item details updated successfully!', 'success');
     } catch (error) {
@@ -2520,7 +2687,7 @@ export default function CompletePurchaseOrderFormEdit() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'barcode', e.target.value)
                                 }
-                                sx={{ width: 90 }}
+                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 90 }}
                               />
                             </TableCell>
                             <TableCell>
@@ -2530,7 +2697,7 @@ export default function CompletePurchaseOrderFormEdit() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'ratio', e.target.value)
                                 }
-                                sx={{ width: 80 }}
+                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 80 }}
                               />
                             </TableCell>
                             <TableCell>
@@ -2541,7 +2708,7 @@ export default function CompletePurchaseOrderFormEdit() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'quantity', e.target.value)
                                 }
-                                sx={{ width: 70 }}
+                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 70 }}
                               />
                             </TableCell>
                             <TableCell>
@@ -2552,7 +2719,7 @@ export default function CompletePurchaseOrderFormEdit() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'itemPrice', e.target.value)
                                 }
-                                sx={{ width: 70 }}
+                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 70 }}
                               />
                             </TableCell>
                             <TableCell>{(row.value ?? 0).toFixed(2)}</TableCell>
@@ -2564,7 +2731,7 @@ export default function CompletePurchaseOrderFormEdit() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'vendorPrice', e.target.value)
                                 }
-                                sx={{ width: 80 }}
+                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 80 }}
                               />
                             </TableCell>
                             <TableCell>
@@ -2575,7 +2742,7 @@ export default function CompletePurchaseOrderFormEdit() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'ldpPrice', e.target.value)
                                 }
-                                sx={{ width: 80 }}
+                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 80 }}
                               />
                             </TableCell>
                             <TableCell>{(row.ldpValue ?? 0).toFixed(2)}</TableCell>
@@ -2587,7 +2754,7 @@ export default function CompletePurchaseOrderFormEdit() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'cartonQty', e.target.value)
                                 }
-                                sx={{ width: 70 }}
+                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 70 }}
                               />
                             </TableCell>
                             <TableCell>
@@ -2598,7 +2765,7 @@ export default function CompletePurchaseOrderFormEdit() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'grossWeight', e.target.value)
                                 }
-                                sx={{ width: 80 }}
+                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 80 }}
                               />
                             </TableCell>
                             <TableCell>
@@ -2609,7 +2776,7 @@ export default function CompletePurchaseOrderFormEdit() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'netWeight', e.target.value)
                                 }
-                                sx={{ width: 80 }}
+                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 80 }}
                               />
                             </TableCell>
                           </TableRow>
