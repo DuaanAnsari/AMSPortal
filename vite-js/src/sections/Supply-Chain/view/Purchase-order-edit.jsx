@@ -1469,16 +1469,18 @@ export default function CompletePurchaseOrderFormEdit() {
   }, [id, reset, customers, suppliers, merchants, productPortfolios]);
 
   // Load Product Specific Information grid data for view (styles / sizes per PO)
-  useEffect(() => {
-    const fetchStyleGrid = async () => {
-      if (!id) return;
+  const fetchStyleGrid = async () => {
+    if (!id) return;
 
-      try {
-        const response = await apiClient.get(`/Milestone/GetStyle?poid=${id}`);
-        const data = Array.isArray(response.data) ? response.data : [];
-        if (data.length === 0) return;
+    try {
+      const response = await apiClient.get(`/Milestone/GetStyle?poid=${id}`);
+      const data = Array.isArray(response.data) ? response.data : [];
+      if (data.length === 0) {
+        setSavedItemData(null);
+        return;
+      }
 
-        const rows = data.map((item) => {
+      const rows = data.map((item) => {
           const quantity = Number(item.quantity || 0);
           const itemPrice = Number(
             item.itemPrice ?? item.rate ?? 0
@@ -1512,28 +1514,30 @@ export default function CompletePurchaseOrderFormEdit() {
             grossWeight: Number(item.grossWeightD ?? 0),
             netWeight: Number(item.netWeightD ?? 0),
           };
-        });
+      });
 
-        const totals = {
-          totalQuantity: rows.reduce((sum, r) => sum + (r.quantity || 0), 0),
-          totalValue: rows.reduce((sum, r) => sum + (r.value || 0), 0),
-          totalLdpValue: rows.reduce((sum, r) => sum + (r.ldpValue || 0), 0),
-        };
+      const totals = {
+        totalQuantity: rows.reduce((sum, r) => sum + (r.quantity || 0), 0),
+        totalValue: rows.reduce((sum, r) => sum + (r.value || 0), 0),
+        totalLdpValue: rows.reduce((sum, r) => sum + (r.ldpValue || 0), 0),
+      };
 
-        setSavedItemData({ rows, totals });
+      setSavedItemData({ rows, totals });
 
-        // Style field ko bhi auto-fill kar dein, jaise Add Order me hai
-        const styleNumbers = [...new Set(rows.map((r) => r.styleNo))].join(', ');
-        if (styleNumbers) {
-          setValue('style', styleNumbers);
-        }
-      } catch (error) {
-        console.error('Error fetching style grid for PO:', error);
+      // Style field ko bhi auto-fill kar dein, jaise Add Order me hai
+      const styleNumbers = [...new Set(rows.map((r) => r.styleNo))].join(', ');
+      if (styleNumbers) {
+        setValue('style', styleNumbers);
       }
-    };
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Error fetching style grid for PO:', error);
+    }
+  };
 
+  useEffect(() => {
     fetchStyleGrid();
-  }, [id, setValue]);
+  }, [id]);
 
   // NOTE:
   // Previously, whenever the Customer PO changed, we were auto-copying it
@@ -1586,17 +1590,6 @@ export default function CompletePurchaseOrderFormEdit() {
       rows: mergedRows,
       totals: recalculateItemTotals(mergedRows),
     });
-
-    // Call AddPurchaseOrderDetails API only for truly new rows
-    try {
-      const payload = mapItemRowsToDetailsPayload(rowsToAdd);
-      await apiClient.post(`/MyOrders/AddPurchaseOrderDetails?poId=${id}`, payload);
-      showSnackbar('Item details added successfully!', 'success');
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Error adding item details:', error);
-      showSnackbar('Error adding item details. Please try again.', 'error');
-    }
   };
 
   const handleShowSelections = () => {
@@ -1677,7 +1670,7 @@ export default function CompletePurchaseOrderFormEdit() {
         ldpRate: Number(row.ldpPrice ?? 0),
         cartonPerPcs: Number(row.cartonQty ?? 0),
         qrCodePOD: row.qrCodePOD || '',
-        ratioPOD: row.ratio || '',
+        ratioPOD: Number(row.ratio ?? 0),
         grossWeightD: Number(row.grossWeight ?? 0),
         netWeightD: Number(row.netWeight ?? 0),
         barCodeTF: row.barcode || '',
@@ -1909,13 +1902,83 @@ export default function CompletePurchaseOrderFormEdit() {
 
       await apiClient.post(`/MyOrders/UpdatePurchaseOrder?poid=${id}`, payload);
 
-      /* 
-      // Bulk update causing 400 error - disabled in favor of per-row onBlur update
-      const stylePayload = buildStyleUpdatePayload(savedItemData?.rows || []);
-      if (stylePayload) {
-        await apiClient.post(`/Milestone/UpdateStyle?poid=${id}`, stylePayload);
+      // Also persist Product Specific Information grid rows (styles) via UpdateStyle API
+      // We reuse the same single-row payload shape that works in handleUpdateStyleRow
+      const allRows = savedItemData?.rows || [];
+
+      // 1) Update existing styles (those having valid styleId)
+      const existingRows = allRows.filter((row) => row.styleId);
+      if (existingRows.length) {
+        // eslint-disable-next-line no-restricted-syntax
+        for (const row of existingRows) {
+          const stylePayload = {
+            styleID: row.styleId,
+            quantity: Number(row.quantity ?? 0),
+            rate: Number(row.itemPrice ?? 0),
+            remarks: row.remarks || '',
+            vendorRate: Number(row.vendorPrice ?? 0),
+            ldpRate: Number(row.ldpPrice ?? 0),
+            cartonPerPcs: Number(row.cartonQty ?? 0),
+            qrCodePOD: row.qrCodePOD || '',
+            ratioPOD: Number(row.ratio ?? 0),
+            grossWeightD: Number(row.grossWeight ?? 0),
+            netWeightD: Number(row.netWeight ?? 0),
+            barCodeTF: row.barcode || '',
+            styleNo: row.styleNo || '',
+            itemDescription: row.itemDescription || '',
+            article: row.article || '',
+            colorway: row.colorway || '',
+            size: row.size || '',
+            itemPrice: Number(row.itemPrice ?? 0),
+            sizeRangeDBID: Number(row.sizeRangeDBID ?? 0),
+            productCode: row.productCode || '',
+          };
+
+          try {
+            // eslint-disable-next-line no-console
+            console.log(
+              `Saving style row styleID=${row.styleId} for PO=${id}`,
+              stylePayload
+            );
+            // eslint-disable-next-line no-await-in-loop
+            await apiClient.post(
+              `/Milestone/UpdateStyle?poid=${id}&styleId=${row.styleId}`,
+              stylePayload
+            );
+          } catch (styleError) {
+            // eslint-disable-next-line no-console
+            console.error(
+              `Error updating style row styleID=${row.styleId} for PO=${id}`,
+              styleError?.response?.data || styleError
+            );
+          }
+        }
       }
-      */
+
+      // 2) Add brand new styles (no styleId yet) via AddPurchaseOrderDetails
+      const newRows = allRows.filter((row) => !row.styleId);
+      if (newRows.length) {
+        const basePayload = mapItemRowsToDetailsPayload(newRows);
+        // Ensure payload matches backend sample (array of objects with styleID=0)
+        const addPayload = basePayload.map((item) => ({
+          styleID: 0,
+          ...item,
+        }));
+        // eslint-disable-next-line no-console
+        console.log(
+          `Adding ${newRows.length} new style row(s) for PO=${id}`,
+          addPayload
+        );
+        const addResponse = await apiClient.post(
+          `/MyOrders/AddPurchaseOrderDetails?poId=${id}`,
+          addPayload
+        );
+        // eslint-disable-next-line no-console
+        console.log('AddPurchaseOrderDetails response:', addResponse?.data);
+
+        // Freshly reload styles from API so in-memory grid (and next reload) match DB
+        await fetchStyleGrid();
+      }
 
       showSnackbar('Purchase Order and item details updated successfully!', 'success');
     } catch (error) {
@@ -2675,11 +2738,11 @@ export default function CompletePurchaseOrderFormEdit() {
                       <TableBody>
                         {savedItemData.rows.map((row, index) => (
                           <TableRow key={index}>
-                            <TableCell>{row.styleNo}</TableCell>
-                            <TableCell>{row.colorway}</TableCell>
-                            <TableCell>{row.productCode}</TableCell>
-                            <TableCell>{row.sizeRange}</TableCell>
-                            <TableCell>{row.size}</TableCell>
+                            <TableCell>{row.styleNo === 'string' ? '' : row.styleNo}</TableCell>
+                            <TableCell>{row.colorway === 'string' ? '' : row.colorway}</TableCell>
+                            <TableCell>{row.productCode === 'string' ? '' : row.productCode}</TableCell>
+                            <TableCell>{row.sizeRange === 'string' ? '' : row.sizeRange}</TableCell>
+                            <TableCell>{row.size === 'string' ? '' : row.size}</TableCell>
                             <TableCell>
                               <TextField
                                 value={row.barcode || ''}
@@ -2687,7 +2750,7 @@ export default function CompletePurchaseOrderFormEdit() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'barcode', e.target.value)
                                 }
-                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 90 }}
+                                sx={{ width: 90 }}
                               />
                             </TableCell>
                             <TableCell>
@@ -2697,86 +2760,86 @@ export default function CompletePurchaseOrderFormEdit() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'ratio', e.target.value)
                                 }
-                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 80 }}
+                                sx={{ width: 80 }}
                               />
                             </TableCell>
                             <TableCell>
                               <TextField
-                                value={row.quantity ?? 0}
+                                value={row.quantity === 0 ? '' : row.quantity ?? ''}
                                 type="number"
                                 size="small"
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'quantity', e.target.value)
                                 }
-                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 70 }}
+                                sx={{ width: 70 }}
                               />
                             </TableCell>
                             <TableCell>
                               <TextField
-                                value={row.itemPrice ?? 0}
+                                value={row.itemPrice === 0 ? '' : row.itemPrice ?? ''}
                                 type="number"
                                 size="small"
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'itemPrice', e.target.value)
                                 }
-                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 70 }}
+                                sx={{ width: 70 }}
                               />
                             </TableCell>
                             <TableCell>{(row.value ?? 0).toFixed(2)}</TableCell>
                             <TableCell>
                               <TextField
-                                value={row.vendorPrice ?? 0}
+                                value={row.vendorPrice === 0 ? '' : row.vendorPrice ?? ''}
                                 type="number"
                                 size="small"
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'vendorPrice', e.target.value)
                                 }
-                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 80 }}
+                                sx={{ width: 80 }}
                               />
                             </TableCell>
                             <TableCell>
                               <TextField
-                                value={row.ldpPrice ?? 0}
+                                value={row.ldpPrice === 0 ? '' : row.ldpPrice ?? ''}
                                 type="number"
                                 size="small"
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'ldpPrice', e.target.value)
                                 }
-                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 80 }}
+                                sx={{ width: 80 }}
                               />
                             </TableCell>
                             <TableCell>{(row.ldpValue ?? 0).toFixed(2)}</TableCell>
                             <TableCell>
                               <TextField
-                                value={row.cartonQty ?? 0}
+                                value={row.cartonQty === 0 ? '' : row.cartonQty ?? ''}
                                 type="number"
                                 size="small"
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'cartonQty', e.target.value)
                                 }
-                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 70 }}
+                                sx={{ width: 70 }}
                               />
                             </TableCell>
                             <TableCell>
                               <TextField
-                                value={row.grossWeight ?? 0}
+                                value={row.grossWeight === 0 ? '' : row.grossWeight ?? ''}
                                 type="number"
                                 size="small"
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'grossWeight', e.target.value)
                                 }
-                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 80 }}
+                                sx={{ width: 80 }}
                               />
                             </TableCell>
                             <TableCell>
                               <TextField
-                                value={row.netWeight ?? 0}
+                                value={row.netWeight === 0 ? '' : row.netWeight ?? ''}
                                 type="number"
                                 size="small"
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'netWeight', e.target.value)
                                 }
-                                onBlur={() => handleUpdateStyleRow(row)} sx={{ width: 80 }}
+                                sx={{ width: 80 }}
                               />
                             </TableCell>
                           </TableRow>

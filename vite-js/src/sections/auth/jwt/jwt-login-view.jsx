@@ -274,6 +274,12 @@ export default function JwtLoginView() {
               name="password"
               label="Password"
               type={password.value ? 'text' : 'password'}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  onSubmit(event);
+                }
+              }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">

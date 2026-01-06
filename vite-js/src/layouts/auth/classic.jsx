@@ -146,6 +146,12 @@ export default function AMSLogin() {
           placeholder="Enter your password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleLogin();
+            }
+          }}
           sx={{ mb: 2 }}
           InputProps={{
             startAdornment: (
