@@ -91,16 +91,103 @@ export default function TNAChartPage() {
     []
   );
 
+  // Total modified process count (for Save button label)
+  const modifiedProcessCount = useMemo(() => {
+    if (modifiedRows.size === 0) return 0;
+
+    let count = 0;
+
+    modifiedRows.forEach((row) => {
+      const processesInRow = new Set();
+      const changedFields = new Set(row.__changedFields || []);
+
+      const editableSuffixes = new Set([
+        'status',
+        'qtyCompleted',
+        'actualDate',
+        'idealDate',
+        'estimatedDate',
+        'approvalDatee',
+        'units',
+        'preFilledRemarks',
+        'tnaChartID',
+        'dateSpan',
+        'date',
+        'freezeCondPPSample',
+      ]);
+
+      changedFields.forEach((key) => {
+        const underscoreIndex = key.indexOf('_');
+        if (underscoreIndex === -1) return;
+        const proc = key.slice(0, underscoreIndex);
+        const suffix = key.slice(underscoreIndex + 1);
+
+        if (editableSuffixes.has(suffix)) {
+          processesInRow.add(proc);
+        }
+      });
+
+      count += processesInRow.size;
+    });
+
+    return count;
+  }, [modifiedRows]);
+
   const [columnDefs, setColumnDefs] = useState([]);
+
+  // Parse date coming from API (string) into JS Date for grid/editor
+  const parseApiDateToDate = (value) => {
+    if (!value) return null;
+
+    // Already a Date instance
+    if (value instanceof Date) return value;
+
+    if (typeof value === 'string') {
+      // dd/MM/yyyy (e.g. 31/12/1999)
+      const ddmmyyyy = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+      let match = value.match(ddmmyyyy);
+      if (match) {
+        const [, dd, mm, yyyy] = match;
+        const d = Number(dd);
+        const m = Number(mm);
+        const y = Number(yyyy);
+        if (
+          !Number.isNaN(d) &&
+          !Number.isNaN(m) &&
+          !Number.isNaN(y) &&
+          d >= 1 &&
+          d <= 31 &&
+          m >= 1 &&
+          m <= 12
+        ) {
+          return new Date(y, m - 1, d);
+        }
+      }
+
+      // ISO-like string handled by Date constructor
+      if (value.includes('T') || value.includes('-')) {
+        const d = new Date(value);
+        if (!Number.isNaN(d.getTime())) return d;
+      }
+
+      // Fallback: let JS try to parse, e.g. "Nov 10, 2025"
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
+    }
+
+    return null;
+  };
 
   // Format date value for grid display (dd/MM/yyyy)
   const formatGridDate = (value) => {
     if (!value) return '';
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return value;
-    const dd = String(d.getUTCDate()).padStart(2, '0');
-    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const yyyy = d.getUTCFullYear();
+
+    const d = parseApiDateToDate(value);
+    if (!d) return '';
+
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
     return `${dd}/${mm}/${yyyy}`;
   };
 
@@ -228,6 +315,7 @@ export default function TNAChartPage() {
               headerName: 'Ideal Date',
               field: `${proc}_idealDate`,
               minWidth: 110,
+              editable: true,
               cellEditor: 'agDateCellEditor',
               valueFormatter: (params) => formatGridDate(params.value),
             },
@@ -235,6 +323,7 @@ export default function TNAChartPage() {
               headerName: 'Actual Date',
               field: `${proc}_actualDate`,
               minWidth: 110,
+              editable: true,
               cellEditor: 'agDateCellEditor',
               valueFormatter: (params) => formatGridDate(params.value),
             },
@@ -242,6 +331,7 @@ export default function TNAChartPage() {
               headerName: 'Approval Date',
               field: `${proc}_approvalDatee`,
               minWidth: 110,
+              editable: true,
               cellEditor: 'agDateCellEditor',
               valueFormatter: (params) => formatGridDate(params.value),
             },
@@ -249,21 +339,38 @@ export default function TNAChartPage() {
               headerName: 'Est. Date',
               field: `${proc}_estimatedDate`,
               minWidth: 110,
+              editable: true,
               cellEditor: 'agDateCellEditor',
               valueFormatter: (params) => formatGridDate(params.value),
             },
-            { headerName: 'Date Span', field: `${proc}_dateSpan`, minWidth: 60 },
+            {
+              headerName: 'Date Span',
+              field: `${proc}_dateSpan`,
+              minWidth: 60,
+              editable: true,
+            },
             {
               headerName: 'Freeze Cond PP Sample',
               field: `${proc}_freezeCondPPSample`,
               minWidth: 150,
+              editable: true,
               cellEditor: 'agDateCellEditor',
               valueFormatter: (params) => formatGridDate(params.value),
             },
-            { headerName: 'Units', field: `${proc}_units`, minWidth: 70 },
-            { headerName: 'Status', field: `${proc}_status`, minWidth: 80 },
-            { headerName: 'Remarks', field: `${proc}_preFilledRemarks`, minWidth: 140 },
-            { headerName: 'Qty Completed', field: `${proc}_qtyCompleted`, minWidth: 100 },
+            { headerName: 'Units', field: `${proc}_units`, minWidth: 70, editable: true },
+            { headerName: 'Status', field: `${proc}_status`, minWidth: 80, editable: true },
+            {
+              headerName: 'Remarks',
+              field: `${proc}_preFilledRemarks`,
+              minWidth: 140,
+              editable: true,
+            },
+            {
+              headerName: 'Qty Completed',
+              field: `${proc}_qtyCompleted`,
+              minWidth: 100,
+              editable: true,
+            },
           ],
         })),
       ];
@@ -317,10 +424,12 @@ export default function TNAChartPage() {
         if (item.process) {
           const proc = item.process;
           // Per‑process fields mapped to fixed sub‑columns
-          row[`${proc}_idealDate`] = item.idealDate;
-          row[`${proc}_actualDate`] = item.actualDate;
-          row[`${proc}_approvalDatee`] = item.approvalDatee;
-          row[`${proc}_estimatedDate`] = item.estimatedDate;
+          // NOTE: `_date` is kept for API payload only (no visible column)
+          row[`${proc}_date`] = parseApiDateToDate(item.date);
+          row[`${proc}_idealDate`] = parseApiDateToDate(item.idealDate);
+          row[`${proc}_actualDate`] = parseApiDateToDate(item.actualDate);
+          row[`${proc}_approvalDatee`] = parseApiDateToDate(item.approvalDatee);
+          row[`${proc}_estimatedDate`] = parseApiDateToDate(item.estimatedDate);
           row[`${proc}_dateSpan`] = item.dateSpan;
 
           row[`${proc}_units`] = item.units || item.Units || '';
@@ -332,7 +441,9 @@ export default function TNAChartPage() {
             '';
           row[`${proc}_qtyCompleted`] =
             item.qtyCompleted || item.QtyCompleted || '';
-          row[`${proc}_freezeCondPPSample`] = item.freezeCondPPSample;
+          row[`${proc}_freezeCondPPSample`] = parseApiDateToDate(
+            item.freezeCondPPSample
+          );
           // IDs / sequence per process for UpdateTNA
           row[`${proc}_tnaChartID`] = item.tnaChartID ?? item.tnaChartId ?? 0;
           row[`${proc}_sequence`] = item.sequence ?? 0;
@@ -384,9 +495,21 @@ export default function TNAChartPage() {
     if (newValue === oldValue) return;
 
     const rowKey = `${data.poid}_${data.color || ''}`;
+    const fieldKey = colDef.field;
+
+    // Update fullData to keep state in sync
+    setFullData((prev) =>
+      prev.map((row) => {
+        const currentRowKey = `${row.poid}_${row.color || ''}`;
+        if (currentRowKey === rowKey) {
+          return { ...row, [fieldKey]: newValue };
+        }
+        return row;
+      })
+    );
+
     setModifiedRows((prev) => {
       const newMap = new Map(prev);
-      const fieldKey = colDef.field;
 
       if (newMap.has(rowKey)) {
         const existing = newMap.get(rowKey);
@@ -414,42 +537,22 @@ export default function TNAChartPage() {
   const handleSaveChanges = async () => {
     if (modifiedRows.size === 0) return;
 
-    // Helper to normalise date strings to ISO; supports dd/MM/yyyy and ISO
-    const toIsoOrSame = (value) => {
+    // Helper to convert grid date (Date or string) back to API string:
+    // "yyyy-MM-ddT09:46:42.397Z"
+    const toApiDateTime = (value) => {
       if (!value) return value;
 
-      // If already looks like ISO (contains 'T'), return as is
-      if (typeof value === 'string' && value.includes('T')) {
-        return value;
+      let d = value;
+      if (!(value instanceof Date)) {
+        d = parseApiDateToDate(value);
       }
+      if (!d) return value;
 
-      // Handle dd/MM/yyyy format (e.g. 31/12/1999)
-      if (typeof value === 'string') {
-        const ddmmyyyy = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-        const match = value.match(ddmmyyyy);
-        if (match) {
-          const [, dd, mm, yyyy] = match;
-          const d = Number(dd);
-          const m = Number(mm);
-          const y = Number(yyyy);
-          if (
-            !Number.isNaN(d) &&
-            !Number.isNaN(m) &&
-            !Number.isNaN(y) &&
-            d >= 1 &&
-            d <= 31 &&
-            m >= 1 &&
-            m <= 12
-          ) {
-            const parsed = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
-            return parsed.toISOString();
-          }
-        }
-      }
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
 
-      const parsed = new Date(value);
-      if (Number.isNaN(parsed.getTime())) return value;
-      return parsed.toISOString();
+      return `${yyyy}-${mm}-${dd}T09:46:42.397Z`;
     };
 
     setSaving(true);
@@ -491,15 +594,33 @@ export default function TNAChartPage() {
           if (!tnaChartID) return; // without ID we can't update
 
           const payload = {
+            // Identity / linkage fields expected by backend
             tnaChartID,
-            status: row[`${proc}_status`] ?? '',
+            poid: row.poid ?? 0,
+            poNo: row.poNo ?? '',
+            color: row.color ?? '',
+            customerName: row.customer ?? '',
+            process: proc,
+            sequence: row[`${proc}_sequence`] ?? 0,
+
+            // Status & quantities
+            status: row[`${proc}_status`] ?? row.status ?? '',
             qtyCompleted: Number(row[`${proc}_qtyCompleted`] ?? 0),
-            actualDate: toIsoOrSame(row[`${proc}_actualDate`]),
-            idealDate: toIsoOrSame(row[`${proc}_idealDate`]),
-            estimatedDate: toIsoOrSame(row[`${proc}_estimatedDate`]),
-            approvalDatee: toIsoOrSame(row[`${proc}_approvalDatee`]),
+            dateSpan: Number(row[`${proc}_dateSpan`] ?? 0),
+
+            // Text fields
             units: row[`${proc}_units`] ?? '',
             preFilledRemarks: row[`${proc}_preFilledRemarks`] ?? '',
+
+            // Dates – always send in API string format
+            date: toApiDateTime(row[`${proc}_date`] ?? row.date),
+            idealDate: toApiDateTime(row[`${proc}_idealDate`]),
+            actualDate: toApiDateTime(row[`${proc}_actualDate`]),
+            approvalDatee: toApiDateTime(row[`${proc}_approvalDatee`]),
+            estimatedDate: toApiDateTime(row[`${proc}_estimatedDate`]),
+            freezeCondPPSample: toApiDateTime(
+              row[`${proc}_freezeCondPPSample`] ?? row.freezeCondPPSample
+            ),
           };
 
           updates.push(payload);
@@ -1072,7 +1193,7 @@ export default function TNAChartPage() {
                 Saving...
               </>
             ) : (
-              `Save Changes (${modifiedRows.size})`
+              `Save Changes (${modifiedProcessCount})`
             )}
           </Button>
         </Box>
