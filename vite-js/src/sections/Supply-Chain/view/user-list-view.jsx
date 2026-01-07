@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Grid,
   Card,
@@ -28,7 +28,7 @@ import {
 // ----------------------------------------------------------------------
 
 const TABLE_HEAD = [
-  { id: 'shipDate', label: 'Ship.Date', width: 90 },
+  { id: 'shipDate', label: 'Ship.Date', width: 150 },
   { id: 'invoiceNo', label: 'Invoice No', width: 120 },
   { id: 'value', label: 'Value', width: 100 },
   { id: 'billNo', label: 'Bill No', width: 90 },
@@ -44,113 +44,287 @@ const TABLE_HEAD = [
   { id: 'status', label: 'Status', width: 70 },
 ];
 
-// Updated data to match the image exactly
-const SAMPLE_DATA = [
-  {
-    id: 1,
-    shipDate: 'May 19, 2025',
-    invoiceNo: 'MAFD-002-25-26',
-    value: '5758.68 US$',
-    billNo: 'SNSL5362',
-    customer: 'THREADFAST APPAREL',
-    ldp: 'AST-TFA 4740',
-    supplier: 'MS Garments',
-    inspectionCertificate: 'Inspection Certificate',
-    invoice: 'Print Invoice',
-    invoiceExcel: 'Excel Invoice',
-    rateDiff: 'Rate Diff',
-    action: 'Action Diff',
-    view: '☐',
-    status: '',
+const DEFAULT_FILTERS = {
+  invoice: '',
+  container: '',
+  bill: '',
+  customer: '',
+  ldpInvoice: '',
+};
+
+const SHIPMENT_RELEASE_API = 'http://192.168.18.13/api/ShipmentRelease/ShipmentRelease';
+const CUSTOMER_API = 'http://192.168.18.13/api/MyOrders/GetCustomer';
+
+const FILTER_CARD_SX = {
+  p: { xs: 2, md: 3 },
+  mb: 3,
+  borderRadius: 2,
+  background: 'linear-gradient(180deg, #ffffff 0%, #f8fbff 100%)',
+  border: '1px solid',
+  borderColor: '#e4ecf5',
+  boxShadow: (theme) => `0 12px 30px rgba(15, 32, 99, 0.08)`,
+};
+
+const FILTER_BUTTON_SX = {
+  bgcolor: '#009473',
+  px: 2,
+  minWidth: 90,
+  height: 40,
+  color: '#fff',
+  fontWeight: 600,
+  textTransform: 'none',
+  '&:hover': { bgcolor: '#007359' },
+};
+
+const FILTER_HEADER_SX = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  mb: 2,
+};
+
+const SEARCH_FIELD_SX = {
+  backgroundColor: '#fff',
+  borderRadius: 1,
+  '& .MuiOutlinedInput-notchedOutline': {
+    borderColor: '#d3dde8',
   },
-  {
-    id: 2,
-    shipDate: 'May 19, 2025',
-    invoiceNo: 'CA/545/AM/2025',
-    value: '37116.00 US$',
-    billNo: 'SNSL5363',
-    customer: 'LONE ROCK',
-    ldp: 'AST-LR 4739',
-    supplier: 'Comfort apparel',
-    inspectionCertificate: 'Inspection Certificate',
-    invoice: 'Print Invoice',
-    invoiceExcel: 'Excel Invoice',
-    rateDiff: 'Rate Diff',
-    action: 'Action Diff',
-    view: '☐',
-    status: '',
+};
+
+const TABLE_CARD_SX = {
+  borderRadius: 2,
+  border: 'none',
+  boxShadow: '0 12px 24px rgba(15, 23, 42, 0.1)',
+};
+
+const TABLE_HEAD_SX = {
+  backgroundColor: '#009473',
+  color: '#ffffff',
+  '& .MuiTableCell-root': {
+    color: '#ffffff',
+    fontWeight: 700,
+    borderBottom: 'none',
+    textTransform: 'uppercase',
+    fontSize: '0.75rem',
   },
-  {
-    id: 3,
-    shipDate: 'May 19, 2025',
-    invoiceNo: 'MS-097-HMB-2025',
-    value: '33209.04 US$',
-    billNo: 'SNSL5361',
-    customer: 'LONE ROCK',
-    ldp: 'AST-LR 4739',
-    supplier: 'MS Garments',
-    inspectionCertificate: 'Inspection Certificate',
-    invoice: 'Print Invoice',
-    invoiceExcel: 'Excel Invoice',
-    rateDiff: 'Rate Diff',
-    action: 'Action Diff',
-    view: '☐',
-    status: '',
+};
+
+const TABLE_ROW_SX = {
+  background: '#ffffff',
+  '&:nth-of-type(odd)': {
+    background: '#f7fbff',
   },
-  {
-    id: 4,
-    shipDate: 'May 19, 2025',
-    invoiceNo: 'MS-096-HMB-2025',
-    value: '67045.92 US$',
-    billNo: 'SNSL5360',
-    customer: 'LONE ROCK',
-    ldp: 'AST-LR 4738',
-    supplier: 'MS Garments',
-    inspectionCertificate: 'Inspection Certificate',
-    invoice: 'Print Invoice',
-    invoiceExcel: 'Excel Invoice',
-    rateDiff: 'Rate Diff',
-    action: 'Action Diff',
-    view: '☐',
-    status: '',
+  '&:hover': {
+    background: '#eefff4',
   },
-  {
-    id: 5,
-    shipDate: 'May 08, 2025',
-    invoiceNo: 'CA-653',
-    value: '19645.20 US$',
-    billNo: 'CNCKH17160',
-    customer: 'ULTIMATE APPAREL, INC',
-    ldp: 'AST-UL 4737',
-    supplier: 'Continental apparels',
-    inspectionCertificate: 'Inspection Certificate',
-    invoice: 'Print Invoice',
-    invoiceExcel: 'Excel Invoice',
-    rateDiff: 'Rate Diff',
-    action: 'Action Diff',
-    view: '☐',
-    status: '',
-  },
-];
+};
 
 // ----------------------------------------------------------------------
 
 export default function ShipmentReleaseFilters() {
-  const [filters, setFilters] = useState({
-    invoice: '',
-    container: '',
-    bill: '',
-    customer: '',
-    ldpInvoice: '',
-  });
+  const [filters, setFilters] = useState(() => ({ ...DEFAULT_FILTERS }));
+  const [tableData, setTableData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState('');
+  const [customers, setCustomers] = useState([]);
+  const [customerLoading, setCustomerLoading] = useState(false);
+  const [customerFetchError, setCustomerFetchError] = useState('');
+  const [customerLookupMessage, setCustomerLookupMessage] = useState('');
+  const abortControllerRef = useRef(null);
+  const customerControllerRef = useRef(null);
 
   const handleChange = (name, value) => {
     setFilters((prev) => ({ ...prev, [name]: value }));
   };
 
-  // table logic
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      return null;
+    }
+    return { Authorization: `Bearer ${token}` };
+  };
+
+  const normalizeParam = (value, fallback) => {
+    if (typeof value !== 'string') {
+      return fallback;
+    }
+    const trimmed = value.trim();
+    return trimmed === '' ? fallback : trimmed;
+  };
+
+  const findCustomerId = (customerNameInput) => {
+    if (!customerNameInput || customers.length === 0) {
+      return '0';
+    }
+    const normalizedValue = customerNameInput.trim().toLowerCase();
+    const exactMatch = customers.find(
+      (item) => item.customerName?.toLowerCase() === normalizedValue
+    );
+    if (exactMatch) {
+      return String(exactMatch.customerID);
+    }
+    const containsMatch = customers.find((item) =>
+      item.customerName?.toLowerCase().includes(normalizedValue)
+    );
+    return containsMatch ? String(containsMatch.customerID) : '0';
+  };
+
+  const buildQueryParams = (values) => {
+    const params = new URLSearchParams();
+    params.set('invoiceNo', normalizeParam(values.invoice, 'ALL'));
+    params.set('ContainerNo', normalizeParam(values.container, 'ALL'));
+    params.set('BillNo', normalizeParam(values.bill, 'ALL'));
+    params.set('LDPInvoiceNo', normalizeParam(values.ldpInvoice, 'ALL'));
+
+    const customerNameInput = normalizeParam(values.customer, '');
+    let lookupMessage = '';
+    let resolvedCustomerId = '0';
+    if (customerNameInput && customers.length > 0) {
+      resolvedCustomerId = findCustomerId(customerNameInput);
+      if (resolvedCustomerId === '0') {
+        lookupMessage = 'Customer name not found; showing all records.';
+      }
+    }
+
+    params.set('CustomerID', resolvedCustomerId);
+    return { queryString: params.toString(), lookupMessage };
+  };
+
+  const mapShipmentRow = (item, index) => ({
+    id: item.cargoID ?? `${item.invoiceNo ?? 'shipment'}-${index}`,
+    shipDate: item.cargoDatee ?? '-',
+    invoiceNo: item.invoiceNo ?? '-',
+    value: item.valueNew ?? '-',
+    billNo: item.billNo ?? '-',
+    customer: item.customerName ?? item.customer ?? '-',
+    ldp: item.ldpInvoiceNo ?? '-',
+    supplier: item.supplier ?? '-',
+    inspectionCertificate: 'Inspection Certificate',
+    invoice: 'Print Invoice',
+    invoiceExcel: 'Excel Invoice',
+    rateDiff: 'Rate Diff',
+    action: 'Action Diff',
+    view: '☐',
+    status: item.shipmentStatus ? 'Released' : 'Pending',
+  });
+
+  const fetchShipments = async (searchValues) => {
+    setLoading(true);
+    setFetchError('');
+    const controller = new AbortController();
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = controller;
+
+    try {
+      const { queryString, lookupMessage } = buildQueryParams(searchValues);
+      setCustomerLookupMessage(lookupMessage);
+      const authHeaders = getAuthHeaders();
+      if (!authHeaders) {
+        throw new Error('Missing access token; login required.');
+      }
+      const response = await fetch(`${SHIPMENT_RELEASE_API}?${queryString}`, {
+        signal: controller.signal,
+        headers: {
+          ...authHeaders,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Shipment API returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      const items = Array.isArray(data) ? data : data ? [data] : [];
+      const customerSearchTerm = normalizeParam(searchValues.customer, '');
+      const filteredItems =
+        customerSearchTerm && customerSearchTerm !== 'ALL'
+          ? items.filter((item) => {
+              const customerValue = (item.customerName ?? item.customer ?? '').toLowerCase();
+              return customerValue.includes(customerSearchTerm.toLowerCase());
+            })
+          : items;
+      setTableData(filteredItems.map((item, index) => mapShipmentRow(item, index)));
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        setTableData([]);
+        setFetchError(error.message || 'Unable to load shipment release data');
+      }
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchShipments(filters);
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchCustomers = async () => {
+    setCustomerLoading(true);
+    setCustomerFetchError('');
+    const controller = new AbortController();
+    customerControllerRef.current?.abort();
+    customerControllerRef.current = controller;
+
+    try {
+      const authHeaders = getAuthHeaders();
+      if (!authHeaders) {
+        throw new Error('Missing access token; login required.');
+      }
+      const response = await fetch(CUSTOMER_API, {
+        signal: controller.signal,
+        headers: {
+          ...authHeaders,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`Customer API returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      const payload = Array.isArray(data) ? data : data ? [data] : [];
+      setCustomers(payload);
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        setCustomerFetchError(error.message || 'Unable to load customers');
+      }
+    } finally {
+      if (customerControllerRef.current === controller) {
+        customerControllerRef.current = null;
+      }
+      setCustomerLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCustomers();
+    return () => {
+      customerControllerRef.current?.abort();
+    };
+  }, []);
+
+  const handleSearch = async () => {
+    if (filters.customer && customers.length === 0 && !customerLoading) {
+      await fetchCustomers();
+    }
+    fetchShipments(filters);
+  };
+
+  const handleShowAll = () => {
+    const defaults = { ...DEFAULT_FILTERS };
+    setFilters(defaults);
+    setCustomerLookupMessage('');
+    fetchShipments(defaults);
+  };
+
   const table = useTable();
-  const [tableData] = useState(SAMPLE_DATA);
 
   const dataFiltered = applyFilter({
     inputData: tableData,
@@ -159,159 +333,135 @@ export default function ShipmentReleaseFilters() {
 
   const denseHeight = 30;
 
+  const headerPaddingY = table.dense ? 1.5 : 2.75;
+  const tableCellPadding = table.dense ? 0.5 : 1;
+  const tableRowSx = {
+    ...TABLE_ROW_SX,
+    '& td': {
+      py: tableCellPadding,
+    },
+  };
+
   return (
     <Container maxWidth="xl" sx={{ py: 1 }}>
-      <Typography variant="h6" sx={{ mb: 1, fontWeight: 'bold', fontSize: '14px' }}>
-        SHIPMENT RELEASE
-      </Typography>
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="h5" sx={{ mb: 0.5, fontWeight: 700, letterSpacing: 0.5 }}>
+          PURCHASE ORDER VIEW
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Dashboard • Purchase Orders
+        </Typography>
+      </Box>
 
       {/* FILTER FORM - Compact */}
-      <Card sx={{ p: 1.5, mb: 1.5, borderRadius: 1 }}>
-        <Grid container spacing={1}>
-          {/* Invoice No + Show All */}
-          <Grid item xs={12}>
-            <Grid container spacing={1} alignItems="center">
-              <Grid item xs={12} md={5}>
-                <TextField
-                  label="Invoice No"
-                  fullWidth
-                  size="small"
-                  value={filters.invoice}
-                  onChange={(e) => handleChange('invoice', e.target.value)}
-                />
-              </Grid>
-              <Grid item>
-                <Button
-                  variant="contained"
-                  size="small"
-                  sx={{ bgcolor: '#3a245d', px: 2, minWidth: 80, height: 40 }}
-                >
-                  Search
-                </Button>
-              </Grid>
-              <Grid item sx={{ flexGrow: 1 }} />
-              <Grid item>
-                <Button
-                  variant="contained"
-                  size="small"
-                  sx={{ bgcolor: '#3a245d', px: 2, minWidth: 80, height: 40 }}
-                >
-                  Show All
-                </Button>
-              </Grid>
-            </Grid>
+      <Card sx={FILTER_CARD_SX}>
+        <Box sx={FILTER_HEADER_SX}>
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              Filter shipments
+            </Typography>
+         
+          </Box>
+        </Box>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={4}>
+            <TextField
+              sx={SEARCH_FIELD_SX}
+              label="Invoice No"
+              fullWidth
+              size="small"
+              value={filters.invoice}
+              onChange={(e) => handleChange('invoice', e.target.value)}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              sx={SEARCH_FIELD_SX}
+              label="Customer"
+              fullWidth
+              size="small"
+              value={filters.customer}
+              onChange={(e) => handleChange('customer', e.target.value)}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              sx={SEARCH_FIELD_SX}
+              label="Container No"
+              fullWidth
+              size="small"
+              value={filters.container}
+              onChange={(e) => handleChange('container', e.target.value)}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              sx={SEARCH_FIELD_SX}
+              label="Bill No"
+              fullWidth
+              size="small"
+              value={filters.bill}
+              onChange={(e) => handleChange('bill', e.target.value)}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              sx={SEARCH_FIELD_SX}
+              label="LDP Invoice No"
+              fullWidth
+              size="small"
+              value={filters.ldpInvoice}
+              onChange={(e) => handleChange('ldpInvoice', e.target.value)}
+            />
           </Grid>
 
-          {/* Container No + Bill No */}
-          <Grid item xs={12}>
-            <Grid container spacing={1}>
-              <Grid item xs={12} md={6}>
-                <Grid container spacing={1}>
-                  <Grid item xs>
-                    <TextField
-                      label="Container No"
-                      fullWidth
-                      size="small"
-                      value={filters.container}
-                      onChange={(e) => handleChange('container', e.target.value)}
-                    />
-                  </Grid>
-                  <Grid item>
-                    <Button
-                      variant="contained"
-                      size="small"
-                      sx={{ bgcolor: '#3a245d', px: 2, minWidth: 80, height: 40 }}
-                    >
-                      Search
-                    </Button>
-                  </Grid>
-                </Grid>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <Grid container spacing={1}>
-                  <Grid item xs>
-                    <TextField
-                      label="Bill No"
-                      fullWidth
-                      size="small"
-                      value={filters.bill}
-                      onChange={(e) => handleChange('bill', e.target.value)}
-                    />
-                  </Grid>
-                  <Grid item>
-                    <Button
-                      variant="contained"
-                      size="small"
-                      sx={{ bgcolor: '#3a245d', px: 2, minWidth: 80, height: 40 }}
-                    >
-                      Search
-                    </Button>
-                  </Grid>
-                </Grid>
-              </Grid>
+          {(customerLoading || customerFetchError || customerLookupMessage) && (
+            <Grid item xs={12}>
+              {customerLoading && (
+                <Typography variant="body2" color="text.secondary">
+                  Loading customer master data…
+                </Typography>
+              )}
+              {customerFetchError && (
+                <Typography variant="body2" color="error">
+                  {customerFetchError}
+                </Typography>
+              )}
+              {customerLookupMessage && (
+                <Typography variant="body2" color="text.secondary">
+                  {customerLookupMessage}
+                </Typography>
+              )}
             </Grid>
-          </Grid>
+          )}
 
-          {/* Customer + LDP Invoice */}
           <Grid item xs={12}>
-            <Grid container spacing={1}>
-              <Grid item xs={12} md={6}>
-                <Grid container spacing={1}>
-                  <Grid item xs>
-                    <TextField
-                      label="Customer"
-                      fullWidth
-                      size="small"
-                      value={filters.customer}
-                      onChange={(e) => handleChange('customer', e.target.value)}
-                    />
-                  </Grid>
-                  <Grid item>
-                    <Button
-                      variant="contained"
-                      size="small"
-                      sx={{ bgcolor: '#3a245d', px: 2, minWidth: 80, height: 40 }}
-                    >
-                      Search
-                    </Button>
-                  </Grid>
-                </Grid>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <Grid container spacing={1}>
-                  <Grid item xs>
-                    <TextField
-                      label="LDP Invoice No"
-                      fullWidth
-                      size="small"
-                      value={filters.ldpInvoice}
-                      onChange={(e) => handleChange('ldpInvoice', e.target.value)}
-                    />
-                  </Grid>
-                  <Grid item>
-                    <Button
-                      variant="contained"
-                      size="small"
-                      sx={{ bgcolor: '#3a245d', px: 2, minWidth: 80, height: 40 }}
-                    >
-                      Search
-                    </Button>
-                  </Grid>
-                </Grid>
-              </Grid>
-            </Grid>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1 }}>
+              <Button variant="contained" size="small" sx={FILTER_BUTTON_SX} onClick={handleSearch}>
+                Search
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={handleShowAll}
+                sx={{
+                  ...FILTER_BUTTON_SX,
+                  bgcolor: '#ffffff',
+                  color: '#009473',
+                  borderColor: '#009473',
+                  boxShadow: 'none',
+                  '&:hover': { bgcolor: '#f0fdf8' },
+                }}
+              >
+                Clear
+              </Button>
+            </Box>
           </Grid>
 
           {/* Add Shipment */}
           <Grid item xs={12}>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-              <Button
-                variant="contained"
-                size="small"
-                sx={{ bgcolor: '#3a245d', px: 3, minWidth: 120, height: 40 }}
-              >
+              <Button variant="contained" size="small" sx={{ ...FILTER_BUTTON_SX, px: 3, minWidth: 120 }}>
                 Add Shipment
               </Button>
             </Box>
@@ -320,8 +470,22 @@ export default function ShipmentReleaseFilters() {
       </Card>
 
       {/* DATA TABLE - No Scrolling */}
-      <Card sx={{ borderRadius: 1 }}>
-        <TableContainer>
+      <Card sx={TABLE_CARD_SX}>
+        {(loading || fetchError) && (
+          <Box sx={{ px: 3, py: 1, borderBottom: '1px solid', borderColor: '#e0e6f0', backgroundColor: '#f5fefb' }}>
+            {loading && (
+              <Typography variant="body2" color="text.secondary">
+                Loading shipment release data…
+              </Typography>
+            )}
+            {fetchError && (
+              <Typography variant="body2" color="error">
+                {fetchError}
+              </Typography>
+            )}
+          </Box>
+        )}
+        <TableContainer sx={{ maxHeight: 540, backgroundColor: '#ffffff' }}>
           <Table
             size="small"
             sx={{
@@ -332,15 +496,21 @@ export default function ShipmentReleaseFilters() {
                 padding: '4px 6px',
                 border: '0.5px solid #e0e0e0',
                 lineHeight: 1.2,
-                py: 1,
+                py: tableCellPadding,
+                textAlign: 'center',
               },
               '& th': {
-                fontWeight: 'bold',
-                backgroundColor: '#f8f8f8',
+                fontWeight: 600,
+                backgroundColor: '#009473',
+                color: '#ffffff',
                 fontSize: '0.75rem',
                 position: 'sticky',
                 top: 0,
                 zIndex: 1,
+                borderBottom: 'none',
+                textTransform: 'uppercase',
+                py: headerPaddingY,
+                textAlign: 'center',
               },
             }}
           >
@@ -353,18 +523,11 @@ export default function ShipmentReleaseFilters() {
               onSort={table.onSort}
             />
 
-            <TableBody>
-              {dataFiltered.map((row) => (
-                <TableRow
-                  hover
-                  key={row.id}
-                  sx={{
-                    '& td': { py: 1 },
-                    '&:hover': {
-                      backgroundColor: '#f5f5f5',
-                    },
-                  }}
-                >
+          <TableBody>
+            {dataFiltered
+              .slice(table.page * table.rowsPerPage, table.page * table.rowsPerPage + table.rowsPerPage)
+              .map((row) => (
+                <TableRow hover key={row.id} sx={tableRowSx}>
                   <TableCell sx={{ fontSize: '0.75rem' }}>{row.shipDate}</TableCell>
                   <TableCell sx={{ fontSize: '0.75rem' }}>{row.invoiceNo}</TableCell>
                   <TableCell sx={{ fontSize: '0.75rem' }}>{row.value}</TableCell>
@@ -478,6 +641,7 @@ export default function ShipmentReleaseFilters() {
           onRowsPerPageChange={table.onChangeRowsPerPage}
           dense={table.dense}
           onChangeDense={table.onChangeDense}
+          rowsPerPageOptions={[5, 10, 25, 60]}
         />
       </Card>
     </Container>
