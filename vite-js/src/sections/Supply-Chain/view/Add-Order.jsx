@@ -42,6 +42,9 @@ import {
   Checkbox,
   ListItemText,
   OutlinedInput,
+  Stepper,
+  Step,
+  StepLabel,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import LoadingButton from '@mui/lab/LoadingButton';
@@ -1148,6 +1151,34 @@ export default function CompletePurchaseOrderForm() {
   const [showCalculationFields, setShowCalculationFields] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
+  const STEPS = [
+    'PURCHASE ORDER ENTRY',
+    'PURCHASE ORDER IMPORTANT DATES',
+    'PRODUCT INFORMATION',
+    'PRODUCT SPECIFIC INFORMATION',
+    'SHIPPING AND PAYMENT TERMS',
+    'REFERENCE & ATTACHMENT',
+    'BANK DETAILS',
+  ];
+
+  const [activeStep, setActiveStep] = useState(0);
+  const isLastStep = activeStep === STEPS.length - 1;
+
+  const handleNextStep = () => {
+    setActiveStep((prev) => {
+      const next = Math.min(prev + 1, STEPS.length - 1);
+      // Scroll to top on every Next click
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      return next;
+    });
+  };
+
+  const handlePrevStep = () => {
+    setActiveStep((prev) => Math.max(prev - 1, 0));
+  };
+
   // API States
   const [costingOptions, setCostingOptions] = useState([]);
   const [costingLoading, setCostingLoading] = useState(false);
@@ -1971,6 +2002,27 @@ export default function CompletePurchaseOrderForm() {
       productCode: row.productCode || '',
     }));
 
+  // Safely extract newly created Purchase Order ID from API response
+  const extractPurchaseOrderId = (responseData) => {
+    if (!responseData) return null;
+
+    // Numeric or numeric-string response
+    if (typeof responseData === 'number') return responseData;
+    if (typeof responseData === 'string' && !Number.isNaN(Number(responseData))) {
+      return Number(responseData);
+    }
+
+    // Common property names from backend
+    return (
+      responseData.purchaseOrderID ??
+      responseData.purchaseOrderId ??
+      responseData.poid ??
+      responseData.poId ??
+      responseData.id ??
+      null
+    );
+  };
+
   // Map form data to API format - COMPLETELY UPDATED FOR IMAGE HANDLING
   const mapFormDataToAPI = async (data) => {
     
@@ -2186,15 +2238,28 @@ export default function CompletePurchaseOrderForm() {
         throw new Error(`Failed to save purchase order. Status: ${response.status}`);
       }
 
+      // Extract newly created Purchase Order ID for details API
+      const createdPoId = extractPurchaseOrderId(response.data);
+      console.log('🆕 Created Purchase Order ID:', createdPoId, 'Raw response:', response.data);
+
       // If we have item grid data, save it using AddPurchaseOrderDetails
       if (savedItemData?.rows?.length) {
-        const detailsPayload = mapItemRowsToDetailsPayload(savedItemData.rows);
+        if (!createdPoId) {
+          throw new Error('Purchase Order saved but POID was not returned by API.');
+        }
+
+        const baseDetails = mapItemRowsToDetailsPayload(savedItemData.rows);
+        // Backend expects styleID + purchaseOrderID in each object
+        const detailsPayload = baseDetails.map((item) => ({
+          styleID: 0,
+          purchaseOrderID: Number(createdPoId) || 0,
+          ...item,
+        }));
 
         console.log('📤 Sending PO Details to API:', detailsPayload);
 
-
         const detailsResponse = await axios.post(
-          `${API_BASE_URL}/api/MyOrders/AddPurchaseOrderDetails`,
+          `${API_BASE_URL}/api/MyOrders/AddPurchaseOrderDetails?poId=${createdPoId}`,
           detailsPayload,
           {
             headers,
@@ -2257,10 +2322,28 @@ export default function CompletePurchaseOrderForm() {
 
   return (
     <FormProvider {...methods}>
-      <Container maxWidth="xl">
-        <form onSubmit={handleSubmit(onSubmit)}>
-          
+      <Box
+        sx={(theme) => ({
+          bgcolor: theme.palette.grey[50],
+          minHeight: '100vh',
+          py: 4,
+        })}
+      >
+        <Container maxWidth="xl">
+          <form onSubmit={handleSubmit(onSubmit)}>
+          {/* Top Stepper */}
+          <Box sx={{ py: 3 }}>
+            <Stepper activeStep={activeStep} alternativeLabel>
+              {STEPS.map((label) => (
+                <Step key={label}>
+                  <StepLabel>{label}</StepLabel>
+                </Step>
+              ))}
+            </Stepper>
+          </Box>
+
           {/* ----------------- Section: Basic Order Info ----------------- */}
+          {activeStep === 0 && (
           <Card sx={{ p: 3, mb: 4 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
               <ArrowBackIosIcon
@@ -2510,125 +2593,129 @@ export default function CompletePurchaseOrderForm() {
               </Grid>
             </Grid>
           </Card>
+          )}
 
-          {/* ----------------- Section: Important Dates ----------------- */}
-          <Card sx={{ p: 3, mb: 4 }}>
-            <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-              PURCHASE ORDER IMPORTANT DATES
-            </Typography>
-            <Grid container spacing={2}>
-              {[
-                { name: 'placementDate', label: 'Placement Date' },
-                { name: 'etaNewJerseyDate', label: 'ETA New Jersey Date' },
-                { name: 'etaWarehouseDate', label: 'ETA Warehouse Date' },
-              ].map(({ name, label }) => (
-                <Grid item xs={12} sm={4} key={name}>
-                  <Controller
-                    name={name}
-                    control={control}
-                    render={({ field, fieldState }) => (
-                      <TextField
-                        {...field}
-                        label={label}
-                        type="date"
-                        fullWidth
-                        InputLabelProps={{ shrink: true }}
-                        error={!!fieldState.error}
-                        helperText={fieldState.error?.message}
-                      />
-                    )}
-                  />
-                </Grid>
-              ))}
-            </Grid>
-          </Card>
+          {/* ----------------- Section: Dates + Shipment Windows (all in one step) ----------------- */}
+          {activeStep === 1 && (
+          <>
+            <Card sx={{ p: 3, mb: 4 }}>
+              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+                PURCHASE ORDER IMPORTANT DATES
+              </Typography>
+              <Grid container spacing={2}>
+                {[
+                  { name: 'placementDate', label: 'Placement Date' },
+                  { name: 'etaNewJerseyDate', label: 'ETA New Jersey Date' },
+                  { name: 'etaWarehouseDate', label: 'ETA Warehouse Date' },
+                ].map(({ name, label }) => (
+                  <Grid item xs={12} sm={4} key={name}>
+                    <Controller
+                      name={name}
+                      control={control}
+                      render={({ field, fieldState }) => (
+                        <TextField
+                          {...field}
+                          label={label}
+                          type="date"
+                          fullWidth
+                          InputLabelProps={{ shrink: true }}
+                          error={!!fieldState.error}
+                          helperText={fieldState.error?.message}
+                        />
+                      )}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            </Card>
 
-          {/* ----------------- Section: Buyer Shipment ----------------- */}
-          <Card sx={{ p: 3, mb: 4 }}>
-            <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-              BUYER SHIPMENT WINDOW
-            </Typography>
-            <Grid container spacing={2}>
-              {[
-                { name: 'buyerShipInitial', label: 'Buyer Ship. Dt. (Initial)' },
-                { name: 'buyerShipLast', label: 'Buyer Ship. Dt. (Last)' },
-              ].map(({ name, label }) => (
-                <Grid item xs={12} sm={6} key={name}>
-                  <Controller
-                    name={name}
-                    control={control}
-                    render={({ field, fieldState }) => (
-                      <TextField
-                        {...field}
-                        label={label}
-                        type="date"
-                        fullWidth
-                        InputLabelProps={{ shrink: true }}
-                        error={!!fieldState.error}
-                        helperText={fieldState.error?.message}
-                      />
-                    )}
-                  />
-                </Grid>
-              ))}
-            </Grid>
-          </Card>
+            <Card sx={{ p: 3, mb: 4 }}>
+              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+                BUYER SHIPMENT WINDOW
+              </Typography>
+              <Grid container spacing={2}>
+                {[
+                  { name: 'buyerShipInitial', label: 'Buyer Ship. Dt. (Initial)' },
+                  { name: 'buyerShipLast', label: 'Buyer Ship. Dt. (Last)' },
+                ].map(({ name, label }) => (
+                  <Grid item xs={12} sm={6} key={name}>
+                    <Controller
+                      name={name}
+                      control={control}
+                      render={({ field, fieldState }) => (
+                        <TextField
+                          {...field}
+                          label={label}
+                          type="date"
+                          fullWidth
+                          InputLabelProps={{ shrink: true }}
+                          error={!!fieldState.error}
+                          helperText={fieldState.error?.message}
+                        />
+                      )}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            </Card>
 
-          {/* ----------------- Section: Vendor Shipment ----------------- */}
-          <Card sx={{ p: 3, mb: 4 }}>
-            <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-              VENDOR SHIPMENT WINDOW
-            </Typography>
-            <Grid container spacing={2}>
-              {[
-                { name: 'vendorShipInitial', label: 'Vendor Ship. Dt. (Initial)' },
-                { name: 'vendorShipLast', label: 'Vendor Ship. Dt. (Last)' },
-                { name: 'finalInspectionDate', label: 'Final Inspection Date' },
-              ].map(({ name, label }) => (
-                <Grid item xs={12} sm={4} key={name}>
-                  <Controller
-                    name={name}
-                    control={control}
-                    render={({ field, fieldState }) => (
-                      <TextField
-                        {...field}
-                        label={label}
-                        type="date"
-                        fullWidth
-                        InputLabelProps={{ shrink: true }}
-                        error={!!fieldState.error}
-                        helperText={fieldState.error?.message}
-                      />
-                    )}
-                  />
-                </Grid>
-              ))}
-              {[
-                { name: 'reasonReviseBuyer', label: 'Reason of Revise Shipment Dates(B)' },
-                { name: 'reasonReviseVendor', label: 'Reason of Revise Shipment Dates(V)' },
-              ].map(({ name, label }) => (
-                <Grid item xs={12} key={name}>
-                  <Controller
-                    name={name}
-                    control={control}
-                    render={({ field, fieldState }) => (
-                      <TextField
-                        {...field}
-                        label={label}
-                        fullWidth
-                        multiline
-                        minRows={2}
-                        error={!!fieldState.error}
-                        helperText={fieldState.error?.message}
-                      />
-                    )}
-                  />
-                </Grid>
-              ))}
-            </Grid>
-          </Card>
+            <Card sx={{ p: 3, mb: 4 }}>
+              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+                VENDOR SHIPMENT WINDOW
+              </Typography>
+              <Grid container spacing={2}>
+                {[
+                  { name: 'vendorShipInitial', label: 'Vendor Ship. Dt. (Initial)' },
+                  { name: 'vendorShipLast', label: 'Vendor Ship. Dt. (Last)' },
+                  { name: 'finalInspectionDate', label: 'Final Inspection Date' },
+                ].map(({ name, label }) => (
+                  <Grid item xs={12} sm={4} key={name}>
+                    <Controller
+                      name={name}
+                      control={control}
+                      render={({ field, fieldState }) => (
+                        <TextField
+                          {...field}
+                          label={label}
+                          type="date"
+                          fullWidth
+                          InputLabelProps={{ shrink: true }}
+                          error={!!fieldState.error}
+                          helperText={fieldState.error?.message}
+                        />
+                      )}
+                    />
+                  </Grid>
+                ))}
+                {[
+                  { name: 'reasonReviseBuyer', label: 'Reason of Revise Shipment Dates(B)' },
+                  { name: 'reasonReviseVendor', label: 'Reason of Revise Shipment Dates(V)' },
+                ].map(({ name, label }) => (
+                  <Grid item xs={12} key={name}>
+                    <Controller
+                      name={name}
+                      control={control}
+                      render={({ field, fieldState }) => (
+                        <TextField
+                          {...field}
+                          label={label}
+                          fullWidth
+                          multiline
+                          minRows={2}
+                          error={!!fieldState.error}
+                          helperText={fieldState.error?.message}
+                        />
+                      )}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            </Card>
+          </>
+          )}
 
-          {/* ----------------- Section: Product Portfolio ----------------- */}
+           {/* ----------------- Section: Product Portfolio / PRODUCT INFORMATION ----------------- */}
+           {activeStep === 2 && (
           <Box
             sx={(theme) => ({
               backgroundColor: theme.palette.background.paper,
@@ -2943,8 +3030,10 @@ export default function CompletePurchaseOrderForm() {
               </Grid>
             </Grid>
           </Box>
+          )}
 
           {/* ----------------- Product Specific Information ----------------- */}
+          {activeStep === 3 && (
           <Card sx={{ p: 3, mb: 4 }}>
             <CardContent>
               <Typography variant="h6" sx={{ fontWeight: "bold", mb: 2 }}>
@@ -3194,8 +3283,10 @@ export default function CompletePurchaseOrderForm() {
               )}
             </CardContent>
           </Card>
+          )}
 
           {/* ----------------- Shipping and Payment Terms ----------------- */}
+          {activeStep === 4 && (
           <Card sx={{ p: 3, mb: 4 }}>
             <CardContent>
               <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
@@ -3283,8 +3374,10 @@ export default function CompletePurchaseOrderForm() {
               </Grid>
             </CardContent>
           </Card>
+          )}
 
           {/* ----------------- Reference & Attachment Form ----------------- */}
+          {activeStep === 5 && (
           <Card sx={{ p: 3, mb: 4 }}>
             <CardContent>
               <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
@@ -3311,8 +3404,10 @@ export default function CompletePurchaseOrderForm() {
               </Grid>
             </CardContent>
           </Card>
+          )}
 
           {/* ----------------- Bank Detail Form ----------------- */}
+          {activeStep === 6 && (
           <Card sx={{ p: 3, mb: 4 }}>
             <CardContent>
               <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
@@ -3412,8 +3507,42 @@ export default function CompletePurchaseOrderForm() {
               </Stack>
             </CardContent>
           </Card>
-        </form>
-      </Container>
+          )}
+
+          {/* Step navigation buttons */}
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              mt: 2,
+              mb: 4,
+            }}
+          >
+            <Button
+              type="button"
+              variant="outlined"
+              color="primary"
+              disabled={activeStep === 0}
+              onClick={handlePrevStep}
+            >
+              Back
+            </Button>
+
+            {!isLastStep && (
+              <Button
+                type="button"
+                variant="contained"
+                color="primary"
+                onClick={handleNextStep}
+              >
+                Next
+              </Button>
+            )}
+          </Box>
+          </form>
+        </Container>
+      </Box>
 
       {/* Item Details Dialog */}
       <ItemDetailsDialog

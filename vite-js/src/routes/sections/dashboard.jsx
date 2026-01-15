@@ -36,6 +36,12 @@ const InvoiceEditPage = lazy(() => import('src/pages/dashboard/invoice/edit'));
 const UserProfilePage = lazy(() => import('src/sections/Supply-Chain/view/My-Order'));
 const UserCardsPage = lazy(() => import('src/sections/Supply-Chain/view/Quick-Search'));
 const UserListPage = lazy(() => import('src/sections/Supply-Chain/view/user-list-view'));
+const ShipmentReleaseAddPage = lazy(
+  () => import('src/sections/Supply-Chain/view/Shipment-Release-add')
+);
+const ShipmentEditViewPage = lazy(
+  () => import('src/sections/Supply-Chain/view/Shipment-edit-view')
+);
 // const UserAccountPage = lazy(() => import('src/sections/Supply-Chain/view/Account')); // Agar Account.jsx hai
 const UserCreatePage = lazy(() => import('src/sections/Supply-Chain/view/user-create-view'));
 const UserEditPage = lazy(() => import('src/sections/Supply-Chain/view/user-edit-view'));
@@ -181,6 +187,8 @@ export const dashboardRoutes = [
           { path: 'size-specs/:id', element: <SizeSpecsPage /> },
           { path: 'milestone/:id', element: <Milestone /> },
           { path: 'tna-chart', element: <TNAChartPage /> },
+          { path: 'shipment-release/add', element: <ShipmentReleaseAddPage /> },
+          { path: 'shipment/:id/edit', element: <ShipmentEditViewPage /> },
           { path: 'view/:id', element: <CompletePurchaseOrderFormEdit /> },
           { path: 'purchase-order-pdf/:id', element: <PurchaseOrderPDF /> },
           { path: 'purchase-order-sspdf/:id', element: <PurchaseOrderSSPDF /> },

@@ -1045,8 +1045,8 @@ export default function TNAChartPage() {
           sx={{
             position: 'relative',
             '& .ag-header, & .ag-header-viewport, & .ag-header-row': {
-              backgroundColor: theme.palette.primary.main,
-              color: theme.palette.primary.contrastText,
+              backgroundColor: '#eeeeee',
+              color: '#000000',
             },
             '& .ag-header-cell, & .ag-header-group-cell': {
               backgroundColor: 'transparent',

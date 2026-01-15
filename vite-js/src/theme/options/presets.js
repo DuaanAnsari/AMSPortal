@@ -68,6 +68,15 @@ const red = {
   contrastText: '#FFFFFF',
 };
 
+const black = {
+  lighter: grey[400],
+  light: grey[700],
+  main: '#171616',
+  dark: '#171616',
+  darker: '#171616',
+  contrastText: '#FFFFFF',
+};
+
 export const presetOptions = [
   { name: 'default', value: primary.main },
   { name: 'cyan', value: cyan.main },
@@ -75,6 +84,7 @@ export const presetOptions = [
   { name: 'blue', value: blue.main },
   { name: 'orange', value: orange.main },
   { name: 'red', value: red.main },
+  { name: 'black', value: black.main },
 ];
 
 export function getPrimary(preset) {
@@ -85,5 +95,6 @@ export function getPrimary(preset) {
     blue,
     orange,
     red,
+    black,
   }[preset];
 }

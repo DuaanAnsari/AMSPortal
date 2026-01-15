@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Grid,
   Card,
@@ -65,17 +66,6 @@ const FILTER_CARD_SX = {
   boxShadow: (theme) => `0 12px 30px rgba(15, 32, 99, 0.08)`,
 };
 
-const FILTER_BUTTON_SX = {
-  bgcolor: '#009473',
-  px: 2,
-  minWidth: 90,
-  height: 40,
-  color: '#fff',
-  fontWeight: 600,
-  textTransform: 'none',
-  '&:hover': { bgcolor: '#007359' },
-};
-
 const FILTER_HEADER_SX = {
   display: 'flex',
   justifyContent: 'space-between',
@@ -97,18 +87,6 @@ const TABLE_CARD_SX = {
   boxShadow: '0 12px 24px rgba(15, 23, 42, 0.1)',
 };
 
-const TABLE_HEAD_SX = {
-  backgroundColor: '#009473',
-  color: '#ffffff',
-  '& .MuiTableCell-root': {
-    color: '#ffffff',
-    fontWeight: 700,
-    borderBottom: 'none',
-    textTransform: 'uppercase',
-    fontSize: '0.75rem',
-  },
-};
-
 const TABLE_ROW_SX = {
   background: '#ffffff',
   '&:nth-of-type(odd)': {
@@ -122,6 +100,7 @@ const TABLE_ROW_SX = {
 // ----------------------------------------------------------------------
 
 export default function ShipmentReleaseFilters() {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState(() => ({ ...DEFAULT_FILTERS }));
   const [tableData, setTableData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -346,10 +325,10 @@ export default function ShipmentReleaseFilters() {
     <Container maxWidth="xl" sx={{ py: 1 }}>
       <Box sx={{ mb: 2 }}>
         <Typography variant="h5" sx={{ mb: 0.5, fontWeight: 700, letterSpacing: 0.5 }}>
-          PURCHASE ORDER VIEW
+          SHIPMENT RELEASE
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Dashboard • Purchase Orders
+          Dashboard
         </Typography>
       </Box>
 
@@ -437,20 +416,26 @@ export default function ShipmentReleaseFilters() {
 
           <Grid item xs={12}>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1 }}>
-              <Button variant="contained" size="small" sx={FILTER_BUTTON_SX} onClick={handleSearch}>
+              <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                sx={{ px: 2, minWidth: 90, height: 40, fontWeight: 600, textTransform: 'none' }}
+                onClick={handleSearch}
+              >
                 Search
               </Button>
               <Button
                 variant="outlined"
+                color="primary"
                 size="small"
                 onClick={handleShowAll}
                 sx={{
-                  ...FILTER_BUTTON_SX,
-                  bgcolor: '#ffffff',
-                  color: '#009473',
-                  borderColor: '#009473',
-                  boxShadow: 'none',
-                  '&:hover': { bgcolor: '#f0fdf8' },
+                  px: 2,
+                  minWidth: 90,
+                  height: 40,
+                  fontWeight: 600,
+                  textTransform: 'none',
                 }}
               >
                 Clear
@@ -461,7 +446,13 @@ export default function ShipmentReleaseFilters() {
           {/* Add Shipment */}
           <Grid item xs={12}>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-              <Button variant="contained" size="small" sx={{ ...FILTER_BUTTON_SX, px: 3, minWidth: 120 }}>
+              <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                sx={{ px: 3, minWidth: 120, height: 40, fontWeight: 600, textTransform: 'none' }}
+                onClick={() => navigate('/dashboard/supply-chain/shipment-release/add')}
+              >
                 Add Shipment
               </Button>
             </Box>
@@ -469,72 +460,161 @@ export default function ShipmentReleaseFilters() {
         </Grid>
       </Card>
 
-      {/* DATA TABLE - No Scrolling */}
+      {/* DATA TABLE */}
       <Card sx={TABLE_CARD_SX}>
-        {(loading || fetchError) && (
-          <Box sx={{ px: 3, py: 1, borderBottom: '1px solid', borderColor: '#e0e6f0', backgroundColor: '#f5fefb' }}>
-            {loading && (
-              <Typography variant="body2" color="text.secondary">
-                Loading shipment release data…
-              </Typography>
-            )}
-            {fetchError && (
-              <Typography variant="body2" color="error">
-                {fetchError}
-              </Typography>
-            )}
-          </Box>
-        )}
-        <TableContainer sx={{ maxHeight: 540, backgroundColor: '#ffffff' }}>
-          <Table
-            size="small"
+        {loading ? (
+          <Box
             sx={{
-              minWidth: 1400,
-              '& td, & th': {
-                fontSize: '0.75rem',
-                whiteSpace: 'nowrap',
-                padding: '4px 6px',
-                border: '0.5px solid #e0e0e0',
-                lineHeight: 1.2,
-                py: tableCellPadding,
-                textAlign: 'center',
-              },
-              '& th': {
-                fontWeight: 600,
-                backgroundColor: '#009473',
-                color: '#ffffff',
-                fontSize: '0.75rem',
-                position: 'sticky',
-                top: 0,
-                zIndex: 1,
-                borderBottom: 'none',
-                textTransform: 'uppercase',
-                py: headerPaddingY,
-                textAlign: 'center',
-              },
+              minHeight: 320,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <TableHeadCustom
-              order={table.order}
-              orderBy={table.orderBy}
-              headLabel={TABLE_HEAD}
-              rowCount={dataFiltered.length}
-              numSelected={table.selected.length}
-              onSort={table.onSort}
-            />
+            <Typography variant="body2" color="text.secondary">
+              Loading shipment release data…
+            </Typography>
+          </Box>
+        ) : (
+          <>
+            {fetchError && (
+              <Box
+                sx={{
+                  px: 3,
+                  py: 1,
+                  borderBottom: '1px solid',
+                  borderColor: '#e0e6f0',
+                  backgroundColor: '#f5fefb',
+                }}
+              >
+                <Typography variant="body2" color="error">
+                  {fetchError}
+                </Typography>
+              </Box>
+            )}
+            <TableContainer sx={{ maxHeight: 540, backgroundColor: '#ffffff' }}>
+              <Table
+                size="small"
+                sx={{
+                  minWidth: 1400,
+                  '& td, & th': {
+                    fontSize: '0.75rem',
+                    whiteSpace: 'nowrap',
+                    padding: '4px 6px',
+                    border: '0.5px solid #e0e0e0',
+                    lineHeight: 1.2,
+                    py: tableCellPadding,
+                    textAlign: 'center',
+                  },
+                  '& th': (theme) => ({
+                    fontWeight: 600,
+                    backgroundColor: theme.palette.primary.main,
+                    color: theme.palette.primary.contrastText,
+                    fontSize: '0.75rem',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1,
+                    borderBottom: 'none',
+                    textTransform: 'uppercase',
+                    py: headerPaddingY,
+                    textAlign: 'center',
+                  }),
+                }}
+              >
+                <TableHeadCustom
+                  order={table.order}
+                  orderBy={table.orderBy}
+                  headLabel={TABLE_HEAD}
+                  rowCount={dataFiltered.length}
+                  numSelected={table.selected.length}
+                  onSort={table.onSort}
+                />
 
-          <TableBody>
-            {dataFiltered
-              .slice(table.page * table.rowsPerPage, table.page * table.rowsPerPage + table.rowsPerPage)
-              .map((row) => (
-                <TableRow hover key={row.id} sx={tableRowSx}>
-                  <TableCell sx={{ fontSize: '0.75rem' }}>{row.shipDate}</TableCell>
-                  <TableCell sx={{ fontSize: '0.75rem' }}>{row.invoiceNo}</TableCell>
-                  <TableCell sx={{ fontSize: '0.75rem' }}>{row.value}</TableCell>
-                  <TableCell sx={{ fontSize: '0.75rem' }}>{row.billNo}</TableCell>
-                  <TableCell sx={{ fontSize: '0.75rem' }}>{row.customer}</TableCell>
-                  <TableCell sx={{ fontSize: '0.75rem' }}>{row.ldp}</TableCell>
-                  <TableCell sx={{ fontSize: '0.75rem' }}>{row.supplier}</TableCell>
+                <TableBody>
+                  {dataFiltered
+                    .slice(
+                      table.page * table.rowsPerPage,
+                      table.page * table.rowsPerPage + table.rowsPerPage
+                    )
+                    .map((row) => (
+                      <TableRow hover key={row.id} sx={tableRowSx}>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>{row.shipDate}</TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>{row.invoiceNo}</TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>{row.value}</TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>{row.billNo}</TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>{row.customer}</TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>{row.ldp}</TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>{row.supplier}</TableCell>
+                        <TableCell>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            sx={{
+                              minWidth: 50,
+                              fontSize: '0.7rem',
+                              py: 0.3,
+                              px: 1,
+                            }}
+                          >
+                            Inspection Certificate
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            sx={{
+                              minWidth: 50,
+                              fontSize: '0.7rem',
+                              py: 0.3,
+                              px: 1,
+                            }}
+                          >
+                            Print Invoice
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            sx={{
+                              minWidth: 50,
+                              fontSize: '0.7rem',
+                              py: 0.3,
+                              px: 1,
+                            }}
+                          >
+                            Excel Invoice
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            sx={{
+                              minWidth: 50,
+                              fontSize: '0.7rem',
+                              py: 0.3,
+                              px: 1,
+                            }}
+                          >
+                            Rate Diff
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            sx={{
+                              minWidth: 50,
+                              fontSize: '0.7rem',
+                              py: 0.3,
+                              px: 1,
+                            }}
+                          >
+                            Action Diff
+                          </Button>
+                        </TableCell>
                   <TableCell>
                     <Button
                       size="small"
@@ -545,104 +625,37 @@ export default function ShipmentReleaseFilters() {
                         py: 0.3,
                         px: 1,
                       }}
-                    >
-                      Inspection Certificate
-                    </Button>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      sx={{
-                        minWidth: 50,
-                        fontSize: '0.7rem',
-                        py: 0.3,
-                        px: 1,
-                      }}
-                    >
-                      Print Invoice
-                    </Button>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      sx={{
-                        minWidth: 50,
-                        fontSize: '0.7rem',
-                        py: 0.3,
-                        px: 1,
-                      }}
-                    >
-                      Excel Invoice
-                    </Button>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      sx={{
-                        minWidth: 50,
-                        fontSize: '0.7rem',
-                        py: 0.3,
-                        px: 1,
-                      }}
-                    >
-                      Rate Diff
-                    </Button>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      sx={{
-                        minWidth: 50,
-                        fontSize: '0.7rem',
-                        py: 0.3,
-                        px: 1,
-                      }}
-                    >
-                      Action Diff
-                    </Button>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      sx={{
-                        minWidth: 50,
-                        fontSize: '0.7rem',
-                        py: 0.3,
-                        px: 1,
-                      }}
+                      onClick={() => navigate(`/dashboard/supply-chain/shipment/${row.id}/edit`)}
                     >
                       View
                     </Button>
                   </TableCell>
-                  <TableCell sx={{ fontSize: '0.75rem' }}>{row.status}</TableCell>
-                </TableRow>
-              ))}
+                        <TableCell sx={{ fontSize: '0.75rem' }}>{row.status}</TableCell>
+                      </TableRow>
+                    ))}
 
-              <TableEmptyRows
-                height={denseHeight}
-                emptyRows={emptyRows(table.page, table.rowsPerPage, dataFiltered.length)}
-              />
+                  <TableEmptyRows
+                    height={denseHeight}
+                    emptyRows={emptyRows(table.page, table.rowsPerPage, dataFiltered.length)}
+                  />
 
-              {!dataFiltered.length && <TableNoData notFound={!dataFiltered.length} />}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                  {!dataFiltered.length && <TableNoData notFound={!dataFiltered.length} />}
+                </TableBody>
+              </Table>
+            </TableContainer>
 
-        <TablePaginationCustom
-          count={dataFiltered.length}
-          page={table.page}
-          rowsPerPage={table.rowsPerPage}
-          onPageChange={table.onChangePage}
-          onRowsPerPageChange={table.onChangeRowsPerPage}
-          dense={table.dense}
-          onChangeDense={table.onChangeDense}
-          rowsPerPageOptions={[5, 10, 25, 60]}
-        />
+            <TablePaginationCustom
+              count={dataFiltered.length}
+              page={table.page}
+              rowsPerPage={table.rowsPerPage}
+              onPageChange={table.onChangePage}
+              onRowsPerPageChange={table.onChangeRowsPerPage}
+              dense={table.dense}
+              onChangeDense={table.onChangeDense}
+              rowsPerPageOptions={[5, 10, 25, 60]}
+            />
+          </>
+        )}
       </Card>
     </Container>
   );

@@ -25,6 +25,7 @@ import Typography from '@mui/material/Typography';
 import Grid from '@mui/material/Grid';
 import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
+import Tooltip from '@mui/material/Tooltip';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -706,7 +707,7 @@ export default function PurchaseOrderView() {
   return (
     <Container maxWidth={settings.themeStretch ? false : 'xl'} sx={{ py: 2 }}>
       <CustomBreadcrumbs
-        heading="PURCHASE ORDER VIEW"
+        heading="SHIPMENT RELEASE"
         links={[{ name: 'Dashboard', href: '/dashboard' }, { name: 'Purchase Orders' }]}
         sx={{ mb: { xs: 2, md: 3 } }}
       />
@@ -1030,14 +1031,14 @@ export default function PurchaseOrderView() {
                 onSort={table.onSort}
                 sx={{
                   '& .MuiTableRow-root': {
-                    backgroundColor: (theme) => theme.palette.primary.main,
+                    backgroundColor: '#eeeeee',
                   },
                   '& .MuiTableCell-root': {
-                    backgroundColor: (theme) => theme.palette.primary.main,
-                    color: (theme) => theme.palette.primary.contrastText,
+                    backgroundColor: '#eeeeee',
+                    color: '#000000',
                   },
                   '& .MuiTableSortLabel-root': {
-                    color: (theme) => theme.palette.primary.contrastText,
+                    color: '#000000',
                   },
                 }}
               />
@@ -1444,7 +1445,7 @@ function PurchaseOrderTableRow({
     if (row[field] === 'Available') {
       return (
         <IconButton size="small" onClick={() => onPdfClick(row.id, field)} sx={{ p: 0.5 }}>
-          <img src="/assets/icons/files/pdf.png" alt="PDF" width={16} height={16} />
+          <Iconify icon="eva:file-text-outline" width={18} color="#000000" />
         </IconButton>
       );
     }
@@ -1473,8 +1474,40 @@ function PurchaseOrderTableRow({
       {/* Base Columns - Sabko dikhne wale */}
       <TableCell sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{row.poNo}</TableCell>
       <TableCell sx={{ fontSize: '0.75rem' }}>{row.styleNo}</TableCell>
-      <TableCell sx={{ fontSize: '0.75rem' }}>{row.customer}</TableCell>
-      <TableCell sx={{ fontSize: '0.75rem' }}>{row.supplier}</TableCell>
+      <TableCell sx={{ fontSize: '0.75rem' }}>
+        <Tooltip title={row.customer || ''}>
+          <Box
+            component="span"
+            sx={{
+              display: 'inline-block',
+              maxWidth: 110,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              verticalAlign: 'bottom',
+            }}
+          >
+            {row.customer}
+          </Box>
+        </Tooltip>
+      </TableCell>
+      <TableCell sx={{ fontSize: '0.75rem' }}>
+        <Tooltip title={row.supplier || ''}>
+          <Box
+            component="span"
+            sx={{
+              display: 'inline-block',
+              maxWidth: 110,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              verticalAlign: 'bottom',
+            }}
+          >
+            {row.supplier}
+          </Box>
+        </Tooltip>
+      </TableCell>
       <TableCell sx={{ fontSize: '0.75rem' }}>{row.placementDate}</TableCell>
       <TableCell sx={{ fontSize: '0.75rem' }}>{row.shipmentDate}</TableCell>
       <TableCell align="right" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
@@ -1488,9 +1521,9 @@ function PurchaseOrderTableRow({
           <TableCell align="center">
             <span
               style={{
-                backgroundColor: '#E8F0FE',
-                color: '#1A73E8',
-                border: '1px solid #1A73E8',
+                backgroundColor: '#FFFFFF',
+                color: '#000000',
+                border: '1px solid #BDBDBD',
                 fontWeight: 600,
                 fontSize: '12px',
                 padding: '4px 10px',
@@ -1501,11 +1534,11 @@ function PurchaseOrderTableRow({
                 transition: 'all 0.2s ease-in-out',
               }}
               onMouseEnter={(e) => {
-                e.target.style.backgroundColor = '#D2E3FC';
-                e.target.style.boxShadow = '0 0 6px rgba(26,115,232,0.4)';
+                e.target.style.backgroundColor = '#F5F5F5';
+                e.target.style.boxShadow = '0 0 6px rgba(0,0,0,0.2)';
               }}
               onMouseLeave={(e) => {
-                e.target.style.backgroundColor = '#E8F0FE';
+                e.target.style.backgroundColor = '#FFFFFF';
                 e.target.style.boxShadow = 'none';
               }}
               onClick={() => onViewOrder(row.id)}
@@ -1522,14 +1555,13 @@ function PurchaseOrderTableRow({
           {/* Copy */}
           <TableCell>
             {row.ssPdf === 'Available' && (
-              <img
-                src="/assets/icons/files/copy.jpg"
-                alt="Copy PO to Add Order"
-                width={16}
-                height={16}
-                style={{ cursor: 'pointer' }}
+              <IconButton
+                size="small"
                 onClick={() => onCopyClick?.(row)}
-              />
+                sx={{ p: 0.5 }}
+              >
+                <Iconify icon="eva:copy-outline" width={18} color="#000000" />
+              </IconButton>
             )}
           </TableCell>
 
@@ -1571,9 +1603,9 @@ function PurchaseOrderTableRow({
       <TableCell align="center">
         <span
           style={{
-            backgroundColor: '#FFF4E5',
-            color: '#FB8C00',
-            border: '1px solid #FB8C00',
+            backgroundColor: '#FFFFFF',
+            color: '#000000',
+            border: '1px solid #BDBDBD',
             fontWeight: 600,
             fontSize: '12px',
             padding: '4px 10px',
@@ -1584,11 +1616,11 @@ function PurchaseOrderTableRow({
             transition: 'all 0.2s ease-in-out',
           }}
           onMouseEnter={(e) => {
-            e.target.style.backgroundColor = '#FFE0B2';
-            e.target.style.boxShadow = '0 0 6px rgba(251,140,0,0.4)';
+            e.target.style.backgroundColor = '#F5F5F5';
+            e.target.style.boxShadow = '0 0 6px rgba(0,0,0,0.2)';
           }}
           onMouseLeave={(e) => {
-            e.target.style.backgroundColor = '#FFF4E5';
+            e.target.style.backgroundColor = '#FFFFFF';
             e.target.style.boxShadow = 'none';
           }}
           onClick={() => onMilestoneClick(row.id)}
@@ -1601,9 +1633,9 @@ function PurchaseOrderTableRow({
       <TableCell align="center">
         <span
           style={{
-            backgroundColor: '#E8F5E9',
-            color: '#43A047',
-            border: '1px solid #43A047',
+            backgroundColor: '#FFFFFF',
+            color: '#000000',
+            border: '1px solid #BDBDBD',
             fontWeight: 600,
             fontSize: '12px',
             padding: '4px 10px',
@@ -1614,11 +1646,11 @@ function PurchaseOrderTableRow({
             transition: 'all 0.2s ease-in-out',
           }}
           onMouseEnter={(e) => {
-            e.target.style.backgroundColor = '#C8E6C9';
-            e.target.style.boxShadow = '0 0 6px rgba(67,160,71,0.4)';
+            e.target.style.backgroundColor = '#F5F5F5';
+            e.target.style.boxShadow = '0 0 6px rgba(0,0,0,0.2)';
           }}
           onMouseLeave={(e) => {
-            e.target.style.backgroundColor = '#E8F5E9';
+            e.target.style.backgroundColor = '#FFFFFF';
             e.target.style.boxShadow = 'none';
           }}
           onClick={() => onInspectionClick?.(row)}
@@ -1659,9 +1691,13 @@ function PurchaseOrderTableRow({
 
       {/* Size Specs PDF */}
       <TableCell>
-        <IconButton size="small" onClick={() => onPdfClick(row.id, 'ssPdf')} sx={{ p: 0.5 }}><img src="/assets/icons/files/pdf.png" alt="SS PDF" width={16} height={16} /></IconButton>
-
-
+        <IconButton
+          size="small"
+          onClick={() => onPdfClick(row.id, 'ssPdf')}
+          sx={{ p: 0.5 }}
+        >
+          <Iconify icon="eva:file-text-outline" width={18} color="#000000" />
+        </IconButton>
       </TableCell>
     </TableRow>
   );

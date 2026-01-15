@@ -39,7 +39,7 @@ export default function PORevisedShipmentView() {
         heading="PO REVISED SHIPMENT"
         links={[
           { name: 'Dashboard', href: '/dashboard' },
-          { name: 'Purchase Orders', href: '/dashboard/supply-chain' },
+          { name: '', href: '/dashboard/supply-chain' },
           { name: 'PO Revised Shipment' },
         ]}
         sx={{ mb: { xs: 2, md: 3 } }}
