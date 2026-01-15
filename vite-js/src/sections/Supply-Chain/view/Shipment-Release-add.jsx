@@ -11,6 +11,14 @@ import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
+import TableHead from '@mui/material/TableHead';
+import TableRow from '@mui/material/TableRow';
+import InputAdornment from '@mui/material/InputAdornment';
+import Iconify from 'src/components/iconify';
 
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 
@@ -67,14 +75,75 @@ const defaultFormValues = {
   extraField6: '',
 };
 
+const ARTICLE_API = 'http://192.168.18.13/api/ShipmentRelease/GetArticleNo';
+
 export default function ShipmentReleaseAddPage() {
   const [form, setForm] = useState(defaultFormValues);
   const [poDialogOpen, setPoDialogOpen] = useState(false);
   const [poSearch, setPoSearch] = useState('');
+  const [articleRows, setArticleRows] = useState([]);
+  const [articleLoading, setArticleLoading] = useState(false);
+  const [articleError, setArticleError] = useState('');
+  const [selectedArticle, setSelectedArticle] = useState(null);
+  const [ldpInvoice, setLdpInvoice] = useState('');
+  const [showMainGrid, setShowMainGrid] = useState(false);
+  const [gridSearch, setGridSearch] = useState('');
 
   const handleChange = (field) => (event) => {
     setForm((prev) => ({ ...prev, [field]: event.target.value }));
   };
+
+  const fetchArticleRows = async () => {
+    if (!poSearch.trim()) {
+      setArticleError('Please enter a PO number.');
+      setArticleRows([]);
+      return;
+    }
+
+    setArticleLoading(true);
+    setArticleError('');
+    try {
+      const response = await fetch(`${ARTICLE_API}/${encodeURIComponent(poSearch.trim())}`);
+      if (!response.ok) {
+        throw new Error('Unable to load article data');
+      }
+      const data = await response.json();
+      const rows = Array.isArray(data) ? data : data ? [data] : [];
+      setArticleRows(rows);
+      setSelectedArticle(rows[0] ?? null);
+    } catch (error) {
+      setArticleError(error.message || 'Failed to fetch articles');
+      setArticleRows([]);
+    } finally {
+      setArticleLoading(false);
+    }
+  };
+
+  const handleClearArticle = () => {
+    setPoSearch('');
+    setArticleRows([]);
+    setArticleError('');
+    setSelectedArticle(null);
+  };
+
+  const totalRemainQty = articleRows.reduce((sum, row) => sum + (Number(row.remainQTY) || 0), 0);
+  const totalCartons = articleRows.reduce((sum, row) => sum + (Number(row.cartons) || 0), 0);
+  const totalReleaseRateAmount = articleRows.reduce(
+    (sum, row) => sum + (Number(row.remainQTY) || 0) * (Number(row.rate) || 0),
+    0
+  );
+
+  const handleGridChange = (index, field, value) => {
+    const updatedRows = [...articleRows];
+    updatedRows[index] = { ...updatedRows[index], [field]: value };
+    setArticleRows(updatedRows);
+  };
+
+  const filteredRows = articleRows.filter((row) =>
+    Object.values(row).some(
+      (val) => val && val.toString().toLowerCase().includes(gridSearch.toLowerCase())
+    )
+  );
 
   const handleSave = () => {
     // TODO: integrate with API
@@ -122,7 +191,7 @@ export default function ShipmentReleaseAddPage() {
               label="Date"
               value={form.date}
               onChange={handleChange('date')}
-              size={ 'small' }
+              size={'small'}
               InputLabelProps={{ shrink: true }}
             />
           </Grid>
@@ -563,12 +632,168 @@ export default function ShipmentReleaseAddPage() {
                 md={9}
                 sx={{ display: 'flex', justifyContent: 'flex-start', mt: { xs: 1, sm: 0 } }}
               >
-                <Button variant="contained" size="small" sx={{ minWidth: 220 }}>
+                <Button
+                  variant="contained"
+                  size="small"
+                  sx={{
+                    minWidth: 220,
+                    bgcolor: '#453e6b',
+                    color: 'white',
+                    '&:hover': { bgcolor: '#352f52' },
+                  }}
+                  onClick={() => setShowMainGrid(true)}
+                >
                   Get Data
                 </Button>
               </Grid>
             </Grid>
           </Grid>
+
+          {/* Master Page Grid Section */}
+          {showMainGrid && articleRows.length > 0 && (
+            <Grid item xs={12}>
+              <Card sx={{ mt: 3, p: 2, border: '1px solid #ddd' }}>
+                <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-start' }}>
+                  <TextField
+                    size="small"
+                    placeholder="Search Grid..."
+                    value={gridSearch}
+                    onChange={(e) => setGridSearch(e.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Iconify icon="eva:search-fill" sx={{ color: 'text.disabled' }} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{ width: 300 }}
+                  />
+                </Box>
+                <TableContainer sx={{ border: '1px solid #eee' }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: '#ff9166' }}>
+                        {[
+                          'PO. No.',
+                          'LDP Invoice No.',
+                          'Customer',
+                          'Item Des.',
+                          'Style No',
+                          'Size',
+                          'PO Quantity',
+                          'Shipped Quantity',
+                          'Release Quantity',
+                          'Cartons',
+                          'Carton#',
+                          'Shipped Rate',
+                          'Delivery Mode',
+                        ].map((head) => (
+                          <TableCell
+                            key={head}
+                            sx={{
+                              color: 'white',
+                              fontWeight: 'bold',
+                              borderRight: '1px solid rgba(255,255,255,0.3)',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {head}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filteredRows.map((row) => {
+                        const actualIndex = articleRows.indexOf(row);
+                        return (
+                          <TableRow key={actualIndex} hover>
+                            <TableCell sx={{ borderRight: '1px solid #eee' }}>{row.pono}</TableCell>
+                            <TableCell sx={{ borderRight: '1px solid #eee', p: 0.5 }}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                value={row.ldpInvoiceNo || ''}
+                                onChange={(e) => handleGridChange(actualIndex, 'ldpInvoiceNo', e.target.value)}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 0 } }}
+                              />
+                            </TableCell>
+                            <TableCell sx={{ borderRight: '1px solid #eee' }}>
+                              {row.customerName}
+                            </TableCell>
+                            <TableCell sx={{ borderRight: '1px solid #eee', p: 0.5 }}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                multiline
+                                rows={2}
+                                value={row.itemDescriptionShippingInvoice || ''}
+                                onChange={(e) =>
+                                  handleGridChange(actualIndex, 'itemDescriptionShippingInvoice', e.target.value)
+                                }
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 0 } }}
+                              />
+                            </TableCell>
+                            <TableCell sx={{ borderRight: '1px solid #eee' }}>{row.styleNo}</TableCell>
+                            <TableCell sx={{ borderRight: '1px solid #eee' }}>{row.size}</TableCell>
+                            <TableCell align="center" sx={{ borderRight: '1px solid #eee' }}>
+                              {row.quantity}
+                            </TableCell>
+                            <TableCell align="center" sx={{ borderRight: '1px solid #eee' }}>
+                              {row.releaseQty || 0}
+                            </TableCell>
+                            <TableCell sx={{ borderRight: '1px solid #eee', p: 0.5 }}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                type="number"
+                                value={row.remainQTY || ''}
+                                onChange={(e) => handleGridChange(actualIndex, 'remainQTY', e.target.value)}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 0 } }}
+                              />
+                            </TableCell>
+                            <TableCell sx={{ borderRight: '1px solid #eee', p: 0.5 }}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                type="number"
+                                value={row.cartons || ''}
+                                onChange={(e) => handleGridChange(actualIndex, 'cartons', e.target.value)}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 0 } }}
+                              />
+                            </TableCell>
+                            <TableCell sx={{ borderRight: '1px solid #eee' }}>{row.cartonNo || ''}</TableCell>
+                            <TableCell sx={{ borderRight: '1px solid #eee', p: 0.5 }}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                type="number"
+                                value={row.rate || ''}
+                                onChange={(e) => handleGridChange(actualIndex, 'rate', e.target.value)}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 0 } }}
+                              />
+                            </TableCell>
+                            <TableCell>{row.deliveryTypeName}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {filteredRows.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={13} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                            No matching records found
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      <TableRow>
+                        <TableCell colSpan={13} align="right" sx={{ fontWeight: 'bold', bgcolor: 'background.neutral' }}>
+                          Records 1 - {filteredRows.length} of {articleRows.length}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Card>
+            </Grid>
+          )}
 
           {/* Extra fields block (3 rows: 3 fields, then 2 fields, then 1 centered field) */}
           <Grid item xs={12} sx={{ mt: 3 }}>
@@ -578,24 +803,33 @@ export default function ShipmentReleaseAddPage() {
                 <TextField
                   fullWidth
                   size="small"
-                  value={form.extraField1}
-                  onChange={handleChange('extraField1')}
+                  label="Release Qty Sum"
+                  value={totalRemainQty || ''}
+                  InputProps={{ readOnly: true }}
+                  variant="outlined"
+                  sx={{ bgcolor: 'background.neutral' }}
                 />
               </Grid>
               <Grid item xs={12} sm={4}>
                 <TextField
                   fullWidth
                   size="small"
-                  value={form.extraField2}
-                  onChange={handleChange('extraField2')}
+                  label="Cartons Sum"
+                  value={totalCartons || ''}
+                  InputProps={{ readOnly: true }}
+                  variant="outlined"
+                  sx={{ bgcolor: 'background.neutral' }}
                 />
               </Grid>
               <Grid item xs={12} sm={4}>
                 <TextField
                   fullWidth
                   size="small"
-                  value={form.extraField3}
-                  onChange={handleChange('extraField3')}
+                  label="Release × Rate Amount"
+                  value={totalReleaseRateAmount.toFixed(2) || ''}
+                  InputProps={{ readOnly: true }}
+                  variant="outlined"
+                  sx={{ bgcolor: 'background.neutral' }}
                 />
               </Grid>
 
@@ -618,7 +852,7 @@ export default function ShipmentReleaseAddPage() {
                   fullWidth
                 />
               </Grid>
-            
+
 
               {/* Row 3: single right-aligned field */}
               <Grid item xs={12} sm={8} />
@@ -669,11 +903,139 @@ export default function ShipmentReleaseAddPage() {
               />
             </Grid>
             <Grid item>
-              <Button variant="contained" size="small">
+              <Button variant="contained" size="small" onClick={fetchArticleRows}>
                 Get Data
               </Button>
             </Grid>
           </Grid>
+          {articleLoading && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                Loading article data…
+              </Typography>
+            </Box>
+          )}
+          {articleError && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" color="error">
+                {articleError}
+              </Typography>
+            </Box>
+          )}
+          {articleRows.length > 0 && (
+            <>
+              <Grid container spacing={2} sx={{ mt: 2 }}>
+                <Grid item xs={12} md={8}>
+                  <TextField
+                    fullWidth
+                    label="Item Description"
+                    value={articleRows[0]?.itemDescriptionShippingInvoice || ''}
+                    multiline
+                    minRows={2}
+                    InputProps={{ readOnly: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    label="LDP Invoice No"
+                    size="small"
+                    value={ldpInvoice}
+                    onChange={(event) => setLdpInvoice(event.target.value)}
+                  />
+                </Grid>
+              </Grid>
+              <TableContainer sx={{ mt: 2 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: '#ff9166' }}>
+                      {[
+                        'PO No.',
+                        'Customer',
+                        'Style',
+                        'Size Range',
+                        'PO Quantity',
+                        'Shipped Qty',
+                        'Release Qty',
+                        'Cartons',
+                        'Carton#',
+                        'Max Allow Qty',
+                        'Cancel Qty',
+                        'Rate',
+                        'ID',
+                        'Delivery Mode',
+                        'Internal PO No.',
+                      ].map((head) => (
+                        <TableCell
+                          key={head}
+                          sx={{
+                            color: 'white',
+                            fontWeight: 'bold',
+                            borderRight: '1px solid rgba(255,255,255,0.3)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {head}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {articleRows.map((row, index) => (
+                      <TableRow
+                        key={`${row.pono}-${row.styleNo}`}
+                        hover
+                        onClick={() => setSelectedArticle(row)}
+                        selected={selectedArticle?.pono === row.pono && selectedArticle?.styleNo === row.styleNo}
+                      >
+                        <TableCell>{row.pono}</TableCell>
+                        <TableCell>{row.customerName}</TableCell>
+                        <TableCell>{row.styleNo}</TableCell>
+                        <TableCell>{row.size}</TableCell>
+                        <TableCell>{row.quantity ?? '-'}</TableCell>
+                        <TableCell>{row.releaseQty ?? '-'}</TableCell>
+                        <TableCell>{row.remainQTY ?? '-'}</TableCell>
+                        <TableCell>{row.cartons ?? '-'}</TableCell>
+                        <TableCell>{row.cartons ?? '-'}</TableCell>
+                        <TableCell>{row.qtYwithTolerance ?? '-'}</TableCell>
+                        <TableCell>{row.cancelQty ?? '-'}</TableCell>
+                        <TableCell>{row.rate ?? '-'}</TableCell>
+                        <TableCell>{index + 1}</TableCell>
+                        <TableCell>{row.deliveryTypeName}</TableCell>
+                        <TableCell>{row.internalPONO}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <Grid container spacing={2} sx={{ mt: 2 }}>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    fullWidth
+                    label="Release Qty Sum"
+                    value={totalRemainQty.toString()}
+                    InputProps={{ readOnly: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    fullWidth
+                    label="Cartons Sum"
+                    value={totalCartons.toString()}
+                    InputProps={{ readOnly: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    fullWidth
+                    label="Release × Rate"
+                    value={totalReleaseRateAmount.toFixed(2)}
+                    InputProps={{ readOnly: true }}
+                  />
+                </Grid>
+              </Grid>
+            </>
+          )}
         </DialogContent>
         <DialogActions sx={{ justifyContent: 'flex-end', pr: 3, pb: 2 }}>
           <Button
