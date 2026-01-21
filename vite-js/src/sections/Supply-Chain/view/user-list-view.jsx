@@ -111,9 +111,36 @@ export default function ShipmentReleaseFilters() {
   const [customerLookupMessage, setCustomerLookupMessage] = useState('');
   const abortControllerRef = useRef(null);
   const customerControllerRef = useRef(null);
+  const tableContainerRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
 
   const handleChange = (name, value) => {
     setFilters((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleMouseDown = (event) => {
+    if (!tableContainerRef.current) return;
+    setIsDragging(true);
+    setStartX(event.pageX - tableContainerRef.current.offsetLeft);
+    setScrollLeft(tableContainerRef.current.scrollLeft);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseMove = (event) => {
+    if (!isDragging || !tableContainerRef.current) return;
+    event.preventDefault();
+    const x = event.pageX - tableContainerRef.current.offsetLeft;
+    const walk = (x - startX) * 2;
+    tableContainerRef.current.scrollLeft = scrollLeft - walk;
   };
 
   const getAuthHeaders = () => {
@@ -525,7 +552,18 @@ export default function ShipmentReleaseFilters() {
                 </Typography>
               </Box>
             )}
-            <TableContainer sx={{ maxHeight: 540, backgroundColor: '#ffffff' }}>
+            <TableContainer
+              ref={tableContainerRef}
+              onMouseDown={handleMouseDown}
+              onMouseLeave={handleMouseLeave}
+              onMouseUp={handleMouseUp}
+              onMouseMove={handleMouseMove}
+              sx={{
+                maxHeight: 540,
+                backgroundColor: '#ffffff',
+                cursor: isDragging ? 'grabbing' : 'grab',
+              }}
+            >
               <Table
                 size="small"
                 sx={{

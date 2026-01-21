@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Container from '@mui/material/Container';
 import Card from '@mui/material/Card';
 import Box from '@mui/material/Box';
@@ -27,7 +27,7 @@ import { LoadingButton } from '@mui/lab';
 // ----------------------------------------------------------------------
 
 const defaultFormValues = {
-  icNo: 'AMS-1829-26',
+  icNo: '',
   invoice: '',
   date: '',
   invoiceValue: '',
@@ -88,8 +88,10 @@ const defaultFormValues = {
   extraSub3Bottom: '0',
 };
 
-const ARTICLE_API = 'http://192.168.18.13/api/ShipmentRelease/GetArticleNo';
-const SAVE_SHIPMENT_API = 'http://192.168.18.13/api/ShipmentRelease/AddShipment';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const ARTICLE_API = `${API_BASE_URL}/api/ShipmentRelease/GetArticleNo`;
+const SAVE_SHIPMENT_API = `${API_BASE_URL}/api/ShipmentRelease/AddShipment`;
+const NEXT_SHIPMENT_API = `${API_BASE_URL}/api/ShipmentRelease/GetNextShipmentNo`;
 
 export default function ShipmentReleaseAddPage() {
   const { enqueueSnackbar } = useSnackbar();
@@ -104,6 +106,29 @@ export default function ShipmentReleaseAddPage() {
   const [ldpInvoice, setLdpInvoice] = useState('');
   const [showMainGrid, setShowMainGrid] = useState(false);
   const [gridSearch, setGridSearch] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchNextShipmentNo = async () => {
+      try {
+        const response = await fetch(NEXT_SHIPMENT_API);
+        if (!response.ok) {
+          throw new Error('Failed to load next shipment number');
+        }
+        const data = await response.json();
+        const nextNo = data?.amsRefNo || data?.amsrefno || '';
+        if (isMounted && nextNo) {
+          setForm((prev) => (prev.icNo ? prev : { ...prev, icNo: nextNo }));
+        }
+      } catch (error) {
+        console.warn('Next shipment no fetch failed', error);
+      }
+    };
+    fetchNextShipmentNo();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleChange = (field) => (event) => {
     setForm((prev) => ({ ...prev, [field]: event.target.value }));
@@ -125,8 +150,19 @@ export default function ShipmentReleaseAddPage() {
       }
       const data = await response.json();
       const rows = Array.isArray(data) ? data : data ? [data] : [];
-      setArticleRows(rows);
-      setSelectedArticle(rows[0] ?? null);
+      setArticleRows((prev) => {
+        const merged = [...prev];
+        rows.forEach((row) => {
+          const isDuplicate = merged.some(
+            (existing) => existing.poid === row.poid && existing.styleNo === row.styleNo
+          );
+          if (!isDuplicate) {
+            merged.push(row);
+          }
+        });
+        return merged;
+      });
+      setSelectedArticle((prev) => prev ?? rows[0] ?? null);
     } catch (error) {
       setArticleError(error.message || 'Failed to fetch articles');
       setArticleRows([]);
@@ -191,120 +227,123 @@ export default function ShipmentReleaseAddPage() {
     }
 
     const safeIsoDate = (dateVal) => {
-      if (!dateVal) return new Date().toISOString();
+      if (!dateVal) return '';
       const d = new Date(dateVal);
-      // If invalid, return current date as fallback to avoid 400
-      return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+      if (isNaN(d.getTime())) return '';
+      // Send date-only string to avoid SQL datetime conversion errors
+      return d.toISOString().split('T')[0];
     };
 
     setSaveLoading(true);
     try {
-      // Use for...of to handle promises sequentially or loop through all
-      for (const row of articleRows) {
-        const payload = {
-          creationDate: new Date().toISOString(),
-          invoiceNo: form.invoice || '',
-          vendorInvoiceNo: form.vendorInvoiceNo || '',
-          invoiceDate: safeIsoDate(form.date),
-          invoiceValue: Number(form.invoiceValue) || 0,
-          terms: form.terms || '',
-          itemDescription: row.itemDescriptionShippingInvoice || '',
-          mode: form.mode || '',
-          carrierName: form.carrierName || '',
-          voyageFlight: form.voyageFlight || '',
-          billNo: form.blAwbNo || '',
-          shipmentDate: safeIsoDate(form.shipmentDate),
-          containerNo: form.containerNo || '',
-          remarks: form.remarks || '',
-          isActive: true,
-          glEnterd: '',
-          currency: form.currency || 'US$',
-          userID: 0,
-          exchangeRate: Number(form.exchangeRate) || 0,
-          exporterInvoiceNo: '',
-          exporterInvoiceDate: new Date().toISOString(),
-          countryOfOrigin: 'INDIA',
-          destination: form.destination || '',
-          portOfLoading: form.portOfLoading || '',
-          portOfDischarge: form.portOfDischarge || '',
-          shippedExchangeRate: 0,
-          // Bank dropdown selected value (e.g. 6, 7) goes directly as bankID
-          bankID: Number(form.bank) || 0,
-          cargoConsigneeName: '',
-          cargoConsigneeAddress1: '',
-          cargoConsigneeCity: '',
-          cargoConsigneeCountry: '',
-          discount: Number(form.discount) || 0,
-          heading1: '',
-          heading2: '',
-          heading3: '',
-          heading1Value: totalRemainQty,
-          heading2Value: totalCartons,
-          heading3Value: totalReleaseRateAmount,
-          amsicNo: form.icNo || '',
-          etdExpectedDate: safeIsoDate(form.expectedEtd),
-          etdActualDate: safeIsoDate(form.actualEtd),
-          etaExpectedDate: safeIsoDate(form.expectedEta),
-          etaActualDate: safeIsoDate(form.actualEta),
-          entryFiledDate: safeIsoDate(form.entryFiledDate),
-          goodsClearedDate: safeIsoDate(form.goodsClearedDate),
-          docstoBrokerDate: safeIsoDate(form.docsToBrokerDate),
-          docstoBankDate: safeIsoDate(form.docsToBankDate),
-          goodsDeliveredDate: safeIsoDate(form.goodsDeliveredDate),
-          updateSheetremarks: form.updateSheetRemarks || '',
-          shipmentStatus: true,
-          revisedETA: safeIsoDate(form.revisedEta),
-          etwDate: safeIsoDate(form.expectedEtw),
-          reverseETWDate: safeIsoDate(form.revisedEtw),
-          revisedETD: safeIsoDate(form.revisedEtd),
-          vpoActualDate: safeIsoDate(form.vpoActualDate),
-          containerReleaseDate: safeIsoDate(form.containerReleaseDate),
-          containerDeliveryDateASTWH: safeIsoDate(form.containerDeliveryDate),
-          wareHouseName: form.warehouseName || '',
-          truckerName: form.truckerName || '',
-          actualETW: safeIsoDate(form.actualEtw),
-          revisedETW: safeIsoDate(form.revisedEtw),
-          // Lower discount field (right side of Discount row) goes to DiscountValue
-          discountValue: Number(form.extraField4) || 0,
-          totalValueWD: finalAmountWithExtra ?? totalReleaseRateAmount,
-          // Rate amount below field goes to DiscountTitle
-          discountTitle: form.extraField5 || '',
-          poid: Number(row.poid) || 0,
-          quantity: Number(row.remainQTY) || 0,
-          styles: row.styleNo || '',
-          cartons: Number(row.cartons) || 0,
-          customerID: Number(row.customerID) || 0,
-          supplierID: Number(row.supplierID) || 0,
-          popoid: Number(row.poid) || 0,
-          shippedRate: Number(row.rate) || 0,
-          cartonNo: row.cartonNo || '',
-          ldpInvoiceNo: row.ldpInvoiceNo || '',
-          itemDescriptionInvoice: row.itemDescriptionShippingInvoice || '',
-          colorway: row.colorway || '',
-          sizeRange: row.size || '',
-          // Sub total labels from second summary grid (top row)
-          subTotalH1: form.extraSub1Top || '',
-          subTotalH2: form.extraSub2Top || '',
-          subTotalH3: form.extraSub3Top || '',
-          // Sub total numeric values from second summary grid (bottom row)
-          subTotalA1: Number(form.extraSub1Bottom) || 0,
-          subTotalA2: Number(form.extraSub2Bottom) || 0,
-          subTotalA3: Number(form.extraSub3Bottom) || 0
-        };
+      const details = articleRows.map((row) => ({
+        poid: Number(row.poid) || 0,
+        quantity: Number(row.remainQTY) || 0,
+        styles: row.styleNo || '',
+        cartons: Number(row.cartons) || 0,
+        customerID: Number(row.customerID) || 0,
+        supplierID: Number(row.supplierID) || 0,
+        popoid: Number(row.poid) || 0,
+        shippedRate: Number(row.rate) || 0,
+        cartonNo: row.cartonNo || '',
+        ldpInvoiceNo: row.ldpInvoiceNo || '',
+        itemDescriptionInvoice: row.itemDescriptionShippingInvoice || '',
+        colorway: row.colorway || '',
+        sizeRange: row.size || '',
+      }));
 
-        const response = await fetch(SAVE_SHIPMENT_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+      const payload = {
+        creationDate: new Date().toISOString(),
+        invoiceNo: form.invoice || '',
+        vendorInvoiceNo: form.vendorInvoiceNo || '',
+        invoiceDate: safeIsoDate(form.date),
+        invoiceValue: Number(form.invoiceValue) || 0,
+        terms: form.terms || '',
+        itemDescription: articleRows[0]?.itemDescriptionShippingInvoice || '',
+        mode: form.mode || '',
+        carrierName: form.carrierName || '',
+        voyageFlight: form.voyageFlight || '',
+        billNo: form.blAwbNo || '',
+        shipmentDate: safeIsoDate(form.shipmentDate),
+        containerNo: form.containerNo || '',
+        remarks: form.remarks || '',
+        isActive: true,
+        glEnterd: '',
+        currency: form.currency || 'US$',
+        userID: 0,
+        exchangeRate: Number(form.exchangeRate) || 0,
+        exporterInvoiceNo: '',
+        exporterInvoiceDate: new Date().toISOString(),
+        countryOfOrigin: 'INDIA',
+        destination: form.destination || '',
+        portOfLoading: form.portOfLoading || '',
+        portOfDischarge: form.portOfDischarge || '',
+        shippedExchangeRate: 0,
+        // Bank dropdown selected value (e.g. 6, 7) goes directly as bankID
+        bankID: Number(form.bank) || 0,
+        cargoConsigneeName: '',
+        cargoConsigneeAddress1: '',
+        cargoConsigneeCity: '',
+        cargoConsigneeCountry: '',
+        discount: Number(form.discount) || 0,
+        heading1: '',
+        heading2: '',
+        heading3: '',
+        heading1Value: totalRemainQty,
+        heading2Value: totalCartons,
+        heading3Value: totalReleaseRateAmount,
+        amsicNo: form.icNo || '',
+        etdExpectedDate: safeIsoDate(form.expectedEtd),
+        etdActualDate: safeIsoDate(form.actualEtd),
+        etaExpectedDate: safeIsoDate(form.expectedEta),
+        etaActualDate: safeIsoDate(form.actualEta),
+        entryFiledDate: safeIsoDate(form.entryFiledDate),
+        goodsClearedDate: safeIsoDate(form.goodsClearedDate),
+        docstoBrokerDate: safeIsoDate(form.docsToBrokerDate),
+        docstoBankDate: safeIsoDate(form.docsToBankDate),
+        goodsDeliveredDate: safeIsoDate(form.goodsDeliveredDate),
+        updateSheetremarks: form.updateSheetRemarks || '',
+        shipmentStatus: true,
+        revisedETA: safeIsoDate(form.revisedEta),
+        etwDate: safeIsoDate(form.expectedEtw),
+        reverseETWDate: safeIsoDate(form.revisedEtw),
+        revisedETD: safeIsoDate(form.revisedEtd),
+        vpoActualDate: safeIsoDate(form.vpoActualDate),
+        containerReleaseDate: safeIsoDate(form.containerReleaseDate),
+        containerDeliveryDateASTWH: safeIsoDate(form.containerDeliveryDate),
+        wareHouseName: form.warehouseName || '',
+        truckerName: form.truckerName || '',
+        actualETW: safeIsoDate(form.actualEtw),
+        // Lower discount field (right side of Discount row) goes to DiscountValue
+        discountValue: Number(form.extraField4) || 0,
+        totalValueWD: finalAmountWithExtra ?? totalReleaseRateAmount,
+        // Rate amount below field goes to DiscountTitle
+        discountTitle: form.extraField5 || '',
+        styles: articleRows[0]?.styleNo || '',
+        // Sub total labels from second summary grid (top row)
+        subTotalH1: form.extraSub1Top || '',
+        subTotalH2: form.extraSub2Top || '',
+        subTotalH3: form.extraSub3Top || '',
+        // Sub total numeric values from second summary grid (bottom row)
+        subTotalA1: Number(form.extraSub1Bottom) || 0,
+        subTotalA2: Number(form.extraSub2Bottom) || 0,
+        subTotalA3: Number(form.extraSub3Bottom) || 0,
+        details,
+      };
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to save row for PO ${row.pono}: ${errorText}`);
-        }
-        // Safely ignore response text if it's just a success message
-        await response.text();
+      console.log('AddShipment payload', payload);
+      const response = await fetch(SAVE_SHIPMENT_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to save shipment: ${errorText}`);
       }
+      // Safely ignore response text if it's just a success message
+      await response.text();
 
       enqueueSnackbar('Shipment saved successfully!', { variant: 'success' });
       // After successful save, clear article grid and hide master grids
