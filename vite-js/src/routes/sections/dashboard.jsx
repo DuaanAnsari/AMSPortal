@@ -65,6 +65,12 @@ const PurchaseOrderSSPDF = lazy(() => import('src/sections/Supply-Chain/Purchase
 const EditOrder = lazy(() =>
   import('src/sections/Supply-Chain/view/edit-order')
 );
+const InspectionCertificatePage = lazy(
+  () => import('src/sections/Supply-Chain/view/Inspection-certificate')
+);
+const PrintInvoicePage = lazy(
+  () => import('src/sections/Supply-Chain/view/Print-Invoice')
+);
 
 // Power_TOOL
 const ProcessBoardPage = lazy(() => import('src/sections/power-tool/view/Process-board'));
@@ -194,6 +200,8 @@ export const dashboardRoutes = [
           { path: 'purchase-order-sspdf/:id', element: <PurchaseOrderSSPDF /> },
           { path: 'edit-order', element: <EditOrder /> },
           { path: 'purchase-order-edit/:id', element: <CompletePurchaseOrderFormEdit /> },
+          { path: 'inspection-certificate/:id', element: <InspectionCertificatePage /> },
+          { path: 'print-invoice/:id', element: <PrintInvoicePage /> },
         ],
       },
 

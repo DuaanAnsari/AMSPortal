@@ -57,6 +57,8 @@ const defaultFormValues = {
   revisedEtd: '',
   expectedEta: '',
   actualEta: '',
+  revisedEta: '',
+  expectedEtw: '',
   revisedEtw: '',
   actualEtw: '',
   containerReleaseDate: '',
@@ -77,6 +79,13 @@ const defaultFormValues = {
   extraField4: '',
   extraField5: '',
   extraField6: '',
+  // Second summary grid manual fields
+  extraSub1Top: '',
+  extraSub2Top: '',
+  extraSub3Top: '',
+  extraSub1Bottom: '0',
+  extraSub2Bottom: '0',
+  extraSub3Bottom: '0',
 };
 
 const ARTICLE_API = 'http://192.168.18.13/api/ShipmentRelease/GetArticleNo';
@@ -152,6 +161,17 @@ export default function ShipmentReleaseAddPage() {
     0
   );
 
+  // Extra amount (2nd field). If user leaves it empty, treat as "no extra" (null).
+  const rawExtraCharge = form.extraField5;
+  const extraChargeAmount =
+    rawExtraCharge === '' || rawExtraCharge === null || typeof rawExtraCharge === 'undefined'
+      ? null
+      : Number(rawExtraCharge) || 0;
+
+  // Final amount only when extra is provided; otherwise keep it null so UI stays blank.
+  const finalAmountWithExtra =
+    extraChargeAmount === null ? null : totalReleaseRateAmount + extraChargeAmount;
+
   const handleGridChange = (index, field, value) => {
     const updatedRows = [...articleRows];
     updatedRows[index] = { ...updatedRows[index], [field]: value };
@@ -203,12 +223,13 @@ export default function ShipmentReleaseAddPage() {
           exchangeRate: Number(form.exchangeRate) || 0,
           exporterInvoiceNo: '',
           exporterInvoiceDate: new Date().toISOString(),
-          countryOfOrigin: '',
+          countryOfOrigin: 'INDIA',
           destination: form.destination || '',
           portOfLoading: form.portOfLoading || '',
           portOfDischarge: form.portOfDischarge || '',
           shippedExchangeRate: 0,
-          bankID: form.bank === 'HAB BANK' ? 1 : 0,
+          // Bank dropdown selected value (e.g. 6, 7) goes directly as bankID
+          bankID: Number(form.bank) || 0,
           cargoConsigneeName: '',
           cargoConsigneeAddress1: '',
           cargoConsigneeCity: '',
@@ -232,9 +253,9 @@ export default function ShipmentReleaseAddPage() {
           goodsDeliveredDate: safeIsoDate(form.goodsDeliveredDate),
           updateSheetremarks: form.updateSheetRemarks || '',
           shipmentStatus: true,
-          revisedETA: safeIsoDate(form.revisedEtw),
-          etwDate: new Date().toISOString(),
-          reverseETWDate: new Date().toISOString(),
+          revisedETA: safeIsoDate(form.revisedEta),
+          etwDate: safeIsoDate(form.expectedEtw),
+          reverseETWDate: safeIsoDate(form.revisedEtw),
           revisedETD: safeIsoDate(form.revisedEtd),
           vpoActualDate: safeIsoDate(form.vpoActualDate),
           containerReleaseDate: safeIsoDate(form.containerReleaseDate),
@@ -242,9 +263,12 @@ export default function ShipmentReleaseAddPage() {
           wareHouseName: form.warehouseName || '',
           truckerName: form.truckerName || '',
           actualETW: safeIsoDate(form.actualEtw),
-          discountValue: 0,
-          totalValueWD: totalReleaseRateAmount,
-          discountTitle: '',
+          revisedETW: safeIsoDate(form.revisedEtw),
+          // Lower discount field (right side of Discount row) goes to DiscountValue
+          discountValue: Number(form.extraField4) || 0,
+          totalValueWD: finalAmountWithExtra ?? totalReleaseRateAmount,
+          // Rate amount below field goes to DiscountTitle
+          discountTitle: form.extraField5 || '',
           poid: Number(row.poid) || 0,
           quantity: Number(row.remainQTY) || 0,
           styles: row.styleNo || '',
@@ -258,12 +282,14 @@ export default function ShipmentReleaseAddPage() {
           itemDescriptionInvoice: row.itemDescriptionShippingInvoice || '',
           colorway: row.colorway || '',
           sizeRange: row.size || '',
-          subTotalH1: '',
-          subTotalH2: '',
-          subTotalH3: '',
-          subTotalA1: totalRemainQty,
-          subTotalA2: totalCartons,
-          subTotalA3: totalReleaseRateAmount
+          // Sub total labels from second summary grid (top row)
+          subTotalH1: form.extraSub1Top || '',
+          subTotalH2: form.extraSub2Top || '',
+          subTotalH3: form.extraSub3Top || '',
+          // Sub total numeric values from second summary grid (bottom row)
+          subTotalA1: Number(form.extraSub1Bottom) || 0,
+          subTotalA2: Number(form.extraSub2Bottom) || 0,
+          subTotalA3: Number(form.extraSub3Bottom) || 0
         };
 
         const response = await fetch(SAVE_SHIPMENT_API, {
@@ -281,6 +307,9 @@ export default function ShipmentReleaseAddPage() {
       }
 
       enqueueSnackbar('Shipment saved successfully!', { variant: 'success' });
+      // After successful save, clear article grid and hide master grids
+      handleClearArticle();
+      setShowMainGrid(false);
     } catch (error) {
       console.error('Error saving shipment:', error);
       enqueueSnackbar(error.message || 'Error saving shipment. Please try again.', { variant: 'error' });
@@ -532,7 +561,7 @@ export default function ShipmentReleaseAddPage() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} sm={8}>
+          <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
               label="Remarks"
@@ -542,8 +571,8 @@ export default function ShipmentReleaseAddPage() {
             />
           </Grid>
 
-          {/* Row: Bank / Expected ETD */}
-          <Grid item xs={12} sm={6}>
+          {/* Row: Bank / Discount / Expected ETD */}
+          <Grid item xs={12} sm={4}>
             <TextField
               select
               fullWidth
@@ -552,10 +581,20 @@ export default function ShipmentReleaseAddPage() {
               onChange={handleChange('bank')}
               size="small"
             >
-              <MenuItem value="HAB BANK">HAB BANK</MenuItem>
+              <MenuItem value="6">HAB BANK</MenuItem>
+              <MenuItem value="7">HAB BANK 2</MenuItem>
             </TextField>
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              fullWidth
+              label="Discount:"
+              value={form.discount || ''}
+              onChange={handleChange('discount')}
+              size="small"
+            />
+          </Grid>
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               type="date"
@@ -597,6 +636,41 @@ export default function ShipmentReleaseAddPage() {
               label="Expected ETA"
               value={form.expectedEta || ''}
               onChange={handleChange('expectedEta')}
+              size="small"
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
+
+          {/* Row: Actual/Revised ETA & Expected ETW */}
+          <Grid item xs={12} sm={4}>
+            <TextField
+              fullWidth
+              type="date"
+              label="Actual ETA"
+              value={form.actualEta || ''}
+              onChange={handleChange('actualEta')}
+              size="small"
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              fullWidth
+              type="date"
+              label="Revised ETA"
+              value={form.revisedEta || ''}
+              onChange={handleChange('revisedEta')}
+              size="small"
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              fullWidth
+              type="date"
+              label="Expected ETW"
+              value={form.expectedEtw || ''}
+              onChange={handleChange('expectedEtw')}
               size="small"
               InputLabelProps={{ shrink: true }}
             />
@@ -780,9 +854,9 @@ export default function ShipmentReleaseAddPage() {
                   size="small"
                   sx={{
                     minWidth: 220,
-                    bgcolor: '#453e6b',
-                    color: 'white',
-                    '&:hover': { bgcolor: '#352f52' },
+                    bgcolor: '#171616',
+                    color: '#ffffff',
+                    '&:hover': { bgcolor: '#000000' },
                   }}
                   onClick={() => setShowMainGrid(true)}
                 >
@@ -796,26 +870,10 @@ export default function ShipmentReleaseAddPage() {
           {showMainGrid && articleRows.length > 0 && (
             <Grid item xs={12}>
               <Card sx={{ mt: 3, p: 2, border: '1px solid #ddd' }}>
-                <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-start' }}>
-                  <TextField
-                    size="small"
-                    placeholder="Search Grid..."
-                    value={gridSearch}
-                    onChange={(e) => setGridSearch(e.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Iconify icon="eva:search-fill" sx={{ color: 'text.disabled' }} />
-                        </InputAdornment>
-                      ),
-                    }}
-                    sx={{ width: 300 }}
-                  />
-                </Box>
                 <TableContainer sx={{ border: '1px solid #eee' }}>
                   <Table size="small">
                     <TableHead>
-                      <TableRow sx={{ bgcolor: '#ff9166' }}>
+                      <TableRow sx={{ bgcolor: '#eeeeee' }}>
                         {[
                           'PO. No.',
                           'LDP Invoice No.',
@@ -834,9 +892,9 @@ export default function ShipmentReleaseAddPage() {
                           <TableCell
                             key={head}
                             sx={{
-                              color: 'white',
+                              color: '#000000',
                               fontWeight: 'bold',
-                              borderRight: '1px solid rgba(255,255,255,0.3)',
+                              borderRight: '1px solid rgba(0,0,0,0.12)',
                               whiteSpace: 'nowrap',
                             }}
                           >
@@ -904,7 +962,15 @@ export default function ShipmentReleaseAddPage() {
                                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: 0 } }}
                               />
                             </TableCell>
-                            <TableCell sx={{ borderRight: '1px solid #eee' }}>{row.cartonNo || ''}</TableCell>
+                            <TableCell sx={{ borderRight: '1px solid #eee', p: 0.5 }}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                value={row.cartonNo || ''}
+                                onChange={(e) => handleGridChange(actualIndex, 'cartonNo', e.target.value)}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 0 } }}
+                              />
+                            </TableCell>
                             <TableCell sx={{ borderRight: '1px solid #eee', p: 0.5 }}>
                               <TextField
                                 fullWidth
@@ -976,23 +1042,23 @@ export default function ShipmentReleaseAddPage() {
                 />
               </Grid>
 
-              {/* Row 2: 2 fields (same width as row below, right aligned) */}
+              {/* Row 2: Discount + extra field */}
               <Grid item xs={12} sm={4} />
               <Grid item xs={12} sm={4} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <TextField
                   fullWidth
                   size="small"
                   label="Discount"
-                  value={form.discount || ''}
-                  onChange={handleChange('discount')}
+                  value={form.extraField4 || ''}
+                  onChange={handleChange('extraField4')}
                 />
               </Grid>
               <Grid item xs={12} sm={4} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <TextField
                   size="small"
                   fullWidth
-                  value={form.extraField4 || ''}
-                  onChange={handleChange('extraField4')}
+                  value={form.extraField5 || ''}
+                  onChange={handleChange('extraField5')}
                 />
               </Grid>
 
@@ -1002,12 +1068,102 @@ export default function ShipmentReleaseAddPage() {
                 <TextField
                   fullWidth
                   size="small"
-                  value={form.extraField6 || ''}
-                  onChange={handleChange('extraField6')}
+                  value={
+                    finalAmountWithExtra === null || Number.isNaN(finalAmountWithExtra)
+                      ? ''
+                      : finalAmountWithExtra.toFixed(2)
+                  }
+                  InputProps={{ readOnly: true }}
+                  variant="outlined"
+                  sx={{ bgcolor: 'background.neutral' }}
                 />
               </Grid>
             </Grid>
           </Grid>
+
+          {/* Second summary grid under totals (LDP Invoice No. + Sub Totals) */}
+          {showMainGrid && articleRows.length > 0 && (
+            <Grid item xs={12} sx={{ mt: 3 }}>
+              <TableContainer sx={{ border: '1px solid #eee' }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: '#eeeeee' }}>
+                      {['LDP Invoice No.', 'Sub Total', 'Sub Total', 'Sub Total'].map((head) => (
+                        <TableCell
+                          key={head}
+                          sx={{
+                            color: '#000000',
+                            fontWeight: 'bold',
+                            borderRight: '1px solid rgba(0,0,0,0.12)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {head}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {/* Top row: 3 empty-but-editable fields */}
+                    <TableRow>
+                      <TableCell rowSpan={2}>{articleRows[0]?.ldpInvoiceNo || ''}</TableCell>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          value={form.extraSub1Top || ''}
+                          onChange={handleChange('extraSub1Top')}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          value={form.extraSub2Top || ''}
+                          onChange={handleChange('extraSub2Top')}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          value={form.extraSub3Top || ''}
+                          onChange={handleChange('extraSub3Top')}
+                        />
+                      </TableCell>
+                    </TableRow>
+                    {/* Bottom row: defaults 0 but editable */}
+                    <TableRow>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          value={form.extraSub1Bottom}
+                          onChange={handleChange('extraSub1Bottom')}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          value={form.extraSub2Bottom}
+                          onChange={handleChange('extraSub2Bottom')}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          value={form.extraSub3Bottom}
+                          onChange={handleChange('extraSub3Bottom')}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Grid>
+          )}
         </Grid>
 
         {/* Actions */}
@@ -1017,10 +1173,25 @@ export default function ShipmentReleaseAddPage() {
             onClick={handleSave}
             loading={saveLoading}
             disabled={saveLoading}
+            sx={{
+              bgcolor: '#171616',
+              color: '#ffffff',
+              '&:hover': { bgcolor: '#000000' },
+            }}
           >
             Save
           </LoadingButton>
-          <Button variant="outlined" color="inherit" onClick={handleCancel} disabled={saveLoading}>
+          <Button
+            variant="outlined"
+            color="inherit"
+            onClick={handleCancel}
+            disabled={saveLoading}
+            sx={{
+              borderColor: '#171616',
+              color: '#171616',
+              '&:hover': { borderColor: '#000000', backgroundColor: '#F3F4F6' },
+            }}
+          >
             Cancel
           </Button>
         </Box>
@@ -1030,7 +1201,7 @@ export default function ShipmentReleaseAddPage() {
       <Dialog
         open={poDialogOpen}
         onClose={() => setPoDialogOpen(false)}
-        maxWidth="sm"
+        maxWidth="lg"
         fullWidth
       >
         <DialogTitle>Select POs</DialogTitle>
@@ -1050,7 +1221,16 @@ export default function ShipmentReleaseAddPage() {
               />
             </Grid>
             <Grid item>
-              <Button variant="contained" size="small" onClick={fetchArticleRows}>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={fetchArticleRows}
+                sx={{
+                  bgcolor: '#171616',
+                  color: '#ffffff',
+                  '&:hover': { bgcolor: '#000000' },
+                }}
+              >
                 Get Data
               </Button>
             </Grid>
@@ -1095,7 +1275,7 @@ export default function ShipmentReleaseAddPage() {
               <TableContainer sx={{ mt: 2 }}>
                 <Table size="small">
                   <TableHead>
-                    <TableRow sx={{ bgcolor: '#ff9166' }}>
+                    <TableRow sx={{ bgcolor: '#eeeeee' }}>
                       {[
                         'PO No.',
                         'Customer',
@@ -1116,9 +1296,9 @@ export default function ShipmentReleaseAddPage() {
                         <TableCell
                           key={head}
                           sx={{
-                            color: 'white',
+                            color: '#000000',
                             fontWeight: 'bold',
-                            borderRight: '1px solid rgba(255,255,255,0.3)',
+                            borderRight: '1px solid rgba(0,0,0,0.12)',
                             whiteSpace: 'nowrap',
                           }}
                         >
@@ -1141,12 +1321,43 @@ export default function ShipmentReleaseAddPage() {
                         <TableCell>{row.size}</TableCell>
                         <TableCell>{row.quantity ?? '-'}</TableCell>
                         <TableCell>{row.releaseQty ?? '-'}</TableCell>
-                        <TableCell>{row.remainQTY ?? '-'}</TableCell>
-                        <TableCell>{row.cartons ?? '-'}</TableCell>
-                        <TableCell>{row.cartons ?? '-'}</TableCell>
+                        <TableCell sx={{ p: 0.5 }}>
+                          <TextField
+                            size="small"
+                            fullWidth
+                            type="number"
+                            value={row.remainQTY ?? ''}
+                            onChange={(e) => handleGridChange(index, 'remainQTY', e.target.value)}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ p: 0.5 }}>
+                          <TextField
+                            size="small"
+                            fullWidth
+                            type="number"
+                            value={row.cartons ?? ''}
+                            onChange={(e) => handleGridChange(index, 'cartons', e.target.value)}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ p: 0.5 }}>
+                          <TextField
+                            size="small"
+                            fullWidth
+                            value={row.cartonNo || ''}
+                            onChange={(e) => handleGridChange(index, 'cartonNo', e.target.value)}
+                          />
+                        </TableCell>
                         <TableCell>{row.qtYwithTolerance ?? '-'}</TableCell>
                         <TableCell>{row.cancelQty ?? '-'}</TableCell>
-                        <TableCell>{row.rate ?? '-'}</TableCell>
+                        <TableCell sx={{ p: 0.5 }}>
+                          <TextField
+                            size="small"
+                            fullWidth
+                            type="number"
+                            value={row.rate ?? ''}
+                            onChange={(e) => handleGridChange(index, 'rate', e.target.value)}
+                          />
+                        </TableCell>
                         <TableCell>{index + 1}</TableCell>
                         <TableCell>{row.deliveryTypeName}</TableCell>
                         <TableCell>{row.internalPONO}</TableCell>
@@ -1189,6 +1400,11 @@ export default function ShipmentReleaseAddPage() {
             variant="outlined"
             size="small"
             onClick={handleSelectClose}
+            sx={{
+              borderColor: '#171616',
+              color: '#171616',
+              '&:hover': { borderColor: '#000000', backgroundColor: '#F3F4F6' },
+            }}
           >
             Select &amp; Close
           </Button>

@@ -13,6 +13,12 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from '@mui/material';
 
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
@@ -20,15 +26,19 @@ import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 // ----------------------------------------------------------------------
 
 const defaultFormValues = {
-  icNo: 'AMS-1829-26',
+  icNo: '',
   invoice: '',
   date: '',
   invoiceValue: '',
   currency: 'US$',
   exchangeRate: '',
   vendorInvoiceNo: '',
+  consigneeName: '',
   terms: '',
+  addressLine: '',
+  city: '',
   mode: '',
+  country: '',
   carrierName: '',
   titleOfAccount: '',
   voyageFlight: '',
@@ -48,14 +58,16 @@ const defaultFormValues = {
   revisedEtd: '',
   expectedEta: '',
   actualEta: '',
+  revisedEta: '',
+  expectedEtw: '',
   revisedEtw: '',
   actualEtw: '',
   containerReleaseDate: '',
   goodsClearedDate: '',
-  docsToBroker: '',
+  docsToBrokerDate: '',
   containerDeliveryDate: '',
   goodsDeliveredDate: '',
-  docsToBank: '',
+  docsToBankDate: '',
   entryFiledDate: '',
   vpoActualDate: '',
   warehouseName: '',
@@ -68,6 +80,18 @@ const defaultFormValues = {
   extraField4: '',
   extraField5: '',
   extraField6: '',
+  // Footer top row values
+  heading1Value: '',
+  heading2Value: '',
+  heading3Value: '',
+  totalValueWD: '',
+  // Second summary grid manual fields
+  extraSub1Top: '',
+  extraSub2Top: '',
+  extraSub3Top: '',
+  extraSub1Bottom: '0',
+  extraSub2Bottom: '0',
+  extraSub3Bottom: '0',
 };
 
 export default function ShipmentEditView() {
@@ -79,18 +103,189 @@ export default function ShipmentEditView() {
   const [form, setForm] = useState(defaultFormValues);
   const [poDialogOpen, setPoDialogOpen] = useState(false);
   const [poSearch, setPoSearch] = useState('');
+  const [articleRows, setArticleRows] = useState([]);
+  const [selectedArticle, setSelectedArticle] = useState(null);
 
-  // Placeholder for future API integration
+  useEffect(() => {
+    const releaseQtySum = articleRows.reduce(
+      (sum, row) => sum + (Number(row.remainQTY ?? row.releaseQty) || 0),
+      0
+    );
+    const cartonsSum = articleRows.reduce((sum, row) => sum + (Number(row.cartons) || 0), 0);
+    const releaseRateAmount = articleRows.reduce(
+      (sum, row) =>
+        sum + (Number(row.remainQTY ?? row.releaseQty) || 0) * (Number(row.rate) || 0),
+      0
+    );
+    setForm((prev) => ({
+      ...prev,
+      heading1Value: releaseQtySum,
+      heading2Value: cartonsSum,
+      heading3Value: releaseRateAmount,
+    }));
+  }, [articleRows]);
+
+  const handleGridChange = (index, field, value) => {
+    const updatedRows = [...articleRows];
+    updatedRows[index] = { ...updatedRows[index], [field]: value };
+    setArticleRows(updatedRows);
+  };
+
+  // API Integration
   useEffect(() => {
     let isMounted = true;
     const fetchDetails = async () => {
       setLoading(true);
       setError('');
       try {
-        // TODO: Integrate shipment detail API using `id`
-        // const res = await fetch(`http://.../api/ShipmentRelease/GetById?id=${id}`);
-        // const data = await res.json();
+        const res = await fetch(`http://192.168.18.13/api/ShipmentRelease/GetShipment/${id}`);
+        if (!res.ok) {
+          throw new Error('Failed to fetch shipment details');
+        }
+        const responseData = await res.json();
+        const primaryData = Array.isArray(responseData) ? responseData[0] : responseData;
+
         if (!isMounted) return;
+
+        // Fetch sibling rows by Invoice No
+        let siblingRows = Array.isArray(responseData) ? responseData : [responseData];
+        if (primaryData.invoiceNo) {
+          try {
+            // Fetch all shipments with this Invoice No to see siblings
+            const listRes = await fetch(`http://192.168.18.13/api/ShipmentRelease/ShipmentRelease?invoiceNo=${encodeURIComponent(primaryData.invoiceNo)}`);
+            if (listRes.ok) {
+              const listData = await listRes.json();
+              if (Array.isArray(listData) && listData.length > 0) {
+                siblingRows = listData.filter(item =>
+                  // Only include items with same invoice and same PO
+                  // Actually, user wants different POs for same invoice?
+                  // User said "2 row ari hai po id alg hai" (2 rows coming, PO ID is different).
+                  // So we just want ALL rows for this invoice.
+                  item.invoiceNo === primaryData.invoiceNo
+                );
+              }
+            }
+          } catch (ignore) {
+            console.warn('Failed to fetch siblings', ignore);
+          }
+        }
+
+        const data = primaryData;
+
+        // Helper to format date for input type="date" (YYYY-MM-DD)
+
+        if (!isMounted) return;
+
+        // Helper to format date for input type="date" (YYYY-MM-DD)
+        const fmtDate = (val) => {
+          if (!val || val.startsWith('1900')) return '';
+          return val.split('T')[0];
+        };
+
+        setForm((prev) => ({
+          ...prev,
+          icNo:
+            data.amsicNo ||
+            data.amsicno ||
+            data.amsICNo ||
+            data.AMSICNo ||
+            '', // Note: Payload maps amsicNo <-> icNo
+          invoice: data.invoiceNo || '',
+          date: fmtDate(data.invoiceDate),
+          invoiceValue: data.invoiceValue || '',
+          currency: data.currency || 'US$',
+          exchangeRate: data.exchangeRate || '',
+          vendorInvoiceNo: data.vendorInvoiceNo || '',
+          consigneeName: data.cargoConsigneeName || data.consigneeName || '',
+          terms: data.terms || '',
+          addressLine: data.cargoConsigneeAddress1 || data.addressLine || '',
+          city: data.cargoConsigneeCity || data.city || '',
+          mode: data.deliveryTypeName || data.mode || '', // API seems to return deliveryTypeName
+          country: data.cargoConsigneeCountry || data.country || '',
+          carrierName: data.carrierName || '',
+          titleOfAccount: data.titleOfAccount || '',
+          voyageFlight: data.voyageFlight || '',
+          bankName: data.bankName || '',
+          blAwbNo: data.billNo || '', // billNo <-> blAwbNo
+          bankBranch: data.bankBranch || '',
+          shipmentDate: fmtDate(data.shipmentDate),
+          accountNo: data.accountNo || '',
+          containerNo: data.containerNo || '',
+          ibanNo: data.iban || '', // iban <-> ibanNo
+          destination: data.destination || '',
+          portOfLoading: data.portOfLoading || '',
+          portOfDischarge: data.portOfDischarge || '',
+          remarks: data.remarks || '',
+          bank: data.bankID ? String(data.bankID) : '', // bankID <-> bank
+          discount: data.discount || 0,
+          expectedEtd: fmtDate(data.etdExpectedDatee || data.etdExpectedDate),
+          actualEtd: fmtDate(data.etdActualDatee || data.etdActualDate),
+          revisedEtd: fmtDate(data.revisedETDd || data.revisedETD),
+          expectedEta: fmtDate(data.etaExpectedDatee || data.etaExpectedDate),
+          actualEta: fmtDate(data.etaActualDatee || data.etaActualDate),
+          revisedEta: fmtDate(data.revisedETADate || data.revisedETA),
+          expectedEtw: fmtDate(data.etwDatee || data.etwDate),
+          actualEtw: fmtDate(data.actualETWw || data.actualETW), // API has actualETWw in example
+          revisedEtw: fmtDate(data.reverseETWDatee || data.reverseETWDate),
+          containerReleaseDate: fmtDate(data.containerReleaseDatee || data.containerReleaseDate),
+          goodsClearedDate: fmtDate(data.goodsClearedDatee || data.goodsClearedDate),
+          docsToBrokerDate: fmtDate(data.docstoBrokerDatee || data.docstoBrokerDate),
+          containerDeliveryDate: fmtDate(data.containerDeliveryDateASTWHh || data.containerDeliveryDateASTWH),
+          goodsDeliveredDate: fmtDate(data.goodsDeliveredDatee || data.goodsDeliveredDate),
+          docsToBankDate: fmtDate(data.docstoBankDatee || data.docstoBankDate),
+          entryFiledDate: fmtDate(data.entryFiledDatee || data.entryFiledDate),
+          vpoActualDate: fmtDate(data.vpoActualDatee || data.vpoActualDate),
+          warehouseName: data.wareHouseName || '',
+          truckerName: data.truckerName || '',
+          updateSheetRemarks: data.updateSheetremarks || '',
+          // Footer fields mapping
+          extraField1: '', // Not in payload/response explicitly as extraField1 usually
+          extraField2: '',
+          extraField3: '',
+          extraField4: data.discountValue || '', // discountValue <-> extraField4 (bottom discount)
+          extraField5:
+            data.discountTitle !== null && typeof data.discountTitle !== 'undefined'
+              ? String(data.discountTitle)
+              : '', // discountTitle <-> extraField5
+          extraField6: '',
+
+          heading1Value: data.heading1Value || 0,
+          heading2Value: data.heading2Value || 0,
+          heading3Value: data.heading3Value || 0,
+          totalValueWD: data.totalValueWD || '',
+
+          extraSub1Top: data.subTotalH1 || '',
+          extraSub2Top: data.subTotalH2 || '',
+          extraSub3Top: data.subTotalH3 || '',
+
+          extraSub1Bottom: data.subTotalA1 || 0,
+          extraSub2Bottom: data.subTotalA2 || 0,
+          extraSub3Bottom: data.subTotalA3 || 0,
+        }));
+
+        const mappedRows = siblingRows.map((item) => ({
+          pono: item.poNo,
+          customerName: item.customerName,
+          styleNo: item.styles,
+          size: item.sizeRange || item.size, // 'size' in payload is sizeRange
+          quantity: item.poqty, // Total PO Qty
+          releaseQty: item.quantity, // This seems to be the 'Release Qty' column
+          remainQTY: item.quantity, // Editable field 'Release Qty'
+          cartons: item.cartons,
+          cartonNo: item.cartonNo,
+          rate: item.shippedRate,
+          deliveryTypeName: item.deliveryTypeName,
+          ldpInvoiceNo: item.ldpInvoiceNo,
+          itemDescriptionShippingInvoice: item.itemDescription,
+          // Other fields
+          poid: item.poid,
+          customerID: item.customerID,
+          supplierID: item.supplierID,
+          colorway: item.colorway,
+          // Preserve any existing fields if needed or mapped from API
+        }));
+        setArticleRows(mappedRows);
+
       } catch (err) {
         if (isMounted) {
           setError(err.message || 'Unable to load shipment details');
@@ -142,7 +337,16 @@ export default function ShipmentEditView() {
             Shipment Details {id ? `(ID: ${id})` : ''}
           </Typography>
 
-          <Button variant="outlined" color="inherit" onClick={() => navigate(-1)}>
+          <Button
+            variant="outlined"
+            color="inherit"
+            onClick={() => navigate(-1)}
+            sx={{
+              borderColor: '#171616',
+              color: '#171616',
+              '&:hover': { borderColor: '#000000', backgroundColor: '#F3F4F6' },
+            }}
+          >
             Back
           </Button>
         </Box>
@@ -244,6 +448,15 @@ export default function ShipmentEditView() {
                   size="small"
                 />
               </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Consignee Name"
+                  value={form.consigneeName}
+                  onChange={handleChange('consigneeName')}
+                  size="small"
+                />
+              </Grid>
 
               {/* Row: Terms / Mode */}
               <Grid item xs={12} sm={6}>
@@ -252,6 +465,24 @@ export default function ShipmentEditView() {
                   label="Terms"
                   value={form.terms}
                   onChange={handleChange('terms')}
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Address Line"
+                  value={form.addressLine}
+                  onChange={handleChange('addressLine')}
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="City"
+                  value={form.city}
+                  onChange={handleChange('city')}
                   size="small"
                 />
               </Grid>
@@ -269,6 +500,15 @@ export default function ShipmentEditView() {
                   <MenuItem value="Air">Air</MenuItem>
                   <MenuItem value="Road">Road</MenuItem>
                 </TextField>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Country"
+                  value={form.country}
+                  onChange={handleChange('country')}
+                  size="small"
+                />
               </Grid>
 
               {/* Row: Carrier / Title Of Account / Voyage Flight */}
@@ -399,7 +639,7 @@ export default function ShipmentEditView() {
                   size="small"
                 />
               </Grid>
-              <Grid item xs={12} sm={8}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
                   label="Remarks"
@@ -409,8 +649,8 @@ export default function ShipmentEditView() {
                 />
               </Grid>
 
-              {/* Row: Bank / Expected ETD */}
-              <Grid item xs={12} sm={6}>
+              {/* Row: Bank / Discount / Expected ETD */}
+              <Grid item xs={12} sm={4}>
                 <TextField
                   select
                   fullWidth
@@ -419,10 +659,20 @@ export default function ShipmentEditView() {
                   onChange={handleChange('bank')}
                   size="small"
                 >
-                  <MenuItem value="HAB BANK">HAB BANK</MenuItem>
+                  <MenuItem value="6">HAB BANK</MenuItem>
+                  <MenuItem value="7">HAB BANK 2</MenuItem>
                 </TextField>
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  label="Discount:"
+                  value={form.discount}
+                  onChange={handleChange('discount')}
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
                 <TextField
                   fullWidth
                   type="date"
@@ -464,6 +714,41 @@ export default function ShipmentEditView() {
                   label="Expected ETA"
                   value={form.expectedEta}
                   onChange={handleChange('expectedEta')}
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+
+              {/* Row: Actual/Revised ETA & Expected ETW */}
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Actual ETA"
+                  value={form.actualEta}
+                  onChange={handleChange('actualEta')}
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Revised ETA"
+                  value={form.revisedEta}
+                  onChange={handleChange('revisedEta')}
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Expected ETW"
+                  value={form.expectedEtw}
+                  onChange={handleChange('expectedEtw')}
                   size="small"
                   InputLabelProps={{ shrink: true }}
                 />
@@ -520,9 +805,10 @@ export default function ShipmentEditView() {
                 <TextField
                   fullWidth
                   label="Docs to Broker"
-                  value={form.docsToBroker}
-                  onChange={handleChange('docsToBroker')}
+                  value={form.docsToBrokerDate}
+                  onChange={handleChange('docsToBrokerDate')}
                   size="small"
+                  InputLabelProps={{ shrink: true }}
                 />
               </Grid>
               <Grid item xs={12} sm={4}>
@@ -553,9 +839,10 @@ export default function ShipmentEditView() {
                 <TextField
                   fullWidth
                   label="Docs to Bank"
-                  value={form.docsToBank}
-                  onChange={handleChange('docsToBank')}
+                  value={form.docsToBankDate}
+                  onChange={handleChange('docsToBankDate')}
                   size="small"
+                  InputLabelProps={{ shrink: true }}
                 />
               </Grid>
               <Grid item xs={12} sm={4}>
@@ -638,43 +925,165 @@ export default function ShipmentEditView() {
                     md={9}
                     sx={{ display: 'flex', justifyContent: 'flex-start', mt: { xs: 1, sm: 0 } }}
                   >
-                    <Button variant="contained" size="small" sx={{ minWidth: 220 }}>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      sx={{
+                        minWidth: 220,
+                        bgcolor: '#171616',
+                        color: '#ffffff',
+                        '&:hover': { bgcolor: '#000000' },
+                      }}
+                    >
                       Get Data
                     </Button>
                   </Grid>
                 </Grid>
               </Grid>
 
+              {/* Main Article Grid */}
+              <Grid item xs={12} sx={{ mt: 3 }}>
+                <TableContainer sx={{ border: '1px solid #eee' }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: '#eeeeee' }}>
+                        {[
+                          { label: 'PO. No.', width: 120 },
+                          { label: 'LDP Invoice No.', width: 120 },
+                          { label: 'Customer', width: 150 },
+                          { label: 'Item Des.', width: 250 }, // Increased width
+                          { label: 'Style No', width: 100 },
+                          { label: 'Size', width: 100 },
+                          { label: 'PO Quantity', width: 100 },
+                          { label: 'Shipped Quantity', width: 120 },
+                          { label: 'Release Quantity', width: 120 },
+                          { label: 'Cartons', width: 80 },
+                          { label: 'Carton#', width: 100 },
+                          { label: 'Shipped Rate', width: 100 },
+                          { label: 'Delivery Mode', width: 120 },
+                        ].map((col) => (
+                          <TableCell
+                            key={col.label}
+                            sx={{
+                              color: '#000000',
+                              fontWeight: 'bold',
+                              borderRight: '1px solid rgba(0,0,0,0.12)',
+                              whiteSpace: 'nowrap',
+                              minWidth: col.width,
+                            }}
+                          >
+                            {col.label}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {articleRows.map((row, index) => (
+                        <TableRow
+                          key={index}
+                          hover
+                          onClick={() => setSelectedArticle(row)}
+                          selected={selectedArticle === row}
+                        >
+                          <TableCell>{row.pono}</TableCell>
+                          <TableCell sx={{ p: 0.5 }}>
+                            <TextField
+                              size="small"
+                              fullWidth
+                              value={row.ldpInvoiceNo || ''}
+                              onChange={(e) => handleGridChange(index, 'ldpInvoiceNo', e.target.value)}
+                            />
+                          </TableCell>
+                          <TableCell>{row.customerName}</TableCell>
+                          <TableCell sx={{ p: 0.5 }}>
+                            <TextField
+                              size="small"
+                              fullWidth
+                              multiline
+                              value={row.itemDescriptionShippingInvoice || ''}
+                              onChange={(e) =>
+                                handleGridChange(index, 'itemDescriptionShippingInvoice', e.target.value)
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>{row.styleNo}</TableCell>
+                          <TableCell>{row.size}</TableCell>
+                          <TableCell>{row.quantity ?? '-'}</TableCell>
+                          <TableCell>{row.releaseQty ?? '-'}</TableCell>
+                          <TableCell sx={{ p: 0.5 }}>
+                            <TextField
+                              size="small"
+                              fullWidth
+                              type="number"
+                              value={row.remainQTY ?? ''}
+                              onChange={(e) => handleGridChange(index, 'remainQTY', e.target.value)}
+                            />
+                          </TableCell>
+                          <TableCell>{row.cartons ?? '-'}</TableCell>
+                          <TableCell>{row.cartonNo ?? ''}</TableCell>
+                          <TableCell sx={{ p: 0.5 }}>
+                            <TextField
+                              size="small"
+                              fullWidth
+                              type="number"
+                              value={row.rate ?? ''}
+                              onChange={(e) => handleGridChange(index, 'rate', e.target.value)}
+                            />
+                          </TableCell>
+                          <TableCell>{row.deliveryTypeName}</TableCell>
+                        </TableRow>
+                      ))}
+                      {articleRows.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={13} align="center">
+                            No data available
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Grid>
+
               {/* Extra fields block (3 rows: 3 fields, then 2 fields, then 1 right-aligned field) */}
               <Grid item xs={12} sx={{ mt: 3 }}>
                 <Grid container spacing={3}>
-                  {/* Row 1: 3 fields */}
+                  {/* Row 1: 3 fields (ReadOnly Totals) */}
                   <Grid item xs={12} sm={4}>
                     <TextField
                       fullWidth
                       size="small"
-                      value={form.extraField1}
-                      onChange={handleChange('extraField1')}
+                      label="Release Qty Sum"
+                      value={form.heading1Value}
+                      InputProps={{ readOnly: true }}
+                      variant="outlined"
+                      sx={{ bgcolor: 'background.neutral' }}
                     />
                   </Grid>
                   <Grid item xs={12} sm={4}>
                     <TextField
                       fullWidth
                       size="small"
-                      value={form.extraField2}
-                      onChange={handleChange('extraField2')}
+                      label="Cartons Sum"
+                      value={form.heading2Value}
+                      InputProps={{ readOnly: true }}
+                      variant="outlined"
+                      sx={{ bgcolor: 'background.neutral' }}
                     />
                   </Grid>
                   <Grid item xs={12} sm={4}>
                     <TextField
                       fullWidth
                       size="small"
-                      value={form.extraField3}
-                      onChange={handleChange('extraField3')}
+                      label="Release × Rate Amount"
+                      value={typeof form.heading3Value === 'number' ? form.heading3Value.toFixed(2) : form.heading3Value}
+                      InputProps={{ readOnly: true }}
+                      variant="outlined"
+                      sx={{ bgcolor: 'background.neutral' }}
                     />
                   </Grid>
 
-                  {/* Row 2: 2 fields (same width as row below, right aligned) */}
+                  {/* Row 2: Discount + extra field (Right Aligned) */}
                   <Grid item xs={12} sm={4} />
                   <Grid
                     item
@@ -685,8 +1094,8 @@ export default function ShipmentEditView() {
                     <TextField
                       label="Discount"
                       size="small"
-                      value={form.discount}
-                      onChange={handleChange('discount')}
+                      value={form.extraField4}
+                      onChange={handleChange('extraField4')}
                       fullWidth
                     />
                   </Grid>
@@ -698,32 +1107,139 @@ export default function ShipmentEditView() {
                   >
                     <TextField
                       size="small"
-                      value={form.extraField4}
-                      onChange={handleChange('extraField4')}
+                      value={form.extraField5}
+                      onChange={handleChange('extraField5')}
                       fullWidth
                     />
                   </Grid>
 
-                  {/* Row 3: single right-aligned field */}
+                  {/* Row 3: single right-aligned field (Total Value) */}
                   <Grid item xs={12} sm={8} />
                   <Grid item xs={12} sm={4}>
                     <TextField
                       fullWidth
                       size="small"
-                      value={form.extraField6}
-                      onChange={handleChange('extraField6')}
+                      value={
+                        Number.isFinite(Number(form.totalValueWD))
+                          ? Number(form.totalValueWD).toFixed(2)
+                          : form.totalValueWD
+                      }
+                      InputProps={{ readOnly: true }}
+                      variant="outlined"
+                      sx={{ bgcolor: 'background.neutral' }}
                     />
                   </Grid>
+                </Grid>
+
+                {/* Subtotal Grid (LDP Invoice No. + Sub Totals) */}
+                <Grid item xs={12} sx={{ mt: 3 }}>
+                  <TableContainer sx={{ border: '1px solid #eee' }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ bgcolor: '#eeeeee' }}>
+                          {['LDP Invoice No.', 'Sub Total', 'Sub Total', 'Sub Total'].map((head) => (
+                            <TableCell
+                              key={head}
+                              sx={{
+                                color: '#000000',
+                                fontWeight: 'bold',
+                                borderRight: '1px solid rgba(0,0,0,0.12)',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {head}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {/* Top row: 3 empty-but-editable fields */}
+                        <TableRow>
+                          <TableCell rowSpan={2}>
+                            {articleRows[0]?.ldpInvoiceNo || ''}
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={form.extraSub1Top}
+                              onChange={handleChange('extraSub1Top')}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={form.extraSub2Top}
+                              onChange={handleChange('extraSub2Top')}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={form.extraSub3Top}
+                              onChange={handleChange('extraSub3Top')}
+                            />
+                          </TableCell>
+                        </TableRow>
+                        {/* Bottom row */}
+                        <TableRow>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={form.extraSub1Bottom}
+                              onChange={handleChange('extraSub1Bottom')}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={form.extraSub2Bottom}
+                              onChange={handleChange('extraSub2Bottom')}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={form.extraSub3Bottom}
+                              onChange={handleChange('extraSub3Bottom')}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
                 </Grid>
               </Grid>
             </Grid>
 
             {/* Actions */}
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4 }}>
-              <Button variant="contained" color="primary" onClick={handleSave}>
-                Save Changes
+              <Button
+                variant="contained"
+                onClick={handleSave}
+                sx={{
+                  bgcolor: '#171616',
+                  color: '#ffffff',
+                  '&:hover': { bgcolor: '#000000' },
+                }}
+              >
+                Update
               </Button>
-              <Button variant="outlined" color="inherit" onClick={handleCancel}>
+              <Button
+                variant="outlined"
+                color="inherit"
+                onClick={handleCancel}
+                sx={{
+                  borderColor: '#171616',
+                  color: '#171616',
+                  '&:hover': { borderColor: '#000000', backgroundColor: '#F3F4F6' },
+                }}
+              >
                 Cancel
               </Button>
             </Box>
@@ -752,7 +1268,15 @@ export default function ShipmentEditView() {
                     />
                   </Grid>
                   <Grid item>
-                    <Button variant="contained" size="small">
+                    <Button
+                      variant="contained"
+                      size="small"
+                      sx={{
+                        bgcolor: '#171616',
+                        color: '#ffffff',
+                        '&:hover': { bgcolor: '#000000' },
+                      }}
+                    >
                       Get Data
                     </Button>
                   </Grid>
@@ -763,6 +1287,11 @@ export default function ShipmentEditView() {
                   variant="outlined"
                   size="small"
                   onClick={() => setPoDialogOpen(false)}
+                  sx={{
+                    borderColor: '#171616',
+                    color: '#171616',
+                    '&:hover': { borderColor: '#000000', backgroundColor: '#F3F4F6' },
+                  }}
                 >
                   Select &amp; Close
                 </Button>

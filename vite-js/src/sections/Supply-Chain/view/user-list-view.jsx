@@ -219,9 +219,9 @@ export default function ShipmentReleaseFilters() {
       const filteredItems =
         customerSearchTerm && customerSearchTerm !== 'ALL'
           ? items.filter((item) => {
-              const customerValue = (item.customerName ?? item.customer ?? '').toLowerCase();
-              return customerValue.includes(customerSearchTerm.toLowerCase());
-            })
+            const customerValue = (item.customerName ?? item.customer ?? '').toLowerCase();
+            return customerValue.includes(customerSearchTerm.toLowerCase());
+          })
           : items;
       setTableData(filteredItems.map((item, index) => mapShipmentRow(item, index)));
     } catch (error) {
@@ -339,7 +339,7 @@ export default function ShipmentReleaseFilters() {
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
               Filter shipments
             </Typography>
-         
+
           </Box>
         </Box>
         <Grid container spacing={2}>
@@ -415,42 +415,75 @@ export default function ShipmentReleaseFilters() {
           )}
 
           <Grid item xs={12}>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: 1.5,
+                mt: { xs: 2, md: 1 },
+              }}
+            >
               <Button
                 variant="contained"
                 color="primary"
                 size="small"
-                sx={{ px: 2, minWidth: 90, height: 40, fontWeight: 600, textTransform: 'none' }}
+                sx={{
+                  px: 3,
+                  minWidth: 110,
+                  height: 40,
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  borderRadius: 999,
+                  boxShadow: '0 4px 10px rgba(15, 23, 42, 0.3)',
+                  backgroundColor: '#171616',
+                  '&:hover': {
+                    backgroundColor: '#000000',
+                  },
+                }}
                 onClick={handleSearch}
               >
                 Search
               </Button>
               <Button
                 variant="outlined"
-                color="primary"
+                color="inherit"
                 size="small"
                 onClick={handleShowAll}
                 sx={{
-                  px: 2,
-                  minWidth: 90,
+                  px: 3,
+                  minWidth: 100,
                   height: 40,
                   fontWeight: 600,
                   textTransform: 'none',
+                  borderRadius: 999,
+                  borderColor: '#171616',
+                  color: '#171616',
+                  backgroundColor: '#FFFFFF',
+                  '&:hover': {
+                    backgroundColor: '#F3F4F6',
+                    borderColor: '#000000',
+                  },
                 }}
               >
                 Clear
               </Button>
-            </Box>
-          </Grid>
-
-          {/* Add Shipment */}
-          <Grid item xs={12}>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
               <Button
                 variant="contained"
                 color="primary"
                 size="small"
-                sx={{ px: 3, minWidth: 120, height: 40, fontWeight: 600, textTransform: 'none' }}
+                sx={{
+                  px: 3,
+                  minWidth: 140,
+                  height: 40,
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  borderRadius: 999,
+                  boxShadow: '0 4px 10px rgba(15, 23, 42, 0.3)',
+                  backgroundColor: '#171616',
+                  '&:hover': {
+                    backgroundColor: '#000000',
+                  },
+                }}
                 onClick={() => navigate('/dashboard/supply-chain/shipment-release/add')}
               >
                 Add Shipment
@@ -506,10 +539,10 @@ export default function ShipmentReleaseFilters() {
                     py: tableCellPadding,
                     textAlign: 'center',
                   },
-                  '& th': (theme) => ({
+                  '& th': {
                     fontWeight: 600,
-                    backgroundColor: theme.palette.primary.main,
-                    color: theme.palette.primary.contrastText,
+                    backgroundColor: '#eeeeee',
+                    color: '#000000',
                     fontSize: '0.75rem',
                     position: 'sticky',
                     top: 0,
@@ -518,7 +551,7 @@ export default function ShipmentReleaseFilters() {
                     textTransform: 'uppercase',
                     py: headerPaddingY,
                     textAlign: 'center',
-                  }),
+                  },
                 }}
               >
                 <TableHeadCustom
@@ -555,6 +588,12 @@ export default function ShipmentReleaseFilters() {
                               py: 0.3,
                               px: 1,
                             }}
+                            onClick={() =>
+                              navigate(
+                                `/dashboard/supply-chain/inspection-certificate/${row.id}`,
+                                { state: { shipment: row } }
+                              )
+                            }
                           >
                             Inspection Certificate
                           </Button>
@@ -569,6 +608,12 @@ export default function ShipmentReleaseFilters() {
                               py: 0.3,
                               px: 1,
                             }}
+                            onClick={() =>
+                              navigate(
+                                `/dashboard/supply-chain/print-invoice/${row.id}`,
+                                { state: { shipment: row } }
+                              )
+                            }
                           >
                             Print Invoice
                           </Button>
@@ -615,21 +660,21 @@ export default function ShipmentReleaseFilters() {
                             Action Diff
                           </Button>
                         </TableCell>
-                  <TableCell>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      sx={{
-                        minWidth: 50,
-                        fontSize: '0.7rem',
-                        py: 0.3,
-                        px: 1,
-                      }}
-                      onClick={() => navigate(`/dashboard/supply-chain/shipment/${row.id}/edit`)}
-                    >
-                      View
-                    </Button>
-                  </TableCell>
+                        <TableCell>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            sx={{
+                              minWidth: 50,
+                              fontSize: '0.7rem',
+                              py: 0.3,
+                              px: 1,
+                            }}
+                            onClick={() => navigate(`/dashboard/supply-chain/shipment/${row.id}/edit`)}
+                          >
+                            View
+                          </Button>
+                        </TableCell>
                         <TableCell sx={{ fontSize: '0.75rem' }}>{row.status}</TableCell>
                       </TableRow>
                     ))}
