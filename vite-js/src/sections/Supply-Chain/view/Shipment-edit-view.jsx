@@ -94,6 +94,10 @@ const defaultFormValues = {
   extraSub3Bottom: '0',
 };
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const SHIPMENT_DETAIL_API = `${API_BASE_URL}/api/ShipmentRelease/GetShipment`;
+const SHIPMENT_RELEASE_API = `${API_BASE_URL}/api/ShipmentRelease/ShipmentRelease`;
+
 export default function ShipmentEditView() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -138,7 +142,7 @@ export default function ShipmentEditView() {
       setLoading(true);
       setError('');
       try {
-        const res = await fetch(`http://192.168.18.13/api/ShipmentRelease/GetShipment/${id}`);
+        const res = await fetch(`${SHIPMENT_DETAIL_API}/${id}`);
         if (!res.ok) {
           throw new Error('Failed to fetch shipment details');
         }
@@ -152,7 +156,9 @@ export default function ShipmentEditView() {
         if (primaryData.invoiceNo) {
           try {
             // Fetch all shipments with this Invoice No to see siblings
-            const listRes = await fetch(`http://192.168.18.13/api/ShipmentRelease/ShipmentRelease?invoiceNo=${encodeURIComponent(primaryData.invoiceNo)}`);
+            const listRes = await fetch(
+              `${SHIPMENT_RELEASE_API}?invoiceNo=${encodeURIComponent(primaryData.invoiceNo)}`
+            );
             if (listRes.ok) {
               const listData = await listRes.json();
               if (Array.isArray(listData) && listData.length > 0) {
