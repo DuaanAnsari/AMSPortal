@@ -4,6 +4,9 @@ import {
   Grid,
   Card,
   Button,
+  Checkbox,
+  IconButton,
+  Tooltip,
   TextField,
   Container,
   Typography,
@@ -15,6 +18,7 @@ import {
   Box,
 } from '@mui/material';
 
+import Iconify from 'src/components/iconify';
 import Scrollbar from 'src/components/scrollbar';
 import {
   useTable,
@@ -53,8 +57,9 @@ const DEFAULT_FILTERS = {
   ldpInvoice: '',
 };
 
-const SHIPMENT_RELEASE_API = 'http://192.168.18.13/api/ShipmentRelease/ShipmentRelease';
-const CUSTOMER_API = 'http://192.168.18.13/api/MyOrders/GetCustomer';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const SHIPMENT_RELEASE_API = `${API_BASE_URL}/api/ShipmentRelease/ShipmentRelease`;
+const CUSTOMER_API = `${API_BASE_URL}/api/MyOrders/GetCustomer`;
 
 const FILTER_CARD_SX = {
   p: { xs: 2, md: 3 },
@@ -90,10 +95,10 @@ const TABLE_CARD_SX = {
 const TABLE_ROW_SX = {
   background: '#ffffff',
   '&:nth-of-type(odd)': {
-    background: '#f7fbff',
+    background: '#ffffff',
   },
   '&:hover': {
-    background: '#eefff4',
+    background: '#ffffff',
   },
 };
 
@@ -347,6 +352,24 @@ export default function ShipmentReleaseFilters() {
       py: tableCellPadding,
     },
   };
+
+  const renderTruncatedCell = (value, maxWidth = 120) => (
+    <Tooltip title={value || ''} placement="top">
+      <Box
+        component="span"
+        sx={{
+          display: 'inline-block',
+          maxWidth,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          verticalAlign: 'bottom',
+        }}
+      >
+        {value || '-'}
+      </Box>
+    </Tooltip>
+  );
 
   return (
     <Container maxWidth="xl" sx={{ py: 1 }}>
@@ -610,12 +633,20 @@ export default function ShipmentReleaseFilters() {
                     .map((row) => (
                       <TableRow hover key={row.id} sx={tableRowSx}>
                         <TableCell sx={{ fontSize: '0.75rem' }}>{row.shipDate}</TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem' }}>{row.invoiceNo}</TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>
+                          {renderTruncatedCell(row.invoiceNo, 130)}
+                        </TableCell>
                         <TableCell sx={{ fontSize: '0.75rem' }}>{row.value}</TableCell>
                         <TableCell sx={{ fontSize: '0.75rem' }}>{row.billNo}</TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem' }}>{row.customer}</TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem' }}>{row.ldp}</TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem' }}>{row.supplier}</TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>
+                          {renderTruncatedCell(row.customer, 140)}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>
+                          {renderTruncatedCell(row.ldp, 110)}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>
+                          {renderTruncatedCell(row.supplier, 120)}
+                        </TableCell>
                         <TableCell>
                           <Button
                             size="small"
@@ -685,18 +716,13 @@ export default function ShipmentReleaseFilters() {
                           </Button>
                         </TableCell>
                         <TableCell>
-                          <Button
+                          <IconButton
                             size="small"
-                            variant="outlined"
-                            sx={{
-                              minWidth: 50,
-                              fontSize: '0.7rem',
-                              py: 0.3,
-                              px: 1,
-                            }}
+                            sx={{ p: 0.5 }}
+                            aria-label="Delete"
                           >
-                            Action Diff
-                          </Button>
+                            <Iconify icon="mdi:delete-outline" color="#000000" width={20} height={20} />
+                          </IconButton>
                         </TableCell>
                         <TableCell>
                           <Button
@@ -713,7 +739,9 @@ export default function ShipmentReleaseFilters() {
                             View
                           </Button>
                         </TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem' }}>{row.status}</TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>
+                          <Checkbox size="small" checked={row.status === 'Released'} />
+                        </TableCell>
                       </TableRow>
                     ))}
 

@@ -243,7 +243,7 @@ export default function ShipmentReleaseAddPage() {
         cartons: Number(row.cartons) || 0,
         customerID: Number(row.customerID) || 0,
         supplierID: Number(row.supplierID) || 0,
-        popoid: Number(row.poid) || 0,
+        popoid: Number(row.popoid) || 0,
         shippedRate: Number(row.rate) || 0,
         cartonNo: row.cartonNo || '',
         ldpInvoiceNo: row.ldpInvoiceNo || '',
