@@ -399,22 +399,31 @@ export default function ShipmentEditView() {
     setLoading(true);
     setError('');
 
-    const primarySubTotalKey = ldpRows[0]?.key;
-    const primarySubTotals = subTotalsByLdp[primarySubTotalKey] || {
-      top1: '',
-      top2: '',
-      top3: '',
-      bottom1: '0',
-      bottom2: '0',
-      bottom3: '0',
+    const safeIsoDate = (dateVal) => {
+      if (!dateVal) return '';
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return '';
+      return d.toISOString().split('T')[0];
     };
+
+    const subTotalDetails = Object.entries(subTotalsByLdp)
+      .filter(([key]) => key && key !== '__EMPTY__')
+      .map(([key, subtotal]) => ({
+        invoiceno: key,
+        subTotalH1: subtotal?.top1 || '',
+        subTotalH2: subtotal?.top2 || '',
+        subTotalH3: subtotal?.top3 || '',
+        subTotalA1: Number(subtotal?.bottom1) || 0,
+        subTotalA2: Number(subtotal?.bottom2) || 0,
+        subTotalA3: Number(subtotal?.bottom3) || 0,
+      }));
 
     const payload = {
       cargoID: Number(cargoId) || 0,
       creationDate: new Date().toISOString(),
       invoiceNo: form.invoice,
       vendorInvoiceNo: form.vendorInvoiceNo,
-      invoiceDate: form.date ? `${form.date}T00:00:00.000Z` : new Date().toISOString(),
+      invoiceDate: safeIsoDate(form.date),
       invoiceValue: Number(form.invoiceValue) || 0,
       terms: form.terms,
       itemDescription: articleRows[0]?.itemDescriptionShippingInvoice || '',
@@ -422,7 +431,7 @@ export default function ShipmentEditView() {
       carrierName: form.carrierName,
       voyageFlight: form.voyageFlight,
       billNo: form.blAwbNo,
-      shipmentDate: form.shipmentDate ? `${form.shipmentDate}T00:00:00.000Z` : new Date().toISOString(),
+      shipmentDate: safeIsoDate(form.shipmentDate),
       containerNo: form.containerNo,
       remarks: form.remarks,
       isActive: true,
@@ -430,7 +439,7 @@ export default function ShipmentEditView() {
       userID: 0,
       exchangeRate: Number(form.exchangeRate) || 0,
       exporterInvoiceNo: form.exporterInvoiceNo || '',
-      exporterInvoiceDate: form.exporterInvoiceDate ? `${form.exporterInvoiceDate}T00:00:00.000Z` : new Date().toISOString(),
+      exporterInvoiceDate: safeIsoDate(form.exporterInvoiceDate),
       countryOfOrigin: form.country,
       destination: form.destination,
       portOfLoading: form.portOfLoading,
@@ -445,27 +454,27 @@ export default function ShipmentEditView() {
       heading2Value: Number(form.heading2Value) || 0,
       heading3Value: Number(form.heading3Value) || 0,
       amsicNo: form.icNo,
-      etdExpectedDate: form.expectedEtd ? `${form.expectedEtd}T00:00:00.000Z` : '',
-      etdActualDate: form.actualEtd ? `${form.actualEtd}T00:00:00.000Z` : '',
-      etaExpectedDate: form.expectedEta ? `${form.expectedEta}T00:00:00.000Z` : '',
-      etaActualDate: form.actualEta ? `${form.actualEta}T00:00:00.000Z` : '',
-      entryFiledDate: form.entryFiledDate ? `${form.entryFiledDate}T00:00:00.000Z` : '',
-      goodsClearedDate: form.goodsClearedDate ? `${form.goodsClearedDate}T00:00:00.000Z` : '',
-      docstoBrokerDate: form.docsToBrokerDate ? `${form.docsToBrokerDate}T00:00:00.000Z` : '',
-      docstoBankDate: form.docsToBankDate ? `${form.docsToBankDate}T00:00:00.000Z` : '',
-      goodsDeliveredDate: form.goodsDeliveredDate ? `${form.goodsDeliveredDate}T00:00:00.000Z` : '',
+      etdExpectedDate: safeIsoDate(form.expectedEtd),
+      etdActualDate: safeIsoDate(form.actualEtd),
+      etaExpectedDate: safeIsoDate(form.expectedEta),
+      etaActualDate: safeIsoDate(form.actualEta),
+      entryFiledDate: safeIsoDate(form.entryFiledDate),
+      goodsClearedDate: safeIsoDate(form.goodsClearedDate),
+      docstoBrokerDate: safeIsoDate(form.docsToBrokerDate),
+      docstoBankDate: safeIsoDate(form.docsToBankDate),
+      goodsDeliveredDate: safeIsoDate(form.goodsDeliveredDate),
       updateSheetremarks: form.updateSheetRemarks,
       shipmentStatus: true,
-      revisedETA: form.revisedEtw ? `${form.revisedEtw}T00:00:00.000Z` : new Date().toISOString(),
-      etwDate: form.actualEtw ? `${form.actualEtw}T00:00:00.000Z` : '',
-      reverseETWDate: form.revisedEtw ? `${form.revisedEtw}T00:00:00.000Z` : '',
-      revisedETD: form.revisedEtd ? `${form.revisedEtd}T00:00:00.000Z` : '',
-      vpoActualDate: form.vpoActualDate ? `${form.vpoActualDate}T00:00:00.000Z` : '',
-      containerReleaseDate: form.containerReleaseDate ? `${form.containerReleaseDate}T00:00:00.000Z` : '',
-      containerDeliveryDateASTWH: form.containerDeliveryDate ? `${form.containerDeliveryDate}T00:00:00.000Z` : '',
+      revisedETA: safeIsoDate(form.revisedEta),
+      etwDate: safeIsoDate(form.expectedEtw),
+      reverseETWDate: safeIsoDate(form.revisedEtw),
+      revisedETD: safeIsoDate(form.revisedEtd),
+      vpoActualDate: safeIsoDate(form.vpoActualDate),
+      containerReleaseDate: safeIsoDate(form.containerReleaseDate),
+      containerDeliveryDateASTWH: safeIsoDate(form.containerDeliveryDate),
       wareHouseName: form.warehouseName,
       truckerName: form.truckerName,
-      actualETW: form.actualEtw ? `${form.actualEtw}T00:00:00.000Z` : '',
+      actualETW: safeIsoDate(form.actualEtw),
       discountValue: Number(form.discount) || 0,
       totalValueWD: Number(form.totalValueWD) || 0,
       discountTitle: form.extraField5,
@@ -474,16 +483,14 @@ export default function ShipmentEditView() {
       cargoConsigneeAddress1: form.addressLine,
       cargoConsigneeCity: form.city,
       cargoConsigneeCountry: form.country,
-      subTotalH1: primarySubTotals.top1 || '',
-      subTotalH2: primarySubTotals.top2 || '',
-      subTotalH3: primarySubTotals.top3 || '',
-      subTotalA1: Number(primarySubTotals.bottom1) || 0,
-      subTotalA2: Number(primarySubTotals.bottom2) || 0,
-      subTotalA3: Number(primarySubTotals.bottom3) || 0,
+      subTotalDetails,
       cargoDetailID: selectedArticle?.cargoDetailID || 0,
       details: articleRows.map((row) => ({
         poid: row.poid || 0,
+        pono: row.pono || '',
+        deliveryTypeName: row.deliveryTypeName || '',
         quantity: Number(row.remainQTY ?? row.releaseQty) || 0,
+        poqty: Number(row.quantity) || 0,
         styles: row.styleNo,
         cartons: Number(row.cartons) || 0,
         customerID: row.customerID || 0,
@@ -499,13 +506,15 @@ export default function ShipmentEditView() {
     };
 
     try {
+      console.log('UpdateShipment payload', payload);
       const response = await fetch(`${SHIPMENT_UPDATE_API}/${id}`, {
-        method: 'PUT',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        throw new Error('Failed to update shipment');
+        const errorText = await response.text();
+        throw new Error(`Failed to update shipment: ${errorText}`);
       }
       setSuccessMessage('Shipment updated successfully.');
       setError('');
@@ -1353,9 +1362,9 @@ export default function ShipmentEditView() {
                     <Table size="small">
                       <TableHead>
                         <TableRow sx={{ bgcolor: '#eeeeee' }}>
-                          {['LDP Invoice No.', 'Sub Total', 'Sub Total', 'Sub Total'].map((head) => (
+                          {['LDP Invoice No.', 'Sub Total', 'Sub Total', 'Sub Total'].map((head, index) => (
                             <TableCell
-                              key={head}
+                              key={`${head}-${index}`}
                               sx={{
                                 color: '#000000',
                                 fontWeight: 'bold',
