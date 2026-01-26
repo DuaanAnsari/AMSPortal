@@ -331,15 +331,17 @@ export default function ShipmentReleaseAddPage() {
         sizeRange: row.size || '',
       }));
 
-      const primarySubTotalKey = ldpRows[0]?.key;
-      const primarySubTotals = subTotalsByLdp[primarySubTotalKey] || {
-        top1: '',
-        top2: '',
-        top3: '',
-        bottom1: '0',
-        bottom2: '0',
-        bottom3: '0',
-      };
+      const subTotalDetails = Object.entries(subTotalsByLdp)
+        .filter(([key]) => key && key !== '__EMPTY__')
+        .map(([key, subtotal]) => ({
+          invoiceno: key,
+          subTotalH1: subtotal?.top1 || '',
+          subTotalH2: subtotal?.top2 || '',
+          subTotalH3: subtotal?.top3 || '',
+          subTotalA1: Number(subtotal?.bottom1) || 0,
+          subTotalA2: Number(subtotal?.bottom2) || 0,
+          subTotalA3: Number(subtotal?.bottom3) || 0,
+        }));
 
       const payload = {
         creationDate: new Date().toISOString(),
@@ -409,14 +411,7 @@ export default function ShipmentReleaseAddPage() {
         // Rate amount below field goes to DiscountTitle
         discountTitle: form.extraField5 || '',
         styles: articleRows[0]?.styleNo || '',
-        // Sub total labels from second summary grid (top row)
-        subTotalH1: primarySubTotals.top1 || '',
-        subTotalH2: primarySubTotals.top2 || '',
-        subTotalH3: primarySubTotals.top3 || '',
-        // Sub total numeric values from second summary grid (bottom row)
-        subTotalA1: Number(primarySubTotals.bottom1) || 0,
-        subTotalA2: Number(primarySubTotals.bottom2) || 0,
-        subTotalA3: Number(primarySubTotals.bottom3) || 0,
+        subTotalDetails,
         details,
       };
 

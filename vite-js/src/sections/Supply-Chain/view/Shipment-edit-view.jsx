@@ -107,6 +107,7 @@ export default function ShipmentEditView() {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [form, setForm] = useState(defaultFormValues);
+  const [cargoId, setCargoId] = useState(0);
   const [poDialogOpen, setPoDialogOpen] = useState(false);
   const [poSearch, setPoSearch] = useState('');
   const [articleRows, setArticleRows] = useState([]);
@@ -342,6 +343,7 @@ export default function ShipmentEditView() {
           extraSub2Bottom: data.subTotalA2 || 0,
           extraSub3Bottom: data.subTotalA3 || 0,
         }));
+        setCargoId(Number(data.cargoID ?? data.cargoId ?? 0) || 0);
 
         const sourceDetails = data.details ?? siblingRows[0]?.details ?? [];
 
@@ -408,6 +410,7 @@ export default function ShipmentEditView() {
     };
 
     const payload = {
+      cargoID: Number(cargoId) || 0,
       creationDate: new Date().toISOString(),
       invoiceNo: form.invoice,
       vendorInvoiceNo: form.vendorInvoiceNo,
