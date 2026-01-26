@@ -62,8 +62,8 @@ export default function DashboardBI() {
       {/* Header */}
       <Box
         sx={{
-          backgroundColor: theme.palette.primary.main,
-          color: theme.palette.primary.contrastText,
+          backgroundColor: '#eeeeee',
+          color: '#000000',
           p: 2,
           borderRadius: 2,
           mb: 2,
@@ -198,8 +198,8 @@ export default function DashboardBI() {
                       sx={{
                         fontWeight: 'bold',
                         fontSize: '1rem',
-                        backgroundColor: theme.palette.primary.main,
-                        color: theme.palette.primary.contrastText,
+                        backgroundColor: '#eeeeee',
+                        color: '#000000',
                         whiteSpace: 'normal',
                       }}
                     >
@@ -256,8 +256,8 @@ export default function DashboardBI() {
                       sx={{
                         fontWeight: 'bold',
                         fontSize: '1rem',
-                        backgroundColor: theme.palette.primary.main,
-                        color: theme.palette.primary.contrastText,
+                        backgroundColor: '#eeeeee',
+                        color: '#000000',
                         whiteSpace: 'normal',
                       }}
                     >
@@ -331,8 +331,8 @@ export default function DashboardBI() {
                       sx={{
                         fontWeight: 'bold',
                         fontSize: '1rem',
-                        backgroundColor: theme.palette.primary.main,
-                        color: theme.palette.primary.contrastText,
+                        backgroundColor: '#eeeeee',
+                        color: '#000000',
                         whiteSpace: 'normal',
                       }}
                     >

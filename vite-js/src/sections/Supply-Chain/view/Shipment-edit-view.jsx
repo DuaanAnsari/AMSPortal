@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
@@ -97,6 +97,7 @@ const defaultFormValues = {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const SHIPMENT_DETAIL_API = `${API_BASE_URL}/api/ShipmentRelease/GetShipment`;
 const SHIPMENT_RELEASE_API = `${API_BASE_URL}/api/ShipmentRelease/ShipmentRelease`;
+const SHIPMENT_UPDATE_API = `${API_BASE_URL}/api/ShipmentRelease/UpdateShipment`;
 
 export default function ShipmentEditView() {
   const navigate = useNavigate();
@@ -104,11 +105,73 @@ export default function ShipmentEditView() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [form, setForm] = useState(defaultFormValues);
   const [poDialogOpen, setPoDialogOpen] = useState(false);
   const [poSearch, setPoSearch] = useState('');
   const [articleRows, setArticleRows] = useState([]);
   const [selectedArticle, setSelectedArticle] = useState(null);
+  const [subTotalsByLdp, setSubTotalsByLdp] = useState({});
+  const ldpInvoiceNumbers = articleRows
+    .map((row) => row.ldpInvoiceNo)
+    .filter((value) => value && String(value).trim().length > 0);
+  const uniqueLdpInvoiceNumbers = Array.from(new Set(ldpInvoiceNumbers));
+
+  const ldpRows = useMemo(() => {
+    const seen = new Set();
+    const rows = [];
+    articleRows.forEach((row) => {
+      const value = row?.ldpInvoiceNo ? String(row.ldpInvoiceNo).trim() : '';
+      if (!value || seen.has(value)) {
+        return;
+      }
+      seen.add(value);
+      rows.push({ key: value, label: value });
+    });
+    if (rows.length === 0) {
+      rows.push({ key: '__EMPTY__', label: '' });
+    }
+    return rows;
+  }, [articleRows]);
+
+  useEffect(() => {
+    const emptyRow = {
+      top1: '',
+      top2: '',
+      top3: '',
+      bottom1: '0',
+      bottom2: '0',
+      bottom3: '0',
+    };
+    setSubTotalsByLdp((prev) => {
+      const next = {};
+      ldpRows.forEach((row, index) => {
+        if (prev[row.key]) {
+          next[row.key] = prev[row.key];
+        } else if (index === 0) {
+          next[row.key] = {
+            top1: form.extraSub1Top || '',
+            top2: form.extraSub2Top || '',
+            top3: form.extraSub3Top || '',
+            bottom1: String(form.extraSub1Bottom ?? '0'),
+            bottom2: String(form.extraSub2Bottom ?? '0'),
+            bottom3: String(form.extraSub3Bottom ?? '0'),
+          };
+        } else {
+          next[row.key] = { ...emptyRow };
+        }
+      });
+      return next;
+    });
+  }, [
+    ldpRows,
+    form.extraSub1Top,
+    form.extraSub2Top,
+    form.extraSub3Top,
+    form.extraSub1Bottom,
+    form.extraSub2Bottom,
+    form.extraSub3Bottom,
+  ]);
 
   useEffect(() => {
     const releaseQtySum = articleRows.reduce(
@@ -133,6 +196,17 @@ export default function ShipmentEditView() {
     const updatedRows = [...articleRows];
     updatedRows[index] = { ...updatedRows[index], [field]: value };
     setArticleRows(updatedRows);
+  };
+
+  const handleSubTotalChange = (rowKey, field) => (event) => {
+    const value = event.target.value;
+    setSubTotalsByLdp((prev) => ({
+      ...prev,
+      [rowKey]: {
+        ...(prev[rowKey] || {}),
+        [field]: value,
+      },
+    }));
   };
 
   // API Integration
@@ -269,9 +343,11 @@ export default function ShipmentEditView() {
           extraSub3Bottom: data.subTotalA3 || 0,
         }));
 
-        const mappedRows = siblingRows.map((item) => ({
-          pono: item.poNo,
-          customerName: item.customerName,
+        const sourceDetails = data.details ?? siblingRows[0]?.details ?? [];
+
+        const mappedRows = (sourceDetails.length ? sourceDetails : siblingRows).map((item, idx) => ({
+          pono: item.pono || item.poNo || data.poNo || '',
+          customerName: item.customerName || data.customerName || '',
           styleNo: item.styles,
           size: item.sizeRange || item.size, // 'size' in payload is sizeRange
           quantity: item.poqty, // Total PO Qty
@@ -283,6 +359,7 @@ export default function ShipmentEditView() {
           deliveryTypeName: item.deliveryTypeName,
           ldpInvoiceNo: item.ldpInvoiceNo,
           itemDescriptionShippingInvoice: item.itemDescription,
+          itemDescriptionInvoice: item.itemDescriptionInvoice || item.itemDescription,
           // Other fields
           poid: item.poid,
           customerID: item.customerID,
@@ -316,9 +393,125 @@ export default function ShipmentEditView() {
     setForm((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
-  const handleSave = () => {
-    // TODO: integrate UPDATE API for shipment release
-    // console.log('Save Shipment Edit', { id, form });
+  const handleSave = async () => {
+    setLoading(true);
+    setError('');
+
+    const primarySubTotalKey = ldpRows[0]?.key;
+    const primarySubTotals = subTotalsByLdp[primarySubTotalKey] || {
+      top1: '',
+      top2: '',
+      top3: '',
+      bottom1: '0',
+      bottom2: '0',
+      bottom3: '0',
+    };
+
+    const payload = {
+      creationDate: new Date().toISOString(),
+      invoiceNo: form.invoice,
+      vendorInvoiceNo: form.vendorInvoiceNo,
+      invoiceDate: form.date ? `${form.date}T00:00:00.000Z` : new Date().toISOString(),
+      invoiceValue: Number(form.invoiceValue) || 0,
+      terms: form.terms,
+      itemDescription: articleRows[0]?.itemDescriptionShippingInvoice || '',
+      mode: form.mode,
+      carrierName: form.carrierName,
+      voyageFlight: form.voyageFlight,
+      billNo: form.blAwbNo,
+      shipmentDate: form.shipmentDate ? `${form.shipmentDate}T00:00:00.000Z` : new Date().toISOString(),
+      containerNo: form.containerNo,
+      remarks: form.remarks,
+      isActive: true,
+      currency: form.currency,
+      userID: 0,
+      exchangeRate: Number(form.exchangeRate) || 0,
+      exporterInvoiceNo: form.exporterInvoiceNo || '',
+      exporterInvoiceDate: form.exporterInvoiceDate ? `${form.exporterInvoiceDate}T00:00:00.000Z` : new Date().toISOString(),
+      countryOfOrigin: form.country,
+      destination: form.destination,
+      portOfLoading: form.portOfLoading,
+      portOfDischarge: form.portOfDischarge,
+      shippedExchangeRate: Number(form.shippedExchangeRate) || 0,
+      bankID: Number(form.bank) || 0,
+      discount: Number(form.discount) || 0,
+      heading1: '',
+      heading2: '',
+      heading3: '',
+      heading1Value: Number(form.heading1Value) || 0,
+      heading2Value: Number(form.heading2Value) || 0,
+      heading3Value: Number(form.heading3Value) || 0,
+      amsicNo: form.icNo,
+      etdExpectedDate: form.expectedEtd ? `${form.expectedEtd}T00:00:00.000Z` : '',
+      etdActualDate: form.actualEtd ? `${form.actualEtd}T00:00:00.000Z` : '',
+      etaExpectedDate: form.expectedEta ? `${form.expectedEta}T00:00:00.000Z` : '',
+      etaActualDate: form.actualEta ? `${form.actualEta}T00:00:00.000Z` : '',
+      entryFiledDate: form.entryFiledDate ? `${form.entryFiledDate}T00:00:00.000Z` : '',
+      goodsClearedDate: form.goodsClearedDate ? `${form.goodsClearedDate}T00:00:00.000Z` : '',
+      docstoBrokerDate: form.docsToBrokerDate ? `${form.docsToBrokerDate}T00:00:00.000Z` : '',
+      docstoBankDate: form.docsToBankDate ? `${form.docsToBankDate}T00:00:00.000Z` : '',
+      goodsDeliveredDate: form.goodsDeliveredDate ? `${form.goodsDeliveredDate}T00:00:00.000Z` : '',
+      updateSheetremarks: form.updateSheetRemarks,
+      shipmentStatus: true,
+      revisedETA: form.revisedEtw ? `${form.revisedEtw}T00:00:00.000Z` : new Date().toISOString(),
+      etwDate: form.actualEtw ? `${form.actualEtw}T00:00:00.000Z` : '',
+      reverseETWDate: form.revisedEtw ? `${form.revisedEtw}T00:00:00.000Z` : '',
+      revisedETD: form.revisedEtd ? `${form.revisedEtd}T00:00:00.000Z` : '',
+      vpoActualDate: form.vpoActualDate ? `${form.vpoActualDate}T00:00:00.000Z` : '',
+      containerReleaseDate: form.containerReleaseDate ? `${form.containerReleaseDate}T00:00:00.000Z` : '',
+      containerDeliveryDateASTWH: form.containerDeliveryDate ? `${form.containerDeliveryDate}T00:00:00.000Z` : '',
+      wareHouseName: form.warehouseName,
+      truckerName: form.truckerName,
+      actualETW: form.actualEtw ? `${form.actualEtw}T00:00:00.000Z` : '',
+      discountValue: Number(form.discount) || 0,
+      totalValueWD: Number(form.totalValueWD) || 0,
+      discountTitle: form.extraField5,
+      styles: articleRows.map((row) => row.styleNo).join(', '),
+      cargoConsigneeName: form.consigneeName,
+      cargoConsigneeAddress1: form.addressLine,
+      cargoConsigneeCity: form.city,
+      cargoConsigneeCountry: form.country,
+      subTotalH1: primarySubTotals.top1 || '',
+      subTotalH2: primarySubTotals.top2 || '',
+      subTotalH3: primarySubTotals.top3 || '',
+      subTotalA1: Number(primarySubTotals.bottom1) || 0,
+      subTotalA2: Number(primarySubTotals.bottom2) || 0,
+      subTotalA3: Number(primarySubTotals.bottom3) || 0,
+      cargoDetailID: selectedArticle?.cargoDetailID || 0,
+      details: articleRows.map((row) => ({
+        poid: row.poid || 0,
+        quantity: Number(row.remainQTY ?? row.releaseQty) || 0,
+        styles: row.styleNo,
+        cartons: Number(row.cartons) || 0,
+        customerID: row.customerID || 0,
+        supplierID: row.supplierID || 0,
+        popoid: row.popoid || 0,
+        shippedRate: Number(row.rate) || 0,
+        cartonNo: row.cartonNo || '',
+        ldpInvoiceNo: row.ldpInvoiceNo || '',
+        itemDescriptionInvoice: row.itemDescriptionShippingInvoice || '',
+        colorway: row.colorway || '',
+        sizeRange: row.size || row.sizeRange || '',
+      })),
+    };
+
+    try {
+      const response = await fetch(`${SHIPMENT_UPDATE_API}/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to update shipment');
+      }
+      setSuccessMessage('Shipment updated successfully.');
+      setError('');
+    } catch (err) {
+      setSuccessMessage('');
+      setError(err.message || 'Unable to update shipment');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCancel = () => {
@@ -377,6 +570,11 @@ export default function ShipmentEditView() {
             {error && (
               <Typography variant="body2" color="error" sx={{ mb: 2 }}>
                 {error}
+              </Typography>
+            )}
+            {!error && successMessage && (
+              <Typography variant="body2" color="success.main" sx={{ mb: 2 }}>
+                {successMessage}
               </Typography>
             )}
 
@@ -947,8 +1145,17 @@ export default function ShipmentEditView() {
                 </Grid>
               </Grid>
 
-              {/* Main Article Grid */}
               <Grid item xs={12} sx={{ mt: 3 }}>
+                {uniqueLdpInvoiceNumbers.length > 0 && (
+                  <Grid container sx={{ mb: 1 }}>
+                    <Grid item xs={12}>
+                      <Typography variant="body2">
+                        LDP Invoice Nos: {uniqueLdpInvoiceNumbers.join(', ')}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                )}
+                {/* Main Article Grid */}
                 <TableContainer sx={{ border: '1px solid #eee' }}>
                   <Table size="small">
                     <TableHead>
@@ -1006,9 +1213,9 @@ export default function ShipmentEditView() {
                               size="small"
                               fullWidth
                               multiline
-                              value={row.itemDescriptionShippingInvoice || ''}
+                              value={row.itemDescriptionInvoice || row.itemDescriptionShippingInvoice || ''}
                               onChange={(e) =>
-                                handleGridChange(index, 'itemDescriptionShippingInvoice', e.target.value)
+                                handleGridChange(index, 'itemDescriptionInvoice', e.target.value)
                               }
                             />
                           </TableCell>
@@ -1159,63 +1366,73 @@ export default function ShipmentEditView() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {/* Top row: 3 empty-but-editable fields */}
-                        <TableRow>
-                          <TableCell rowSpan={2}>
-                            {articleRows[0]?.ldpInvoiceNo || ''}
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              value={form.extraSub1Top}
-                              onChange={handleChange('extraSub1Top')}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              value={form.extraSub2Top}
-                              onChange={handleChange('extraSub2Top')}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              value={form.extraSub3Top}
-                              onChange={handleChange('extraSub3Top')}
-                            />
-                          </TableCell>
-                        </TableRow>
-                        {/* Bottom row */}
-                        <TableRow>
-                          <TableCell>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              value={form.extraSub1Bottom}
-                              onChange={handleChange('extraSub1Bottom')}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              value={form.extraSub2Bottom}
-                              onChange={handleChange('extraSub2Bottom')}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              value={form.extraSub3Bottom}
-                              onChange={handleChange('extraSub3Bottom')}
-                            />
-                          </TableCell>
-                        </TableRow>
+                        {ldpRows.flatMap((rowInfo) => {
+                          const rowKey = rowInfo.key;
+                          const subtotal = subTotalsByLdp[rowKey] || {
+                            top1: '',
+                            top2: '',
+                            top3: '',
+                            bottom1: '0',
+                            bottom2: '0',
+                            bottom3: '0',
+                          };
+                          const label = rowInfo.label || '-';
+                          return [
+                            <TableRow key={`${rowKey}-top`}>
+                              <TableCell rowSpan={2}>{label}</TableCell>
+                              <TableCell>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  value={subtotal.top1}
+                                  onChange={handleSubTotalChange(rowKey, 'top1')}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  value={subtotal.top2}
+                                  onChange={handleSubTotalChange(rowKey, 'top2')}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  value={subtotal.top3}
+                                  onChange={handleSubTotalChange(rowKey, 'top3')}
+                                />
+                              </TableCell>
+                            </TableRow>,
+                            <TableRow key={`${rowKey}-bottom`}>
+                              <TableCell>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  value={subtotal.bottom1}
+                                  onChange={handleSubTotalChange(rowKey, 'bottom1')}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  value={subtotal.bottom2}
+                                  onChange={handleSubTotalChange(rowKey, 'bottom2')}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  value={subtotal.bottom3}
+                                  onChange={handleSubTotalChange(rowKey, 'bottom3')}
+                                />
+                              </TableCell>
+                            </TableRow>,
+                          ];
+                        })}
                       </TableBody>
                     </Table>
                   </TableContainer>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Container from '@mui/material/Container';
 import Card from '@mui/material/Card';
 import Box from '@mui/material/Box';
@@ -103,9 +103,12 @@ export default function ShipmentReleaseAddPage() {
   const [saveLoading, setSaveLoading] = useState(false);
   const [articleError, setArticleError] = useState('');
   const [selectedArticle, setSelectedArticle] = useState(null);
+  const [dialogRows, setDialogRows] = useState([]);
+  const [dialogSelectedRow, setDialogSelectedRow] = useState(null);
   const [ldpInvoice, setLdpInvoice] = useState('');
   const [showMainGrid, setShowMainGrid] = useState(false);
   const [gridSearch, setGridSearch] = useState('');
+  const [subTotalsByLdp, setSubTotalsByLdp] = useState({});
 
   useEffect(() => {
     let isMounted = true;
@@ -134,10 +137,11 @@ export default function ShipmentReleaseAddPage() {
     setForm((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
+  const getRowKey = (row) => `${row?.poid ?? ''}-${row?.styleNo ?? ''}-${row?.pono ?? ''}`;
+
   const fetchArticleRows = async () => {
     if (!poSearch.trim()) {
       setArticleError('Please enter a PO number.');
-      setArticleRows([]);
       return;
     }
 
@@ -150,35 +154,45 @@ export default function ShipmentReleaseAddPage() {
       }
       const data = await response.json();
       const rows = Array.isArray(data) ? data : data ? [data] : [];
-      setArticleRows((prev) => {
-        const merged = [...prev];
-        rows.forEach((row) => {
-          const isDuplicate = merged.some(
-            (existing) => existing.poid === row.poid && existing.styleNo === row.styleNo
-          );
-          if (!isDuplicate) {
-            merged.push(row);
-          }
-        });
-        return merged;
-      });
-      setSelectedArticle((prev) => prev ?? rows[0] ?? null);
+      setDialogRows(rows);
+      setDialogSelectedRow(rows[0] ?? null);
     } catch (error) {
       setArticleError(error.message || 'Failed to fetch articles');
-      setArticleRows([]);
+      setDialogRows([]);
+      setDialogSelectedRow(null);
     } finally {
       setArticleLoading(false);
     }
   };
 
   const handleSelectClose = () => {
-    if (ldpInvoice.trim() && articleRows.length > 0) {
-      setArticleRows((prev) =>
-        prev.map((row) => ({
-          ...row,
-          ldpInvoiceNo: ldpInvoice.trim(),
-        }))
-      );
+    const trimmedInvoice = ldpInvoice.trim();
+    if (dialogRows.length > 0) {
+      const dialogKeys = new Set(dialogRows.map((row) => getRowKey(row)));
+      setArticleRows((prev) => {
+        const merged = [...prev];
+        const existingKeys = new Set(prev.map((item) => getRowKey(item)));
+        const addedKeys = [];
+        dialogRows.forEach((row) => {
+          const rowKey = getRowKey(row);
+          if (!existingKeys.has(rowKey)) {
+            merged.push(row);
+            addedKeys.push(rowKey);
+          }
+        });
+        if (trimmedInvoice && addedKeys.length > 0) {
+          const keysToUpdate = new Set(addedKeys);
+          return merged.map((row) =>
+            keysToUpdate.has(getRowKey(row)) ? { ...row, ldpInvoiceNo: trimmedInvoice } : row
+          );
+        }
+        if (trimmedInvoice && dialogKeys.size > 0 && addedKeys.length === 0) {
+          return merged.map((row) =>
+            dialogKeys.has(getRowKey(row)) ? { ...row, ldpInvoiceNo: trimmedInvoice } : row
+          );
+        }
+        return merged;
+      });
     }
     setPoDialogOpen(false);
   };
@@ -197,6 +211,41 @@ export default function ShipmentReleaseAddPage() {
     0
   );
 
+  const ldpRows = useMemo(() => {
+    const seen = new Set();
+    const rows = [];
+    articleRows.forEach((row) => {
+      const value = row?.ldpInvoiceNo ? String(row.ldpInvoiceNo).trim() : '';
+      if (!value || seen.has(value)) {
+        return;
+      }
+      seen.add(value);
+      rows.push({ key: value, label: value });
+    });
+    if (rows.length === 0) {
+      rows.push({ key: '__EMPTY__', label: '' });
+    }
+    return rows;
+  }, [articleRows]);
+
+  useEffect(() => {
+    const emptyRow = {
+      top1: '',
+      top2: '',
+      top3: '',
+      bottom1: '0',
+      bottom2: '0',
+      bottom3: '0',
+    };
+    setSubTotalsByLdp((prev) => {
+      const next = {};
+      ldpRows.forEach(({ key }) => {
+        next[key] = prev[key] || { ...emptyRow };
+      });
+      return next;
+    });
+  }, [ldpRows]);
+
   // Extra amount (2nd field). If user leaves it empty, treat as "no extra" (null).
   const rawExtraCharge = form.extraField5;
   const extraChargeAmount =
@@ -212,6 +261,36 @@ export default function ShipmentReleaseAddPage() {
     const updatedRows = [...articleRows];
     updatedRows[index] = { ...updatedRows[index], [field]: value };
     setArticleRows(updatedRows);
+  };
+
+  const handleDialogGridChange = (index, field, value) => {
+    setDialogRows((prev) => {
+      const updatedRows = [...prev];
+      updatedRows[index] = { ...updatedRows[index], [field]: value };
+      return updatedRows;
+    });
+  };
+
+  const handleSubTotalChange = (rowKey, field) => (event) => {
+    const value = event.target.value;
+    setSubTotalsByLdp((prev) => ({
+      ...prev,
+      [rowKey]: {
+        ...(prev[rowKey] || {}),
+        [field]: value,
+      },
+    }));
+  };
+
+  const updateDialogSelectedField = (field, value) => {
+    if (!dialogSelectedRow) {
+      return;
+    }
+    const selectedKey = getRowKey(dialogSelectedRow);
+    setDialogRows((prev) =>
+      prev.map((row) => (getRowKey(row) === selectedKey ? { ...row, [field]: value } : row))
+    );
+    setDialogSelectedRow((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
   const filteredRows = articleRows.filter((row) =>
@@ -251,6 +330,16 @@ export default function ShipmentReleaseAddPage() {
         colorway: row.colorway || '',
         sizeRange: row.size || '',
       }));
+
+      const primarySubTotalKey = ldpRows[0]?.key;
+      const primarySubTotals = subTotalsByLdp[primarySubTotalKey] || {
+        top1: '',
+        top2: '',
+        top3: '',
+        bottom1: '0',
+        bottom2: '0',
+        bottom3: '0',
+      };
 
       const payload = {
         creationDate: new Date().toISOString(),
@@ -321,13 +410,13 @@ export default function ShipmentReleaseAddPage() {
         discountTitle: form.extraField5 || '',
         styles: articleRows[0]?.styleNo || '',
         // Sub total labels from second summary grid (top row)
-        subTotalH1: form.extraSub1Top || '',
-        subTotalH2: form.extraSub2Top || '',
-        subTotalH3: form.extraSub3Top || '',
+        subTotalH1: primarySubTotals.top1 || '',
+        subTotalH2: primarySubTotals.top2 || '',
+        subTotalH3: primarySubTotals.top3 || '',
         // Sub total numeric values from second summary grid (bottom row)
-        subTotalA1: Number(form.extraSub1Bottom) || 0,
-        subTotalA2: Number(form.extraSub2Bottom) || 0,
-        subTotalA3: Number(form.extraSub3Bottom) || 0,
+        subTotalA1: Number(primarySubTotals.bottom1) || 0,
+        subTotalA2: Number(primarySubTotals.bottom2) || 0,
+        subTotalA3: Number(primarySubTotals.bottom3) || 0,
         details,
       };
 
@@ -874,7 +963,14 @@ export default function ShipmentReleaseAddPage() {
                 <Typography
                   variant="body2"
                   sx={{ color: 'primary.main', cursor: 'pointer' }}
-                  onClick={() => setPoDialogOpen(true)}
+                  onClick={() => {
+                    setPoDialogOpen(true);
+                    setPoSearch('');
+                    setArticleError('');
+                    setDialogRows([]);
+                    setDialogSelectedRow(null);
+                    setLdpInvoice('');
+                  }}
                 >
                   Select POs
                 </Typography>
@@ -1143,61 +1239,73 @@ export default function ShipmentReleaseAddPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {/* Top row: 3 empty-but-editable fields */}
-                    <TableRow>
-                      <TableCell rowSpan={2}>{articleRows[0]?.ldpInvoiceNo || ''}</TableCell>
-                      <TableCell>
-                        <TextField
-                          fullWidth
-                          size="small"
-                          value={form.extraSub1Top || ''}
-                          onChange={handleChange('extraSub1Top')}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          fullWidth
-                          size="small"
-                          value={form.extraSub2Top || ''}
-                          onChange={handleChange('extraSub2Top')}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          fullWidth
-                          size="small"
-                          value={form.extraSub3Top || ''}
-                          onChange={handleChange('extraSub3Top')}
-                        />
-                      </TableCell>
-                    </TableRow>
-                    {/* Bottom row: defaults 0 but editable */}
-                    <TableRow>
-                      <TableCell>
-                        <TextField
-                          fullWidth
-                          size="small"
-                          value={form.extraSub1Bottom}
-                          onChange={handleChange('extraSub1Bottom')}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          fullWidth
-                          size="small"
-                          value={form.extraSub2Bottom}
-                          onChange={handleChange('extraSub2Bottom')}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          fullWidth
-                          size="small"
-                          value={form.extraSub3Bottom}
-                          onChange={handleChange('extraSub3Bottom')}
-                        />
-                      </TableCell>
-                    </TableRow>
+                    {ldpRows.flatMap((rowInfo) => {
+                      const rowKey = rowInfo.key;
+                      const subtotal = subTotalsByLdp[rowKey] || {
+                        top1: '',
+                        top2: '',
+                        top3: '',
+                        bottom1: '0',
+                        bottom2: '0',
+                        bottom3: '0',
+                      };
+                      const label = rowInfo.label || '-';
+                      return [
+                        <TableRow key={`${rowKey}-top`}>
+                          <TableCell rowSpan={2}>{label}</TableCell>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={subtotal.top1}
+                              onChange={handleSubTotalChange(rowKey, 'top1')}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={subtotal.top2}
+                              onChange={handleSubTotalChange(rowKey, 'top2')}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={subtotal.top3}
+                              onChange={handleSubTotalChange(rowKey, 'top3')}
+                            />
+                          </TableCell>
+                        </TableRow>,
+                        <TableRow key={`${rowKey}-bottom`}>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={subtotal.bottom1}
+                              onChange={handleSubTotalChange(rowKey, 'bottom1')}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={subtotal.bottom2}
+                              onChange={handleSubTotalChange(rowKey, 'bottom2')}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={subtotal.bottom3}
+                              onChange={handleSubTotalChange(rowKey, 'bottom3')}
+                            />
+                          </TableCell>
+                        </TableRow>,
+                      ];
+                    })}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -1288,17 +1396,19 @@ export default function ShipmentReleaseAddPage() {
               </Typography>
             </Box>
           )}
-          {articleRows.length > 0 && (
+          {dialogRows.length > 0 && (
             <>
               <Grid container spacing={2} sx={{ mt: 2 }}>
                 <Grid item xs={12} md={8}>
                   <TextField
                     fullWidth
                     label="Item Description"
-                    value={articleRows[0]?.itemDescriptionShippingInvoice || ''}
+                    value={dialogSelectedRow?.itemDescriptionShippingInvoice || ''}
                     multiline
                     minRows={2}
-                    InputProps={{ readOnly: true }}
+                    onChange={(event) =>
+                      updateDialogSelectedField('itemDescriptionShippingInvoice', event.target.value)
+                    }
                   />
                 </Grid>
                 <Grid item xs={12} md={4}>
@@ -1347,12 +1457,15 @@ export default function ShipmentReleaseAddPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {articleRows.map((row, index) => (
+                    {dialogRows.map((row, index) => (
                       <TableRow
                         key={`${row.pono}-${row.styleNo}`}
                         hover
-                        onClick={() => setSelectedArticle(row)}
-                        selected={selectedArticle?.pono === row.pono && selectedArticle?.styleNo === row.styleNo}
+                        onClick={() => setDialogSelectedRow(row)}
+                        selected={
+                          dialogSelectedRow?.pono === row.pono &&
+                          dialogSelectedRow?.styleNo === row.styleNo
+                        }
                       >
                         <TableCell>{row.pono}</TableCell>
                         <TableCell>{row.customerName}</TableCell>
@@ -1366,7 +1479,7 @@ export default function ShipmentReleaseAddPage() {
                             fullWidth
                             type="number"
                             value={row.remainQTY ?? ''}
-                            onChange={(e) => handleGridChange(index, 'remainQTY', e.target.value)}
+                            onChange={(e) => handleDialogGridChange(index, 'remainQTY', e.target.value)}
                           />
                         </TableCell>
                         <TableCell sx={{ p: 0.5 }}>
@@ -1375,7 +1488,7 @@ export default function ShipmentReleaseAddPage() {
                             fullWidth
                             type="number"
                             value={row.cartons ?? ''}
-                            onChange={(e) => handleGridChange(index, 'cartons', e.target.value)}
+                            onChange={(e) => handleDialogGridChange(index, 'cartons', e.target.value)}
                           />
                         </TableCell>
                         <TableCell sx={{ p: 0.5 }}>
@@ -1383,7 +1496,7 @@ export default function ShipmentReleaseAddPage() {
                             size="small"
                             fullWidth
                             value={row.cartonNo || ''}
-                            onChange={(e) => handleGridChange(index, 'cartonNo', e.target.value)}
+                            onChange={(e) => handleDialogGridChange(index, 'cartonNo', e.target.value)}
                           />
                         </TableCell>
                         <TableCell>{row.qtYwithTolerance ?? '-'}</TableCell>
@@ -1394,7 +1507,7 @@ export default function ShipmentReleaseAddPage() {
                             fullWidth
                             type="number"
                             value={row.rate ?? ''}
-                            onChange={(e) => handleGridChange(index, 'rate', e.target.value)}
+                            onChange={(e) => handleDialogGridChange(index, 'rate', e.target.value)}
                           />
                         </TableCell>
                         <TableCell>{index + 1}</TableCell>

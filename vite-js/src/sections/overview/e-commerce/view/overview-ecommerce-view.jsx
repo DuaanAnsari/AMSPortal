@@ -328,8 +328,11 @@ function applyFilter({ inputData, comparator, filters }) {
   inputData = stabilizedThis.map((el) => el[0]);
 
   if (name) {
-    inputData = inputData.filter(
-      (user) => user.name.toLowerCase().indexOf(name.toLowerCase()) !== -1
+    const searchTerm = name.toLowerCase();
+    inputData = inputData.filter((user) =>
+      String(user.name ?? '')
+        .toLowerCase()
+        .includes(searchTerm)
     );
   }
 
