@@ -29,19 +29,29 @@ export default function InspectionCertificatePage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [supplierMap, setSupplierMap] = useState({});
+
+  const normalizeSupplierId = (value) => {
+    if (value === null || value === undefined || value === '') return '';
+    const num = Number(value);
+    return Number.isNaN(num) ? String(value).trim() : String(num);
+  };
 
   useEffect(() => {
     let isMounted = true;
     const fetchShipment = async () => {
-      if (state?.shipment || !id) return;
+      if (!id) return;
       setLoading(true);
       setError('');
       try {
-        const res = await fetch(`${SHIPMENT_DETAIL_API}/${id}`);
+        const token = localStorage.getItem('accessToken');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch(`${SHIPMENT_DETAIL_API}/${id}`, { headers });
         if (!res.ok) {
           throw new Error('Failed to fetch inspection data');
         }
         const responseData = await res.json();
+        // console.log('GetShipment response', responseData);
         const primaryData = Array.isArray(responseData) ? responseData[0] : responseData;
         if (!isMounted) return;
         setShipment(primaryData || {});
@@ -59,9 +69,9 @@ export default function InspectionCertificatePage() {
             qtyPcs: row.quantity ?? '',
             qtyCtns: row.cartons ?? '',
           }));
-          setItems(mappedItems);
+          setItems(aggregateItemsByPo(mappedItems));
         } else if (Array.isArray(primaryData?.items)) {
-          setItems(primaryData.items);
+          setItems(aggregateItemsByPo(primaryData.items));
         }
       } catch (err) {
         if (isMounted) {
@@ -78,6 +88,52 @@ export default function InspectionCertificatePage() {
     };
   }, [SHIPMENT_DETAIL_API, id, state?.shipment]);
 
+  useEffect(() => {
+    let isMounted = true;
+    const fetchSuppliers = async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch(`${API_BASE_URL}/api/MyOrders/GetSupplier`, { headers });
+        if (!res.ok) {
+          throw new Error('Failed to fetch suppliers');
+        }
+        const data = await res.json();
+        // console.log('GetSupplier response', data);
+        const rowsRaw = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.data)
+            ? data.data
+            : Array.isArray(data?.result)
+              ? data.result
+              : Array.isArray(data?.items)
+                ? data.items
+                : data
+                  ? [data]
+                  : [];
+        const rows = Array.isArray(rowsRaw) ? rowsRaw : [];
+        const nextMap = rows.reduce((acc, row) => {
+          const key = row?.venderLibraryID ?? row?.supplierID ?? row?.id;
+          const normalizedKey = normalizeSupplierId(key);
+          if (normalizedKey) {
+            acc[normalizedKey] = row?.venderName || '';
+          }
+          return acc;
+        }, {});
+        if (isMounted) {
+          setSupplierMap(nextMap);
+        }
+      } catch (err) {
+        console.warn('Supplier fetch failed', err);
+      }
+    };
+
+    fetchSuppliers();
+    return () => {
+      isMounted = false;
+    };
+  }, [API_BASE_URL]);
+
   const safeDate = (val) => {
     if (!val) return '-';
     if (typeof val === 'string' && val.includes('T')) {
@@ -87,6 +143,44 @@ export default function InspectionCertificatePage() {
   };
 
   const displayShipment = shipment || {};
+
+  const resolveSupplierId = (data) => {
+    const directId =
+      data?.vendorID ??
+      data?.vendorId ??
+      data?.supplierID ??
+      data?.supplierId;
+    if (directId !== undefined && directId !== null && directId !== '') {
+      return directId;
+    }
+    const details = Array.isArray(data?.details) ? data.details : [];
+    const detailRow = details.find(
+      (row) => row?.supplierID !== undefined && row?.supplierID !== null && row?.supplierID !== ''
+    );
+    if (detailRow) return detailRow.supplierID;
+    const detailRowAlt = details.find(
+      (row) => row?.supplierId !== undefined && row?.supplierId !== null && row?.supplierId !== ''
+    );
+    return detailRowAlt?.supplierId ?? '';
+  };
+
+  const aggregateItemsByPo = (rows = []) => {
+    const map = new Map();
+    rows.forEach((row) => {
+      const key = (row.poNo ?? '').toString().trim();
+      if (!key) return;
+      const existing = map.get(key);
+      const qtyPcs = Number(row.qtyPcs) || 0;
+      const qtyCtns = Number(row.qtyCtns) || 0;
+      if (existing) {
+        existing.qtyPcs = (Number(existing.qtyPcs) || 0) + qtyPcs;
+        existing.qtyCtns = (Number(existing.qtyCtns) || 0) + qtyCtns;
+      } else {
+        map.set(key, { ...row, qtyPcs, qtyCtns });
+      }
+    });
+    return Array.from(map.values());
+  };
 
   useEffect(() => {
     if (!state?.shipment) return;
@@ -104,15 +198,20 @@ export default function InspectionCertificatePage() {
         qtyPcs: row.quantity ?? '',
         qtyCtns: row.cartons ?? '',
       }));
-      setItems(mappedItems);
+      setItems(aggregateItemsByPo(mappedItems));
     } else if (Array.isArray(state.shipment?.items)) {
-      setItems(state.shipment.items);
+      setItems(aggregateItemsByPo(state.shipment.items));
     }
   }, [state?.shipment]);
 
   // Calculate totals
   const totalPcs = items.reduce((sum, item) => sum + (Number(item.qtyPcs) || 0), 0);
   const totalCtns = items.reduce((sum, item) => sum + (Number(item.qtyCtns) || 0), 0);
+  const formatQty = (value) => {
+    const num = Number(value);
+    if (Number.isNaN(num)) return value ?? '';
+    return num.toLocaleString();
+  };
 
   const contentRef = useRef(null);
   const [zoomLevel, setZoomLevel] = useState(1.2);
@@ -292,7 +391,7 @@ export default function InspectionCertificatePage() {
               <Box>
                 <MetaRow
                   label="I.C Issue Date"
-                  value={safeDate(displayShipment.icIssueDate)}
+                  value={safeDate(displayShipment.creationDate || displayShipment.icIssueDate)}
                   labelStyle={labelStyle}
                   valueStyle={valueStyle}
                 />
@@ -300,6 +399,8 @@ export default function InspectionCertificatePage() {
                   label="Buyer"
                   value={
                     displayShipment.cargoConsigneeName ||
+                    displayShipment.cargoConsigneeNAME ||
+                    displayShipment.cargoConsignee ||
                     displayShipment.customer ||
                     displayShipment.customerName ||
                     '-'
@@ -309,7 +410,9 @@ export default function InspectionCertificatePage() {
                 />
                 <MetaRow
                   label="Vendor"
-                  value={displayShipment.supplier || displayShipment.supplierName || '-'}
+                  value={
+                    supplierMap[normalizeSupplierId(resolveSupplierId(displayShipment))] || '-'
+                  }
                   labelStyle={labelStyle}
                   valueStyle={valueStyle}
                 />
@@ -421,40 +524,23 @@ export default function InspectionCertificatePage() {
                     <TableCell>{item.poNo}</TableCell>
                     <TableCell>{item.styleNo}</TableCell>
                     <TableCell sx={{ color: '#000' }}>{item.itemDescription}</TableCell>
-                    <TableCell align="right">{item.qtyPcs}</TableCell>
-                    <TableCell align="right">{item.qtyCtns}</TableCell>
+                    <TableCell align="right">{formatQty(item.qtyPcs)}</TableCell>
+                    <TableCell align="right">{formatQty(item.qtyCtns)}</TableCell>
                   </TableRow>
                 ))}
+                <TableRow>
+                  <TableCell />
+                  <TableCell />
+                  <TableCell sx={{ fontWeight: 700 }}>Total</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>
+                    {formatQty(totalPcs)}
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>
+                    {formatQty(totalCtns)}
+                  </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
-
-            {/* Totals row */}
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'flex-end',
-                mb: 4,
-              }}
-            >
-              <Box
-                sx={{
-                  border: '1px solid #ccc',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  px: 2,
-                  py: 0.75,
-                }}
-              >
-                <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#000' }}>Total :</Typography>
-                <Typography sx={{ fontSize: 12, fontWeight: 600, minWidth: 60, textAlign: 'right' }}>
-                  {totalPcs.toLocaleString()}
-                </Typography>
-                <Typography sx={{ fontSize: 12, fontWeight: 600, minWidth: 60, textAlign: 'right' }}>
-                  {totalCtns.toLocaleString()}
-                </Typography>
-              </Box>
-            </Box>
 
             {/* Horizontal line before footer */}
             <Box sx={{ borderTop: '1px solid #000', mb: 2, mt: 4 }} />

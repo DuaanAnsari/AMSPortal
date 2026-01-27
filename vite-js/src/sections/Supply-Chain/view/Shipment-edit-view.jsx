@@ -115,6 +115,7 @@ export default function ShipmentEditView() {
   const [articleRows, setArticleRows] = useState([]);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [subTotalsByLdp, setSubTotalsByLdp] = useState({});
+  const [subTotalSeed, setSubTotalSeed] = useState({});
   const ldpInvoiceNumbers = articleRows
     .map((row) => row.ldpInvoiceNo)
     .filter((value) => value && String(value).trim().length > 0);
@@ -149,9 +150,18 @@ export default function ShipmentEditView() {
     setSubTotalsByLdp((prev) => {
       const next = {};
       ldpRows.forEach((row, index) => {
+        if (!row?.key) {
+          return;
+        }
         if (prev[row.key]) {
           next[row.key] = prev[row.key];
-        } else if (index === 0) {
+          return;
+        }
+        if (subTotalSeed[row.key]) {
+          next[row.key] = subTotalSeed[row.key];
+          return;
+        }
+        if (index === 0) {
           next[row.key] = {
             top1: form.extraSub1Top || '',
             top2: form.extraSub2Top || '',
@@ -174,6 +184,7 @@ export default function ShipmentEditView() {
     form.extraSub1Bottom,
     form.extraSub2Bottom,
     form.extraSub3Bottom,
+    subTotalSeed,
   ]);
 
   useEffect(() => {
@@ -218,6 +229,7 @@ export default function ShipmentEditView() {
     const fetchDetails = async () => {
       setLoading(true);
       setError('');
+      setSubTotalSeed({});
       try {
         const res = await fetch(`${SHIPMENT_DETAIL_API}/${id}`);
         if (!res.ok) {
@@ -233,6 +245,44 @@ export default function ShipmentEditView() {
         const siblingRows = Array.isArray(responseData) ? responseData : [responseData];
 
         const data = primaryData;
+        const rawSubTotals = Array.isArray(data.subTotalDetails)
+          ? data.subTotalDetails
+          : data.subTotalDetails
+          ? [data.subTotalDetails]
+          : [];
+        const seed = {};
+        rawSubTotals.forEach((detail) => {
+          const key = (
+            detail?.invoiceno ||
+            detail?.invoiceNo ||
+            detail?.ldpInvoiceNo ||
+            ''
+          )
+            .toString()
+            .trim();
+          if (!key) {
+            return;
+          }
+          seed[key] = {
+            top1: detail?.subTotalH1 || '',
+            top2: detail?.subTotalH2 || '',
+            top3: detail?.subTotalH3 || '',
+            bottom1:
+              detail?.subTotalA1 !== undefined && detail?.subTotalA1 !== null
+                ? String(detail.subTotalA1)
+                : '0',
+            bottom2:
+              detail?.subTotalA2 !== undefined && detail?.subTotalA2 !== null
+                ? String(detail.subTotalA2)
+                : '0',
+            bottom3:
+              detail?.subTotalA3 !== undefined && detail?.subTotalA3 !== null
+                ? String(detail.subTotalA3)
+                : '0',
+          };
+        });
+        setSubTotalSeed(seed);
+        setSubTotalsByLdp((prev) => ({ ...prev, ...seed }));
 
         // Helper to format date for input type="date" (YYYY-MM-DD)
 
@@ -397,17 +447,35 @@ export default function ShipmentEditView() {
     const resolveDate = (value, fallback) => safeIsoDate(resolveValue(value, fallback));
     const source = originalData || {};
 
-    const subTotalDetails = Object.entries(subTotalsByLdp)
-      .filter(([key]) => key && key !== '__EMPTY__')
-      .map(([key, subtotal]) => ({
-        invoiceno: key,
-        subTotalH1: subtotal?.top1 || '',
-        subTotalH2: subtotal?.top2 || '',
-        subTotalH3: subtotal?.top3 || '',
-        subTotalA1: Number(subtotal?.bottom1) || 0,
-        subTotalA2: Number(subtotal?.bottom2) || 0,
-        subTotalA3: Number(subtotal?.bottom3) || 0,
-      }));
+    const defaultSubTotals = {
+      top1: '',
+      top2: '',
+      top3: '',
+      bottom1: '0',
+      bottom2: '0',
+      bottom3: '0',
+    };
+    const ensureSubTotals = (key) => {
+      if (!key) {
+        return defaultSubTotals;
+      }
+      return subTotalsByLdp[key] || subTotalSeed[key] || defaultSubTotals;
+    };
+    const subTotalDetails = ldpRows
+      .filter((row) => row.key && row.key !== '__EMPTY__')
+      .map((row) => {
+        const subtotal = ensureSubTotals(row.key);
+      return {
+        invoiceno: row.key,
+        LDPInvoiceNo: row.key,
+          subTotalH1: subtotal.top1 || '',
+          subTotalH2: subtotal.top2 || '',
+          subTotalH3: subtotal.top3 || '',
+          subTotalA1: Number(subtotal.bottom1) || 0,
+          subTotalA2: Number(subtotal.bottom2) || 0,
+          subTotalA3: Number(subtotal.bottom3) || 0,
+        };
+      });
     const primarySubTotal = subTotalDetails[0] || {
       subTotalH1: '',
       subTotalH2: '',
@@ -566,7 +634,7 @@ export default function ShipmentEditView() {
       <Card sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            Shipment Details {id ? `(ID: ${id})` : ''}
+            Shipment Details
           </Typography>
 
           <Button
@@ -1179,15 +1247,6 @@ export default function ShipmentEditView() {
               </Grid>
 
               <Grid item xs={12} sx={{ mt: 3 }}>
-                {uniqueLdpInvoiceNumbers.length > 0 && (
-                  <Grid container sx={{ mb: 1 }}>
-                    <Grid item xs={12}>
-                      <Typography variant="body2">
-                        LDP Invoice Nos: {uniqueLdpInvoiceNumbers.join(', ')}
-                      </Typography>
-                    </Grid>
-                  </Grid>
-                )}
                 {/* Main Article Grid */}
                 <TableContainer sx={{ border: '1px solid #eee' }}>
                   <Table size="small">

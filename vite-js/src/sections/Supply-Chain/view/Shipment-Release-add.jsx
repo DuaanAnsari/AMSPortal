@@ -334,7 +334,7 @@ export default function ShipmentReleaseAddPage() {
       const subTotalDetails = Object.entries(subTotalsByLdp)
         .filter(([key]) => key && key !== '__EMPTY__')
         .map(([key, subtotal]) => ({
-          invoiceno: key,
+          ldpInvoiceNo: key,
           subTotalH1: subtotal?.top1 || '',
           subTotalH2: subtotal?.top2 || '',
           subTotalH3: subtotal?.top3 || '',
@@ -432,6 +432,11 @@ export default function ShipmentReleaseAddPage() {
       enqueueSnackbar('Shipment saved successfully!', { variant: 'success' });
       // After successful save, clear article grid and hide master grids
       handleClearArticle();
+      setForm(defaultFormValues);
+      setPoDialogOpen(false);
+      setDialogRows([]);
+      setDialogSelectedRow(null);
+      setLdpInvoice('');
       setShowMainGrid(false);
     } catch (error) {
       console.error('Error saving shipment:', error);
@@ -550,9 +555,9 @@ export default function ShipmentReleaseAddPage() {
               size="small"
             >
               <MenuItem value="">Select</MenuItem>
-              <MenuItem value="Sea">Sea</MenuItem>
-              <MenuItem value="Air">Air</MenuItem>
-              <MenuItem value="Road">Road</MenuItem>
+              <MenuItem value="BY SEA">BY SEA</MenuItem>
+              <MenuItem value="BY AIR">BY AIR</MenuItem>
+              <MenuItem value="BY COURIER">BY COURIER</MenuItem>
             </TextField>
           </Grid>
 
