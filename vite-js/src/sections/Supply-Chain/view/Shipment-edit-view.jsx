@@ -22,6 +22,7 @@ import {
 } from '@mui/material';
 
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
+import { useSnackbar } from 'src/components/snackbar';
 
 // ----------------------------------------------------------------------
 
@@ -96,10 +97,10 @@ const defaultFormValues = {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const SHIPMENT_DETAIL_API = `${API_BASE_URL}/api/ShipmentRelease/GetShipment`;
-const SHIPMENT_RELEASE_API = `${API_BASE_URL}/api/ShipmentRelease/ShipmentRelease`;
 const SHIPMENT_UPDATE_API = `${API_BASE_URL}/api/ShipmentRelease/UpdateShipment`;
 
 export default function ShipmentEditView() {
+  const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
   const { id } = useParams();
 
@@ -107,6 +108,7 @@ export default function ShipmentEditView() {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [form, setForm] = useState(defaultFormValues);
+  const [originalData, setOriginalData] = useState(null);
   const [cargoId, setCargoId] = useState(0);
   const [poDialogOpen, setPoDialogOpen] = useState(false);
   const [poSearch, setPoSearch] = useState('');
@@ -222,34 +224,13 @@ export default function ShipmentEditView() {
           throw new Error('Failed to fetch shipment details');
         }
         const responseData = await res.json();
+        console.log('GetShipment response', responseData);
         const primaryData = Array.isArray(responseData) ? responseData[0] : responseData;
 
         if (!isMounted) return;
 
-        // Fetch sibling rows by Invoice No
-        let siblingRows = Array.isArray(responseData) ? responseData : [responseData];
-        if (primaryData.invoiceNo) {
-          try {
-            // Fetch all shipments with this Invoice No to see siblings
-            const listRes = await fetch(
-              `${SHIPMENT_RELEASE_API}?invoiceNo=${encodeURIComponent(primaryData.invoiceNo)}`
-            );
-            if (listRes.ok) {
-              const listData = await listRes.json();
-              if (Array.isArray(listData) && listData.length > 0) {
-                siblingRows = listData.filter(item =>
-                  // Only include items with same invoice and same PO
-                  // Actually, user wants different POs for same invoice?
-                  // User said "2 row ari hai po id alg hai" (2 rows coming, PO ID is different).
-                  // So we just want ALL rows for this invoice.
-                  item.invoiceNo === primaryData.invoiceNo
-                );
-              }
-            }
-          } catch (ignore) {
-            console.warn('Failed to fetch siblings', ignore);
-          }
-        }
+        // Use API response rows directly (avoid invoiceNo filter call)
+        const siblingRows = Array.isArray(responseData) ? responseData : [responseData];
 
         const data = primaryData;
 
@@ -343,6 +324,7 @@ export default function ShipmentEditView() {
           extraSub2Bottom: data.subTotalA2 || 0,
           extraSub3Bottom: data.subTotalA3 || 0,
         }));
+        setOriginalData(data);
         setCargoId(Number(data.cargoID ?? data.cargoId ?? 0) || 0);
 
         const sourceDetails = data.details ?? siblingRows[0]?.details ?? [];
@@ -400,11 +382,20 @@ export default function ShipmentEditView() {
     setError('');
 
     const safeIsoDate = (dateVal) => {
-      if (!dateVal) return '';
+      if (!dateVal) return null;
       const d = new Date(dateVal);
-      if (isNaN(d.getTime())) return '';
+      if (isNaN(d.getTime())) return null;
       return d.toISOString().split('T')[0];
     };
+    const resolveValue = (value, fallback = '') =>
+      value === '' || value === null || typeof value === 'undefined' ? fallback : value;
+    const resolveNumber = (value, fallback = 0) => {
+      const resolved = resolveValue(value, fallback);
+      const num = Number(resolved);
+      return Number.isNaN(num) ? 0 : num;
+    };
+    const resolveDate = (value, fallback) => safeIsoDate(resolveValue(value, fallback));
+    const source = originalData || {};
 
     const subTotalDetails = Object.entries(subTotalsByLdp)
       .filter(([key]) => key && key !== '__EMPTY__')
@@ -417,91 +408,118 @@ export default function ShipmentEditView() {
         subTotalA2: Number(subtotal?.bottom2) || 0,
         subTotalA3: Number(subtotal?.bottom3) || 0,
       }));
+    const primarySubTotal = subTotalDetails[0] || {
+      subTotalH1: '',
+      subTotalH2: '',
+      subTotalH3: '',
+      subTotalA1: 0,
+      subTotalA2: 0,
+      subTotalA3: 0,
+    };
 
     const payload = {
       cargoID: Number(cargoId) || 0,
       creationDate: new Date().toISOString(),
-      invoiceNo: form.invoice,
-      vendorInvoiceNo: form.vendorInvoiceNo,
-      invoiceDate: safeIsoDate(form.date),
-      invoiceValue: Number(form.invoiceValue) || 0,
-      terms: form.terms,
-      itemDescription: articleRows[0]?.itemDescriptionShippingInvoice || '',
-      mode: form.mode,
-      carrierName: form.carrierName,
-      voyageFlight: form.voyageFlight,
-      billNo: form.blAwbNo,
-      shipmentDate: safeIsoDate(form.shipmentDate),
-      containerNo: form.containerNo,
-      remarks: form.remarks,
+      invoiceNo: resolveValue(form.invoice, source.invoiceNo || ''),
+      vendorInvoiceNo: resolveValue(form.vendorInvoiceNo, source.vendorInvoiceNo || ''),
+      invoiceDate: resolveDate(form.date, source.invoiceDate),
+      invoiceValue: resolveNumber(form.invoiceValue, source.invoiceValue || 0),
+      terms: resolveValue(form.terms, source.terms || ''),
+      itemDescription: resolveValue(
+        articleRows[0]?.itemDescriptionShippingInvoice,
+        source.itemDescription || ''
+      ),
+      mode: resolveValue(form.mode, source.mode || ''),
+      carrierName: resolveValue(form.carrierName, source.carrierName || ''),
+      voyageFlight: resolveValue(form.voyageFlight, source.voyageFlight || ''),
+      billNo: resolveValue(form.blAwbNo, source.billNo || ''),
+      shipmentDate: resolveDate(form.shipmentDate, source.shipmentDate),
+      containerNo: resolveValue(form.containerNo, source.containerNo || ''),
+      remarks: resolveValue(form.remarks, source.remarks || ''),
       isActive: true,
-      currency: form.currency,
+      glEnterd: resolveValue(source.glEnterd, ''),
+      currency: resolveValue(form.currency, source.currency || 'US$'),
       userID: 0,
-      exchangeRate: Number(form.exchangeRate) || 0,
-      exporterInvoiceNo: form.exporterInvoiceNo || '',
-      exporterInvoiceDate: safeIsoDate(form.exporterInvoiceDate),
-      countryOfOrigin: form.country,
-      destination: form.destination,
-      portOfLoading: form.portOfLoading,
-      portOfDischarge: form.portOfDischarge,
-      shippedExchangeRate: Number(form.shippedExchangeRate) || 0,
-      bankID: Number(form.bank) || 0,
-      discount: Number(form.discount) || 0,
+      exchangeRate: resolveNumber(form.exchangeRate, source.exchangeRate || 0),
+      exporterInvoiceNo: resolveValue(form.exporterInvoiceNo, source.exporterInvoiceNo || ''),
+      exporterInvoiceDate: resolveDate(form.exporterInvoiceDate, source.exporterInvoiceDate),
+      countryOfOrigin: resolveValue(form.country, source.countryOfOrigin || source.country || ''),
+      destination: resolveValue(form.destination, source.destination || ''),
+      portOfLoading: resolveValue(form.portOfLoading, source.portOfLoading || ''),
+      portOfDischarge: resolveValue(form.portOfDischarge, source.portOfDischarge || ''),
+      shippedExchangeRate: resolveNumber(form.shippedExchangeRate, source.shippedExchangeRate || 0),
+      bankID: resolveNumber(form.bank, source.bankID || 0),
+      discount: resolveNumber(form.discount, source.discount || 0),
       heading1: '',
       heading2: '',
       heading3: '',
-      heading1Value: Number(form.heading1Value) || 0,
-      heading2Value: Number(form.heading2Value) || 0,
-      heading3Value: Number(form.heading3Value) || 0,
-      amsicNo: form.icNo,
-      etdExpectedDate: safeIsoDate(form.expectedEtd),
-      etdActualDate: safeIsoDate(form.actualEtd),
-      etaExpectedDate: safeIsoDate(form.expectedEta),
-      etaActualDate: safeIsoDate(form.actualEta),
-      entryFiledDate: safeIsoDate(form.entryFiledDate),
-      goodsClearedDate: safeIsoDate(form.goodsClearedDate),
-      docstoBrokerDate: safeIsoDate(form.docsToBrokerDate),
-      docstoBankDate: safeIsoDate(form.docsToBankDate),
-      goodsDeliveredDate: safeIsoDate(form.goodsDeliveredDate),
-      updateSheetremarks: form.updateSheetRemarks,
+      heading1Value: resolveNumber(form.heading1Value, source.heading1Value || 0),
+      heading2Value: resolveNumber(form.heading2Value, source.heading2Value || 0),
+      heading3Value: resolveNumber(form.heading3Value, source.heading3Value || 0),
+      amsicNo: resolveValue(form.icNo, source.amsicNo || ''),
+      etdExpectedDate: resolveDate(form.expectedEtd, source.etdExpectedDate),
+      etdActualDate: resolveDate(form.actualEtd, source.etdActualDate),
+      etaExpectedDate: resolveDate(form.expectedEta, source.etaExpectedDate),
+      etaActualDate: resolveDate(form.actualEta, source.etaActualDate),
+      entryFiledDate: resolveDate(form.entryFiledDate, source.entryFiledDate),
+      goodsClearedDate: resolveDate(form.goodsClearedDate, source.goodsClearedDate),
+      docstoBrokerDate: resolveDate(form.docsToBrokerDate, source.docstoBrokerDate),
+      docstoBankDate: resolveDate(form.docsToBankDate, source.docstoBankDate),
+      goodsDeliveredDate: resolveDate(form.goodsDeliveredDate, source.goodsDeliveredDate),
+      updateSheetremarks: resolveValue(form.updateSheetRemarks, source.updateSheetremarks || ''),
       shipmentStatus: true,
-      revisedETA: safeIsoDate(form.revisedEta),
-      etwDate: safeIsoDate(form.expectedEtw),
-      reverseETWDate: safeIsoDate(form.revisedEtw),
-      revisedETD: safeIsoDate(form.revisedEtd),
-      vpoActualDate: safeIsoDate(form.vpoActualDate),
-      containerReleaseDate: safeIsoDate(form.containerReleaseDate),
-      containerDeliveryDateASTWH: safeIsoDate(form.containerDeliveryDate),
-      wareHouseName: form.warehouseName,
-      truckerName: form.truckerName,
-      actualETW: safeIsoDate(form.actualEtw),
-      discountValue: Number(form.discount) || 0,
-      totalValueWD: Number(form.totalValueWD) || 0,
-      discountTitle: form.extraField5,
-      styles: articleRows.map((row) => row.styleNo).join(', '),
-      cargoConsigneeName: form.consigneeName,
-      cargoConsigneeAddress1: form.addressLine,
-      cargoConsigneeCity: form.city,
-      cargoConsigneeCountry: form.country,
+      revisedETA: resolveDate(form.revisedEta, source.revisedETA),
+      etwDate: resolveDate(form.expectedEtw, source.etwDate),
+      reverseETWDate: resolveDate(form.revisedEtw, source.reverseETWDate),
+      revisedETD: resolveDate(form.revisedEtd, source.revisedETD),
+      vpoActualDate: resolveDate(form.vpoActualDate, source.vpoActualDate),
+      containerReleaseDate: resolveDate(form.containerReleaseDate, source.containerReleaseDate),
+      containerDeliveryDateASTWH: resolveDate(
+        form.containerDeliveryDate,
+        source.containerDeliveryDateASTWH
+      ),
+      wareHouseName: resolveValue(form.warehouseName, source.wareHouseName || ''),
+      truckerName: resolveValue(form.truckerName, source.truckerName || ''),
+      actualETW: resolveDate(form.actualEtw, source.actualETW),
+      discountValue: resolveNumber(form.extraField4, source.discountValue || 0),
+      totalValueWD: resolveNumber(form.totalValueWD, source.totalValueWD || 0),
+      discountTitle: resolveValue(form.extraField5, source.discountTitle || ''),
+      styles: articleRows.map((row) => row.styleNo).join(', ') || source.styles || '',
+      cargoConsigneeName: resolveValue(form.consigneeName, source.cargoConsigneeName || ''),
+      cargoConsigneeAddress1: resolveValue(
+        form.addressLine,
+        source.cargoConsigneeAddress1 || ''
+      ),
+      cargoConsigneeCity: resolveValue(form.city, source.cargoConsigneeCity || ''),
+      cargoConsigneeCountry: resolveValue(form.country, source.cargoConsigneeCountry || ''),
+      subTotalH1: primarySubTotal.subTotalH1,
+      subTotalH2: primarySubTotal.subTotalH2,
+      subTotalH3: primarySubTotal.subTotalH3,
+      subTotalA1: Number(primarySubTotal.subTotalA1) || 0,
+      subTotalA2: Number(primarySubTotal.subTotalA2) || 0,
+      subTotalA3: Number(primarySubTotal.subTotalA3) || 0,
       subTotalDetails,
       cargoDetailID: selectedArticle?.cargoDetailID || 0,
       details: articleRows.map((row) => ({
-        poid: row.poid || 0,
-        pono: row.pono || '',
-        deliveryTypeName: row.deliveryTypeName || '',
+        poid: resolveNumber(row.poid, row.poid || 0),
+        popoid: resolveNumber(row.popoid, row.popoid || 0),
+        pono: resolveValue(row.pono, row.pono || ''),
+        deliveryTypeName: resolveValue(row.deliveryTypeName, row.deliveryTypeName || ''),
         quantity: Number(row.remainQTY ?? row.releaseQty) || 0,
-        poqty: Number(row.quantity) || 0,
-        styles: row.styleNo,
-        cartons: Number(row.cartons) || 0,
-        customerID: row.customerID || 0,
-        supplierID: row.supplierID || 0,
-        popoid: row.popoid || 0,
-        shippedRate: Number(row.rate) || 0,
-        cartonNo: row.cartonNo || '',
-        ldpInvoiceNo: row.ldpInvoiceNo || '',
-        itemDescriptionInvoice: row.itemDescriptionShippingInvoice || '',
-        colorway: row.colorway || '',
-        sizeRange: row.size || row.sizeRange || '',
+        poqty: resolveNumber(row.quantity, row.quantity || 0),
+        styles: resolveValue(row.styleNo, row.styleNo || ''),
+        cartons: resolveNumber(row.cartons, row.cartons || 0),
+        customerID: resolveNumber(row.customerID, row.customerID || 0),
+        supplierID: resolveNumber(row.supplierID, row.supplierID || 0),
+        shippedRate: resolveNumber(row.rate, row.rate || 0),
+        cartonNo: resolveValue(row.cartonNo, row.cartonNo || ''),
+        ldpInvoiceNo: resolveValue(row.ldpInvoiceNo, row.ldpInvoiceNo || ''),
+        itemDescriptionInvoice: resolveValue(
+          row.itemDescriptionInvoice,
+          row.itemDescriptionShippingInvoice || ''
+        ),
+        colorway: resolveValue(row.colorway, row.colorway || ''),
+        sizeRange: resolveValue(row.size || row.sizeRange, row.size || row.sizeRange || ''),
       })),
     };
 
@@ -516,11 +534,14 @@ export default function ShipmentEditView() {
         const errorText = await response.text();
         throw new Error(`Failed to update shipment: ${errorText}`);
       }
+      await response.text();
       setSuccessMessage('Shipment updated successfully.');
       setError('');
+      enqueueSnackbar('Shipment updated successfully.', { variant: 'success' });
     } catch (err) {
       setSuccessMessage('');
       setError(err.message || 'Unable to update shipment');
+      enqueueSnackbar(err.message || 'Unable to update shipment', { variant: 'error' });
     } finally {
       setLoading(false);
     }
