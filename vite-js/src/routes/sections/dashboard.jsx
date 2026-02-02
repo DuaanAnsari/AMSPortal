@@ -71,6 +71,12 @@ const InspectionCertificatePage = lazy(
 const PrintInvoicePage = lazy(
   () => import('src/sections/Supply-Chain/view/Print-Invoice')
 );
+const RateDiffPage = lazy(
+  () => import('src/sections/Supply-Chain/view/Rate-Diff')
+);
+const TrackingInShipmentPage = lazy(
+  () => import('src/sections/Supply-Chain/view/Tracking-in-shipment')
+);
 
 // Power_TOOL
 const ProcessBoardPage = lazy(() => import('src/sections/power-tool/view/Process-board'));
@@ -202,6 +208,8 @@ export const dashboardRoutes = [
           { path: 'purchase-order-edit/:id', element: <CompletePurchaseOrderFormEdit /> },
           { path: 'inspection-certificate/:id', element: <InspectionCertificatePage /> },
           { path: 'print-invoice/:id', element: <PrintInvoicePage /> },
+          { path: 'rate-diff/:id', element: <RateDiffPage /> },
+          { path: 'tracking-in-shipment', element: <TrackingInShipmentPage /> },
         ],
       },
 

@@ -575,9 +575,10 @@ export default function PurchaseOrderView() {
         }
 
         const data = await response.json();
-        console.log('Revised shipment PO details response:', data);
+        console.log('✅ Revised shipment PO details response:', data);
 
         const order = Array.isArray(data) ? data[0] : data;
+        console.log('📦 Order object:', order);
 
         // Try to pre-fill revised dates if backend sends them
         const buyerDateValue =
@@ -614,58 +615,62 @@ export default function PurchaseOrderView() {
           merchandiserId: order?.marchandID ?? prev?.merchandiserId,
         }));
 
-        // Normalize items for "Items to be sourced" table (best-effort)
-        const rawItems =
-          order?.items ||
-          order?.Items ||
-          order?.poItems ||
-          order?.POItems ||
-          order?.orderItems ||
-          order?.OrderItems ||
-          [];
+        // 🔥 NEW: Fetch style grid data from separate API endpoint
+        console.log('🔍 Fetching style grid data from /Milestone/GetStyle...');
 
-        if (Array.isArray(rawItems)) {
-          const normalizedItems = rawItems.map((item, index) => ({
-            id: item.id || item.itemId || item.ItemId || index,
-            style: item.styleNo || '',
-            articleNo: item.articleNo || item.ArticleNo || '',
-            description:
-              item.description ||
-              item.Description ||
-              item.itemDescription ||
-              item.ItemDescription ||
-              '',
-            colourway:
-              item.colourway ||
-              item.Colourway ||
-              item.colorway ||
-              item.Colorway ||
-              item.color ||
-              item.Color ||
-              '',
-            size: item.size || item.Size || '',
-            poQuantity:
-              item.poQuantity ||
-              item.POQuantity ||
-              item.quantity ||
-              item.Quantity ||
-              0,
-            itemPrice:
-              item.itemPrice ||
-              item.ItemPrice ||
-              item.price ||
-              item.Price ||
-              0,
-            value:
-              item.value ||
-              item.Value ||
-              item.amount ||
-              item.Amount ||
-              0,
-          }));
+        try {
+          const styleResponse = await fetch(
+            `${API_BASE_URL}/api/Milestone/GetStyle?poid=${row.id}`,
+            {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
 
-          setRevisedItems(normalizedItems);
-        } else {
+          if (!styleResponse.ok) {
+            throw new Error(`HTTP error! status: ${styleResponse.status}`);
+          }
+
+          const styleData = await styleResponse.json();
+          console.log('✅ Style grid API response:', styleData);
+          console.log('📊 Style items count:', Array.isArray(styleData) ? styleData.length : 0);
+
+          if (Array.isArray(styleData) && styleData.length > 0) {
+            console.log('🎯 First style item structure:', styleData[0]);
+
+            const normalizedItems = styleData.map((item, index) => {
+              const quantity = Number(item.quantity || 0);
+              const itemPrice = Number(item.itemPrice || item.rate || 0);
+              const value = quantity * itemPrice;
+
+              const normalized = {
+                id: item.styleID || item.styleId || index,
+                style: item.styleNo || '',
+                articleNo: item.article || item.articleNo || '',
+                description: item.itemDescription || item.description || '',
+                colourway: item.colorway || item.colourway || '',
+                size: item.size || '',
+                poQuantity: quantity,
+                itemPrice: itemPrice,
+                value: value,
+              };
+
+              console.log(`Style item ${index + 1} normalized:`, normalized);
+              return normalized;
+            });
+
+            console.log('✅ Total normalized style items:', normalizedItems.length);
+            setRevisedItems(normalizedItems);
+          } else {
+            console.warn('⚠️ No style items found in API response');
+            setRevisedItems([]);
+          }
+        } catch (styleError) {
+          console.error('❌ Error fetching style grid:', styleError);
+          console.log('Will show empty items table');
           setRevisedItems([]);
         }
       } catch (err) {

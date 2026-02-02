@@ -13,8 +13,10 @@ import {
   Toolbar,
   Typography,
 } from '@mui/material';
-import { ZoomIn, ZoomOut, Print } from '@mui/icons-material';
+import { ZoomIn, ZoomOut, Print, Download } from '@mui/icons-material';
 import { useReactToPrint } from 'react-to-print';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 // ----------------------------------------------------------------------
 
@@ -224,6 +226,52 @@ export default function InspectionCertificatePage() {
     documentTitle: `Inspection_Certificate_${id}`,
   });
 
+  const handleDownloadPDF = async () => {
+    const element = contentRef.current;
+    if (!element) return;
+    const originalTransform = element.style.transform;
+    const originalTransition = element.style.transition;
+
+    try {
+      element.style.transform = 'scale(1)';
+      element.style.transition = 'none';
+
+      const pages = Array.from(element.children);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+
+      for (let i = 0; i < pages.length; i += 1) {
+        const page = pages[i];
+        if (!(page instanceof HTMLElement)) continue;
+
+        const canvas = await html2canvas(page, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#FFFFFF',
+        });
+        const imgData = canvas.toDataURL('image/png');
+        const imgWidth = canvas.width;
+        const imgHeight = canvas.height;
+        const ratio = pdfWidth / imgWidth;
+        const finalHeight = imgHeight * ratio;
+
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, Math.min(finalHeight, pdfHeight));
+        if (i < pages.length - 1) {
+          pdf.addPage();
+        }
+      }
+
+      pdf.save(`Inspection_Certificate_${id}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    } finally {
+      element.style.transform = originalTransform;
+      element.style.transition = originalTransition;
+    }
+  };
+
   // Common text styles
   const labelStyle = { fontSize: 12, color: '#000', fontWeight: 600 };
   const valueStyle = { fontSize: 12, color: '#000' };
@@ -289,8 +337,11 @@ export default function InspectionCertificatePage() {
             </IconButton>
           </Box>
 
-          {/* Right: print */}
+          {/* Right: download + print */}
           <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
+            <IconButton size="small" onClick={handleDownloadPDF} sx={{ color: '#fff' }}>
+              <Download fontSize="small" />
+            </IconButton>
             <IconButton size="small" onClick={handlePrint} sx={{ color: '#fff' }}>
               <Print fontSize="small" />
             </IconButton>

@@ -9,7 +9,6 @@ import {
   TableHead,
   TableRow,
   Paper,
-  useTheme,
   IconButton,
   AppBar,
   Toolbar,
@@ -32,7 +31,6 @@ import { HOST_API } from 'src/config-global';
 
 // --- Helper Components ---
 const POCell = ({ children, header = false, sx = {} }) => {
-  const theme = useTheme();
   return (
     <TableCell
       sx={{
@@ -70,9 +68,10 @@ const BorderedPOCell = ({ children, header = false, sx = {} }) => (
 
 // --- Main Component ---
 const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
-  const theme = useTheme();
   const componentRef = useRef();
+  const scrollContainerRef = useRef(null);
   const [zoomLevel, setZoomLevel] = useState(1.2);
+  const [currentPage, setCurrentPage] = useState(1);
   const { id } = useParams();
   const [fetchedData, setFetchedData] = useState(null);
   const [loading, setLoading] = useState(!!id && !propPoData);
@@ -96,9 +95,10 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
         console.log('API Response:', response);
 
         if (response.data) {
-          const dataToSet = Array.isArray(response.data) ? response.data[0] : response.data;
-          console.log('Setting fetched data:', dataToSet);
-          setFetchedData(dataToSet);
+          // API returns an array with multiple rows (rowType: Size/Quantity).
+          // Keep the whole array so we can build the grid correctly.
+          console.log('Setting fetched data:', response.data);
+          setFetchedData(response.data);
         }
       } catch (error) {
         console.error('Failed to fetch purchase order data:', error);
@@ -110,78 +110,289 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
     fetchPurchaseOrderData();
   }, [id, propPoData]);
 
-  const poData = propPoData || fetchedData || {};
+  const rawReport = propPoData ?? fetchedData;
+  const reportRows = Array.isArray(rawReport) ? rawReport : rawReport ? [rawReport] : [];
+  // Use first row as header/source for the non-grid fields
+  const poData = reportRows[0] || {};
+  const totalPages = 3;
+
+  // Track which page is currently visible inside the scroll container (for header indicator)
+  useEffect(() => {
+    const root = scrollContainerRef.current;
+    const container = componentRef.current;
+    if (!root || !container) return;
+
+    const pages = Array.from(container.children).filter((el) => el instanceof HTMLElement);
+    if (!pages.length) return;
+
+    pages.forEach((pageEl, idx) => {
+      pageEl.dataset.pageIndex = String(idx + 1);
+    });
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => (b.intersectionRatio ?? 0) - (a.intersectionRatio ?? 0))[0];
+
+        if (!visible?.target) return;
+        const idx = Number(visible.target.dataset.pageIndex);
+        if (Number.isFinite(idx) && idx >= 1) setCurrentPage(idx);
+      },
+      {
+        root,
+        threshold: [0.15, 0.35, 0.55, 0.75],
+      }
+    );
+
+    pages.forEach((p) => observer.observe(p));
+    return () => observer.disconnect();
+  }, [loading, id, propPoData, fetchedData]);
+
+  const toNumber = (value) => {
+    if (value === null || value === undefined) return 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    const cleaned = String(value).replace(/[^0-9.-]/g, '');
+    const num = Number(cleaned);
+    return Number.isFinite(num) ? num : 0;
+  };
+
+  const fmtQty = (value) =>
+    toNumber(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const fmtMoney = (value) =>
+    toNumber(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const fmtInt = (value) => toNumber(value).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  const fmtDz = (value) =>
+    toNumber(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtSmart = (value) => {
+    const n = toNumber(value);
+    const isInt = Math.abs(n - Math.round(n)) < 1e-9;
+    return n.toLocaleString('en-US', {
+      minimumFractionDigits: isInt ? 0 : 2,
+      maximumFractionDigits: isInt ? 0 : 2,
+    });
+  };
+
+  const getSArray = (obj, max = 11) =>
+    Array.from({ length: max }, (_, i) => {
+      const v = obj?.[`s${i + 1}`];
+      return v === null || v === undefined ? '' : String(v).trim();
+    });
+
+  const buildOrderRowsFromReport = (rows) => {
+    const groups = new Map();
+    const getKey = (r) =>
+      String(
+        r?.poDetailID ??
+          `${r?.color ?? ''}|${r?.style ?? ''}|${r?.sizeRange ?? ''}|${r?.productCode ?? ''}|${r?.rowNo ?? ''}`
+      );
+
+    (rows || []).forEach((r, idx) => {
+      const key = getKey(r);
+      const curr = groups.get(key) || { sizeRow: null, qtyRow: null, firstIndex: idx };
+      if (String(r?.rowType || '').toLowerCase() === 'size') curr.sizeRow = r;
+      if (String(r?.rowType || '').toLowerCase() === 'quantity') curr.qtyRow = r;
+      groups.set(key, curr);
+    });
+
+    const out = [];
+    for (const [, g] of groups) {
+      const base = g.qtyRow || g.sizeRow || {};
+      const sizeLabelsRaw = g.sizeRow ? getSArray(g.sizeRow) : [];
+      const sizeLabels = sizeLabelsRaw.filter((s) => s);
+
+      const qtyRaw = g.qtyRow ? getSArray(g.qtyRow) : [];
+      // Quantities align to the number of size labels (if present); otherwise take numeric-like from qty row.
+      const qtyVals = [];
+      if (sizeLabels.length) {
+        for (let i = 0; i < sizeLabels.length; i += 1) qtyVals.push(toNumber(qtyRaw[i]));
+      } else {
+        for (const v of qtyRaw) {
+          if (v) qtyVals.push(toNumber(v));
+        }
+      }
+
+      const computedQty = qtyVals.reduce((sum, n) => sum + toNumber(n), 0);
+      const totalQtyNum = toNumber(base.totalQTY) || computedQty;
+      const unitNum = toNumber(base.rate);
+      const amountNum = totalQtyNum * unitNum;
+
+      out.push({
+        color: base.color || '',
+        style: base.style || '',
+        sizeRange: base.sizeRange || '',
+        productCode: base.productCode || 'NA',
+        refLabel: 'Size',
+        sizeLabels,
+        sizeRow: qtyVals,
+        totalQtyNum,
+        unitNum,
+        amountNum,
+        firstIndex: g.firstIndex ?? 0,
+      });
+    }
+
+    // Preserve API order within the same PO as much as possible
+    out.sort((a, b) => {
+      return (a.firstIndex ?? 0) - (b.firstIndex ?? 0);
+    });
+
+    return out;
+  };
+
+  const extractSizeColumns = (obj) => {
+    // Tries to read sizes + qty columns from API response using common naming patterns.
+    // NOTE: Your API may send:
+    // - s1..sN as quantities (old)
+    // - OR s1..sN as size labels (new: "M", "L", "XL", "2XL")
+    const max = 20;
+    const labels = [];
+    const qty = [];
+
+    const isNumericLike = (v) => {
+      if (v === null || v === undefined) return false;
+      const s = String(v).trim();
+      if (!s) return false;
+      return /^-?\d+(\.\d+)?$/.test(s.replace(/,/g, ''));
+    };
+
+    const hasAnyS = Array.from({ length: max }, (_, i) => obj?.[`s${i + 1}`]).some(
+      (v) => v !== undefined && v !== null && String(v).trim() !== ''
+    );
+
+    const s1 = obj?.s1;
+    const sLooksNumeric = isNumericLike(s1);
+
+    // Mode A: s1..sN are quantities
+    if (hasAnyS && sLooksNumeric) {
+      for (let i = 1; i <= max; i += 1) {
+        const qRaw = obj?.[`s${i}`];
+        const hasQty = qRaw !== undefined && qRaw !== null && String(qRaw).trim() !== '';
+        if (!hasQty) continue;
+
+        qty.push(toNumber(qRaw));
+
+        const labelCandidates = [
+          obj?.[`size${i}`],
+          obj?.[`size${i}Text`],
+          obj?.[`s${i}Text`],
+          obj?.[`s${i}Label`],
+          obj?.[`s${i}Size`],
+          obj?.[`sz${i}`],
+        ];
+        const found = labelCandidates.find((v) => v !== undefined && v !== null && String(v).trim() !== '');
+        labels.push(found ? String(found).trim() : '');
+      }
+      return { labels, qty };
+    }
+
+    // Mode B: s1..sN are size labels (your case)
+    if (hasAnyS) {
+      for (let i = 1; i <= max; i += 1) {
+        const labelRaw = obj?.[`s${i}`];
+        const label = labelRaw !== undefined && labelRaw !== null ? String(labelRaw).trim() : '';
+        if (!label) continue;
+
+        labels.push(label);
+
+        const qtyCandidates = [
+          obj?.[`q${i}`],
+          obj?.[`qty${i}`],
+          obj?.[`quantity${i}`],
+          obj?.[`poQty${i}`],
+          obj?.[`qtyS${i}`],
+          obj?.[`s${i}Qty`],
+          obj?.[`s${i}Quantity`],
+          obj?.[`qty_${i}`],
+          obj?.[`quantity_${i}`],
+        ];
+        const foundQty = qtyCandidates.find((v) => v !== undefined && v !== null && String(v).trim() !== '');
+        qty.push(toNumber(foundQty));
+      }
+      return { labels, qty };
+    }
+
+    // If API didn’t provide s1.. fields, fall back to existing 4 qty fields (keeps layout working)
+    if (!qty.length) {
+      const fallbackQty = [obj?.s1, obj?.s2, obj?.s3, obj?.s4].filter(
+        (v) => v !== undefined && v !== null && String(v).trim() !== ''
+      );
+      fallbackQty.forEach((v) => qty.push(toNumber(v)));
+      // No hardcoded size names; leave labels empty when API doesn’t send them
+      while (labels.length < qty.length) labels.push('');
+    }
+
+    return { labels, qty };
+  };
 
   const data = {
     ref: poData.amsRefNo || '',
-    receivedDate: poData.creationDate ? new Date(poData.creationDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Monday, May 19, 2025',
-    attn: poData.contactPersonVendor || 'COMFORT APPAREL',
-    addressLeft: poData.venderAddress || 'PLOT # E-99, SECTOR 31-D KORANGI INDUSTRIAL\nKARACHI\nPAKISTAN',
-    trackingCode: poData.venderCode || '11265',
-    brand: poData.brand || 'Gentle Threads',
-    division: poData.ecpDivistion || 'Men',
-    rn: poData.rnNo || '130691',
-    shipTo: poData.consigneeAddress1 || 'ALL SEASONS TEXTILE\n1441 BROADWAY, SUITE # 6162\nNEW YORK, NY 10018\nUSA',
-    itemDescription: poData.itemDescriptionShippingInvoice || '100% Cotton Men Jersey Garment Dye LS Tee',
-    exFactory: poData.shipmentDate ? new Date(poData.shipmentDate).toLocaleDateString('en-US') : '07-15-2025',
-    finalInspection: poData.finalInspDate ? new Date(poData.finalInspDate).toLocaleDateString('en-US') : '07/10/2025',
-    leadTime: poData.timeSpame ? `${poData.timeSpame} Days` : '57 Days',
+    receivedDate: (poData.creationDate && !poData.creationDate.startsWith('1900-01-01'))
+      ? new Date(poData.creationDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+      : '',
+    attn: poData.contactPersonVendor || '',
+    addressLeft: poData.venderAddress || '',
+    trackingCode: poData.venderCode || '',
+    brand: poData.brand || '',
+    division: poData.ecpDivistion || '',
+    rn: poData.rnNo || '',
+    shipTo: poData.consigneeAddress1 || '',
+    itemDescription: poData.itemDescriptionShippingInvoice || '',
+    exFactory: (poData.shipmentDate && !poData.shipmentDate.startsWith('1900-01-01')) ? new Date(poData.shipmentDate).toLocaleDateString('en-US') : '',
+    finalInspection: (poData.finalInspDate && !poData.finalInspDate.startsWith('1900-01-01')) ? new Date(poData.finalInspDate).toLocaleDateString('en-US') : '',
+    leadTime: poData.timeSpame ? `${poData.timeSpame} Days` : '',
     fabric: {
-      description: 'Body',
-      fabric: poData.fabric || 'Jersey',
-      content: poData.otherFabric || '100% Cotton',
-      weight: poData.gms ? `${poData.gms} GSM` : '190 GSM'
+      description: '',
+      fabric: poData.fabric || '',
+      content: poData.quality || '',
+      weight: poData.gms ? `${poData.gms} GSM` : ''
     },
-    packingInstructions: poData.packingList || '12pcs poly bag and 48pcs Master Carton',
-    cartonMarking: poData.cartonMarking || 'LR',
-    pcsPerCarton: poData.pcPerCarton || '48',
+    packingInstructions: poData.packingList || '',
+    cartonMarking: poData.cartonMarking || '',
+    pcsPerCarton: poData.pcPerCarton || '',
     ration: poData.ration || '',
-    orderRows: [{
-      color: poData.color || 'Red clay',
-      sizeRow: [
-        parseInt(poData.s1) || 672,
-        parseInt(poData.s2) || 480,
-        parseInt(poData.s3) || 672,
-        parseInt(poData.s4) || 432
-      ],
-      total: poData.totalQTY ? `${poData.totalQTY} PCS` : '2,256.00 PCS',
-      unit: poData.rate || '2.93',
-      amount: (parseFloat(poData.totalQTY || 0) * parseFloat(poData.rate || 0)).toFixed(2) || '6,610.08',
-      productCode: poData.productCode || 'NA'
-    }],
-    totalQty: poData.totalQTY || '2,256',
-    totalAmount: (parseFloat(poData.totalQTY || 0) * parseFloat(poData.rate || 0)).toFixed(2) || '6,610.08',
-    importantNotes: poData.importantNote ? [poData.importantNote] : [
-      'Fabric should be heat set and lock properly to avoid shrinkage problem.',
-      'Before cutting fabric should be kept on table for atleast 24 hours.',
-      'All garments should be 100% checked for sizes before carton packing'
-    ],
+    orderRows: buildOrderRowsFromReport(reportRows),
+    totalQtyNum: toNumber(poData.totalQTY) || 0,
+    totalAmountNum: (toNumber(poData.totalQTY) || 0) * toNumber(poData.rate),
+    importantNotes: poData.importantNote ? [poData.importantNote] : [],
     productImage: poData.poImage || '',
-    shipMode: poData.shipmentModeText || 'Sea',
-    destination: poData.destination || 'NEW YORK',
-    shipmentTerms: poData.paymentTypeName || 'FOB',
-    paymentTerms: poData.paymentModeName || 'DP',
-    amsTeam: poData.userName || 'MUHAMMAD SHAHZAIB',
-    cpoNumber: poData.pono || '37522-LS-RED',
-    styleNumber: poData.style || 'LR2096',
-    productCategory: poData.productCategoriesName || 'Knits',
-    specialInstructions: poData.pO_Special_Instructions || 'N/A',
-    source: poData.styleSource || 'Local',
-    embellishment: poData.embAndEmbellishment || 'N/A',
-    trimsAccessories: poData.trimsAccessories || 'Local',
-    specialOperation: poData.pO_Special_Operation || 'GARMENT DYE',
-    samplingReq: poData.samplingReq || 'N/A',
-    beneficiaryBank: poData.bankNameBank || 'HABIB METROPOLITAN BANK LTD',
-    accountNo: poData.accountNoBank || '601-55-112233',
-    routingNo: poData.ibanBank || '125010999',
-    washingInstructions: poData.washingCareLabelInstructions || 'Machine Wash Cold With Like Colors, Gentle Cycle. Use Only Non Chlorine Bleach when needed, Line Dry, Cool Iron.',
-    poTotalDetails: poData.poTotalDetails || '',
+    shipMode: poData.deliveryTypeDisplayName || '',
+    destination: poData.destination || '',
+    shipmentTerms: poData.shipmentModeName || '',
+    paymentTerms: poData.paymentModeName || '',
+    amsTeam: poData.userName || '',
+    cpoNumber: poData.pono || '',
+    styleNumber: poData.style || '',
+    productCategory: poData.productCategoriesName || '',
+    specialInstructions: poData.pO_Special_Instructions || '',
+    source: poData.styleSource || '',
+    embellishment: poData.embAndEmbellishment || '',
+    trimsAccessories: poData.trimsAccessories || '',
+    specialOperation: poData.pO_Special_Operation || '',
+    samplingReq: poData.samplingReq || '',
+    beneficiaryBank: poData.bankNameBank || '',
+    accountNo: poData.accountNoBank || '',
+    routingNo: poData.ibanBank || '',
+    washingInstructions: poData.washingCareLabelInstructions || '',
+    poTotalDetails:
+      poData.poTotalDetails ||
+      poData.poTotalDetail ||
+      poData.poTotalDetailText ||
+      poData.poTotalDetailsText ||
+      '',
+    fmtQty,
+    fmtMoney,
+    fmtInt,
+    fmtDz,
+    fmtSmart,
   };
 
   // Second page data
   const secondPageData = {
-    companyName: "All Seaon Textile Inc",
-    preparedBy: "Mr. Munkhoq Ashraf",
+    companyName: poData.companyName || "",
+    preparedBy: poData.userName || "",
     termsAndConditions: [
       "PO should be read carefully and confirm in 3 days from the date of issuance.",
       "Goods should be in good quality as per the buyer requirement, otherwise factory will be responsible for charge back.",
@@ -213,9 +424,21 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
 
   // Print functionality
   const handlePrint = useReactToPrint({
-    content: () => componentRef.current,
+    contentRef: componentRef,
     documentTitle: `Purchase_Order_${data.ref}`,
     onAfterPrint: () => console.log('Printed PDF successfully!'),
+    pageStyle: `
+      @page {
+        size: A4;
+        margin: 10mm;
+      }
+      @media print {
+        body {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+      }
+    `,
   });
 
   // Download as PDF functionality
@@ -243,23 +466,35 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
         // Skip if not an HTML element
         if (!(page instanceof HTMLElement)) continue;
 
+        // Avoid capturing shadows/margins that can cause page overflow/cropping
+        const prevBoxShadow = page.style.boxShadow;
+        const prevMarginBottom = page.style.marginBottom;
+        page.style.boxShadow = 'none';
+        page.style.marginBottom = '0';
+
         const canvas = await html2canvas(page, {
           scale: 2, // High resolution
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#FFFFFF'
-    });
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#FFFFFF'
+        });
 
-    const imgData = canvas.toDataURL('image/png');
-    const imgWidth = canvas.width;
-    const imgHeight = canvas.height;
+        const imgData = canvas.toDataURL('image/png');
+        const imgWidth = canvas.width;
+        const imgHeight = canvas.height;
 
-        // Calculate ratio to fit A4 page width (maintaining aspect ratio)
-        const ratio = pdfWidth / imgWidth;
-        const finalHeight = imgHeight * ratio;
+        // Fit to A4 page (avoid cropping by fitting to both width and height)
+        const scale = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+        const finalWidth = imgWidth * scale;
+        const finalHeight = imgHeight * scale;
+        const x = (pdfWidth - finalWidth) / 2;
+        const y = (pdfHeight - finalHeight) / 2;
 
-        // Add image to PDF
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, finalHeight);
+        pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight);
+
+        // Restore per-page overrides
+        page.style.boxShadow = prevBoxShadow;
+        page.style.marginBottom = prevMarginBottom;
 
         // Add new page if not the last page
         if (i < pages.length - 1) {
@@ -267,7 +502,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
         }
       }
 
-    pdf.save(`Purchase_Order_${data.ref}.pdf`);
+      pdf.save(`Purchase_Order_${data.ref}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
     } finally {
@@ -281,6 +516,14 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!loading && !data.orderRows.length) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', p: 3 }}>
+        <Typography sx={{ color: '#000' }}>No report rows found for this PO.</Typography>
       </Box>
     );
   }
@@ -322,7 +565,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                 ml: 2
               }}
             >
-              1/3
+              {currentPage}/{totalPages}
             </Typography>
           </Box>
 
@@ -390,6 +633,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
 
       {/* PDF Content Area with Scroll and Zoom */}
       <Box
+        ref={scrollContainerRef}
         sx={{
           flex: 1,
           overflow: 'auto',
@@ -406,6 +650,9 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
             transform: `scale(${zoomLevel})`,
             transformOrigin: 'top center',
             transition: 'transform 0.2s ease-in-out',
+            '@media print': {
+              transform: 'none !important',
+            }
           }}
         >
           {/* First Page - Your Original Content */}
@@ -678,11 +925,20 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
             <TableContainer component={Paper} sx={{ mb: 0, border: '1px solid black', backgroundColor: '#FFFFFF' }}>
               <Table sx={{ minWidth: 450, fontSize: '0.70rem', borderCollapse: 'collapse', '& td, & th': { border: '1px solid #000' } }} size="small">
                 <TableHead>
+                  {/*
+                    Make the size-range columns dynamic so the grid matches API sizes (no hardcoding).
+                    Total columns = 3 fixed + N sizes + 3 fixed (PCS total, unit, amount)
+                  */}
                   <TableRow sx={{ borderBottom: "1px solid black" }}>
                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF', border: '1px solid #000' }}>Color (s)</TableCell>
                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF', border: '1px solid #000' }}>Product Code</TableCell>
                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF', border: '1px solid #000' }}>Reference</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF', border: '1px solid #000' }} colSpan={4}>Size Range</TableCell>
+                    <TableCell
+                      sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF', border: '1px solid #000' }}
+                      colSpan={Math.max(...data.orderRows.map((r) => (r.sizeLabels?.length || 0)), 1)}
+                    >
+                      Size Range
+                    </TableCell>
                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF', border: '1px solid #000' }}>Color Total Qty in PCS</TableCell>
                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF', border: '1px solid #000' }}>FOB Unit Price ($)</TableCell>
                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF', border: '1px solid #000' }}>FOB Value Sub Amount ($)</TableCell>
@@ -690,76 +946,160 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                 </TableHead>
 
                 <TableBody>
+                  {(() => {
+                    const maxSizeCols = Math.max(...data.orderRows.map((r) => (r.sizeLabels?.length || 0)), 0);
+                    const sizeCols = Math.max(maxSizeCols, 1);
+                    const pad = (arr, len, fill = '') => {
+                      const out = Array.isArray(arr) ? [...arr] : [];
+                      while (out.length < len) out.push(fill);
+                      return out.slice(0, len);
+                    };
+                    const groupByColor = (rows) => {
+                      const m = new Map();
+                      (rows || []).forEach((r) => {
+                        const key = String(r.color || '');
+                        if (!m.has(key)) m.set(key, []);
+                        m.get(key).push(r);
+                      });
+                      return Array.from(m.entries());
+                    };
+                    return (
+                      <>
+                        {groupByColor(data.orderRows).map(([color, rows]) => (
+                          <React.Fragment key={color || 'NO_COLOR'}>
+                            {/* Color row ONCE per color (matches old app) */}
                   <TableRow sx={{ borderBottom: "1px solid black" }}>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.color ?? "Red clay"}</TableCell>
-                    <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
-                    <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
-                    <TableCell colSpan={4} sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
-                    <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
-                    <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
-                    <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
+                              <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>
+                                {color || ""}
+                              </TableCell>
+                              <TableCell colSpan={sizeCols + 5} sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }} />
                   </TableRow>
 
+                            {rows.map((row, idx) => (
+                              <React.Fragment key={`${row.sizeRange}-${idx}`}>
+                                {/* Size header row */}
                   <TableRow sx={{ borderBottom: "1px solid black" }}>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>S-XL</TableCell>
-                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.productCode ?? "NA"}</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Size</TableCell>
-                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>S</TableCell>
-                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>M</TableCell>
-                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>L</TableCell>
-                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>XL</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>PCS</TableCell>
-                    <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
-                    <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
-                  </TableRow>
-                  <TableRow sx={{ borderBottom: "1px solid black" }}>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>S-XL</TableCell>
-                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.productCode ?? "NA"}</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Size</TableCell>
-                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>S</TableCell>
-                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>M</TableCell>
-                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>L</TableCell>
-                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>XL</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>PCS</TableCell>
-                    <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
-                    <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
-                  </TableRow>
-
-
-                  <TableRow sx={{ borderBottom: "1px solid black" }}>
-                    <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
-                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.productCode ?? "NA"}</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Quantity</TableCell>
-                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.sizeRow?.[0] ?? 672}</TableCell>
-                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.sizeRow?.[1] ?? 480}</TableCell>
-                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.sizeRow?.[2] ?? 672}</TableCell>
-                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.sizeRow?.[3] ?? 432}</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.orderRows?.[0]?.total ?? '2,256.00 PCS'}</TableCell>
-                    <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>${data.orderRows?.[0]?.unit ?? "2.93"}</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>${data.orderRows?.[0]?.amount ?? "6,610.08"}</TableCell>
+                                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>
+                                    {row.sizeRange || ""}
+                                  </TableCell>
+                                  <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>
+                                    {row.productCode || ""}
+                                  </TableCell>
+                                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>
+                                    {row.refLabel || "Size"}
+                                  </TableCell>
+                                  {pad(row.sizeLabels || [], sizeCols, '').map((lbl, i) => (
+                                    <TableCell key={i} sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>
+                                      {lbl}
+                                    </TableCell>
+                                  ))}
+                                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>
+                                    PCS
+                                  </TableCell>
+                                  <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }} />
+                                  <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }} />
                   </TableRow>
 
+                                {/* Quantity row (pad blanks as blanks, not 0.00) */}
                   <TableRow sx={{ borderBottom: "1px solid black" }}>
-                    <TableCell colSpan={7} sx={{ textAlign: "right", fontWeight: "bold", fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Total:-</TableCell>
-                    <TableCell sx={{ fontWeight: "bold", fontSize: '0.70rem', padding: '2px 8px', color: '#000000', backgroundColor: '#FFFFFF' }}>{data.totalQty ?? "2256"}</TableCell>
+                                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>
+                                    {row.sizeRange || ""}
+                                  </TableCell>
+                                  <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>
+                                    {row.productCode || ""}
+                                  </TableCell>
+                                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>
+                                    Quantity
+                                  </TableCell>
+                                  {pad(row.sizeRow || [], sizeCols, null).map((val, i) => (
+                                    <TableCell key={i} sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>
+                                      {val === null || val === undefined ? '' : data.fmtSmart(val)}
+                                    </TableCell>
+                                  ))}
+                                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>
+                                    {toNumber(row.totalQtyNum) > 0 ? `${data.fmtQty(row.totalQtyNum)} PCS` : 'PCS'}
+                                  </TableCell>
+                                  <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>
+                                    {idx === 0 ? `$${data.fmtMoney(row.unitNum)}` : ''}
+                                  </TableCell>
+                                  <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>
+                                    {idx === 0 ? `$${data.fmtMoney(row.amountNum)}` : ''}
+                                  </TableCell>
+                  </TableRow>
+                              </React.Fragment>
+                            ))}
+                          </React.Fragment>
+                        ))}
+
+                  <TableRow sx={{ borderBottom: "1px solid black" }}>
+                    <TableCell colSpan={sizeCols + 3} sx={{ textAlign: "right", fontWeight: "bold", fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>Total:-</TableCell>
+                    <TableCell sx={{ fontWeight: "bold", fontSize: '0.70rem', padding: '2px 8px', color: '#000000', backgroundColor: '#FFFFFF' }}>
+                      {data.fmtInt(data.orderRows.reduce((sum, r) => sum + (r.totalQtyNum || 0), 0))}
+                    </TableCell>
                     <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
                     <TableCell sx={{ padding: '2px 4px', backgroundColor: '#FFFFFF' }}></TableCell>
                   </TableRow>
+                      </>
+                    );
+                  })()}
                 </TableBody>
               </Table>
             </TableContainer>
 
             {/* PO Total Section */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1px 0', fontSize: '0.70rem', color: '#000000', backgroundColor: '#FFFFFF' }}>
-              <Box sx={{ fontWeight: 'bold', display: 'flex', gap: '3px' }}>
-                P.O Total: <span style={{ paddingRight: '10px' }}>{data.totalQty ?? '2,256'}</span> PCS {data.poTotalDetails ?? '188.00 Dz 47 Ctn'}
+              <Box sx={{ fontWeight: 'bold', display: 'flex', minWidth: 0 }}>
+                {(() => {
+                  const totalPcs = data.orderRows.reduce((sum, r) => sum + (r.totalQtyNum || 0), 0);
+                  const pcsPerCartonNum = toNumber(data.pcsPerCarton);
+                  const dz = totalPcs ? totalPcs / 12 : 0;
+                  const ctn = pcsPerCartonNum > 0 ? totalPcs / pcsPerCartonNum : 0;
+                  const computedDetailsParts = [
+                    totalPcs ? `${data.fmtDz(dz)} Dz` : '',
+                    ctn ? `${data.fmtInt(Math.round(ctn))} Ctn` : '',
+                  ].filter(Boolean);
+
+                  const detailsText = data.poTotalDetails || '';
+
+                  return (
+                    <Box
+                      component="span"
+                      sx={{
+                        display: 'inline-flex',
+                        alignItems: 'baseline',
+                        gap: 2,
+                        flexWrap: 'wrap',
+                        minWidth: 0,
+                      }}
+                    >
+                      <Box component="span">P.O Total:</Box>
+                      <Box component="span" sx={{ minWidth: 0 }}>
+                        {data.fmtInt(totalPcs)}
+                      </Box>
+                      <Box component="span">PCS</Box>
+                      {detailsText ? (
+                        <Box component="span" sx={{ ml: 1 }}>
+                          {detailsText}
+                        </Box>
+                      ) : computedDetailsParts.length ? (
+                        <Box component="span" sx={{ display: 'inline-flex', gap: 3, ml: 1, flexWrap: 'wrap' }}>
+                          {computedDetailsParts.map((t) => (
+                            <Box component="span" key={t}>
+                              {t}
+                            </Box>
+                          ))}
+                        </Box>
+                      ) : null}
+                    </Box>
+                  );
+                })()}
               </Box>
               <Box sx={{ display: 'flex', fontWeight: 'bold' }}>
                 <Box sx={{ textAlign: 'left', pr: 0.5, pl: 0.5, backgroundColor: '#f0f0f0', color: '#000000' }}>
                   P.O Net FOB Value $
                 </Box>
                 <Box sx={{ textAlign: 'left', pr: 0.5, pl: 0.5, backgroundColor: '#f0f0f0', minWidth: '60px', color: '#000000' }}>
-                  {data.totalAmount ?? '6,610.08'}
+                  {data.fmtMoney(data.orderRows.reduce((sum, r) => sum + (r.amountNum || 0), 0))}
                 </Box>
               </Box>
             </Box>
@@ -828,7 +1168,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                   <TableRow>
                     <TableCell sx={{ border: '1px solid black', fontWeight: 'bold', fontSize: '11px', p: 1, color: '#000000', backgroundColor: '#FFFFFF' }}>More Info :</TableCell>
                     <TableCell colSpan={3} sx={{ border: '1px solid black', p: 1, backgroundColor: '#FFFFFF' }}>
-                      <Typography sx={{ fontSize: '11px', color: '#000000' }}>N/A</Typography>
+                      <Typography sx={{ fontSize: '11px', color: '#000000' }}>{poData.moreInfo || 'N/A'}</Typography>
                     </TableCell>
                   </TableRow>
 
@@ -870,7 +1210,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               <Box sx={{ textAlign: 'center', flex: 1 }}>
                 <Box sx={{ borderBottom: '1px solid #000', width: '150px', margin: '0 auto', mb: 1 }}></Box>
                 <Typography sx={{ fontSize: '10px' }}>
-                  Mr. Munkhoq Ashraf
+                  {data.amsTeam}
                 </Typography>
               </Box>
 
@@ -975,7 +1315,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               <Box sx={{ textAlign: 'center', flex: 1 }}>
                 <Box sx={{ borderBottom: '1px solid #000', width: '150px', margin: '0 auto', mb: 1 }}></Box>
                 <Typography sx={{ fontSize: '10px' }}>
-                  Mr. Munkhoq Ashrafy
+                  {secondPageData.preparedBy}
                 </Typography>
               </Box>
 
@@ -1053,10 +1393,10 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
             {/* Top Content - Exact same positioning */}
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
 
-              {/* Main Title - Red clay */}
+              {/* Main Title */}
               <Box sx={{ width: '100%', textAlign: 'center', mb: 3 }}>
                 <Typography sx={{ fontSize: '24px', fontWeight: 'bold', color: '#000000', letterSpacing: 1 }}>
-                  {data.orderRows?.[0]?.color || "Red clay"}
+                  {data.orderRows?.[0]?.color || ""}
                 </Typography>
               </Box>
 
@@ -1100,7 +1440,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               {/* Quantity */}
               <Box sx={{ width: '100%', textAlign: 'center', mb: 2, mt: 2 }}>
                 <Typography sx={{ fontSize: '16px', fontWeight: 'bold', color: '#000000' }}>
-                  Qty: {data.totalQty}
+                  Qty: {data.totalQty || ""}
                 </Typography>
               </Box>
 

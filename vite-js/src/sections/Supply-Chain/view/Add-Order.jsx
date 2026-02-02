@@ -436,6 +436,10 @@ const ItemDetailsSchema = Yup.object().shape({
     .positive('LDP Price must be positive')
     .typeError('LDP Price must be a number'),
   sizeRange: Yup.string().required('Size Range is required'),
+  sizeRangeDBID: Yup.number()
+    .typeError('Size Range ID is required')
+    .min(1, 'Size Range ID is required')
+    .required('Size Range ID is required'),
 });
 
 // -------------------- Item Details Dialog Component --------------------
@@ -445,7 +449,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
     totalValue: 0,
     totalLdpValue: 0,
   });
-  const { handleSubmit, control, reset, formState: { errors, isValid } } = useForm({
+  const { handleSubmit, control, reset, setValue, formState: { errors, isValid } } = useForm({
     resolver: yupResolver(ItemDetailsSchema),
     defaultValues: {
       styleNo: '',
@@ -454,6 +458,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       itemPrice: '',
       ldpPrice: '',
       sizeRange: '',
+      sizeRangeDBID: 0,
     },
     mode: 'onChange',
   });
@@ -474,9 +479,34 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
         const res = await axios.get(`${API_BASE_URL}/api/MyOrders/GetSizeRange`, { headers });
         
         if (Array.isArray(res.data)) {
-          setSizeRangeData(res.data);
-          const uniqueSizeRanges = [...new Set(res.data.map(item => item.sizeRange))];
-          setSizeRangeOptions(uniqueSizeRanges);
+          // Normalize to include DB ID so we can post it later (sizeRangeDBID key from API)
+          const normalized = res.data
+            .map((item) => ({
+              id: Number(
+                item.sizeRangeDBID ??
+                item.sizeRangeDbId ??
+                item.sizeRangeID ??
+                item.sizeRangeId ??
+                item.id ??
+                0
+              ),
+              sizeRange: item.sizeRange ?? '',
+              sizes: item.sizes,
+            }))
+            .filter((x) => x.sizeRange);
+
+          setSizeRangeData(normalized);
+
+          // Unique options (prefer id when present)
+          const seen = new Set();
+          const uniqueOptions = [];
+          normalized.forEach((x) => {
+            const key = x.id ? `id:${x.id}` : `sr:${x.sizeRange}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            uniqueOptions.push(x);
+          });
+          setSizeRangeOptions(uniqueOptions);
         }
       } catch (err) {
         console.error('Size range fetch error:', err);
@@ -506,6 +536,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       colorway: data.colorway || '',
       productCode: data.productCode || '',
       sizeRange: data.sizeRange || '',
+      sizeRangeDBID: Number(data.sizeRangeDBID || 0),
       size,
       // grid editable fields
       barcode: '',
@@ -530,6 +561,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       itemPrice: data.itemPrice || '',
       ldpPrice: data.ldpPrice || '',
       sizeRange: '',
+      sizeRangeDBID: 0,
     });
     setFormError('');
   };
@@ -712,8 +744,18 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
                   <Autocomplete
                     options={sizeRangeOptions}
                     loading={loadingSizeRanges}
-                    value={field.value || ''}
-                    onChange={(_, newValue) => field.onChange(newValue || '')}
+                    getOptionLabel={(option) => option?.sizeRange || ''}
+                    isOptionEqualToValue={(option, value) =>
+                      (option?.id && value?.id && option.id === value.id) ||
+                      option?.sizeRange === value?.sizeRange
+                    }
+                    value={sizeRangeOptions.find((opt) => opt.sizeRange === field.value) || null}
+                    onChange={(_, newValue) => {
+                      const nextLabel = newValue?.sizeRange || '';
+                      const nextId = Number(newValue?.id || 0);
+                      field.onChange(nextLabel);
+                      setValue('sizeRangeDBID', nextId, { shouldValidate: true });
+                    }}
                     renderInput={(params) => (
                       <TextField
                         {...params}
@@ -1817,6 +1859,7 @@ export default function CompletePurchaseOrderForm() {
           colorway: it.colorway || it.Colorway || it.colourway || '',
           productCode: it.productCode || it.ProductCode || '',
           sizeRange: it.sizeRange || it.SizeRange || '',
+          sizeRangeDBID: Number(it.sizeRangeDBID || it.sizeRangeDbId || it.sizeRangeID || it.sizeRangeId || 0),
           size: it.size || it.Size || '',
           // editable / extended fields for grid
           barcode: it.barCodeTFPO || it.barcode || it.Barcode || '',
@@ -1998,7 +2041,7 @@ export default function CompletePurchaseOrderForm() {
       colorway: row.colorway || '',
       size: String(row.size ?? ''),
       itemPrice: Number(row.itemPrice || 0),
-      sizeRangeDBID: 0, // backend can derive from sizeRange text if needed
+      sizeRangeDBID: Number(row.sizeRangeDBID || 0),
       productCode: row.productCode || '',
     }));
 

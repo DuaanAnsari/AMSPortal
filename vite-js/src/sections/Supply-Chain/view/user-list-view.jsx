@@ -377,7 +377,7 @@ export default function ShipmentReleaseFilters() {
         <Typography variant="h5" sx={{ mb: 0.5, fontWeight: 700, letterSpacing: 0.5 }}>
           SHIPMENT RELEASE
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" color="text.secondary" sx={{ display: 'none' }}>
           Dashboard
         </Typography>
       </Box>
@@ -389,8 +389,14 @@ export default function ShipmentReleaseFilters() {
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
               Filter shipments
             </Typography>
-
           </Box>
+          <Typography
+            variant="body2"
+            sx={{ color: '#1a237e', fontWeight: 600, cursor: 'pointer' }}
+            onClick={() => navigate('/dashboard/supply-chain/tracking-in-shipment')}
+          >
+            PO Tracking in Shipment
+          </Typography>
         </Box>
         <Grid container spacing={2}>
           <Grid item xs={12} md={4}>
@@ -679,7 +685,7 @@ export default function ShipmentReleaseFilters() {
                             }}
                             onClick={() =>
                               navigate(
-                                `/dashboard/supply-chain/print-invoice/${row.id}`,
+                                `/dashboard/supply-chain/print-invoice/${encodeURIComponent(row.invoiceNo)}`,
                                 { state: { shipment: row } }
                               )
                             }
@@ -711,6 +717,12 @@ export default function ShipmentReleaseFilters() {
                               py: 0.3,
                               px: 1,
                             }}
+                            onClick={() =>
+                              navigate(
+                                `/dashboard/supply-chain/rate-diff/${row.id}`,
+                                { state: { shipment: row } }
+                              )
+                            }
                           >
                             Rate Diff
                           </Button>
