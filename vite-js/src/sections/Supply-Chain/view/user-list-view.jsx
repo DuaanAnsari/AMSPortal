@@ -863,7 +863,7 @@ export default function ShipmentReleaseFilters() {
 
 function applyFilter({ inputData, comparator }) {
   // Priority cargo IDs to show at the top
-  const priorityCargoIds = ['111770', '111771', '111772', '111773', '111774', '111775'];
+  const priorityCargoIds = ['121836', '121837', '121838', '121782', '121785', '121714', '12181', '121815'];
   
   const stabilizedThis = inputData.map((el, index) => [el, index]);
 
