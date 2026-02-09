@@ -16,6 +16,7 @@ import {
   Typography,
   CircularProgress,
   Alert,
+  Tooltip,
 } from '@mui/material';
 import { ArrowBackIosNew } from '@mui/icons-material';
 
@@ -159,16 +160,42 @@ export default function TrackingInShipmentPage() {
                 ) : (
                   rows.map((row) => (
                     <TableRow key={`${row.cargoid}-${row.invoiceno}`}>
-                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.invoiceno}</TableCell>
-                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.invoicevalue}</TableCell>
-                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.invoicedate}</TableCell>
-                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.shipmentdate}</TableCell>
-                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.billno}</TableCell>
-                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.voyageFlight}</TableCell>
+                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>
+                        <Tooltip title={`Cargo ID: ${row.cargoid || '-'}`} placement="top">
+                          <span>{row.invoiceno}</span>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>
+                        <Tooltip title={`Cargo ID: ${row.cargoid || '-'}`} placement="top">
+                          <span>{row.invoicevalue}</span>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>
+                        <Tooltip title={`Cargo ID: ${row.cargoid || '-'}`} placement="top">
+                          <span>{row.invoicedate}</span>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>
+                        <Tooltip title={`Cargo ID: ${row.cargoid || '-'}`} placement="top">
+                          <span>{row.shipmentdate}</span>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>
+                        <Tooltip title={`Cargo ID: ${row.cargoid || '-'}`} placement="top">
+                          <span>{row.billno}</span>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>
+                        <Tooltip title={`Cargo ID: ${row.cargoid || '-'}`} placement="top">
+                          <span>{row.voyageFlight}</span>
+                        </Tooltip>
+                      </TableCell>
                     <TableCell sx={{ border: '1px solid #e0e0e0' }}>
-                      <Button size="small" sx={{ textTransform: 'none', color: '#3f336d' }}>
-                        View
-                      </Button>
+                      <Tooltip title={`Cargo ID: ${row.cargoid || '-'}`} placement="top">
+                        <Button size="small" sx={{ textTransform: 'none', color: '#3f336d' }}>
+                          View
+                        </Button>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                   ))
