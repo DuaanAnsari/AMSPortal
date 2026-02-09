@@ -87,7 +87,7 @@ export default function App() {
             themeDirection: 'ltr',
             themeContrast: 'bold',
             themeLayout: 'vertical',
-            themeColorPresets: 'default',
+            themeColorPresets: 'black',
             themeStretch: false,
           }}
         >

@@ -8,7 +8,7 @@ export default function OverviewEcommercePage() {
   return (
     <>
       <Helmet>
-        <title> Dashboard: E-Commerce</title>
+        <title> Dashboard: Customers</title>
       </Helmet>
 
       <OverviewEcommerceView />

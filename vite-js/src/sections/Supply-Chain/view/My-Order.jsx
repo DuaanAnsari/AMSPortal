@@ -236,6 +236,11 @@ export default function PurchaseOrderView() {
   const [revisedError, setRevisedError] = useState(null);
   const [revisedItems, setRevisedItems] = useState([]);
 
+  // Merchandiser assistant (name lookup by ID)
+  const [merchAssistantOptions, setMerchAssistantOptions] = useState([]); // raw API items
+  const [merchAssistantName, setMerchAssistantName] = useState('');
+  const [merchAssistantLoading, setMerchAssistantLoading] = useState(false);
+
   // Check restricted access
   const isRestrictedUser = hasRestrictedAccess();
 
@@ -682,6 +687,53 @@ export default function PurchaseOrderView() {
     },
     []
   );
+
+  // Fetch Merchants list for ID -> Name mapping
+  const fetchMerchAssistantOptions = useCallback(async () => {
+    if (!API_BASE_URL) return [];
+    setMerchAssistantLoading(true);
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(`${API_BASE_URL}/api/MyOrders/GetMerchants`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+      const data = await response.json();
+      const arr = Array.isArray(data) ? data : data ? [data] : [];
+      setMerchAssistantOptions(arr);
+      return arr;
+    } catch (error) {
+      console.error('❌ Error fetching merchants:', error);
+      setMerchAssistantOptions([]);
+      return [];
+    } finally {
+      setMerchAssistantLoading(false);
+    }
+  }, []);
+
+  // Ensure we have merch list when Revised Shipment popup opens
+  useEffect(() => {
+    if (!revisedOpen) return;
+    if (merchAssistantOptions.length) return;
+    fetchMerchAssistantOptions();
+  }, [fetchMerchAssistantOptions, merchAssistantOptions.length, revisedOpen]);
+
+  // Resolve merchandiser name by merchandiserId
+  useEffect(() => {
+    const idVal = revisedRow?.merchandiserId;
+    if (!revisedOpen || !idVal) {
+      setMerchAssistantName('');
+      return;
+    }
+    const idNum = Number(idVal);
+    const found = (merchAssistantOptions || []).find(
+      (x) => Number(x?.userId ?? x?.userID ?? x?.id ?? x?.ID) === idNum
+    );
+    const name = String(found?.userName ?? found?.UserName ?? found?.name ?? found?.Name ?? '').trim();
+    setMerchAssistantName(name || '');
+  }, [merchAssistantOptions, revisedOpen, revisedRow?.merchandiserId]);
 
   const handleSizeSpecsClick = useCallback(
     (row) => {
@@ -1334,8 +1386,10 @@ export default function PurchaseOrderView() {
                       Merchandiser Information
                     </Typography>
                     <Typography variant="body2">
-                      {revisedRow.merchandiserId
-                        ? `Merchandiser ID: ${revisedRow.merchandiserId}`
+                      {revisedRow?.merchandiserId
+                        ? merchAssistantLoading
+                          ? 'Loading...'
+                          : merchAssistantName || `Merchandiser ID: ${revisedRow.merchandiserId}`
                         : '-'}
                     </Typography>
                   </Box>
@@ -1417,7 +1471,88 @@ export default function PurchaseOrderView() {
                 >
                   Delivery Schedule
                 </Typography>
-                <Typography variant="body2">No schedule data.</Typography>
+                {(() => {
+                  const toNum = (v) => {
+                    const n = Number(v);
+                    return Number.isFinite(n) ? n : 0;
+                  };
+
+                  const totalScheduledQty = (revisedItems || []).reduce((sum, it) => sum + toNum(it?.poQuantity), 0);
+                  const totalScheduledValue = (revisedItems || []).reduce((sum, it) => sum + toNum(it?.value), 0);
+
+                  const currencyRaw = String(revisedRow?.transactionCurrency || '').toLowerCase();
+                  const currencySymbol =
+                    currencyRaw.includes('€') || currencyRaw.includes('eur')
+                      ? '€'
+                      : currencyRaw.includes('dollar')
+                        ? '$'
+                      : currencyRaw.includes('$') || currencyRaw.includes('usd')
+                        ? '$'
+                        : currencyRaw.includes('gbp') || currencyRaw.includes('£')
+                          ? '£'
+                          : currencyRaw ? `${revisedRow?.transactionCurrency} ` : '€';
+
+                  const fmtMoney = (n) =>
+                    Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+                  const formatDeliveryDate = (d) => {
+                    if (!d) return '';
+                    const date = new Date(d);
+                    if (Number.isNaN(date.getTime())) return String(d);
+                    return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                  };
+
+                  // Delivery1 should show Shipment Date (as per requirement)
+                  const deliveryDate =
+                    buyerRevisedDate ||
+                    vendorRevisedDate ||
+                    revisedRow?.shipmentDate ||
+                    revisedRow?.ShipmentDate ||
+                    '';
+
+                  return (
+                    <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 2 }}>
+                      <Box
+                        sx={{
+                          display: 'grid',
+                          gridTemplateColumns: '110px 1fr',
+                          columnGap: 2,
+                          alignItems: 'center',
+                          mb: 1.2,
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                          Delivery1
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {formatDeliveryDate(deliveryDate)}
+                        </Typography>
+                      </Box>
+
+                      <Box
+                        sx={{
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 90px 140px 60px',
+                          alignItems: 'center',
+                          columnGap: 2,
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: 700, textAlign: 'right' }}>
+                          Total Scheduled
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700, textAlign: 'right' }}>
+                          {totalScheduledQty.toLocaleString()}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700, textAlign: 'right' }}>
+                          {currencySymbol}{fmtMoney(totalScheduledValue)}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700, textAlign: 'right' }}>
+                          FOB
+                        </Typography>
+                      </Box>
+                    </Box>
+                  );
+                })()}
               </Box>
             </Box>
           )}

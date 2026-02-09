@@ -19,6 +19,13 @@ export function SettingsProvider({ children, defaultSettings }) {
 
   const isArabic = localStorageGetItem('i18nextLng') === 'ar';
 
+  // Ensure preset defaults to black (migrate stored "default" -> "black")
+  useEffect(() => {
+    if (state?.themeColorPresets === 'default' && defaultSettings?.themeColorPresets === 'black') {
+      update('themeColorPresets', 'black');
+    }
+  }, [defaultSettings?.themeColorPresets, state?.themeColorPresets, update]);
+
   useEffect(() => {
     if (isArabic) {
       onChangeDirectionByLang('ar');

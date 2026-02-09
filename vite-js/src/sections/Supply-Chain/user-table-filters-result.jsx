@@ -20,6 +20,8 @@ export default function UserTableFiltersResult({
   results,
   ...other
 }) {
+  const roleFilters = Array.isArray(filters?.role) ? filters.role : [];
+
   const handleRemoveKeyword = useCallback(() => {
     onFilters('name', '');
   }, [onFilters]);
@@ -30,11 +32,11 @@ export default function UserTableFiltersResult({
 
   const handleRemoveRole = useCallback(
     (inputValue) => {
-      const newValue = filters.role.filter((item) => item !== inputValue);
+      const newValue = roleFilters.filter((item) => item !== inputValue);
 
       onFilters('role', newValue);
     },
-    [filters.role, onFilters]
+    [roleFilters, onFilters]
   );
 
   return (
@@ -53,9 +55,9 @@ export default function UserTableFiltersResult({
           </Block>
         )}
 
-        {!!filters.role.length && (
+        {!!roleFilters.length && (
           <Block label="Role:">
-            {filters.role.map((item) => (
+            {roleFilters.map((item) => (
               <Chip key={item} label={item} size="small" onDelete={() => handleRemoveRole(item)} />
             ))}
           </Block>

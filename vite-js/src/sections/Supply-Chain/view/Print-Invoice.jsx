@@ -14,8 +14,10 @@ import {
     Typography,
     CircularProgress,
 } from '@mui/material';
-import { ZoomIn, ZoomOut, Print } from '@mui/icons-material';
+import { ZoomIn, ZoomOut, Print, Download } from '@mui/icons-material';
 import { useReactToPrint } from 'react-to-print';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 // ----------------------------------------------------------------------
 
@@ -232,6 +234,7 @@ export default function PrintInvoicePage() {
 
     const contentRef = useRef(null);
     const [zoomLevel, setZoomLevel] = useState(1.2);
+    const [downloading, setDownloading] = useState(false);
 
     const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 0.1, 2));
     const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 0.1, 0.5));
@@ -240,6 +243,56 @@ export default function PrintInvoicePage() {
         contentRef,
         documentTitle: `Invoice_${invoiceData?.invoiceNo || 'invoice'}`,
     });
+
+    const handleDownloadPDF = async () => {
+        const element = contentRef.current;
+        if (!element || !invoiceData) return;
+
+        const originalTransform = element.style.transform;
+        const originalTransition = element.style.transition;
+
+        try {
+            setDownloading(true);
+
+            // Ensure we capture at 100% (ignore zoom scale) for correct PDF sizing
+            element.style.transform = 'scale(1)';
+            element.style.transition = 'none';
+
+            const pages = Array.from(element.children);
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+
+            for (let i = 0; i < pages.length; i += 1) {
+                const page = pages[i];
+                if (!(page instanceof HTMLElement)) continue;
+
+                const canvas = await html2canvas(page, {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: '#FFFFFF',
+                });
+
+                const imgData = canvas.toDataURL('image/png');
+                const ratio = pdfWidth / canvas.width;
+                const finalHeight = canvas.height * ratio;
+
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, Math.min(finalHeight, pdfHeight));
+                if (i < pages.length - 1) {
+                    pdf.addPage();
+                }
+            }
+
+            pdf.save(`Invoice_${invoiceData.invoiceNo || 'invoice'}.pdf`);
+        } catch (err) {
+            console.error('Error generating PDF:', err);
+        } finally {
+            element.style.transform = originalTransform;
+            element.style.transition = originalTransition;
+            setDownloading(false);
+        }
+    };
 
     // Common styles
     const labelStyle = { fontSize: 10, color: '#000', fontWeight: 600 };
@@ -288,6 +341,15 @@ export default function PrintInvoicePage() {
                     </Box>
 
                     <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
+                        <IconButton
+                            size="small"
+                            onClick={handleDownloadPDF}
+                            disabled={downloading || loading || !!error || !invoiceData}
+                            sx={{ color: '#fff' }}
+                            title="Download"
+                        >
+                            <Download fontSize="small" />
+                        </IconButton>
                         <IconButton size="small" onClick={handlePrint} sx={{ color: '#fff' }}>
                             <Print fontSize="small" />
                         </IconButton>

@@ -703,6 +703,12 @@ export default function ShipmentReleaseFilters() {
                               py: 0.3,
                               px: 1,
                             }}
+                            onClick={() =>
+                              navigate(
+                                `/dashboard/supply-chain/invoice-excel/${encodeURIComponent(row.invoiceNo)}`,
+                                { state: { shipment: row } }
+                              )
+                            }
                           >
                             Excel Invoice
                           </Button>

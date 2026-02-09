@@ -14,6 +14,8 @@ import {
   TableRow,
   TextField,
   Typography,
+  CircularProgress,
+  Alert,
 } from '@mui/material';
 import { ArrowBackIosNew } from '@mui/icons-material';
 
@@ -23,17 +25,52 @@ export default function TrackingInShipmentPage() {
   const navigate = useNavigate();
   const [poNumber, setPoNumber] = useState('');
   const [showResults, setShowResults] = useState(false);
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const mockRows = [
-    {
-      invoiceNo: 'SM AST SADSTK-BS-CR-004-22-23',
-      value: '10094.72',
-      invoiceDate: '10 Nov 2022',
-      shipmentDate: '08 Nov 2022',
-      billNo: 'CNCKHI5068',
-      voyage: 'CMA CGM ORFEO 2145',
-    },
-  ];
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+  const buildUrl = (baseUrl, po) => {
+    const base = String(baseUrl || '').replace(/\/+$/, '');
+    // base should be like: http://192.168.18.13  (NOT including /api)
+    return `${base}/api/ShipmentRelease/PoSearch/${encodeURIComponent(po)}`;
+  };
+
+  const handleSearch = async () => {
+    const po = poNumber.trim();
+    if (!po) {
+      setError('PO Number is required.');
+      setShowResults(false);
+      return;
+    }
+    if (!API_BASE_URL) {
+      setError('Missing VITE_API_BASE_URL in env.');
+      setShowResults(false);
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+    setShowResults(true);
+    try {
+      const token = localStorage.getItem('accessToken');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const url = buildUrl(API_BASE_URL, po);
+
+      const res = await fetch(url, { headers });
+      if (!res.ok) {
+        throw new Error(`Failed (${res.status})`);
+      }
+      const data = await res.json();
+      setRows(Array.isArray(data) ? data : data ? [data] : []);
+    } catch (e) {
+      setRows([]);
+      setError(e?.message || 'Failed to fetch data.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -69,21 +106,27 @@ export default function TrackingInShipmentPage() {
                 bgcolor: '#3f336d',
                 '&:hover': { bgcolor: '#302857' },
               }}
-              onClick={() => setShowResults(true)}
+              onClick={handleSearch}
+              disabled={loading}
             >
-              Search
+              {loading ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'Search'}
             </Button>
           </Grid>
         </Grid>
 
         {showResults && (
           <Box sx={{ mt: 3 }}>
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
             <Typography variant="body2" sx={{ mb: 1, color: '#6b6f76' }}>
               This Order Exist in Following Invoices
             </Typography>
             <Table size="small">
               <TableHead>
-                <TableRow sx={{ backgroundColor: '#f28f5a' }}>
+                <TableRow sx={{ backgroundColor: (theme) => theme.palette.action.hover }}>
                   {[
                     'Invoice No',
                     'Value',
@@ -95,7 +138,11 @@ export default function TrackingInShipmentPage() {
                   ].map((head) => (
                     <TableCell
                       key={head}
-                      sx={{ color: '#fff', fontWeight: 600, border: '1px solid #f28f5a' }}
+                      sx={{
+                        color: '#000',
+                        fontWeight: 700,
+                        border: (theme) => `1px solid ${theme.palette.divider}`,
+                      }}
                     >
                       {head}
                     </TableCell>
@@ -103,23 +150,31 @@ export default function TrackingInShipmentPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {mockRows.map((row) => (
-                  <TableRow key={row.invoiceNo}>
-                    <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.invoiceNo}</TableCell>
-                    <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.value}</TableCell>
-                    <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.invoiceDate}</TableCell>
-                    <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.shipmentDate}</TableCell>
-                    <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.billNo}</TableCell>
-                    <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.voyage}</TableCell>
+                {rows.length === 0 && !loading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} sx={{ border: '1px solid #e0e0e0', color: '#6b6f76' }}>
+                      No records found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  rows.map((row) => (
+                    <TableRow key={`${row.cargoid}-${row.invoiceno}`}>
+                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.invoiceno}</TableCell>
+                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.invoicevalue}</TableCell>
+                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.invoicedate}</TableCell>
+                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.shipmentdate}</TableCell>
+                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.billno}</TableCell>
+                      <TableCell sx={{ border: '1px solid #e0e0e0' }}>{row.voyageFlight}</TableCell>
                     <TableCell sx={{ border: '1px solid #e0e0e0' }}>
                       <Button size="small" sx={{ textTransform: 'none', color: '#3f336d' }}>
                         View
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))}
-                <TableRow sx={{ backgroundColor: '#3f336d' }}>
-                  <TableCell colSpan={7} sx={{ color: '#fff', fontWeight: 600 }}>
+                  ))
+                )}
+                <TableRow>
+                  <TableCell colSpan={7} sx={{ color: '#6b6f76', fontWeight: 600, border: '1px solid #e0e0e0' }}>
                     Page 1
                   </TableCell>
                 </TableRow>

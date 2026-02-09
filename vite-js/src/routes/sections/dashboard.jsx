@@ -71,6 +71,9 @@ const InspectionCertificatePage = lazy(
 const PrintInvoicePage = lazy(
   () => import('src/sections/Supply-Chain/view/Print-Invoice')
 );
+const InvoiceExcelPage = lazy(
+  () => import('src/sections/Supply-Chain/view/Invoice-Excel')
+);
 const RateDiffPage = lazy(
   () => import('src/sections/Supply-Chain/view/Rate-Diff')
 );
@@ -208,6 +211,7 @@ export const dashboardRoutes = [
           { path: 'purchase-order-edit/:id', element: <CompletePurchaseOrderFormEdit /> },
           { path: 'inspection-certificate/:id', element: <InspectionCertificatePage /> },
           { path: 'print-invoice/:id', element: <PrintInvoicePage /> },
+          { path: 'invoice-excel/:id', element: <InvoiceExcelPage /> },
           { path: 'rate-diff/:id', element: <RateDiffPage /> },
           { path: 'tracking-in-shipment', element: <TrackingInShipmentPage /> },
         ],
