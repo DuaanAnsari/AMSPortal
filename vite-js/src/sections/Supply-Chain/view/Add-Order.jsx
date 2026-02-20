@@ -5,7 +5,7 @@ import { useForm, Controller, FormProvider, useFormContext } from 'react-hook-fo
 import { yupResolver } from '@hookform/resolvers/yup';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
-import { Autocomplete } from '@mui/material';
+import { Autocomplete, createFilterOptions } from '@mui/material';
 import CalculateIcon from '@mui/icons-material/Calculate';
 import CircularProgress from '@mui/material/CircularProgress';
 import CloseIcon from '@mui/icons-material/Close';
@@ -129,7 +129,7 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
     if (file) {
       setValue(name, file, { shouldValidate: true });
       
-      // Create preview URL for images
+      // Create preview URL for all file types
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -137,12 +137,18 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
         };
         reader.readAsDataURL(file);
       } else {
-        setPreviewUrl('');
+        // For all other files (PDF, Excel, Word, etc), create object URL
+        const objectUrl = URL.createObjectURL(file);
+        setPreviewUrl(objectUrl);
       }
     }
   };
 
   const handleRemoveFile = () => {
+    // Cleanup object URL if exists
+    if (previewUrl && !previewUrl.startsWith('data:')) {
+      URL.revokeObjectURL(previewUrl);
+    }
     setValue(name, null, { shouldValidate: true });
     setPreviewUrl('');
     if (fileInputRef.current) {
@@ -151,8 +157,31 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
   };
 
   const handlePreviewClick = () => {
-    if (previewUrl) {
-      setFullScreenOpen(true);
+    if (previewUrl && fileValue) {
+      const fileType = fileValue.type;
+      const fileName = fileValue.name;
+      const fileExtension = fileName.split('.').pop().toLowerCase();
+      
+      // For images, show full screen preview
+      if (fileType.startsWith('image/')) {
+        setFullScreenOpen(true);
+      } 
+      // For Word files, download instead (can't preview locally)
+      else if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+               fileType === 'application/msword' ||
+               fileExtension === 'doc' || fileExtension === 'docx') {
+        // Create download link for Word files
+        const link = document.createElement('a');
+        link.href = previewUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+      // For PDF and Excel, open in new tab
+      else {
+        window.open(previewUrl, '_blank');
+      }
     }
   };
 
@@ -165,9 +194,22 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
     if (!fileValue) {
       setPreviewUrl('');
     }
-  }, [fileValue]);
+    // Cleanup on unmount
+    return () => {
+      if (previewUrl && !previewUrl.startsWith('data:')) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [fileValue, previewUrl]);
 
   const isImage = fileValue?.type?.startsWith('image/');
+  const isPDF = fileValue?.type === 'application/pdf';
+  const isExcel = fileValue?.type === 'application/vnd.ms-excel' || 
+                  fileValue?.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const isWord = fileValue?.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+                 fileValue?.type === 'application/msword';
+  const isOtherFile = fileValue && !isImage && !isPDF && !isExcel && !isWord;
+  const canPreview = isImage || isPDF || isExcel || isWord || isOtherFile;
 
   return (
     <Box>
@@ -255,6 +297,82 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
               </Box>
               <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>
                 Click on image to view full screen
+              </Typography>
+            </Box>
+          )}
+
+          {/* PDF Preview Button */}
+          {isPDF && (
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                startIcon={<ZoomInIcon />}
+                onClick={handlePreviewClick}
+                sx={{ textTransform: 'none' }}
+              >
+                Open PDF Preview
+              </Button>
+              <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
+                Click to view PDF in new tab
+              </Typography>
+            </Box>
+          )}
+
+          {/* Excel Preview Button */}
+          {isExcel && (
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Button
+                variant="contained"
+                color="success"
+                size="small"
+                startIcon={<ZoomInIcon />}
+                onClick={handlePreviewClick}
+                sx={{ textTransform: 'none' }}
+              >
+                Open Excel Preview
+              </Button>
+              <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
+                Click to view Excel in new tab
+              </Typography>
+            </Box>
+          )}
+
+          {/* Word Preview Button */}
+          {isWord && (
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Button
+                variant="contained"
+                color="info"
+                size="small"
+                startIcon={<UploadFileIcon />}
+                onClick={handlePreviewClick}
+                sx={{ textTransform: 'none' }}
+              >
+                Download Word File
+              </Button>
+              <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
+                Click to download and open Word document
+              </Typography>
+            </Box>
+          )}
+
+          {/* Other Files Preview Button */}
+          {isOtherFile && (
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Button
+                variant="contained"
+                color="secondary"
+                size="small"
+                startIcon={<ZoomInIcon />}
+                onClick={handlePreviewClick}
+                sx={{ textTransform: 'none' }}
+              >
+                Open File Preview
+              </Button>
+              <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
+                Click to view file in new tab
               </Typography>
             </Box>
           )}
@@ -490,22 +608,23 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
                 item.id ??
                 0
               ),
-              sizeRange: item.sizeRange ?? '',
+              sizeRange: String(item.sizeRange ?? '').trim(),
               sizes: item.sizes,
             }))
-            .filter((x) => x.sizeRange);
+            .filter((x) => x.sizeRange && x.sizeRange !== '');
 
           setSizeRangeData(normalized);
 
-          // Unique options (prefer id when present)
-          const seen = new Set();
-          const uniqueOptions = [];
+          // Remove duplicates based on sizeRange value
+          const uniqueMap = new Map();
           normalized.forEach((x) => {
-            const key = x.id ? `id:${x.id}` : `sr:${x.sizeRange}`;
-            if (seen.has(key)) return;
-            seen.add(key);
-            uniqueOptions.push(x);
+            if (!uniqueMap.has(x.sizeRange)) {
+              uniqueMap.set(x.sizeRange, x);
+            }
           });
+          
+          const uniqueOptions = Array.from(uniqueMap.values());
+          console.log('Unique size range options loaded:', uniqueOptions.length);
           setSizeRangeOptions(uniqueOptions);
         }
       } catch (err) {
@@ -740,35 +859,61 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="sizeRange"
               control={control}
               render={({ field, fieldState }) => (
-                <FormControl fullWidth size="small" error={!!fieldState.error}>
-                  <Autocomplete
-                    options={sizeRangeOptions}
-                    loading={loadingSizeRanges}
-                    getOptionLabel={(option) => option?.sizeRange || ''}
-                    isOptionEqualToValue={(option, value) =>
-                      (option?.id && value?.id && option.id === value.id) ||
-                      option?.sizeRange === value?.sizeRange
+                <Autocomplete
+                  options={sizeRangeOptions}
+                  loading={loadingSizeRanges}
+                  getOptionLabel={(option) => String(option?.sizeRange || '')}
+                  value={sizeRangeOptions.find((opt) => opt.sizeRange === field.value) || null}
+                  onChange={(_, newValue) => {
+                    const nextLabel = newValue?.sizeRange || '';
+                    const nextId = Number(newValue?.id || 0);
+                    field.onChange(nextLabel);
+                    setValue('sizeRangeDBID', nextId, { shouldValidate: true });
+                  }}
+                  filterOptions={(options, { inputValue }) => {
+                    if (!inputValue) return options.slice(0, 100);
+                    
+                    const searchTerm = inputValue.toLowerCase();
+                    const filtered = [];
+                    
+                    // First pass: collect matches
+                    for (let i = 0; i < options.length && filtered.length < 100; i++) {
+                      const label = String(options[i]?.sizeRange || '').toLowerCase();
+                      if (label.includes(searchTerm)) {
+                        filtered.push(options[i]);
+                      }
                     }
-                    value={sizeRangeOptions.find((opt) => opt.sizeRange === field.value) || null}
-                    onChange={(_, newValue) => {
-                      const nextLabel = newValue?.sizeRange || '';
-                      const nextId = Number(newValue?.id || 0);
-                      field.onChange(nextLabel);
-                      setValue('sizeRangeDBID', nextId, { shouldValidate: true });
-                    }}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="Size Range"
-                        placeholder="Select Size Range"
-                        size="small"
-                        error={!!fieldState.error}
-                        helperText={fieldState.error?.message}
-                        required
-                      />
-                    )}
-                  />
-                </FormControl>
+                    
+                    // Sort: starts-with first
+                    filtered.sort((a, b) => {
+                      const aLabel = String(a?.sizeRange || '').toLowerCase();
+                      const bLabel = String(b?.sizeRange || '').toLowerCase();
+                      
+                      const aStarts = aLabel.startsWith(searchTerm);
+                      const bStarts = bLabel.startsWith(searchTerm);
+                      
+                      if (aStarts && !bStarts) return -1;
+                      if (!aStarts && bStarts) return 1;
+                      return aLabel.localeCompare(bLabel);
+                    });
+                    
+                    return filtered;
+                  }}
+                  ListboxProps={{
+                    style: { maxHeight: 250 }
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Size Range"
+                      placeholder="Type to search..."
+                      size="small"
+                      error={!!fieldState.error}
+                      helperText={fieldState.error?.message}
+                      required
+                    />
+                  )}
+                />
               )}
             />
           </Grid>
@@ -815,6 +960,16 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
                           type="number"
                           size="small"
                           onChange={(e) => handleQuantityChange(index, e.target.value)}
+                          onFocus={(e) => {
+                            if (e.target.value === '0' || e.target.value === 0) {
+                              e.target.select();
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if ((e.target.value === '0' || e.target.value === 0) && e.key !== 'Tab' && e.key !== 'Enter' && e.key !== 'Escape' && e.key !== 'Backspace' && e.key !== 'Delete') {
+                              e.target.value = '';
+                            }
+                          }}
                           sx={{ width: 70 }}
                         />
                       </TableCell>
@@ -878,8 +1033,8 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
 
 // -------------------- Validation Schema --------------------
 const Schema = Yup.object().shape({
-  costingRef: Yup.string(),
-  masterPo: Yup.string().required('Master No. is required'),
+  costingRef: Yup.string().nullable(),
+  masterPo: Yup.string().nullable(),
   customer: Yup.string().required('Customer is required'),
   supplier: Yup.string().required('Supplier is required'),
   merchant: Yup.array().min(1, 'At least one merchant is required').required('Merchant is required'),
@@ -900,8 +1055,8 @@ const Schema = Yup.object().shape({
   consignee: Yup.string(),
   image: Yup.mixed().required('Image is required'),
   placementDate: Yup.date().required('Placement Date is required'),
-  etaNewJerseyDate: Yup.date().required('ETA New Jersey Date is required'),
-  etaWarehouseDate: Yup.date().required('ETA Warehouse Date is required'),
+  etaNewJerseyDate: Yup.date().nullable(),
+  etaWarehouseDate: Yup.date().nullable(),
   buyerShipInitial: Yup.date().required('Buyer Ship. Dt. (Initial) is required'),
   buyerShipLast: Yup.date().required('Buyer Ship. Dt. (Last) is required'),
   vendorShipInitial: Yup.date().required('Vendor Ship. Dt. (Initial) is required'),
@@ -1176,13 +1331,14 @@ export default function CompletePurchaseOrderForm() {
 
   const {
     handleSubmit,
-    formState: { isSubmitting },
+    formState: { isSubmitting, errors },
     control,
     setValue,
     watch,
     getValues,
     setError,
     clearErrors,
+    trigger,
   } = methods;
 
   
@@ -1206,7 +1362,105 @@ export default function CompletePurchaseOrderForm() {
   const [activeStep, setActiveStep] = useState(0);
   const isLastStep = activeStep === STEPS.length - 1;
 
-  const handleNextStep = () => {
+  const handleNextStep = async () => {
+    // Validate current step fields before moving to next step
+    const currentValues = getValues();
+    let hasErrors = false;
+    let errorMessages = [];
+
+    // Step 0: PURCHASE ORDER ENTRY
+    if (activeStep === 0) {
+      if (!currentValues.customer) {
+        setError('customer', { type: 'manual', message: 'Customer is required' });
+        errorMessages.push('Customer');
+        hasErrors = true;
+      }
+      if (!currentValues.supplier) {
+        setError('supplier', { type: 'manual', message: 'Supplier is required' });
+        errorMessages.push('Supplier');
+        hasErrors = true;
+      }
+      if (!currentValues.merchant || currentValues.merchant.length === 0) {
+        setError('merchant', { type: 'manual', message: 'At least one merchant is required' });
+        errorMessages.push('Merchant');
+        hasErrors = true;
+      }
+      if (!currentValues.proceedings) {
+        setError('proceedings', { type: 'manual', message: 'Proceedings is required' });
+        errorMessages.push('Proceedings');
+        hasErrors = true;
+      }
+      if (!currentValues.orderType) {
+        setError('orderType', { type: 'manual', message: 'Order Type is required' });
+        errorMessages.push('Order Type');
+        hasErrors = true;
+      }
+      if (!currentValues.transactions) {
+        setError('transactions', { type: 'manual', message: 'Transactions is required' });
+        errorMessages.push('Transactions');
+        hasErrors = true;
+      }
+      if (!currentValues.version) {
+        setError('version', { type: 'manual', message: 'Version is required' });
+        errorMessages.push('Version');
+        hasErrors = true;
+      }
+    }
+
+    // Step 1: PURCHASE ORDER IMPORTANT DATES
+    if (activeStep === 1) {
+      if (!currentValues.image) {
+        setError('image', { type: 'manual', message: 'Image is required' });
+        errorMessages.push('Image');
+        hasErrors = true;
+      }
+      if (!currentValues.placementDate) {
+        setError('placementDate', { type: 'manual', message: 'Placement Date is required' });
+        errorMessages.push('Placement Date');
+        hasErrors = true;
+      }
+      if (!currentValues.buyerShipInitial) {
+        setError('buyerShipInitial', { type: 'manual', message: 'Buyer Ship. Dt. (Initial) is required' });
+        errorMessages.push('Buyer Ship. Dt. (Initial)');
+        hasErrors = true;
+      }
+      if (!currentValues.buyerShipLast) {
+        setError('buyerShipLast', { type: 'manual', message: 'Buyer Ship. Dt. (Last) is required' });
+        errorMessages.push('Buyer Ship. Dt. (Last)');
+        hasErrors = true;
+      }
+      if (!currentValues.vendorShipInitial) {
+        setError('vendorShipInitial', { type: 'manual', message: 'Vendor Ship. Dt. (Initial) is required' });
+        errorMessages.push('Vendor Ship. Dt. (Initial)');
+        hasErrors = true;
+      }
+      if (!currentValues.vendorShipLast) {
+        setError('vendorShipLast', { type: 'manual', message: 'Vendor Ship. Dt. (Last) is required' });
+        errorMessages.push('Vendor Ship. Dt. (Last)');
+        hasErrors = true;
+      }
+      if (!currentValues.finalInspectionDate) {
+        setError('finalInspectionDate', { type: 'manual', message: 'Final Inspection Date is required' });
+        errorMessages.push('Final Inspection Date');
+        hasErrors = true;
+      }
+    }
+
+    // Show error message if validation fails
+    if (hasErrors) {
+      setSnackbar({
+        open: true,
+        message: `Please fill the following required fields: ${errorMessages.join(', ')}`,
+        severity: 'error',
+      });
+      // Scroll to top to show errors
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      return;
+    }
+
+    // If validation passes, move to next step
     setActiveStep((prev) => {
       const next = Math.min(prev + 1, STEPS.length - 1);
       // Scroll to top on every Next click
@@ -3200,6 +3454,16 @@ export default function CompletePurchaseOrderForm() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'ratio', e.target.value)
                                 }
+                                onFocus={(e) => {
+                                  if (e.target.value === '0' || e.target.value === 0 || e.target.value === '') {
+                                    e.target.select();
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if ((e.target.value === '0' || e.target.value === 0) && e.key !== 'Tab' && e.key !== 'Enter' && e.key !== 'Escape') {
+                                    e.target.value = '';
+                                  }
+                                }}
                                 sx={{ width: 80 }}
                               />
                             </TableCell>
@@ -3211,6 +3475,16 @@ export default function CompletePurchaseOrderForm() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'quantity', e.target.value)
                                 }
+                                onFocus={(e) => {
+                                  if (e.target.value === '0' || e.target.value === 0) {
+                                    e.target.select();
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if ((e.target.value === '0' || e.target.value === 0) && e.key !== 'Tab' && e.key !== 'Enter' && e.key !== 'Escape' && e.key !== 'Backspace' && e.key !== 'Delete') {
+                                    e.target.value = '';
+                                  }
+                                }}
                                 sx={{ width: 70 }}
                               />
                             </TableCell>
@@ -3222,6 +3496,16 @@ export default function CompletePurchaseOrderForm() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'itemPrice', e.target.value)
                                 }
+                                onFocus={(e) => {
+                                  if (e.target.value === '0' || e.target.value === 0) {
+                                    e.target.select();
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if ((e.target.value === '0' || e.target.value === 0) && e.key !== 'Tab' && e.key !== 'Enter' && e.key !== 'Escape' && e.key !== 'Backspace' && e.key !== 'Delete') {
+                                    e.target.value = '';
+                                  }
+                                }}
                                 sx={{ width: 70 }}
                               />
                             </TableCell>
@@ -3234,6 +3518,16 @@ export default function CompletePurchaseOrderForm() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'vendorPrice', e.target.value)
                                 }
+                                onFocus={(e) => {
+                                  if (e.target.value === '0' || e.target.value === 0) {
+                                    e.target.select();
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if ((e.target.value === '0' || e.target.value === 0) && e.key !== 'Tab' && e.key !== 'Enter' && e.key !== 'Escape' && e.key !== 'Backspace' && e.key !== 'Delete') {
+                                    e.target.value = '';
+                                  }
+                                }}
                                 sx={{ width: 80 }}
                               />
                             </TableCell>
@@ -3245,6 +3539,16 @@ export default function CompletePurchaseOrderForm() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'ldpPrice', e.target.value)
                                 }
+                                onFocus={(e) => {
+                                  if (e.target.value === '0' || e.target.value === 0) {
+                                    e.target.select();
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if ((e.target.value === '0' || e.target.value === 0) && e.key !== 'Tab' && e.key !== 'Enter' && e.key !== 'Escape' && e.key !== 'Backspace' && e.key !== 'Delete') {
+                                    e.target.value = '';
+                                  }
+                                }}
                                 sx={{ width: 80 }}
                               />
                             </TableCell>
@@ -3257,6 +3561,16 @@ export default function CompletePurchaseOrderForm() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'cartonQty', e.target.value)
                                 }
+                                onFocus={(e) => {
+                                  if (e.target.value === '0' || e.target.value === 0) {
+                                    e.target.select();
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if ((e.target.value === '0' || e.target.value === 0) && e.key !== 'Tab' && e.key !== 'Enter' && e.key !== 'Escape' && e.key !== 'Backspace' && e.key !== 'Delete') {
+                                    e.target.value = '';
+                                  }
+                                }}
                                 sx={{ width: 70 }}
                               />
                             </TableCell>
@@ -3268,6 +3582,16 @@ export default function CompletePurchaseOrderForm() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'grossWeight', e.target.value)
                                 }
+                                onFocus={(e) => {
+                                  if (e.target.value === '0' || e.target.value === 0) {
+                                    e.target.select();
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if ((e.target.value === '0' || e.target.value === 0) && e.key !== 'Tab' && e.key !== 'Enter' && e.key !== 'Escape' && e.key !== 'Backspace' && e.key !== 'Delete') {
+                                    e.target.value = '';
+                                  }
+                                }}
                                 sx={{ width: 80 }}
                               />
                             </TableCell>
@@ -3279,6 +3603,16 @@ export default function CompletePurchaseOrderForm() {
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'netWeight', e.target.value)
                                 }
+                                onFocus={(e) => {
+                                  if (e.target.value === '0' || e.target.value === 0) {
+                                    e.target.select();
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if ((e.target.value === '0' || e.target.value === 0) && e.key !== 'Tab' && e.key !== 'Enter' && e.key !== 'Escape' && e.key !== 'Backspace' && e.key !== 'Delete') {
+                                    e.target.value = '';
+                                  }
+                                }}
                                 sx={{ width: 80 }}
                               />
                             </TableCell>

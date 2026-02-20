@@ -66,13 +66,13 @@ export default function TNAChartPage() {
 
   const [tableData, setTableData] = useState([]);
   const [fullData, setFullData] = useState([]); // Store complete unfiltered data
-  const [productPortfolios, setProductPortfolios] = useState([]);
-  const [selectedPortfolio, setSelectedPortfolio] = useState('');
+  const [customers, setCustomers] = useState([]); // All customers from API
+  const [selectedCustomer, setSelectedCustomer] = useState(''); // Selected customer ID
+  const [productPortfolios, setProductPortfolios] = useState([]); // Portfolio names
   const [loading, setLoading] = useState(false);
-  const [allPoNumbers, setAllPoNumbers] = useState([]);
+  const [allPoOptions, setAllPoOptions] = useState([]); // PO options with portfolio grouping
   const [selectedPoNumbers, setSelectedPoNumbers] = useState([]);
-  const [allCustomers, setAllCustomers] = useState([]);
-  const [selectedCustomers, setSelectedCustomers] = useState([]);
+  const [selectedPortfolioId, setSelectedPortfolioId] = useState(null); // Track selected portfolio
   const [allColors, setAllColors] = useState([]);
   const [selectedColors, setSelectedColors] = useState([]);
   const [modifiedRows, setModifiedRows] = useState(new Map());
@@ -191,59 +191,57 @@ export default function TNAChartPage() {
     return `${dd}/${mm}/${yyyy}`;
   };
 
-  // Fetch product portfolios for filter
+  // Fetch customers from API
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const response = await apiClient.get('/MyOrders/GetCustomer');
+        const list = response.data || [];
+        setCustomers(list);
+      } catch (error) {
+        console.error('Error fetching customers for TNA Chart:', error);
+      }
+    };
+
+    fetchCustomers();
+  }, []);
+
+  // Fetch product portfolios for name mapping
   useEffect(() => {
     const fetchProductPortfolios = async () => {
       try {
         const response = await apiClient.get('/MyOrders/GetProductPortfolio');
         const list = response.data || [];
-        // Sirf list set karein; ab auto first select + search nahi hoga
         setProductPortfolios(list);
       } catch (error) {
-        // eslint-disable-next-line no-console
         console.error('Error fetching product portfolios for TNA Chart:', error);
       }
     };
 
     fetchProductPortfolios();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Recompute dropdown options and visible rows whenever selections or data change
   useEffect(() => {
     if (fullData.length === 0) return;
 
-    // Rebuild dependent dropdown options (PO No, Color) based on selected customers
-    let optionBase = fullData;
-    if (selectedCustomers.length > 0) {
-      optionBase = optionBase.filter((row) =>
-        selectedCustomers.includes(row.customer)
-      );
+    // Rebuild color dropdown based on selected POs
+    let colorBase = fullData;
+    if (selectedPoNumbers.length > 0) {
+      colorBase = colorBase.filter((row) => selectedPoNumbers.includes(row.poNo));
     }
-
-    // PO list depends only on customer filter
-    const uniquePoNumbers = [...new Set(optionBase.map((row) => row.poNo))]
-      .filter(Boolean)
-      .sort();
-    setAllPoNumbers(uniquePoNumbers);
-
-    // Color list depends on customer + PO filter (same data as visible grid before color filter)
-    const colorBase =
-      selectedPoNumbers.length > 0
-        ? optionBase.filter((row) => selectedPoNumbers.includes(row.poNo))
-        : optionBase;
 
     const uniqueColors = [...new Set(colorBase.map((row) => row.color))]
       .filter(Boolean)
       .sort();
     setAllColors(uniqueColors);
 
-    // Now compute filtered grid data
+    // Compute filtered grid data
     let filteredData = fullData;
 
-    if (selectedCustomers.length > 0) {
+    if (selectedPoNumbers.length > 0) {
       filteredData = filteredData.filter((row) =>
-        selectedCustomers.includes(row.customer)
+        selectedPoNumbers.includes(row.poNo)
       );
     }
 
@@ -253,55 +251,77 @@ export default function TNAChartPage() {
       );
     }
 
-    if (selectedPoNumbers.length > 0) {
-      filteredData = filteredData.filter((row) =>
-        selectedPoNumbers.includes(row.poNo)
-      );
-    }
-
     setTableData(filteredData);
-  }, [fullData, selectedCustomers, selectedColors, selectedPoNumbers]);
+  }, [fullData, selectedColors, selectedPoNumbers]);
 
-  const handleSearch = async (portfolioId) => {
-    const idToUse = portfolioId || selectedPortfolio;
+  const handleSearch = async (customerId) => {
+    const idToUse = customerId || selectedCustomer;
 
     if (!idToUse) {
       setTableData([]);
       setFullData([]);
       setColumnDefs([]);
-      setAllCustomers([]);
-      setAllPoNumbers([]);
+      setAllPoOptions([]);
       return;
     }
 
-    // Clear previous data immediately to prevent showing stale data
+    // Clear previous data immediately
     setTableData([]);
     setFullData([]);
     setColumnDefs([]);
-    setAllCustomers([]);
-    setAllPoNumbers([]);
+    setAllPoOptions([]);
 
     setLoading(true);
     try {
-      const [processRes, poRes] = await Promise.all([
-        apiClient
-          .get(`/Milestone/GetprocessByPortfolio?productPortfolioId=${idToUse}`)
-          .catch((err) => {
-            // eslint-disable-next-line no-console
-            console.error('Process API Error', err);
-            return { data: [] };
-          }),
-        apiClient
-          .get(`/Milestone/GetTNAandPO?PortfolioID=${idToUse}`)
-          .catch((err) => {
-            // eslint-disable-next-line no-console
-            console.error('TNA API Error', err);
-            return { data: [] };
-          }),
-      ]);
+      // Fetch TNA data grouped by portfolio
+      const response = await apiClient.get(`/Milestone/GetTNAandPO?CustomerID=${idToUse}`);
+      const portfolioGroups = response.data || [];
 
-      const processList = (processRes.data || []).filter((p) => !!p);
-      const poData = poRes.data || [];
+      // Flatten all tnaData from all portfolios
+      let allTnaData = [];
+      portfolioGroups.forEach(group => {
+        if (group.tnaData && Array.isArray(group.tnaData)) {
+          // Add portfolioID to each item
+          const dataWithPortfolio = group.tnaData.map(item => ({
+            ...item,
+            portfolioID: group.portfolioID,
+          }));
+          allTnaData = [...allTnaData, ...dataWithPortfolio];
+        }
+      });
+
+      // Extract all unique processes
+      const allProcesses = new Set();
+      allTnaData.forEach(item => {
+        if (item.process) {
+          allProcesses.add(item.process);
+        }
+      });
+      const processList = Array.from(allProcesses);
+
+      // Build PO options with portfolio grouping
+      const poOptionsWithPortfolio = [];
+      portfolioGroups.forEach(group => {
+        if (group.tnaData && Array.isArray(group.tnaData)) {
+          const uniquePos = [...new Set(group.tnaData.map(item => item.poNo))].filter(Boolean);
+          
+          // Find portfolio name from productPortfolios
+          const portfolio = productPortfolios.find(p => p.productPortfolioID === group.portfolioID);
+          const portfolioName = portfolio ? portfolio.productPortfolio : `Portfolio ${group.portfolioID}`;
+          
+          uniquePos.forEach(poNo => {
+            poOptionsWithPortfolio.push({
+              poNo,
+              portfolioID: group.portfolioID,
+              portfolioName,
+              label: `${poNo}`,
+            });
+          });
+        }
+      });
+      setAllPoOptions(poOptionsWithPortfolio);
+
+      const poData = allTnaData;
 
       // 1. Construct Columns (group headers) - fixed sub‑columns per process
       const newColDefs = [
@@ -451,38 +471,59 @@ export default function TNAChartPage() {
       });
 
       const finalData = Array.from(rowMap.values()).sort((a, b) => b.poid - a.poid);
-      // eslint-disable-next-line no-console
-      console.log('Grid Data:', finalData);
 
       // Store full data (filters & dropdown options are handled in useEffect)
       setFullData(finalData);
-
-      // Extract unique customers for dropdown
-      const uniqueCustomers = [...new Set(finalData.map((row) => row.customer))]
-        .filter(Boolean)
-        .sort();
-      setAllCustomers(uniqueCustomers);
     } catch (error) {
-      // eslint-disable-next-line no-console
       console.error('Error fetching TNA data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePortfolioChange = (event) => {
+  const handleCustomerChange = (event) => {
     const value = event.target.value;
-    setSelectedPortfolio(value);
-    setSelectedCustomers([]); // Reset customers when portfolio changes
-    setSelectedPoNumbers([]); // Reset PO selection when portfolio changes
-    setSelectedColors([]); // Reset color selection when portfolio changes
+    setSelectedCustomer(value);
+    setSelectedPoNumbers([]); // Reset PO selection when customer changes
+    setSelectedColors([]); // Reset color selection when customer changes
+    setSelectedPortfolioId(null); // Reset portfolio tracking
     handleSearch(value);
   };
 
-  const handleCustomerChange = (event, newValue) => {
-    setSelectedCustomers(newValue);
-    setSelectedPoNumbers([]); // Reset PO selection when customers change
-    setSelectedColors([]); // Reset color selection when customers change
+  const handlePoChange = (event, newValue) => {
+    if (newValue.length === 0) {
+      // Clear all selections
+      setSelectedPoNumbers([]);
+      setSelectedPortfolioId(null);
+      return;
+    }
+
+    // Get the portfolio IDs of all selected POs
+    const selectedPortfolioData = newValue.map(poNo => {
+      const poOption = allPoOptions.find(opt => opt.poNo === poNo);
+      return { 
+        portfolioID: poOption?.portfolioID,
+        portfolioName: poOption?.portfolioName 
+      };
+    });
+
+    // Check if all selected POs belong to the same portfolio
+    const uniquePortfolios = [...new Set(selectedPortfolioData.map(p => p.portfolioID))];
+    
+    if (uniquePortfolios.length > 1) {
+      // Show error - can't select POs from different portfolios
+      const portfolioNames = [...new Set(selectedPortfolioData.map(p => p.portfolioName))];
+      setSnackbar({
+        open: true,
+        message: `You can only select POs from one Portfolio at a time! (Attempted: ${portfolioNames.join(', ')})`,
+        severity: 'error',
+      });
+      return;
+    }
+
+    // Update selections
+    setSelectedPoNumbers(newValue);
+    setSelectedPortfolioId(uniquePortfolios[0]);
   };
 
   const handleColorChange = (event, newValue) => {
@@ -680,14 +721,14 @@ export default function TNAChartPage() {
       <Card sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-            <Box sx={{ flex: '1 1 22%', minWidth: 200 }}>
+            <Box sx={{ flex: '1 1 30%', minWidth: 200 }}>
               <TextField
                 select
                 fullWidth
                 size="small"
-                label="Product Portfolio"
-                value={selectedPortfolio}
-                onChange={handlePortfolioChange}
+                label="Customer"
+                value={selectedCustomer}
+                onChange={handleCustomerChange}
                 SelectProps={{
                   MenuProps: {
                     PaperProps: {
@@ -697,197 +738,51 @@ export default function TNAChartPage() {
                 }}
               >
                 <MenuItem value="">
-                  Product Portfolio
+                  Select Customer
                 </MenuItem>
-                {productPortfolios.map((p) => (
-                  <MenuItem key={p.productPortfolioID} value={p.productPortfolioID}>
-                    {p.productPortfolio}
+                {customers.map((customer) => (
+                  <MenuItem key={customer.customerID} value={customer.customerID}>
+                    {customer.customerName}
                   </MenuItem>
                 ))}
               </TextField>
             </Box>
 
-            <Box sx={{ flex: '1 1 22%', minWidth: 200 }}>
-              <Autocomplete
-                multiple
-                id="customer-autocomplete"
-                options={['__SELECT_ALL__', ...allCustomers]}
-                disableCloseOnSelect
-                value={selectedCustomers}
-                onChange={(event, newValue) => {
-                  // Filter out the __SELECT_ALL__ option from the value
-                  const filteredValue = newValue.filter(v => v !== '__SELECT_ALL__');
-                  handleCustomerChange(event, filteredValue);
-                }}
-                getOptionLabel={(option) => {
-                  if (option === '__SELECT_ALL__') return 'Select All';
-                  return option;
-                }}
-                disabled={!selectedPortfolio}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label={`Customer ${selectedCustomers.length > 0 ? `(${selectedCustomers.length})` : ''}`}
-                    placeholder={selectedCustomers.length === 0 ? "Search or select customers..." : ""}
-                    size="small"
-                  />
-                )}
-                renderOption={(props, option, { selected }) => {
-                  // Check if this is the "Select All" option
-                  if (option === '__SELECT_ALL__') {
-                    const allSelected = allCustomers.length > 0 && allCustomers.every(customer => selectedCustomers.includes(customer));
-                    const someSelected = allCustomers.some(customer => selectedCustomers.includes(customer));
-
-                    return (
-                      <li
-                        {...props}
-                        key="select-all"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (allSelected) {
-                            setSelectedCustomers([]);
-                            setSelectedPoNumbers([]);
-                          } else {
-                            setSelectedCustomers([...allCustomers]);
-                          }
-                        }}
-                        style={{
-                          ...props.style,
-                          backgroundColor: '#f5f5f5',
-                          borderBottom: '1px solid #e0e0e0',
-                          fontWeight: 500,
-                        }}
-                      >
-                        <Checkbox
-                          checked={allSelected}
-                          indeterminate={someSelected && !allSelected}
-                          style={{ marginRight: 8 }}
-                        />
-                        Select All
-                      </li>
-                    );
-                  }
-
-                  return (
-                    <li {...props} key={option}>
-                      <Checkbox
-                        checked={selected}
-                        style={{ marginRight: 8 }}
-                      />
-                      {option}
-                    </li>
-                  );
-                }}
-                renderTags={(value) => {
-                  if (value.length === 0) return null;
-                  if (value.length === 1) {
-                    return (
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontSize: '0.875rem',
-                          color: 'text.primary',
-                        }}
-                      >
-                        {value[0]}
-                      </Typography>
-                    );
-                  }
-                  return (
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        fontSize: '0.875rem',
-                        color: 'text.primary',
-                        fontWeight: 500,
-                      }}
-                    >
-                      {value.length} selected
-                    </Typography>
-                  );
-                }}
-                ListboxProps={{
-                  style: { maxHeight: 300 },
-                }}
-              />
-            </Box>
-
-            <Box sx={{ flex: '1 1 22%', minWidth: 200 }}>
+            <Box sx={{ flex: '1 1 30%', minWidth: 200 }}>
               <Autocomplete
                 multiple
                 id="po-number-autocomplete"
-                options={['__SELECT_ALL__', ...allPoNumbers]}
+                options={allPoOptions.map(opt => opt.poNo)}
+                groupBy={(option) => {
+                  const poOption = allPoOptions.find(opt => opt.poNo === option);
+                  return poOption?.portfolioName || 'Unknown Portfolio';
+                }}
                 disableCloseOnSelect
                 value={selectedPoNumbers}
-                onChange={(event, newValue) => {
-                  // Filter out the __SELECT_ALL__ option from the value
-                  const filteredValue = newValue.filter((v) => v !== '__SELECT_ALL__');
-                  setSelectedPoNumbers(filteredValue);
-                }}
-                getOptionLabel={(option) => {
-                  if (option === '__SELECT_ALL__') return 'Select All';
-                  return option;
-                }}
+                onChange={handlePoChange}
+                getOptionLabel={(option) => option}
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label={`PO No ${selectedPoNumbers.length > 0 ? `(${selectedPoNumbers.length})` : ''
-                      }`}
-                    placeholder={
-                      selectedPoNumbers.length === 0 ? 'Search or select PO...' : ''
-                    }
+                    label={`PO No ${selectedPoNumbers.length > 0 ? `(${selectedPoNumbers.length})` : ''}`}
+                    placeholder={selectedPoNumbers.length === 0 ? 'Search or select PO...' : ''}
                     size="small"
+                    helperText={
+                      selectedPortfolioId 
+                        ? `${allPoOptions.find(opt => opt.portfolioID === selectedPortfolioId)?.portfolioName || `Portfolio ${selectedPortfolioId}`} selected`
+                        : ''
+                    }
                   />
                 )}
-                renderOption={(props, option, { selected }) => {
-                  // Check if this is the "Select All" option
-                  if (option === '__SELECT_ALL__') {
-                    const allSelected =
-                      allPoNumbers.length > 0 &&
-                      allPoNumbers.every((poNo) => selectedPoNumbers.includes(poNo));
-                    const someSelected = allPoNumbers.some((poNo) =>
-                      selectedPoNumbers.includes(poNo)
-                    );
-
-                    return (
-                      <li
-                        {...props}
-                        key="select-all"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (allSelected) {
-                            setSelectedPoNumbers([]);
-                          } else {
-                            setSelectedPoNumbers([...allPoNumbers]);
-                          }
-                        }}
-                        style={{
-                          ...props.style,
-                          backgroundColor: '#f5f5f5',
-                          borderBottom: '1px solid #e0e0e0',
-                          fontWeight: 500,
-                        }}
-                      >
-                        <Checkbox
-                          checked={allSelected}
-                          indeterminate={someSelected && !allSelected}
-                          style={{ marginRight: 8 }}
-                        />
-                        Select All
-                      </li>
-                    );
-                  }
-
-                  return (
-                    <li {...props} key={option}>
-                      <Checkbox
-                        checked={selected}
-                        style={{ marginRight: 8 }}
-                      />
-                      {option}
-                    </li>
-                  );
-                }}
+                renderOption={(props, option, { selected }) => (
+                  <li {...props} key={option}>
+                    <Checkbox
+                      checked={selected}
+                      style={{ marginRight: 8 }}
+                    />
+                    {option}
+                  </li>
+                )}
                 renderTags={(value) => {
                   if (value.length === 0) return null;
                   if (value.length === 1) {
@@ -938,7 +833,6 @@ export default function TNAChartPage() {
                   if (option === '__SELECT_ALL__') return 'Select All';
                   return option;
                 }}
-                disabled={!selectedPortfolio}
                 renderInput={(params) => (
                   <TextField
                     {...params}

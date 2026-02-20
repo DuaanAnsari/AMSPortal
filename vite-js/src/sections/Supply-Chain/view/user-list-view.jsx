@@ -204,7 +204,6 @@ export default function ShipmentReleaseFilters() {
 
   const mapShipmentRow = (item, index) => ({
     id: item.cargoID ?? `${item.invoiceNo ?? 'shipment'}-${index}`,
-    cargoID: item.cargoID ?? '-',
     shipDate: item.cargoDatee ?? '-',
     invoiceNo: item.invoiceNo ?? '-',
     value: item.valueNew ?? '-',
@@ -639,88 +638,20 @@ export default function ShipmentReleaseFilters() {
                     )
                     .map((row) => (
                       <TableRow hover key={row.id} sx={tableRowSx}>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>{row.shipDate}</TableCell>
                         <TableCell sx={{ fontSize: '0.75rem' }}>
-                          <Tooltip title={`Cargo ID: ${row.cargoID}`} placement="top">
-                            <span>{row.shipDate}</span>
-                          </Tooltip>
+                          {renderTruncatedCell(row.invoiceNo, 130)}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>{row.value}</TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>{row.billNo}</TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem' }}>
+                          {renderTruncatedCell(row.customer, 140)}
                         </TableCell>
                         <TableCell sx={{ fontSize: '0.75rem' }}>
-                          <Tooltip title={`Cargo ID: ${row.cargoID}`} placement="top">
-                            <Box
-                              component="span"
-                              sx={{
-                                display: 'inline-block',
-                                maxWidth: 130,
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                verticalAlign: 'bottom',
-                              }}
-                            >
-                              {row.invoiceNo || '-'}
-                            </Box>
-                          </Tooltip>
+                          {renderTruncatedCell(row.ldp, 110)}
                         </TableCell>
                         <TableCell sx={{ fontSize: '0.75rem' }}>
-                          <Tooltip title={`Cargo ID: ${row.cargoID}`} placement="top">
-                            <span>{row.value}</span>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem' }}>
-                          <Tooltip title={`Cargo ID: ${row.cargoID}`} placement="top">
-                            <span>{row.billNo}</span>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem' }}>
-                          <Tooltip title={`Cargo ID: ${row.cargoID}`} placement="top">
-                            <Box
-                              component="span"
-                              sx={{
-                                display: 'inline-block',
-                                maxWidth: 140,
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                verticalAlign: 'bottom',
-                              }}
-                            >
-                              {row.customer || '-'}
-                            </Box>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem' }}>
-                          <Tooltip title={`Cargo ID: ${row.cargoID}`} placement="top">
-                            <Box
-                              component="span"
-                              sx={{
-                                display: 'inline-block',
-                                maxWidth: 110,
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                verticalAlign: 'bottom',
-                              }}
-                            >
-                              {row.ldp || '-'}
-                            </Box>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem' }}>
-                          <Tooltip title={`Cargo ID: ${row.cargoID}`} placement="top">
-                            <Box
-                              component="span"
-                              sx={{
-                                display: 'inline-block',
-                                maxWidth: 120,
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                verticalAlign: 'bottom',
-                              }}
-                            >
-                              {row.supplier || '-'}
-                            </Box>
-                          </Tooltip>
+                          {renderTruncatedCell(row.supplier, 120)}
                         </TableCell>
                         <TableCell>
                           <Button
@@ -862,28 +793,9 @@ export default function ShipmentReleaseFilters() {
 // ----------------------------------------------------------------------
 
 function applyFilter({ inputData, comparator }) {
-  // Priority cargo IDs to show at the top
-  const priorityCargoIds = ['121836', '121837', '121838', '121782', '121785', '121714', '12181', '121815'];
-  
   const stabilizedThis = inputData.map((el, index) => [el, index]);
 
   stabilizedThis.sort((a, b) => {
-    // Check if cargo IDs are in priority list
-    const aCargoId = String(a[0].cargoID || '');
-    const bCargoId = String(b[0].cargoID || '');
-    const aIsPriority = priorityCargoIds.includes(aCargoId);
-    const bIsPriority = priorityCargoIds.includes(bCargoId);
-    
-    // If one is priority and other is not, priority comes first
-    if (aIsPriority && !bIsPriority) return -1;
-    if (!aIsPriority && bIsPriority) return 1;
-    
-    // If both are priority, sort by the order in priority list
-    if (aIsPriority && bIsPriority) {
-      return priorityCargoIds.indexOf(aCargoId) - priorityCargoIds.indexOf(bCargoId);
-    }
-    
-    // Otherwise use default comparator
     const order = comparator(a[0], b[0]);
     if (order !== 0) return order;
     return a[1] - b[1];

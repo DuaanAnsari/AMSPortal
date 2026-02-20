@@ -1307,13 +1307,18 @@ export default function CompletePurchaseOrderFormEdit() {
         return;
       }
 
+      // Wait for costing options to be loaded first
+      if (costingLoading) {
+        return;
+      }
+
       try {
         setLoading(true);
         const response = await apiClient.get(`/MyOrders/GetPurchaseOrder/${id}`);
         
         if (response.data && response.data.length > 0) {
           const orderData = response.data[0];
-          console.log("API Order Data:", orderData);
+          console.log("=== PURCHASE ORDER GET DATA PAYLOAD ===", orderData);
           setApiData(orderData);
           
           // Find customer name based on customerID from purchase order
@@ -1347,20 +1352,6 @@ export default function CompletePurchaseOrderFormEdit() {
             group => group.productGroupID === orderData.productGroupID
           );
           const groupName = groupFromAPI ? groupFromAPI.productGroup : '';
-          
-          console.log("Category Match:", {
-            purchaseOrderCategoryID: orderData.productCategoriesID,
-            allCategories: productCategories,
-            matchedCategory: categoryFromAPI,
-            categoryName: categoryName
-          });
-
-          console.log("Group Match:", {
-            purchaseOrderGroupID: orderData.productGroupID,
-            allGroups: productGroups,
-            matchedGroup: groupFromAPI,
-            groupName: groupName
-          });
           
           // Map API data to form fields with date mappings
           reset({
@@ -1451,8 +1442,11 @@ export default function CompletePurchaseOrderFormEdit() {
             
             // Keep existing values for fields not in API
             // Costing Ref: API sends costingMstID; our select uses IDs as string values.
+            // Treat 0 as empty (no costing ref selected)
             costingRef:
-              orderData.costingMstID !== undefined && orderData.costingMstID !== null
+              orderData.costingMstID !== undefined && 
+              orderData.costingMstID !== null && 
+              orderData.costingMstID !== 0
                 ? String(orderData.costingMstID)
                 : '',
             RevisedShipmentDate: '',
@@ -1486,11 +1480,12 @@ export default function CompletePurchaseOrderFormEdit() {
     };
 
     // Fetch purchase order data only when main dependent data is loaded
+    // AND costing options are loaded
     if (customers.length > 0 && suppliers.length > 0 && merchants.length > 0 && 
-        productPortfolios.length > 0) {
+        productPortfolios.length > 0 && !costingLoading) {
       fetchPurchaseOrderData();
     }
-  }, [id, reset, customers, suppliers, merchants, productPortfolios]);
+  }, [id, reset, customers, suppliers, merchants, productPortfolios, costingLoading]);
 
   // Load Product Specific Information grid data for view (styles / sizes per PO)
   const fetchStyleGrid = async () => {
@@ -1624,8 +1619,6 @@ export default function CompletePurchaseOrderFormEdit() {
         purchaseOrderID: Number(id) || 0,
         ...item,
       }));
-
-      console.log('Sending new style rows to AddPurchaseOrderDetails:', payload);
 
       // Include poId in query for explicit linkage with this Purchase Order
       await apiClient.post(`/MyOrders/AddPurchaseOrderDetails?poId=${id}`, payload);
@@ -1952,8 +1945,6 @@ export default function CompletePurchaseOrderFormEdit() {
         return;
       }
 
-      console.log('Update payload:', payload);
-
       await apiClient.post(`/MyOrders/UpdatePurchaseOrder?poid=${id}`, payload);
 
       // Also persist Product Specific Information grid rows (styles) via UpdateStyle API
@@ -1989,18 +1980,11 @@ export default function CompletePurchaseOrderFormEdit() {
           };
 
           try {
-            // eslint-disable-next-line no-console
-            console.log(
-              `Saving style row styleID=${row.styleId} for PO=${id}`,
-              stylePayload
-            );
-            // eslint-disable-next-line no-await-in-loop
             await apiClient.post(
               `/Milestone/UpdateStyle?poid=${id}&styleId=${row.styleId}`,
               stylePayload
             );
           } catch (styleError) {
-            // eslint-disable-next-line no-console
             console.error(
               `Error updating style row styleID=${row.styleId} for PO=${id}`,
               styleError?.response?.data || styleError
