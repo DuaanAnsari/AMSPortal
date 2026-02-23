@@ -1055,8 +1055,14 @@ const Schema = Yup.object().shape({
   consignee: Yup.string(),
   image: Yup.mixed().required('Image is required'),
   placementDate: Yup.date().required('Placement Date is required'),
-  etaNewJerseyDate: Yup.date().nullable(),
-  etaWarehouseDate: Yup.date().nullable(),
+  etaNewJerseyDate: Yup.date()
+    .transform((value, originalValue) => (originalValue === '' ? null : value))
+    .nullable()
+    .notRequired(),
+  etaWarehouseDate: Yup.date()
+    .transform((value, originalValue) => (originalValue === '' ? null : value))
+    .nullable()
+    .notRequired(),
   buyerShipInitial: Yup.date().required('Buyer Ship. Dt. (Initial) is required'),
   buyerShipLast: Yup.date().required('Buyer Ship. Dt. (Last) is required'),
   vendorShipInitial: Yup.date().required('Vendor Ship. Dt. (Initial) is required'),
