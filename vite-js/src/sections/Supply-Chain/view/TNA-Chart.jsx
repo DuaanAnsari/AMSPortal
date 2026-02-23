@@ -276,6 +276,14 @@ export default function TNAChartPage() {
       // Fetch TNA data grouped by portfolio
       const response = await apiClient.get(`/Milestone/GetTNAandPO?CustomerID=${idToUse}`);
       const portfolioGroups = response.data || [];
+      // eslint-disable-next-line no-console
+      console.log('[TNA] API Response (portfolioGroups):', portfolioGroups);
+      const firstGroup = portfolioGroups[0];
+      const firstItem = firstGroup?.tnaData?.[0];
+      // eslint-disable-next-line no-console
+      console.log('[TNA] First group keys:', firstGroup ? Object.keys(firstGroup) : []);
+      // eslint-disable-next-line no-console
+      console.log('[TNA] First tnaData item keys & pcPerCarton:', firstItem ? { keys: Object.keys(firstItem), pcPerCarton: firstItem.pcPerCarton, PcPerCarton: firstItem.PcPerCarton } : null);
 
       // Flatten all tnaData from all portfolios
       let allTnaData = [];
@@ -285,6 +293,7 @@ export default function TNAChartPage() {
           const dataWithPortfolio = group.tnaData.map(item => ({
             ...item,
             portfolioID: group.portfolioID,
+            pcPerCarton: item.pcPerCarton ?? group.pcPerCarton,
           }));
           allTnaData = [...allTnaData, ...dataWithPortfolio];
         }
@@ -322,11 +331,25 @@ export default function TNAChartPage() {
       setAllPoOptions(poOptionsWithPortfolio);
 
       const poData = allTnaData;
+      // eslint-disable-next-line no-console
+      console.log('[TNA] poData (first 3 items pcPerCarton):', poData.slice(0, 3).map((i) => ({ poid: i.poid, color: i.color, pcPerCarton: i.pcPerCarton })));
 
       // 1. Construct Columns (group headers) - fixed sub‑columns per process
       const newColDefs = [
         { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 100 },
         { headerName: 'Customer', field: 'customer', pinned: 'left', maxWidth: 100 },
+        {
+          headerName: 'PCS',
+          field: 'pcPerCarton',
+          pinned: 'left',
+          maxWidth: 100,
+          editable: true,
+          valueFormatter: (params) => {
+            const v = params.value;
+            if (v === null || v === undefined || v === '') return '';
+            return String(v);
+          },
+        },
         { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 100 },
         ...processList.map((proc) => ({
           headerName: proc,
@@ -429,11 +452,21 @@ export default function TNAChartPage() {
 
         const key = `${item.poid}_${colorValue || ''}`;
 
+        // pcPerCarton - support multiple API casing (camelCase, PascalCase)
+        const pcPerCarton =
+          item.pcPerCarton ??
+          item.PcPerCarton ??
+          item.PCPerCarton ??
+          item.pcsPerCarton ??
+          item.PcsPerCarton ??
+          '';
+
         if (!rowMap.has(key)) {
           rowMap.set(key, {
             poid: item.poid,
             poNo: item.poNo,
             customer: item.customer || item.customerName || '',
+            pcPerCarton,
             color: colorValue,
             status: item.status,
             qtyCompleted: item.qtyCompleted,
@@ -441,6 +474,10 @@ export default function TNAChartPage() {
           });
         }
         const row = rowMap.get(key);
+        // Update pcPerCarton if we get it from any item (first may not have it)
+        if (pcPerCarton !== '' && pcPerCarton != null) {
+          row.pcPerCarton = pcPerCarton;
+        }
         if (item.process) {
           const proc = item.process;
           // Per‑process fields mapped to fixed sub‑columns
@@ -471,6 +508,8 @@ export default function TNAChartPage() {
       });
 
       const finalData = Array.from(rowMap.values()).sort((a, b) => b.poid - a.poid);
+      // eslint-disable-next-line no-console
+      console.log('[TNA] finalData rows (poNo, color, pcPerCarton):', finalData.map((r) => ({ poNo: r.poNo, color: r.color, pcPerCarton: r.pcPerCarton })));
 
       // Store full data (filters & dropdown options are handled in useEffect)
       setFullData(finalData);
