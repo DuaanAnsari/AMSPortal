@@ -1053,7 +1053,7 @@ const Schema = Yup.object().shape({
   internalPo: Yup.string(),
   rnNo: Yup.string(),
   consignee: Yup.string(),
-  image: Yup.mixed().required('Image is required'),
+  image: Yup.mixed().nullable(),
   placementDate: Yup.date().required('Placement Date is required'),
   etaNewJerseyDate: Yup.date()
     .transform((value, originalValue) => (originalValue === '' ? null : value))
@@ -1376,6 +1376,16 @@ export default function CompletePurchaseOrderForm() {
 
     // Step 0: PURCHASE ORDER ENTRY
     if (activeStep === 0) {
+      if (customerPoExists) {
+        setError('customerPo', { type: 'manual', message: 'This PO already exists.' });
+        errorMessages.push('Customer PO already exists');
+        hasErrors = true;
+      }
+      if (internalPoExists) {
+        setError('internalPo', { type: 'manual', message: 'This PO already exists.' });
+        errorMessages.push('Internal PO already exists');
+        hasErrors = true;
+      }
       if (!currentValues.customer) {
         setError('customer', { type: 'manual', message: 'Customer is required' });
         errorMessages.push('Customer');
@@ -1415,11 +1425,6 @@ export default function CompletePurchaseOrderForm() {
 
     // Step 1: PURCHASE ORDER IMPORTANT DATES
     if (activeStep === 1) {
-      if (!currentValues.image) {
-        setError('image', { type: 'manual', message: 'Image is required' });
-        errorMessages.push('Image');
-        hasErrors = true;
-      }
       if (!currentValues.placementDate) {
         setError('placementDate', { type: 'manual', message: 'Placement Date is required' });
         errorMessages.push('Placement Date');
@@ -1769,6 +1774,11 @@ export default function CompletePurchaseOrderForm() {
   const [checkingCustomerPo, setCheckingCustomerPo] = useState(false);
   const [customerPoExists, setCustomerPoExists] = useState(false);
 
+  // Internal PO uniqueness check
+  const internalPoValue = watch('internalPo');
+  const [checkingInternalPo, setCheckingInternalPo] = useState(false);
+  const [internalPoExists, setInternalPoExists] = useState(false);
+
   // Validate Customer PO against backend (AlreadyExistPONumber)
   useEffect(() => {
     // If field is empty, clear state and errors
@@ -1831,6 +1841,58 @@ export default function CompletePurchaseOrderForm() {
       clearTimeout(handler);
     };
   }, [customerPoValue, clearErrors, setError]);
+
+  // Validate Internal PO against backend (AlreadyExistPONumber)
+  useEffect(() => {
+    if (!internalPoValue) {
+      setInternalPoExists(false);
+      clearErrors('internalPo');
+      return;
+    }
+
+    let isActive = true;
+    setCheckingInternalPo(true);
+
+    const handler = setTimeout(async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+        const response = await axios.get(
+          `${API_BASE_URL}/api/MyOrders/AlreadyExistPONumber`,
+          {
+            params: { PONO: internalPoValue },
+            headers,
+          }
+        );
+
+        if (!isActive) return;
+
+        const resData = response.data;
+        const exists = String(resData?.message || '').toUpperCase() === 'YES';
+
+        setInternalPoExists(!!exists);
+
+        if (exists) {
+          setError('internalPo', {
+            type: 'manual',
+            message: 'This PO already exists.',
+          });
+        } else {
+          clearErrors('internalPo');
+        }
+      } catch (err) {
+        console.error('InternalPO AlreadyExist check error:', err);
+      } finally {
+        if (isActive) setCheckingInternalPo(false);
+      }
+    }, 500);
+
+    return () => {
+      isActive = false;
+      clearTimeout(handler);
+    };
+  }, [internalPoValue, clearErrors, setError]);
 
   // Handle file changes
   const handleFileChangeWithBase64 = async (field, file) => {
@@ -2089,6 +2151,7 @@ export default function CompletePurchaseOrderForm() {
   };
 
   // Prefill Item Details grid from existing PO items when copying
+  // Uses same API as Purchase-order-edit.jsx: /Milestone/GetStyle?poid=
   useEffect(() => {
     if (!copyFromPoId) return;
 
@@ -2097,43 +2160,41 @@ export default function CompletePurchaseOrderForm() {
         const token = localStorage.getItem('accessToken');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
         const res = await axios.get(
-          `${API_BASE_URL}/api/MyOrders/GetPurchaseOrder/${copyFromPoId}`,
+          `${API_BASE_URL}/api/Milestone/GetStyle?poid=${copyFromPoId}`,
           { headers }
         );
 
-        const data = Array.isArray(res.data) ? res.data[0] : res.data;
-        if (!data) return;
+        const data = Array.isArray(res.data) ? res.data : [];
+        if (data.length === 0) return;
 
-        // Backend usually sends item details in POItems / items etc.
-        const rawItems =
-          data.poItems ||
-          data.POItems ||
-          data.items ||
-          data.Items ||
-          [];
+        const rows = data.map((item) => {
+          const quantity = Number(item.quantity || 0);
+          const itemPrice = Number(item.itemPrice ?? item.rate ?? 0);
+          const ldpPrice = Number(item.ldpRate ?? item.ldpPrice ?? 0);
+          const value = quantity * itemPrice;
+          const ldpValue = quantity * ldpPrice;
 
-        if (!Array.isArray(rawItems) || rawItems.length === 0) return;
-
-        const rows = rawItems.map((it) => ({
-          styleNo: it.styleNo || it.StyleNo || it.style || '',
-          colorway: it.colorway || it.Colorway || it.colourway || '',
-          productCode: it.productCode || it.ProductCode || '',
-          sizeRange: it.sizeRange || it.SizeRange || '',
-          sizeRangeDBID: Number(it.sizeRangeDBID || it.sizeRangeDbId || it.sizeRangeID || it.sizeRangeId || 0),
-          size: it.size || it.Size || '',
-          // editable / extended fields for grid
-          barcode: it.barCodeTFPO || it.barcode || it.Barcode || '',
-          ratio: it.ration || it.ratio || it.Ratio || '',
-          quantity: Number(it.poQty || it.POQty || it.quantity || it.Quantity || 0),
-          itemPrice: Number(it.itemPrice || it.ItemPrice || it.price || it.Price || 0),
-          value: Number(it.value || it.Value || it.amount || it.Amount || 0),
-          vendorPrice: Number(it.vendorPrice || it.VendorPrice || it.vendorprice || 0),
-          ldpPrice: Number(it.ldpPrice || it.LDPPrice || 0),
-          ldpValue: Number(it.ldpValue || it.LDPValue || 0),
-          cartonQty: Number(it.cartonQty || it.CartonQty || it.cartonQuantity || 0),
-          grossWeight: Number(it.grossWeight || it.GrossWeight || 0),
-          netWeight: Number(it.netWeight || it.NetWeight || 0),
-        }));
+          return {
+            styleId: item.styleID || item.styleId || 0,
+            styleNo: item.styleNo || '',
+            colorway: item.colorway || '',
+            productCode: item.productCode || '',
+            sizeRange: item.sizeRange || '',
+            sizeRangeDBID: Number(item.sizeRangeDBID || item.sizeRangeId || 0),
+            size: item.size || '',
+            barcode: item.barCodeTF || item.barCodeTFPO || '',
+            ratio: item.ratioPOD || item.ratio || 0,
+            quantity,
+            itemPrice,
+            value,
+            vendorPrice: Number(item.vendorRate ?? item.vendorPrice ?? 0),
+            ldpPrice,
+            ldpValue,
+            cartonQty: Number(item.cartonPerPcs ?? item.cartonQty ?? 0),
+            grossWeight: Number(item.grossWeightD ?? item.grossWeight ?? 0),
+            netWeight: Number(item.netWeightD ?? item.netWeight ?? 0),
+          };
+        });
 
         const totals = {
           totalQuantity: rows.reduce((sum, r) => sum + (r.quantity || 0), 0),
@@ -2142,9 +2203,10 @@ export default function CompletePurchaseOrderForm() {
         };
 
         setSavedItemData({ rows, totals });
+        setShowSelections(true);
 
-        // Also set Style field for top bar like old system
-        const styleNumbers = [...new Set(rows.map((r) => r.styleNo))].join(', ');
+        // Set Style field
+        const styleNumbers = [...new Set(rows.map((r) => r.styleNo))].filter(Boolean).join(', ');
         if (styleNumbers) {
           setValue('style', styleNumbers);
         }
@@ -2592,6 +2654,9 @@ export default function CompletePurchaseOrderForm() {
         methods.reset(defaultValues);
         setSavedItemData(null);
         setFiles({});
+
+        // Redirect to My Orders page
+        navigate('/dashboard/supply-chain');
     } catch (error) {
       console.error('❌ Error submitting form:', error);
       
@@ -2725,6 +2790,8 @@ export default function CompletePurchaseOrderForm() {
                         helperText={
                           fieldState.error?.message ||
                           (item.name === 'customerPo' && customerPoExists
+                            ? 'This PO already exists'
+                            : item.name === 'internalPo' && internalPoExists
                             ? 'This PO already exists'
                             : '')
                         }
@@ -3918,8 +3985,13 @@ export default function CompletePurchaseOrderForm() {
                 variant="contained"
                 color="primary"
                 onClick={handleNextStep}
+                disabled={
+                  (activeStep === 0 && (customerPoExists || internalPoExists)) ||
+                  checkingCustomerPo ||
+                  checkingInternalPo
+                }
               >
-                Next
+                {checkingCustomerPo || checkingInternalPo ? 'Checking...' : 'Next'}
               </Button>
             )}
           </Box>

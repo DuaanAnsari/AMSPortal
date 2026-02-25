@@ -336,21 +336,22 @@ export default function TNAChartPage() {
 
       // 1. Construct Columns (group headers) - fixed sub‑columns per process
       const newColDefs = [
-        { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 100 },
-        { headerName: 'Customer', field: 'customer', pinned: 'left', maxWidth: 100 },
+        { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 100, floatingFilter: false },
+        { headerName: 'Customer', field: 'customer', pinned: 'left', maxWidth: 100, floatingFilter: false },
         {
           headerName: 'PCS',
           field: 'pcPerCarton',
           pinned: 'left',
           maxWidth: 100,
           editable: true,
+          floatingFilter: false,
           valueFormatter: (params) => {
             const v = params.value;
             if (v === null || v === undefined || v === '') return '';
             return String(v);
           },
         },
-        { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 100 },
+        { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 100, floatingFilter: false },
         ...processList.map((proc) => ({
           headerName: proc,
           children: [
@@ -359,6 +360,7 @@ export default function TNAChartPage() {
               field: `${proc}_idealDate`,
               minWidth: 110,
               editable: true,
+              floatingFilter: true,
               cellEditor: 'agDateCellEditor',
               valueFormatter: (params) => formatGridDate(params.value),
             },
@@ -367,6 +369,7 @@ export default function TNAChartPage() {
               field: `${proc}_actualDate`,
               minWidth: 110,
               editable: true,
+              floatingFilter: true,
               cellEditor: 'agDateCellEditor',
               valueFormatter: (params) => formatGridDate(params.value),
             },
@@ -375,6 +378,7 @@ export default function TNAChartPage() {
               field: `${proc}_approvalDatee`,
               minWidth: 110,
               editable: true,
+              floatingFilter: true,
               cellEditor: 'agDateCellEditor',
               valueFormatter: (params) => formatGridDate(params.value),
             },
@@ -383,6 +387,7 @@ export default function TNAChartPage() {
               field: `${proc}_estimatedDate`,
               minWidth: 110,
               editable: true,
+              floatingFilter: true,
               cellEditor: 'agDateCellEditor',
               valueFormatter: (params) => formatGridDate(params.value),
             },
@@ -391,28 +396,32 @@ export default function TNAChartPage() {
               field: `${proc}_dateSpan`,
               minWidth: 60,
               editable: true,
+              floatingFilter: true,
             },
             {
               headerName: 'Freeze Cond PP Sample',
               field: `${proc}_freezeCondPPSample`,
               minWidth: 150,
               editable: true,
+              floatingFilter: true,
               cellEditor: 'agDateCellEditor',
               valueFormatter: (params) => formatGridDate(params.value),
             },
-            { headerName: 'Units', field: `${proc}_units`, minWidth: 70, editable: true },
-            { headerName: 'Status', field: `${proc}_status`, minWidth: 80, editable: true },
+            { headerName: 'Units', field: `${proc}_units`, minWidth: 70, editable: true, floatingFilter: true },
+            { headerName: 'Status', field: `${proc}_status`, minWidth: 80, editable: true, floatingFilter: true },
             {
               headerName: 'Remarks',
               field: `${proc}_preFilledRemarks`,
               minWidth: 140,
               editable: true,
+              floatingFilter: true,
             },
             {
               headerName: 'Qty Completed',
               field: `${proc}_qtyCompleted`,
               minWidth: 100,
               editable: true,
+              floatingFilter: true,
             },
           ],
         })),
@@ -424,13 +433,13 @@ export default function TNAChartPage() {
       const hasFreezeCondPPSample = poData.some(item => item.freezeCondPPSample);
 
       if (hasStatus) {
-        newColDefs.push({ headerName: 'Status', field: 'status', minWidth: 85 });
+        newColDefs.push({ headerName: 'Status', field: 'status', minWidth: 85, floatingFilter: true });
       }
       if (hasQtyCompleted) {
-        newColDefs.push({ headerName: 'Qty Completed', field: 'qtyCompleted', minWidth: 90 });
+        newColDefs.push({ headerName: 'Qty Completed', field: 'qtyCompleted', minWidth: 90, floatingFilter: true });
       }
       if (hasFreezeCondPPSample) {
-        newColDefs.push({ headerName: 'Freeze Cond PP Sample', field: 'freezeCondPPSample', minWidth: 120 });
+        newColDefs.push({ headerName: 'Freeze Cond PP Sample', field: 'freezeCondPPSample', minWidth: 120, floatingFilter: true });
       }
 
       setColumnDefs(newColDefs);
@@ -1075,7 +1084,8 @@ export default function TNAChartPage() {
                 sortable: true,
                 filter: true,
                 resizable: true,
-                suppressHeaderMenuButton: true,
+                floatingFilter: false,
+                suppressHeaderMenuButton: false,
                 editable: (params) => {
                   const field = params.colDef.field || '';
                   const editableSuffixes = [
