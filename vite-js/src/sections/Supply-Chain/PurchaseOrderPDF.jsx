@@ -83,22 +83,95 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
       try {
         setLoading(true);
         const token = localStorage.getItem('accessToken');
-        console.log('Fetching PO Data for ID:', id);
-        console.log('API URL:', `${HOST_API}/api/Report/GeneratePOReport?poid=${id}`);
+        const headers = { Authorization: token ? `Bearer ${token}` : '' };
 
-        const response = await axios.get(`${HOST_API}/api/Report/GeneratePOReport?poid=${id}`, {
-          headers: {
-            Authorization: token ? `Bearer ${token}` : '',
-          },
-        });
+        const response = await axios.get(`${HOST_API}/api/Report/GeneratePOReport?poid=${id}`, { headers });
 
-        console.log('API Response:', response);
+        const reportData = response.data;
+        const isEmpty = !reportData || (Array.isArray(reportData) && reportData.length === 0);
 
-        if (response.data) {
-          // API returns an array with multiple rows (rowType: Size/Quantity).
-          // Keep the whole array so we can build the grid correctly.
-          console.log('Setting fetched data:', response.data);
-          setFetchedData(response.data);
+        if (!isEmpty) {
+          setFetchedData(reportData);
+        } else {
+          // Fallback: fetch PO header + style/item rows separately
+          try {
+            const [fallback, styleRes] = await Promise.all([
+              axios.get(`${HOST_API}/api/MyOrders/GetPurchaseOrder/${id}`, { headers }),
+              axios.get(`${HOST_API}/api/Milestone/GetStyle?poid=${id}`, { headers }).catch(() => ({ data: [] })),
+            ]);
+
+            const order = Array.isArray(fallback.data) ? fallback.data[0] : fallback.data;
+            const styleRows = Array.isArray(styleRes.data) ? styleRes.data : [];
+
+            const baseHeader = order ? {
+              amsRefNo: order.amsRefNo || order.amsRef || '',
+              pono: order.pono || order.poNo || order.PONO || '',
+              venderAddress: order.venderAddress || order.vendorAddress || '',
+              venderCode: order.venderCode || order.vendorCode || '',
+              contactPersonVendor: order.contactPersonVendor || '',
+              brand: order.brand || '',
+              fabric: order.fabric || '',
+              quality: order.quality || '',
+              shipmentDate: order.shipmentDate || order.tolerance || '',
+              finalInspDate: order.finalInspDate || '',
+              packingList: order.packingList || '',
+              cartonMarking: order.cartonMarking || '',
+              pcPerCarton: order.pcPerCarton || '',
+              ration: order.ration || '',
+              destination: order.destination || '',
+              paymentModeName: order.paymentModeName || order.paymentMode || '',
+              deliveryTypeDisplayName: order.deliveryTypeDisplayName || order.deliveryType || '',
+              shipmentModeName: order.shipmentModeName || order.shipmentMode || '',
+              importantNote: order.importantNote || '',
+              itemDescriptionShippingInvoice: order.itemDescriptionShippingInvoice || '',
+              poImage: order.poImage || '',
+              userName: order.userName || '',
+              consigneeAddress1: order.consigneeAddress1 || order.consignee || '',
+              rnNo: order.rnNo || '',
+              moreInfo: order.moreInfo || '',
+              gms: order.gms || '',
+              bankName: order.bankName || '',
+              bankBranch: order.bankBranch || '',
+              accountNo: order.accountNo || '',
+            } : {};
+
+            if (styleRows.length > 0) {
+              // Build report rows from GetStyle data (same format as GeneratePOReport)
+              // Each style row becomes a size+quantity pair
+              const builtRows = styleRows.flatMap((s) => {
+                const sizeRow = {
+                  ...baseHeader,
+                  poDetailID: s.styleId || s.styleID,
+                  color: s.colorway || '',
+                  style: s.styleNo || '',
+                  sizeRange: s.sizeRange || '',
+                  productCode: s.productCode || '',
+                  rate: s.rate || s.itemPrice || 0,
+                  totalQTY: s.quantity || 0,
+                  rowType: 'size',
+                  s1: s.size || '',
+                };
+                const qtyRow = {
+                  ...baseHeader,
+                  poDetailID: s.styleId || s.styleID,
+                  color: s.colorway || '',
+                  style: s.styleNo || '',
+                  sizeRange: s.sizeRange || '',
+                  productCode: s.productCode || '',
+                  rate: s.rate || s.itemPrice || 0,
+                  totalQTY: s.quantity || 0,
+                  rowType: 'quantity',
+                  s1: s.quantity || 0,
+                };
+                return [sizeRow, qtyRow];
+              });
+              setFetchedData(builtRows);
+            } else if (order) {
+              setFetchedData([baseHeader]);
+            }
+          } catch (fallbackErr) {
+            console.error('Fallback fetch failed:', fallbackErr);
+          }
         }
       } catch (error) {
         console.error('Failed to fetch purchase order data:', error);
@@ -520,13 +593,6 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
     );
   }
 
-  if (!loading && !data.orderRows.length) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', p: 3 }}>
-        <Typography sx={{ color: '#000' }}>No report rows found for this PO.</Typography>
-      </Box>
-    );
-  }
 
   return (
     <Box sx={{

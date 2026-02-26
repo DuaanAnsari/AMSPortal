@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   Box,
@@ -64,6 +64,7 @@ apiClient.interceptors.request.use(
 export default function TNAChartPage() {
   const theme = useTheme();
 
+  const gridRef = useRef(null);
   const [tableData, setTableData] = useState([]);
   const [fullData, setFullData] = useState([]); // Store complete unfiltered data
   const [customers, setCustomers] = useState([]); // All customers from API
@@ -336,22 +337,22 @@ export default function TNAChartPage() {
 
       // 1. Construct Columns (group headers) - fixed sub‑columns per process
       const newColDefs = [
-        { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 100, floatingFilter: false },
-        { headerName: 'Customer', field: 'customer', pinned: 'left', maxWidth: 100, floatingFilter: false },
+        { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
+        { headerName: 'Customer', field: 'customer', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
         {
           headerName: 'PCS',
           field: 'pcPerCarton',
           pinned: 'left',
           maxWidth: 100,
           editable: true,
-          floatingFilter: false,
+          suppressHeaderMenuButton: true,
           valueFormatter: (params) => {
             const v = params.value;
             if (v === null || v === undefined || v === '') return '';
             return String(v);
           },
         },
-        { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 100, floatingFilter: false },
+        { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
         ...processList.map((proc) => ({
           headerName: proc,
           children: [
@@ -360,8 +361,18 @@ export default function TNAChartPage() {
               field: `${proc}_idealDate`,
               minWidth: 110,
               editable: true,
-              floatingFilter: true,
               cellEditor: 'agDateCellEditor',
+              filter: 'agDateColumnFilter',
+              filterParams: {
+                comparator: (filterDate, cellValue) => {
+                  if (!cellValue) return -1;
+                  const cellDate = parseApiDateToDate(cellValue);
+                  if (!cellDate) return -1;
+                  if (cellDate < filterDate) return -1;
+                  if (cellDate > filterDate) return 1;
+                  return 0;
+                },
+              },
               valueFormatter: (params) => formatGridDate(params.value),
             },
             {
@@ -369,8 +380,18 @@ export default function TNAChartPage() {
               field: `${proc}_actualDate`,
               minWidth: 110,
               editable: true,
-              floatingFilter: true,
               cellEditor: 'agDateCellEditor',
+              filter: 'agDateColumnFilter',
+              filterParams: {
+                comparator: (filterDate, cellValue) => {
+                  if (!cellValue) return -1;
+                  const cellDate = parseApiDateToDate(cellValue);
+                  if (!cellDate) return -1;
+                  if (cellDate < filterDate) return -1;
+                  if (cellDate > filterDate) return 1;
+                  return 0;
+                },
+              },
               valueFormatter: (params) => formatGridDate(params.value),
             },
             {
@@ -378,8 +399,18 @@ export default function TNAChartPage() {
               field: `${proc}_approvalDatee`,
               minWidth: 110,
               editable: true,
-              floatingFilter: true,
               cellEditor: 'agDateCellEditor',
+              filter: 'agDateColumnFilter',
+              filterParams: {
+                comparator: (filterDate, cellValue) => {
+                  if (!cellValue) return -1;
+                  const cellDate = parseApiDateToDate(cellValue);
+                  if (!cellDate) return -1;
+                  if (cellDate < filterDate) return -1;
+                  if (cellDate > filterDate) return 1;
+                  return 0;
+                },
+              },
               valueFormatter: (params) => formatGridDate(params.value),
             },
             {
@@ -387,8 +418,18 @@ export default function TNAChartPage() {
               field: `${proc}_estimatedDate`,
               minWidth: 110,
               editable: true,
-              floatingFilter: true,
               cellEditor: 'agDateCellEditor',
+              filter: 'agDateColumnFilter',
+              filterParams: {
+                comparator: (filterDate, cellValue) => {
+                  if (!cellValue) return -1;
+                  const cellDate = parseApiDateToDate(cellValue);
+                  if (!cellDate) return -1;
+                  if (cellDate < filterDate) return -1;
+                  if (cellDate > filterDate) return 1;
+                  return 0;
+                },
+              },
               valueFormatter: (params) => formatGridDate(params.value),
             },
             {
@@ -396,32 +437,39 @@ export default function TNAChartPage() {
               field: `${proc}_dateSpan`,
               minWidth: 60,
               editable: true,
-              floatingFilter: true,
             },
             {
               headerName: 'Freeze Cond PP Sample',
               field: `${proc}_freezeCondPPSample`,
               minWidth: 150,
               editable: true,
-              floatingFilter: true,
               cellEditor: 'agDateCellEditor',
+              filter: 'agDateColumnFilter',
+              filterParams: {
+                comparator: (filterDate, cellValue) => {
+                  if (!cellValue) return -1;
+                  const cellDate = parseApiDateToDate(cellValue);
+                  if (!cellDate) return -1;
+                  if (cellDate < filterDate) return -1;
+                  if (cellDate > filterDate) return 1;
+                  return 0;
+                },
+              },
               valueFormatter: (params) => formatGridDate(params.value),
             },
-            { headerName: 'Units', field: `${proc}_units`, minWidth: 70, editable: true, floatingFilter: true },
-            { headerName: 'Status', field: `${proc}_status`, minWidth: 80, editable: true, floatingFilter: true },
+            { headerName: 'Units', field: `${proc}_units`, minWidth: 70, editable: true },
+            { headerName: 'Status', field: `${proc}_status`, minWidth: 80, editable: true },
             {
               headerName: 'Remarks',
               field: `${proc}_preFilledRemarks`,
               minWidth: 140,
               editable: true,
-              floatingFilter: true,
             },
             {
               headerName: 'Qty Completed',
               field: `${proc}_qtyCompleted`,
               minWidth: 100,
               editable: true,
-              floatingFilter: true,
             },
           ],
         })),
@@ -433,13 +481,13 @@ export default function TNAChartPage() {
       const hasFreezeCondPPSample = poData.some(item => item.freezeCondPPSample);
 
       if (hasStatus) {
-        newColDefs.push({ headerName: 'Status', field: 'status', minWidth: 85, floatingFilter: true });
+        newColDefs.push({ headerName: 'Status', field: 'status', minWidth: 85 });
       }
       if (hasQtyCompleted) {
-        newColDefs.push({ headerName: 'Qty Completed', field: 'qtyCompleted', minWidth: 90, floatingFilter: true });
+        newColDefs.push({ headerName: 'Qty Completed', field: 'qtyCompleted', minWidth: 90 });
       }
       if (hasFreezeCondPPSample) {
-        newColDefs.push({ headerName: 'Freeze Cond PP Sample', field: 'freezeCondPPSample', minWidth: 120, floatingFilter: true });
+        newColDefs.push({ headerName: 'Freeze Cond PP Sample', field: 'freezeCondPPSample', minWidth: 120 });
       }
 
       setColumnDefs(newColDefs);
@@ -579,23 +627,39 @@ export default function TNAChartPage() {
   };
 
   // Handle cell value change
+  // onFillOperation — return the source value ensuring Date objects are preserved
+  const onFillOperation = (params) => {
+    const val = params.initialValues[0];
+    if (val instanceof Date) return val;
+    if (val != null && val !== '') return parseApiDateToDate(val) ?? val;
+    return val;
+  };
+
   const onCellValueChanged = (params) => {
     const { data, colDef, newValue, oldValue } = params;
-    if (newValue === oldValue) return;
+    // For Date objects compare by time value, otherwise strict equality
+    const isSame =
+      newValue instanceof Date && oldValue instanceof Date
+        ? newValue.getTime() === oldValue.getTime()
+        : newValue === oldValue;
+    if (isSame) return;
 
     const rowKey = `${data.poid}_${data.color || ''}`;
     const fieldKey = colDef.field;
 
-    // Update fullData to keep state in sync
-    setFullData((prev) =>
-      prev.map((row) => {
-        const currentRowKey = `${row.poid}_${row.color || ''}`;
-        if (currentRowKey === rowKey) {
-          return { ...row, [fieldKey]: newValue };
-        }
-        return row;
-      })
-    );
+    const updateRow = (row) => {
+      const currentRowKey = `${row.poid}_${row.color || ''}`;
+      return currentRowKey === rowKey ? { ...row, [fieldKey]: newValue } : row;
+    };
+
+    // Update both fullData and tableData immediately for instant visual feedback
+    setFullData((prev) => prev.map(updateRow));
+    setTableData((prev) => prev.map(updateRow));
+
+    // Force grid to visually re-render filled cells (especially when destination was empty)
+    setTimeout(() => {
+      gridRef.current?.api?.refreshCells({ force: true });
+    }, 0);
 
     setModifiedRows((prev) => {
       const newMap = new Map(prev);
@@ -1075,8 +1139,10 @@ export default function TNAChartPage() {
           )}
           <div style={{ width: '100%', height: '100%' }}>
             <AgGridReact
+              ref={gridRef}
               rowData={tableData}
               columnDefs={columnDefs}
+              getRowId={(params) => `${params.data.poid}_${params.data.color || ''}`}
               headerHeight={32}
               groupHeaderHeight={32}
               rowHeight={32}
@@ -1084,8 +1150,8 @@ export default function TNAChartPage() {
                 sortable: true,
                 filter: true,
                 resizable: true,
-                floatingFilter: false,
-                suppressHeaderMenuButton: false,
+                wrapHeaderText: true,
+                autoHeaderHeight: true,
                 editable: (params) => {
                   const field = params.colDef.field || '';
                   const editableSuffixes = [
@@ -1103,6 +1169,14 @@ export default function TNAChartPage() {
                   return editableSuffixes.some((suffix) => field.endsWith(suffix));
                 },
               }}
+              enableRangeSelection
+              enableFillHandle
+              fillHandleDirection="y"
+              undoRedoCellEditing
+              undoRedoCellEditingLimit={20}
+              rowSelection="multiple"
+              suppressRowClickSelection
+              stopEditingWhenCellsLoseFocus
               rowDragManaged={false}
               animateRows
               pagination
@@ -1115,6 +1189,7 @@ export default function TNAChartPage() {
                 </div>
               )}
               onCellValueChanged={onCellValueChanged}
+              onFillOperation={onFillOperation}
             />
           </div>
         </Box>

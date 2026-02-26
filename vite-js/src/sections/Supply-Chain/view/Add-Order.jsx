@@ -1430,29 +1430,56 @@ export default function CompletePurchaseOrderForm() {
         errorMessages.push('Placement Date');
         hasErrors = true;
       }
+      const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
+
       if (!currentValues.buyerShipInitial) {
         setError('buyerShipInitial', { type: 'manual', message: 'Buyer Ship. Dt. (Initial) is required' });
         errorMessages.push('Buyer Ship. Dt. (Initial)');
         hasErrors = true;
       }
+
       if (!currentValues.buyerShipLast) {
         setError('buyerShipLast', { type: 'manual', message: 'Buyer Ship. Dt. (Last) is required' });
         errorMessages.push('Buyer Ship. Dt. (Last)');
         hasErrors = true;
+      } else if (
+        currentValues.buyerShipInitial &&
+        toLocal(currentValues.buyerShipLast) < toLocal(currentValues.buyerShipInitial)
+      ) {
+        setError('buyerShipLast', { type: 'manual', message: 'Buyer Ship. Dt. (Last) must be same or after Initial date' });
+        errorMessages.push('Buyer Ship. Dt. (Last) must be after Initial');
+        hasErrors = true;
       }
+
       if (!currentValues.vendorShipInitial) {
         setError('vendorShipInitial', { type: 'manual', message: 'Vendor Ship. Dt. (Initial) is required' });
         errorMessages.push('Vendor Ship. Dt. (Initial)');
         hasErrors = true;
       }
+
       if (!currentValues.vendorShipLast) {
         setError('vendorShipLast', { type: 'manual', message: 'Vendor Ship. Dt. (Last) is required' });
         errorMessages.push('Vendor Ship. Dt. (Last)');
         hasErrors = true;
+      } else if (
+        currentValues.vendorShipInitial &&
+        toLocal(currentValues.vendorShipLast) < toLocal(currentValues.vendorShipInitial)
+      ) {
+        setError('vendorShipLast', { type: 'manual', message: 'Vendor Ship. Dt. (Last) must be same or after Initial date' });
+        errorMessages.push('Vendor Ship. Dt. (Last) must be after Initial');
+        hasErrors = true;
       }
+
       if (!currentValues.finalInspectionDate) {
         setError('finalInspectionDate', { type: 'manual', message: 'Final Inspection Date is required' });
         errorMessages.push('Final Inspection Date');
+        hasErrors = true;
+      } else if (
+        currentValues.vendorShipInitial &&
+        toLocal(currentValues.finalInspectionDate) < toLocal(currentValues.vendorShipInitial)
+      ) {
+        setError('finalInspectionDate', { type: 'manual', message: 'Final Inspection Date must be same or after Vendor Ship. Dt. (Initial)' });
+        errorMessages.push('Final Inspection Date must be after Vendor Initial');
         hasErrors = true;
       }
     }
@@ -3004,28 +3031,41 @@ export default function CompletePurchaseOrderForm() {
                 BUYER SHIPMENT WINDOW
               </Typography>
               <Grid container spacing={2}>
-                {[
-                  { name: 'buyerShipInitial', label: 'Buyer Ship. Dt. (Initial)' },
-                  { name: 'buyerShipLast', label: 'Buyer Ship. Dt. (Last)' },
-                ].map(({ name, label }) => (
-                  <Grid item xs={12} sm={6} key={name}>
-                    <Controller
-                      name={name}
-                      control={control}
-                      render={({ field, fieldState }) => (
-                        <TextField
-                          {...field}
-                          label={label}
-                          type="date"
-                          fullWidth
-                          InputLabelProps={{ shrink: true }}
-                          error={!!fieldState.error}
-                          helperText={fieldState.error?.message}
-                        />
-                      )}
+                <Grid item xs={12} sm={6}>
+                  <Controller name="buyerShipInitial" control={control} render={({ field, fieldState }) => (
+                    <TextField {...field} label="Buyer Ship. Dt. (Initial)" type="date" fullWidth InputLabelProps={{ shrink: true }}
+                      error={!!fieldState.error} helperText={fieldState.error?.message}
+                      onChange={(e) => {
+                        field.onChange(e);
+                        const val = e.target.value;
+                        const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
+                        if (!val) { clearErrors('buyerShipInitial'); return; }
+                        clearErrors('buyerShipInitial');
+                        const lastVal = getValues('buyerShipLast');
+                        if (lastVal && toLocal(lastVal) < toLocal(val))
+                          setError('buyerShipLast', { type: 'manual', message: 'Buyer Ship. Dt. (Last) must be same or after Initial date' });
+                        else if (lastVal) clearErrors('buyerShipLast');
+                      }}
                     />
-                  </Grid>
-                ))}
+                  )} />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Controller name="buyerShipLast" control={control} render={({ field, fieldState }) => (
+                    <TextField {...field} label="Buyer Ship. Dt. (Last)" type="date" fullWidth InputLabelProps={{ shrink: true }}
+                      error={!!fieldState.error} helperText={fieldState.error?.message}
+                      onChange={(e) => {
+                        field.onChange(e);
+                        const val = e.target.value;
+                        const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
+                        if (!val) { clearErrors('buyerShipLast'); return; }
+                        const initVal = getValues('buyerShipInitial');
+                        if (initVal && toLocal(val) < toLocal(initVal))
+                          setError('buyerShipLast', { type: 'manual', message: 'Buyer Ship. Dt. (Last) must be same or after Initial date' });
+                        else clearErrors('buyerShipLast');
+                      }}
+                    />
+                  )} />
+                </Grid>
               </Grid>
             </Card>
 
@@ -3034,29 +3074,62 @@ export default function CompletePurchaseOrderForm() {
                 VENDOR SHIPMENT WINDOW
               </Typography>
               <Grid container spacing={2}>
-                {[
-                  { name: 'vendorShipInitial', label: 'Vendor Ship. Dt. (Initial)' },
-                  { name: 'vendorShipLast', label: 'Vendor Ship. Dt. (Last)' },
-                  { name: 'finalInspectionDate', label: 'Final Inspection Date' },
-                ].map(({ name, label }) => (
-                  <Grid item xs={12} sm={4} key={name}>
-                    <Controller
-                      name={name}
-                      control={control}
-                      render={({ field, fieldState }) => (
-                        <TextField
-                          {...field}
-                          label={label}
-                          type="date"
-                          fullWidth
-                          InputLabelProps={{ shrink: true }}
-                          error={!!fieldState.error}
-                          helperText={fieldState.error?.message}
-                        />
-                      )}
+                <Grid item xs={12} sm={4}>
+                  <Controller name="vendorShipInitial" control={control} render={({ field, fieldState }) => (
+                    <TextField {...field} label="Vendor Ship. Dt. (Initial)" type="date" fullWidth InputLabelProps={{ shrink: true }}
+                      error={!!fieldState.error} helperText={fieldState.error?.message}
+                      onChange={(e) => {
+                        field.onChange(e);
+                        const val = e.target.value;
+                        const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
+                        if (!val) { clearErrors('vendorShipInitial'); return; }
+                        clearErrors('vendorShipInitial');
+                        const lastVal = getValues('vendorShipLast');
+                        if (lastVal && toLocal(lastVal) < toLocal(val))
+                          setError('vendorShipLast', { type: 'manual', message: 'Vendor Ship. Dt. (Last) must be same or after Initial date' });
+                        else if (lastVal) clearErrors('vendorShipLast');
+                        const finalVal = getValues('finalInspectionDate');
+                        if (finalVal && toLocal(finalVal) < toLocal(val))
+                          setError('finalInspectionDate', { type: 'manual', message: 'Final Inspection Date must be same or after Vendor Ship. Dt. (Initial)' });
+                        else if (finalVal) clearErrors('finalInspectionDate');
+                      }}
                     />
-                  </Grid>
-                ))}
+                  )} />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller name="vendorShipLast" control={control} render={({ field, fieldState }) => (
+                    <TextField {...field} label="Vendor Ship. Dt. (Last)" type="date" fullWidth InputLabelProps={{ shrink: true }}
+                      error={!!fieldState.error} helperText={fieldState.error?.message}
+                      onChange={(e) => {
+                        field.onChange(e);
+                        const val = e.target.value;
+                        const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
+                        if (!val) { clearErrors('vendorShipLast'); return; }
+                        const initVal = getValues('vendorShipInitial');
+                        if (initVal && toLocal(val) < toLocal(initVal))
+                          setError('vendorShipLast', { type: 'manual', message: 'Vendor Ship. Dt. (Last) must be same or after Initial date' });
+                        else clearErrors('vendorShipLast');
+                      }}
+                    />
+                  )} />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller name="finalInspectionDate" control={control} render={({ field, fieldState }) => (
+                    <TextField {...field} label="Final Inspection Date" type="date" fullWidth InputLabelProps={{ shrink: true }}
+                      error={!!fieldState.error} helperText={fieldState.error?.message}
+                      onChange={(e) => {
+                        field.onChange(e);
+                        const val = e.target.value;
+                        const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
+                        if (!val) { clearErrors('finalInspectionDate'); return; }
+                        const vendorInit = getValues('vendorShipInitial');
+                        if (vendorInit && toLocal(val) < toLocal(vendorInit))
+                          setError('finalInspectionDate', { type: 'manual', message: 'Final Inspection Date must be same or after Vendor Ship. Dt. (Initial)' });
+                        else clearErrors('finalInspectionDate');
+                      }}
+                    />
+                  )} />
+                </Grid>
                 {[
                   { name: 'reasonReviseBuyer', label: 'Reason of Revise Shipment Dates(B)' },
                   { name: 'reasonReviseVendor', label: 'Reason of Revise Shipment Dates(V)' },
@@ -3506,7 +3579,16 @@ export default function CompletePurchaseOrderForm() {
                             }}
                           >
                             <TableCell>{row.styleNo}</TableCell>
-                            <TableCell>{row.colorway}</TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.colorway || ''}
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'colorway', e.target.value)
+                                }
+                                sx={{ width: 100 }}
+                              />
+                            </TableCell>
                             <TableCell>{row.productCode}</TableCell>
                             <TableCell>{row.sizeRange}</TableCell>
                             <TableCell>{row.size}</TableCell>
