@@ -1437,11 +1437,11 @@ export default function CompletePurchaseOrderForm() {
         errorMessages.push('Buyer Ship. Dt. (Initial)');
         hasErrors = true;
       } else if (
-        currentValues.vendorShipInitial &&
-        toLocal(currentValues.buyerShipInitial) <= toLocal(currentValues.vendorShipInitial)
+        currentValues.placementDate &&
+        toLocal(currentValues.buyerShipInitial) <= toLocal(currentValues.placementDate)
       ) {
-        setError('buyerShipInitial', { type: 'manual', message: 'Buyer Ship. Dt. (Initial) must be after Vendor Ship. Dt. (Initial)' });
-        errorMessages.push('Buyer Ship. Dt. (Initial) must be after Vendor Ship Initial');
+        setError('buyerShipInitial', { type: 'manual', message: 'Buyer Ship. Dt. (Initial) must be after Placement Date' });
+        errorMessages.push('Buyer Ship. Dt. (Initial) must be after Placement Date');
         hasErrors = true;
       }
 
@@ -3050,6 +3050,10 @@ export default function CompletePurchaseOrderForm() {
                               if (val && vendorInit && toLocal(vendorInit) <= toLocal(val))
                                 setError('vendorShipInitial', { type: 'manual', message: 'Vendor Ship. Dt. (Initial) must be after Placement Date' });
                               else if (vendorInit) clearErrors('vendorShipInitial');
+                              const buyerInit = getValues('buyerShipInitial');
+                              if (val && buyerInit && toLocal(buyerInit) <= toLocal(val))
+                                setError('buyerShipInitial', { type: 'manual', message: 'Buyer Ship. Dt. (Initial) must be after Placement Date' });
+                              else if (buyerInit) clearErrors('buyerShipInitial');
                             }
                           }}
                         />
@@ -3074,10 +3078,10 @@ export default function CompletePurchaseOrderForm() {
                         const val = e.target.value;
                         const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
                         if (!val) { clearErrors('buyerShipInitial'); return; }
-                        // Validate vs vendorShipInitial
-                        const vendorInit = getValues('vendorShipInitial');
-                        if (vendorInit && toLocal(val) <= toLocal(vendorInit)) {
-                          setError('buyerShipInitial', { type: 'manual', message: 'Buyer Ship. Dt. (Initial) must be after Vendor Ship. Dt. (Initial)' });
+                        // Validate vs placementDate
+                        const placement = getValues('placementDate');
+                        if (placement && toLocal(val) <= toLocal(placement)) {
+                          setError('buyerShipInitial', { type: 'manual', message: 'Buyer Ship. Dt. (Initial) must be after Placement Date' });
                         } else {
                           clearErrors('buyerShipInitial');
                           // Re-validate buyerShipLast vs new initial
@@ -3139,11 +3143,6 @@ export default function CompletePurchaseOrderForm() {
                           if (finalVal && toLocal(finalVal) < toLocal(val))
                             setError('finalInspectionDate', { type: 'manual', message: 'Final Inspection Date must be same or after Vendor Ship. Dt. (Initial)' });
                           else if (finalVal) clearErrors('finalInspectionDate');
-                          // Re-validate buyerShipInitial vs this new vendorShipInitial
-                          const buyerInit = getValues('buyerShipInitial');
-                          if (buyerInit && toLocal(buyerInit) <= toLocal(val))
-                            setError('buyerShipInitial', { type: 'manual', message: 'Buyer Ship. Dt. (Initial) must be after Vendor Ship. Dt. (Initial)' });
-                          else if (buyerInit) clearErrors('buyerShipInitial');
                         }
                       }}
                     />
