@@ -23,9 +23,10 @@ import {
   ZoomOut,
   Download,
   Print,
-  Close
+  Close,
+  ArrowBack
 } from '@mui/icons-material';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { HOST_API } from 'src/config-global';
 
@@ -73,6 +74,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
   const [zoomLevel, setZoomLevel] = useState(1.2);
   const [currentPage, setCurrentPage] = useState(1);
   const { id } = useParams();
+  const navigate = useNavigate();
   const [fetchedData, setFetchedData] = useState(null);
   const [loading, setLoading] = useState(!!id && !propPoData);
 
@@ -435,7 +437,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
     destination: poData.destination || '',
     shipmentTerms: poData.shipmentModeName || '',
     paymentTerms: poData.paymentModeName || '',
-    amsTeam: poData.userName || '',
+    amsTeam: 'Mr. Mushtaq Ashraf',
     cpoNumber: poData.pono || '',
     styleNumber: poData.style || '',
     productCategory: poData.productCategoriesName || '',
@@ -465,7 +467,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
   // Second page data
   const secondPageData = {
     companyName: poData.companyName || "",
-    preparedBy: poData.userName || "",
+    preparedBy: 'Mr. Mushtaq Ashraf',
     termsAndConditions: [
       "PO should be read carefully and confirm in 3 days from the date of issuance.",
       "Goods should be in good quality as per the buyer requirement, otherwise factory will be responsible for charge back.",
@@ -612,8 +614,16 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
         }}
       >
         <Toolbar variant="dense" sx={{ minHeight: '48px !important' }}>
-          {/* Left Section - Document Info */}
+          {/* Left Section - Back Button + Document Info */}
           <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+            <IconButton
+              size="small"
+              onClick={() => navigate('/dashboard/supply-chain')}
+              sx={{ color: '#fff', mr: 1 }}
+              title="My Orders pe wapas jao"
+            >
+              <ArrowBack fontSize="small" />
+            </IconButton>
             <Typography
               variant="h6"
               sx={{

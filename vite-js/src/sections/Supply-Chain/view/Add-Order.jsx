@@ -1436,6 +1436,13 @@ export default function CompletePurchaseOrderForm() {
         setError('buyerShipInitial', { type: 'manual', message: 'Buyer Ship. Dt. (Initial) is required' });
         errorMessages.push('Buyer Ship. Dt. (Initial)');
         hasErrors = true;
+      } else if (
+        currentValues.vendorShipInitial &&
+        toLocal(currentValues.buyerShipInitial) <= toLocal(currentValues.vendorShipInitial)
+      ) {
+        setError('buyerShipInitial', { type: 'manual', message: 'Buyer Ship. Dt. (Initial) must be after Vendor Ship. Dt. (Initial)' });
+        errorMessages.push('Buyer Ship. Dt. (Initial) must be after Vendor Ship Initial');
+        hasErrors = true;
       }
 
       if (!currentValues.buyerShipLast) {
@@ -1454,6 +1461,13 @@ export default function CompletePurchaseOrderForm() {
       if (!currentValues.vendorShipInitial) {
         setError('vendorShipInitial', { type: 'manual', message: 'Vendor Ship. Dt. (Initial) is required' });
         errorMessages.push('Vendor Ship. Dt. (Initial)');
+        hasErrors = true;
+      } else if (
+        currentValues.placementDate &&
+        toLocal(currentValues.vendorShipInitial) <= toLocal(currentValues.placementDate)
+      ) {
+        setError('vendorShipInitial', { type: 'manual', message: 'Vendor Ship. Dt. (Initial) must be after Placement Date' });
+        errorMessages.push('Vendor Ship. Dt. (Initial) must be after Placement Date');
         hasErrors = true;
       }
 
@@ -1481,6 +1495,14 @@ export default function CompletePurchaseOrderForm() {
         setError('finalInspectionDate', { type: 'manual', message: 'Final Inspection Date must be same or after Vendor Ship. Dt. (Initial)' });
         errorMessages.push('Final Inspection Date must be after Vendor Initial');
         hasErrors = true;
+      }
+    }
+
+    // Step 3: PRODUCT SPECIFIC INFORMATION — at least one item/style required
+    if (activeStep === 3) {
+      if (!savedItemData || !savedItemData.rows || savedItemData.rows.length === 0) {
+        hasErrors = true;
+        errorMessages.push('Item Details (at least one style must be added)');
       }
     }
 
@@ -3018,6 +3040,18 @@ export default function CompletePurchaseOrderForm() {
                           InputLabelProps={{ shrink: true }}
                           error={!!fieldState.error}
                           helperText={fieldState.error?.message}
+                          onChange={(e) => {
+                            field.onChange(e);
+                            if (name === 'placementDate') {
+                              const val = e.target.value;
+                              const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
+                              clearErrors('placementDate');
+                              const vendorInit = getValues('vendorShipInitial');
+                              if (val && vendorInit && toLocal(vendorInit) <= toLocal(val))
+                                setError('vendorShipInitial', { type: 'manual', message: 'Vendor Ship. Dt. (Initial) must be after Placement Date' });
+                              else if (vendorInit) clearErrors('vendorShipInitial');
+                            }
+                          }}
                         />
                       )}
                     />
@@ -3040,11 +3074,18 @@ export default function CompletePurchaseOrderForm() {
                         const val = e.target.value;
                         const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
                         if (!val) { clearErrors('buyerShipInitial'); return; }
-                        clearErrors('buyerShipInitial');
-                        const lastVal = getValues('buyerShipLast');
-                        if (lastVal && toLocal(lastVal) < toLocal(val))
-                          setError('buyerShipLast', { type: 'manual', message: 'Buyer Ship. Dt. (Last) must be same or after Initial date' });
-                        else if (lastVal) clearErrors('buyerShipLast');
+                        // Validate vs vendorShipInitial
+                        const vendorInit = getValues('vendorShipInitial');
+                        if (vendorInit && toLocal(val) <= toLocal(vendorInit)) {
+                          setError('buyerShipInitial', { type: 'manual', message: 'Buyer Ship. Dt. (Initial) must be after Vendor Ship. Dt. (Initial)' });
+                        } else {
+                          clearErrors('buyerShipInitial');
+                          // Re-validate buyerShipLast vs new initial
+                          const lastVal = getValues('buyerShipLast');
+                          if (lastVal && toLocal(lastVal) < toLocal(val))
+                            setError('buyerShipLast', { type: 'manual', message: 'Buyer Ship. Dt. (Last) must be same or after Initial date' });
+                          else if (lastVal) clearErrors('buyerShipLast');
+                        }
                       }}
                     />
                   )} />
@@ -3083,15 +3124,27 @@ export default function CompletePurchaseOrderForm() {
                         const val = e.target.value;
                         const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
                         if (!val) { clearErrors('vendorShipInitial'); return; }
-                        clearErrors('vendorShipInitial');
-                        const lastVal = getValues('vendorShipLast');
-                        if (lastVal && toLocal(lastVal) < toLocal(val))
-                          setError('vendorShipLast', { type: 'manual', message: 'Vendor Ship. Dt. (Last) must be same or after Initial date' });
-                        else if (lastVal) clearErrors('vendorShipLast');
-                        const finalVal = getValues('finalInspectionDate');
-                        if (finalVal && toLocal(finalVal) < toLocal(val))
-                          setError('finalInspectionDate', { type: 'manual', message: 'Final Inspection Date must be same or after Vendor Ship. Dt. (Initial)' });
-                        else if (finalVal) clearErrors('finalInspectionDate');
+                        // Validate vs placementDate
+                        const placement = getValues('placementDate');
+                        if (placement && toLocal(val) <= toLocal(placement)) {
+                          setError('vendorShipInitial', { type: 'manual', message: 'Vendor Ship. Dt. (Initial) must be after Placement Date' });
+                        } else {
+                          clearErrors('vendorShipInitial');
+                          // Re-validate dependents
+                          const lastVal = getValues('vendorShipLast');
+                          if (lastVal && toLocal(lastVal) < toLocal(val))
+                            setError('vendorShipLast', { type: 'manual', message: 'Vendor Ship. Dt. (Last) must be same or after Initial date' });
+                          else if (lastVal) clearErrors('vendorShipLast');
+                          const finalVal = getValues('finalInspectionDate');
+                          if (finalVal && toLocal(finalVal) < toLocal(val))
+                            setError('finalInspectionDate', { type: 'manual', message: 'Final Inspection Date must be same or after Vendor Ship. Dt. (Initial)' });
+                          else if (finalVal) clearErrors('finalInspectionDate');
+                          // Re-validate buyerShipInitial vs this new vendorShipInitial
+                          const buyerInit = getValues('buyerShipInitial');
+                          if (buyerInit && toLocal(buyerInit) <= toLocal(val))
+                            setError('buyerShipInitial', { type: 'manual', message: 'Buyer Ship. Dt. (Initial) must be after Vendor Ship. Dt. (Initial)' });
+                          else if (buyerInit) clearErrors('buyerShipInitial');
+                        }
                       }}
                     />
                   )} />

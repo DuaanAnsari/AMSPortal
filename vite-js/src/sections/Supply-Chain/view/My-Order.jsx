@@ -764,7 +764,7 @@ export default function PurchaseOrderView() {
   return (
     <Container maxWidth={settings.themeStretch ? false : 'xl'} sx={{ py: 2 }}>
       <CustomBreadcrumbs
-        heading="SHIPMENT RELEASE"
+        heading="Purchase Orders"
         links={[{ name: 'Dashboard', href: '/dashboard' }, { name: 'Purchase Orders' }]}
         sx={{ mb: { xs: 2, md: 3 } }}
       />

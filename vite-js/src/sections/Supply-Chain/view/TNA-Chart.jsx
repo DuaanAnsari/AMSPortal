@@ -361,7 +361,6 @@ export default function TNAChartPage() {
               field: `${proc}_idealDate`,
               minWidth: 110,
               editable: true,
-              cellEditor: 'agDateCellEditor',
               filter: 'agDateColumnFilter',
               filterParams: {
                 comparator: (filterDate, cellValue) => {
@@ -373,14 +372,12 @@ export default function TNAChartPage() {
                   return 0;
                 },
               },
-              valueFormatter: (params) => formatGridDate(params.value),
             },
             {
               headerName: 'Actual Date',
               field: `${proc}_actualDate`,
               minWidth: 110,
               editable: true,
-              cellEditor: 'agDateCellEditor',
               filter: 'agDateColumnFilter',
               filterParams: {
                 comparator: (filterDate, cellValue) => {
@@ -392,14 +389,12 @@ export default function TNAChartPage() {
                   return 0;
                 },
               },
-              valueFormatter: (params) => formatGridDate(params.value),
             },
             {
               headerName: 'Approval Date',
               field: `${proc}_approvalDatee`,
               minWidth: 110,
               editable: true,
-              cellEditor: 'agDateCellEditor',
               filter: 'agDateColumnFilter',
               filterParams: {
                 comparator: (filterDate, cellValue) => {
@@ -411,14 +406,12 @@ export default function TNAChartPage() {
                   return 0;
                 },
               },
-              valueFormatter: (params) => formatGridDate(params.value),
             },
             {
               headerName: 'Est. Date',
               field: `${proc}_estimatedDate`,
               minWidth: 110,
               editable: true,
-              cellEditor: 'agDateCellEditor',
               filter: 'agDateColumnFilter',
               filterParams: {
                 comparator: (filterDate, cellValue) => {
@@ -430,7 +423,6 @@ export default function TNAChartPage() {
                   return 0;
                 },
               },
-              valueFormatter: (params) => formatGridDate(params.value),
             },
             {
               headerName: 'Date Span',
@@ -443,7 +435,6 @@ export default function TNAChartPage() {
               field: `${proc}_freezeCondPPSample`,
               minWidth: 150,
               editable: true,
-              cellEditor: 'agDateCellEditor',
               filter: 'agDateColumnFilter',
               filterParams: {
                 comparator: (filterDate, cellValue) => {
@@ -455,7 +446,6 @@ export default function TNAChartPage() {
                   return 0;
                 },
               },
-              valueFormatter: (params) => formatGridDate(params.value),
             },
             { headerName: 'Units', field: `${proc}_units`, minWidth: 70, editable: true },
             { headerName: 'Status', field: `${proc}_status`, minWidth: 80, editable: true },
@@ -539,11 +529,11 @@ export default function TNAChartPage() {
           const proc = item.process;
           // Per‑process fields mapped to fixed sub‑columns
           // NOTE: `_date` is kept for API payload only (no visible column)
-          row[`${proc}_date`] = parseApiDateToDate(item.date);
-          row[`${proc}_idealDate`] = parseApiDateToDate(item.idealDate);
-          row[`${proc}_actualDate`] = parseApiDateToDate(item.actualDate);
-          row[`${proc}_approvalDatee`] = parseApiDateToDate(item.approvalDatee);
-          row[`${proc}_estimatedDate`] = parseApiDateToDate(item.estimatedDate);
+          row[`${proc}_date`] = formatGridDate(parseApiDateToDate(item.date)) || null;
+          row[`${proc}_idealDate`] = formatGridDate(parseApiDateToDate(item.idealDate)) || null;
+          row[`${proc}_actualDate`] = formatGridDate(parseApiDateToDate(item.actualDate)) || null;
+          row[`${proc}_approvalDatee`] = formatGridDate(parseApiDateToDate(item.approvalDatee)) || null;
+          row[`${proc}_estimatedDate`] = formatGridDate(parseApiDateToDate(item.estimatedDate)) || null;
           row[`${proc}_dateSpan`] = item.dateSpan;
 
           row[`${proc}_units`] = item.units || item.Units || '';
@@ -555,9 +545,7 @@ export default function TNAChartPage() {
             '';
           row[`${proc}_qtyCompleted`] =
             item.qtyCompleted || item.QtyCompleted || '';
-          row[`${proc}_freezeCondPPSample`] = parseApiDateToDate(
-            item.freezeCondPPSample
-          );
+          row[`${proc}_freezeCondPPSample`] = formatGridDate(parseApiDateToDate(item.freezeCondPPSample)) || null;
           // IDs / sequence per process for UpdateTNA
           row[`${proc}_tnaChartID`] = item.tnaChartID ?? item.tnaChartId ?? 0;
           row[`${proc}_sequence`] = item.sequence ?? 0;
@@ -627,39 +615,36 @@ export default function TNAChartPage() {
   };
 
   // Handle cell value change
-  // onFillOperation — return the source value ensuring Date objects are preserved
+  // onFillOperation — copy source value directly (dates stored as strings, copy as-is)
   const onFillOperation = (params) => {
     const val = params.initialValues[0];
-    if (val instanceof Date) return val;
-    if (val != null && val !== '') return parseApiDateToDate(val) ?? val;
+    // If a Date object slips in (edge case), convert to display string
+    if (val instanceof Date) return formatGridDate(val) || null;
     return val;
   };
 
   const onCellValueChanged = (params) => {
     const { data, colDef, newValue, oldValue } = params;
-    // For Date objects compare by time value, otherwise strict equality
-    const isSame =
-      newValue instanceof Date && oldValue instanceof Date
-        ? newValue.getTime() === oldValue.getTime()
-        : newValue === oldValue;
-    if (isSame) return;
+    if (newValue === oldValue) return;
 
     const rowKey = `${data.poid}_${data.color || ''}`;
     const fieldKey = colDef.field;
+
+    // Build updated row merging new value into current data
+    const updatedRowData = { ...data, [fieldKey]: newValue };
+
+    // Directly update AG Grid row node — most reliable for immediate visual refresh
+    // (especially when destination cell field was previously absent/undefined)
+    gridRef.current?.api?.applyTransaction({ update: [updatedRowData] });
 
     const updateRow = (row) => {
       const currentRowKey = `${row.poid}_${row.color || ''}`;
       return currentRowKey === rowKey ? { ...row, [fieldKey]: newValue } : row;
     };
 
-    // Update both fullData and tableData immediately for instant visual feedback
+    // Keep fullData and tableData in sync for filtering and save operations
     setFullData((prev) => prev.map(updateRow));
     setTableData((prev) => prev.map(updateRow));
-
-    // Force grid to visually re-render filled cells (especially when destination was empty)
-    setTimeout(() => {
-      gridRef.current?.api?.refreshCells({ force: true });
-    }, 0);
 
     setModifiedRows((prev) => {
       const newMap = new Map(prev);
