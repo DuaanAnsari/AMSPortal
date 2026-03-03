@@ -405,7 +405,7 @@ export default function TNAChartPage() {
           headerName: proc,
           children: [
             {
-              headerName: 'Ideal Date',
+              headerName: 'Target Date',
               field: `${proc}_idealDate`,
               minWidth: 110,
               editable: true,
@@ -422,9 +422,9 @@ export default function TNAChartPage() {
               },
             },
             {
-              headerName: 'Actual Date',
+              headerName: 'Factory Commitment Date',
               field: `${proc}_actualDate`,
-              minWidth: 110,
+              minWidth: 130,
               editable: true,
               filter: 'agDateColumnFilter',
               filterParams: {
@@ -439,7 +439,7 @@ export default function TNAChartPage() {
               },
             },
             {
-              headerName: 'Approval Date',
+              headerName: 'Submission Date',
               field: `${proc}_approvalDatee`,
               minWidth: 110,
               editable: true,
@@ -456,7 +456,7 @@ export default function TNAChartPage() {
               },
             },
             {
-              headerName: 'Est. Date',
+              headerName: 'Approval Date',
               field: `${proc}_estimatedDate`,
               minWidth: 110,
               editable: true,
