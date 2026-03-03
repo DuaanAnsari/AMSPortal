@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   Box,
@@ -65,6 +65,54 @@ export default function TNAChartPage() {
   const theme = useTheme();
 
   const gridRef = useRef(null);
+  const dragScrollRef = useRef({ active: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
+
+  const onGridReady = useCallback((params) => {
+    const gridDiv = params.api.getGridBody?.()?.eGridBody
+      || gridRef.current?.eGridDiv
+      || document.querySelector('.ag-root-wrapper');
+    if (!gridDiv) return;
+
+    const hScroll = gridDiv.querySelector('.ag-center-cols-viewport')
+      || gridDiv.querySelector('.ag-body-horizontal-scroll-viewport');
+    const vScroll = gridDiv.querySelector('.ag-body-viewport');
+
+    if (!hScroll && !vScroll) return;
+
+    const target = hScroll || vScroll;
+    target.style.cursor = 'grab';
+
+    const onMouseDown = (e) => {
+      if (e.button !== 0) return;
+      const ds = dragScrollRef.current;
+      ds.active = true;
+      ds.startX = e.clientX;
+      ds.startY = e.clientY;
+      ds.scrollLeftH = hScroll ? hScroll.scrollLeft : 0;
+      ds.scrollTopV = vScroll ? vScroll.scrollTop : 0;
+      target.style.cursor = 'grabbing';
+      document.body.style.userSelect = 'none';
+    };
+
+    const onMouseMove = (e) => {
+      const ds = dragScrollRef.current;
+      if (!ds.active) return;
+      e.preventDefault();
+      if (hScroll) hScroll.scrollLeft = ds.scrollLeftH - (e.clientX - ds.startX);
+      if (vScroll) vScroll.scrollTop = ds.scrollTopV - (e.clientY - ds.startY);
+    };
+
+    const onMouseUp = () => {
+      dragScrollRef.current.active = false;
+      target.style.cursor = 'grab';
+      document.body.style.userSelect = '';
+    };
+
+    target.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }, []);
+
   const [tableData, setTableData] = useState([]);
   const [fullData, setFullData] = useState([]); // Store complete unfiltered data
   const [customers, setCustomers] = useState([]); // All customers from API
@@ -352,7 +400,7 @@ export default function TNAChartPage() {
             return String(v);
           },
         },
-        { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
+        { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true, cellStyle: { borderRight: '2px solid #999' } },
         ...processList.map((proc) => ({
           headerName: proc,
           children: [
@@ -460,6 +508,8 @@ export default function TNAChartPage() {
               field: `${proc}_qtyCompleted`,
               minWidth: 100,
               editable: true,
+              cellStyle: { borderRight: '2px solid #999' },
+              headerClass: 'ag-group-last-header',
             },
           ],
         })),
@@ -1053,6 +1103,9 @@ export default function TNAChartPage() {
             '& .ag-header-group-cell': {
               borderBottom: `1px solid ${theme.palette.divider} !important`,
             },
+            '& .ag-group-last-header': {
+              borderRight: '2px solid #999 !important',
+            },
             '& .ag-cell': {
               paddingLeft: '2px !important',
               paddingRight: '2px !important',
@@ -1125,6 +1178,7 @@ export default function TNAChartPage() {
           <div style={{ width: '100%', height: '100%' }}>
             <AgGridReact
               ref={gridRef}
+              onGridReady={onGridReady}
               rowData={tableData}
               columnDefs={columnDefs}
               getRowId={(params) => `${params.data.poid}_${params.data.color || ''}`}

@@ -2474,10 +2474,6 @@ export default function CompletePurchaseOrderFormEdit() {
                           if (lastVal && toLocal(lastVal) < toLocal(val))
                             setError('vendorShipLast', { type: 'manual', message: 'Vendor Ship. Dt. (Last) must be same or after Initial date' });
                           else if (lastVal) clearErrors('vendorShipLast');
-                          const finalVal = getValues('finalInspectionDate');
-                          if (finalVal && toLocal(finalVal) < toLocal(val))
-                            setError('finalInspectionDate', { type: 'manual', message: 'Final Inspection Date must be same or after Vendor Ship. Dt. (Initial)' });
-                          else if (finalVal) clearErrors('finalInspectionDate');
                         }
                       }}
                     />
@@ -2544,13 +2540,7 @@ export default function CompletePurchaseOrderFormEdit() {
                       helperText={fieldState.error?.message}
                       onChange={(e) => {
                         field.onChange(e);
-                        const val = e.target.value;
-                        const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
-                        if (!val) { clearErrors('finalInspectionDate'); return; }
-                        const vendorInit = getValues('vendorShipInitial');
-                        if (vendorInit && toLocal(val) < toLocal(vendorInit))
-                          setError('finalInspectionDate', { type: 'manual', message: 'Final Inspection Date must be same or after Vendor Ship. Dt. (Initial)' });
-                        else clearErrors('finalInspectionDate');
+                        clearErrors('finalInspectionDate');
                       }}
                     />
                   )}

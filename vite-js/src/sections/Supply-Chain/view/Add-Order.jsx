@@ -164,7 +164,7 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
       
       // For images, show full screen preview
       if (fileType.startsWith('image/')) {
-        setFullScreenOpen(true);
+      setFullScreenOpen(true);
       } 
       // For Word files, download instead (can't preview locally)
       else if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
@@ -859,9 +859,9 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="sizeRange"
               control={control}
               render={({ field, fieldState }) => (
-                <Autocomplete
-                  options={sizeRangeOptions}
-                  loading={loadingSizeRanges}
+                  <Autocomplete
+                    options={sizeRangeOptions}
+                    loading={loadingSizeRanges}
                   getOptionLabel={(option) => String(option?.sizeRange || '')}
                   value={sizeRangeOptions.find((opt) => opt.sizeRange === field.value) || null}
                   onChange={(_, newValue) => {
@@ -902,18 +902,18 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
                   ListboxProps={{
                     style: { maxHeight: 250 }
                   }}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Size Range"
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Size Range"
                       placeholder="Type to search..."
-                      size="small"
-                      error={!!fieldState.error}
-                      helperText={fieldState.error?.message}
-                      required
-                    />
-                  )}
-                />
+                        size="small"
+                        error={!!fieldState.error}
+                        helperText={fieldState.error?.message}
+                        required
+                      />
+                    )}
+                  />
               )}
             />
           </Grid>
@@ -1487,13 +1487,6 @@ export default function CompletePurchaseOrderForm() {
       if (!currentValues.finalInspectionDate) {
         setError('finalInspectionDate', { type: 'manual', message: 'Final Inspection Date is required' });
         errorMessages.push('Final Inspection Date');
-        hasErrors = true;
-      } else if (
-        currentValues.vendorShipInitial &&
-        toLocal(currentValues.finalInspectionDate) < toLocal(currentValues.vendorShipInitial)
-      ) {
-        setError('finalInspectionDate', { type: 'manual', message: 'Final Inspection Date must be same or after Vendor Ship. Dt. (Initial)' });
-        errorMessages.push('Final Inspection Date must be after Vendor Initial');
         hasErrors = true;
       }
     }
@@ -3110,7 +3103,7 @@ export default function CompletePurchaseOrderForm() {
                       }}
                     />
                   )} />
-                </Grid>
+                  </Grid>
               </Grid>
             </Card>
 
@@ -3139,10 +3132,6 @@ export default function CompletePurchaseOrderForm() {
                           if (lastVal && toLocal(lastVal) < toLocal(val))
                             setError('vendorShipLast', { type: 'manual', message: 'Vendor Ship. Dt. (Last) must be same or after Initial date' });
                           else if (lastVal) clearErrors('vendorShipLast');
-                          const finalVal = getValues('finalInspectionDate');
-                          if (finalVal && toLocal(finalVal) < toLocal(val))
-                            setError('finalInspectionDate', { type: 'manual', message: 'Final Inspection Date must be same or after Vendor Ship. Dt. (Initial)' });
-                          else if (finalVal) clearErrors('finalInspectionDate');
                         }
                       }}
                     />
@@ -3164,20 +3153,14 @@ export default function CompletePurchaseOrderForm() {
                       }}
                     />
                   )} />
-                </Grid>
+                  </Grid>
                 <Grid item xs={12} sm={4}>
                   <Controller name="finalInspectionDate" control={control} render={({ field, fieldState }) => (
                     <TextField {...field} label="Final Inspection Date" type="date" fullWidth InputLabelProps={{ shrink: true }}
                       error={!!fieldState.error} helperText={fieldState.error?.message}
                       onChange={(e) => {
                         field.onChange(e);
-                        const val = e.target.value;
-                        const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
-                        if (!val) { clearErrors('finalInspectionDate'); return; }
-                        const vendorInit = getValues('vendorShipInitial');
-                        if (vendorInit && toLocal(val) < toLocal(vendorInit))
-                          setError('finalInspectionDate', { type: 'manual', message: 'Final Inspection Date must be same or after Vendor Ship. Dt. (Initial)' });
-                        else clearErrors('finalInspectionDate');
+                        clearErrors('finalInspectionDate');
                       }}
                     />
                   )} />

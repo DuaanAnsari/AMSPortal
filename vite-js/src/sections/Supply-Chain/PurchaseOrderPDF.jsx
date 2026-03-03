@@ -1079,10 +1079,10 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                                 {/* Quantity row (pad blanks as blanks, not 0.00) */}
                   <TableRow sx={{ borderBottom: "1px solid black" }}>
                                   <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>
-                                    {row.sizeRange || ""}
+                                    
                                   </TableCell>
                                   <TableCell sx={{ fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>
-                                    {row.productCode || ""}
+                                    
                                   </TableCell>
                                   <TableCell sx={{ fontWeight: 'bold', fontSize: '0.70rem', padding: '2px 4px', color: '#000000', backgroundColor: '#FFFFFF' }}>
                                     Quantity
