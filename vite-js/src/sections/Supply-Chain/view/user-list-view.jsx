@@ -374,11 +374,18 @@ export default function ShipmentReleaseFilters() {
   return (
     <Container maxWidth="xl" sx={{ py: 1 }}>
       <Box sx={{ mb: 2 }}>
-        <Typography variant="h5" sx={{ mb: 0.5, fontWeight: 700, letterSpacing: 0.5 }}>
+        <Typography variant="h4" sx={{ mb: 0.5, fontWeight: 700, letterSpacing: 0.5 }}>
           SHIPMENT RELEASE
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ display: 'none' }}>
-          Dashboard
+        <Typography variant="body2" color="text.secondary">
+          <Box
+            component="span"
+            sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+            onClick={() => navigate('/dashboard')}
+          >
+            Dashboard
+          </Box>
+          &nbsp; • &nbsp; SHIPMENT RELEASE
         </Typography>
       </Box>
 

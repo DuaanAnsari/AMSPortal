@@ -43,7 +43,7 @@ const ShipmentEditViewPage = lazy(
   () => import('src/sections/Supply-Chain/view/Shipment-edit-view')
 );
 // const UserAccountPage = lazy(() => import('src/sections/Supply-Chain/view/Account')); // Agar Account.jsx hai
-const UserCreatePage = lazy(() => import('src/sections/Supply-Chain/view/user-create-view'));
+const MerchandiserBacklogPage = lazy(() => import('src/sections/Supply-Chain/view/merchandiser-backlog'));
 const UserEditPage = lazy(() => import('src/sections/Supply-Chain/view/user-edit-view'));
 const AddOrderPage = lazy(() => import('src/sections/Supply-Chain/view/Add-Order'));
 const MilestonePage = lazy(() => import('src/sections/Supply-Chain/view/Milestone'));
@@ -188,7 +188,7 @@ export const dashboardRoutes = [
           { path: 'add-order', element: <AddOrderPage /> },
           { path: 'quick-search', element: <UserCardsPage /> },
           { path: 'list', element: <UserListPage /> },
-          { path: 'new', element: <UserCreatePage /> },
+          { path: 'merchandiser-backlog', element: <MerchandiserBacklogPage /> },
           { path: ':id/edit', element: <UserEditPage /> },
           // { path: 'account', element: <UserAccountPage /> },
           { path: 'cancellations', element: <CancellationsPage /> },

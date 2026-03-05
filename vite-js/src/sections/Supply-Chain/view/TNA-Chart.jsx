@@ -122,6 +122,8 @@ export default function TNAChartPage() {
   const [allPoOptions, setAllPoOptions] = useState([]); // PO options with portfolio grouping
   const [selectedPoNumbers, setSelectedPoNumbers] = useState([]);
   const [selectedPortfolioId, setSelectedPortfolioId] = useState(null); // Track selected portfolio
+  const [availablePortfolios, setAvailablePortfolios] = useState([]); // Portfolio options for dropdown
+  const [portfolioGroupsRef, setPortfolioGroupsRef] = useState([]); // Raw API portfolio groups
   const [allColors, setAllColors] = useState([]);
   const [selectedColors, setSelectedColors] = useState([]);
   const [modifiedRows, setModifiedRows] = useState(new Map());
@@ -319,54 +321,67 @@ export default function TNAChartPage() {
     setFullData([]);
     setColumnDefs([]);
     setAllPoOptions([]);
+    setAvailablePortfolios([]);
+    setPortfolioGroupsRef([]);
 
     setLoading(true);
     try {
       // Fetch TNA data grouped by portfolio
       const response = await apiClient.get(`/Milestone/GetTNAandPO?CustomerID=${idToUse}`);
-      const portfolioGroups = response.data || [];
+      const rawGroups = response.data || [];
       // eslint-disable-next-line no-console
-      console.log('[TNA] API Response (portfolioGroups):', portfolioGroups);
-      const firstGroup = portfolioGroups[0];
-      const firstItem = firstGroup?.tnaData?.[0];
-      // eslint-disable-next-line no-console
-      console.log('[TNA] First group keys:', firstGroup ? Object.keys(firstGroup) : []);
-      // eslint-disable-next-line no-console
-      console.log('[TNA] First tnaData item keys & pcPerCarton:', firstItem ? { keys: Object.keys(firstItem), pcPerCarton: firstItem.pcPerCarton, PcPerCarton: firstItem.PcPerCarton } : null);
+      console.log('[TNA] API Response (portfolioGroups):', rawGroups);
 
-      // Flatten all tnaData from all portfolios
-      let allTnaData = [];
-      portfolioGroups.forEach(group => {
-        if (group.tnaData && Array.isArray(group.tnaData)) {
-          // Add portfolioID to each item
-          const dataWithPortfolio = group.tnaData.map(item => ({
-            ...item,
-            portfolioID: group.portfolioID,
-            pcPerCarton: item.pcPerCarton ?? group.pcPerCarton,
-          }));
-          allTnaData = [...allTnaData, ...dataWithPortfolio];
-        }
+      // Filter out portfolioID 0 (unassigned POs)
+      const portfolioGroups = rawGroups.filter(g => g.portfolioID && g.portfolioID !== 0);
+
+      // Store raw groups for portfolio switching
+      setPortfolioGroupsRef(portfolioGroups);
+
+      // Build portfolio dropdown options
+      const portfolioOptions = portfolioGroups.map(group => {
+        const portfolio = productPortfolios.find(p => p.productPortfolioID === group.portfolioID);
+        const portfolioName = portfolio ? portfolio.productPortfolio : 'Other';
+        return { id: group.portfolioID, name: portfolioName };
       });
+      setAvailablePortfolios(portfolioOptions);
 
-      // Extract all unique processes
-      const allProcesses = new Set();
+      // Auto-select first portfolio
+      const firstPortfolioId = portfolioGroups[0]?.portfolioID ?? null;
+      setSelectedPortfolioId(firstPortfolioId);
+
+      // Use only the first portfolio's data for initial grid
+      const selectedGroup = portfolioGroups.find(g => g.portfolioID === firstPortfolioId);
+      let allTnaData = [];
+      if (selectedGroup?.tnaData && Array.isArray(selectedGroup.tnaData)) {
+        allTnaData = selectedGroup.tnaData.map(item => ({
+          ...item,
+          portfolioID: selectedGroup.portfolioID,
+          pcPerCarton: item.pcPerCarton ?? selectedGroup.pcPerCarton,
+        }));
+      }
+
+      // Extract all unique processes and sort by sequence so headings stay in consistent order
+      const processSeqMap = new Map();
       allTnaData.forEach(item => {
         if (item.process) {
-          allProcesses.add(item.process);
+          const seq = item.sequence ?? 9999;
+          if (!processSeqMap.has(item.process) || seq < processSeqMap.get(item.process)) {
+            processSeqMap.set(item.process, seq);
+          }
         }
       });
-      const processList = Array.from(allProcesses);
+      const processList = Array.from(processSeqMap.keys()).sort(
+        (a, b) => processSeqMap.get(a) - processSeqMap.get(b)
+      );
 
-      // Build PO options with portfolio grouping
+      // Build PO options from ALL portfolios (grouped by portfolio name)
       const poOptionsWithPortfolio = [];
       portfolioGroups.forEach(group => {
         if (group.tnaData && Array.isArray(group.tnaData)) {
           const uniquePos = [...new Set(group.tnaData.map(item => item.poNo))].filter(Boolean);
-          
-          // Find portfolio name from productPortfolios
           const portfolio = productPortfolios.find(p => p.productPortfolioID === group.portfolioID);
-          const portfolioName = portfolio ? portfolio.productPortfolio : `Portfolio ${group.portfolioID}`;
-          
+          const portfolioName = portfolio ? portfolio.productPortfolio : 'Other';
           uniquePos.forEach(poNo => {
             poOptionsWithPortfolio.push({
               poNo,
@@ -618,17 +633,229 @@ export default function TNAChartPage() {
   const handleCustomerChange = (event) => {
     const value = event.target.value;
     setSelectedCustomer(value);
-    setSelectedPoNumbers([]); // Reset PO selection when customer changes
-    setSelectedColors([]); // Reset color selection when customer changes
-    setSelectedPortfolioId(null); // Reset portfolio tracking
+    setSelectedPoNumbers([]);
+    setSelectedColors([]);
+    setSelectedPortfolioId(null);
+    setAvailablePortfolios([]);
+    setPortfolioGroupsRef([]);
     handleSearch(value);
+  };
+
+  const buildGridForPortfolio = useCallback((portfolioId, groups) => {
+    const selectedGroup = groups.find(g => g.portfolioID === portfolioId);
+    if (!selectedGroup?.tnaData) {
+      setTableData([]);
+      setFullData([]);
+      setColumnDefs([]);
+      setAllPoOptions([]);
+      return;
+    }
+
+    const allTnaData = selectedGroup.tnaData.map(item => ({
+      ...item,
+      portfolioID: selectedGroup.portfolioID,
+      pcPerCarton: item.pcPerCarton ?? selectedGroup.pcPerCarton,
+    }));
+
+    // Processes sorted by sequence
+    const processSeqMap = new Map();
+    allTnaData.forEach(item => {
+      if (item.process) {
+        const seq = item.sequence ?? 9999;
+        if (!processSeqMap.has(item.process) || seq < processSeqMap.get(item.process)) {
+          processSeqMap.set(item.process, seq);
+        }
+      }
+    });
+    const processList = Array.from(processSeqMap.keys()).sort(
+      (a, b) => processSeqMap.get(a) - processSeqMap.get(b)
+    );
+
+    // Column defs
+    const newColDefs = [
+      { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
+      { headerName: 'Customer', field: 'customer', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
+      {
+        headerName: 'PCS',
+        field: 'pcPerCarton',
+        pinned: 'left',
+        maxWidth: 100,
+        editable: true,
+        suppressHeaderMenuButton: true,
+        valueFormatter: (params) => {
+          const v = params.value;
+          if (v === null || v === undefined || v === '') return '';
+          return String(v);
+        },
+      },
+      { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true, cellStyle: { borderRight: '2px solid #999' } },
+      ...processList.map((proc) => ({
+        headerName: proc,
+        children: [
+          {
+            headerName: 'Target Date',
+            field: `${proc}_idealDate`,
+            minWidth: 110,
+            editable: true,
+            filter: 'agDateColumnFilter',
+            filterParams: {
+              comparator: (filterDate, cellValue) => {
+                if (!cellValue) return -1;
+                const cellDate = parseApiDateToDate(cellValue);
+                if (!cellDate) return -1;
+                if (cellDate < filterDate) return -1;
+                if (cellDate > filterDate) return 1;
+                return 0;
+              },
+            },
+          },
+          {
+            headerName: 'Factory Commitment Date',
+            field: `${proc}_actualDate`,
+            minWidth: 130,
+            editable: true,
+            filter: 'agDateColumnFilter',
+            filterParams: {
+              comparator: (filterDate, cellValue) => {
+                if (!cellValue) return -1;
+                const cellDate = parseApiDateToDate(cellValue);
+                if (!cellDate) return -1;
+                if (cellDate < filterDate) return -1;
+                if (cellDate > filterDate) return 1;
+                return 0;
+              },
+            },
+          },
+          {
+            headerName: 'Submission Date',
+            field: `${proc}_approvalDatee`,
+            minWidth: 110,
+            editable: true,
+            filter: 'agDateColumnFilter',
+            filterParams: {
+              comparator: (filterDate, cellValue) => {
+                if (!cellValue) return -1;
+                const cellDate = parseApiDateToDate(cellValue);
+                if (!cellDate) return -1;
+                if (cellDate < filterDate) return -1;
+                if (cellDate > filterDate) return 1;
+                return 0;
+              },
+            },
+          },
+          {
+            headerName: 'Approval Date',
+            field: `${proc}_estimatedDate`,
+            minWidth: 110,
+            editable: true,
+            filter: 'agDateColumnFilter',
+            filterParams: {
+              comparator: (filterDate, cellValue) => {
+                if (!cellValue) return -1;
+                const cellDate = parseApiDateToDate(cellValue);
+                if (!cellDate) return -1;
+                if (cellDate < filterDate) return -1;
+                if (cellDate > filterDate) return 1;
+                return 0;
+              },
+            },
+          },
+          { headerName: 'Date Span', field: `${proc}_dateSpan`, minWidth: 60, editable: true },
+          {
+            headerName: 'Freeze Cond PP Sample',
+            field: `${proc}_freezeCondPPSample`,
+            minWidth: 150,
+            editable: true,
+            filter: 'agDateColumnFilter',
+            filterParams: {
+              comparator: (filterDate, cellValue) => {
+                if (!cellValue) return -1;
+                const cellDate = parseApiDateToDate(cellValue);
+                if (!cellDate) return -1;
+                if (cellDate < filterDate) return -1;
+                if (cellDate > filterDate) return 1;
+                return 0;
+              },
+            },
+          },
+          { headerName: 'Units', field: `${proc}_units`, minWidth: 70, editable: true },
+          { headerName: 'Status', field: `${proc}_status`, minWidth: 80, editable: true },
+          { headerName: 'Remarks', field: `${proc}_preFilledRemarks`, minWidth: 140, editable: true },
+          {
+            headerName: 'Qty Completed',
+            field: `${proc}_qtyCompleted`,
+            minWidth: 100,
+            editable: true,
+            cellStyle: { borderRight: '2px solid #999' },
+            headerClass: 'ag-group-last-header',
+          },
+        ],
+      })),
+    ];
+    setColumnDefs(newColDefs);
+
+    // Pivot rows
+    const rowMap = new Map();
+    allTnaData.forEach((item) => {
+      if (!item.poid) return;
+      const colorValue = item.colourway || item.Colourway || item.colorway || item.Colorway || item.color || item.Color || '';
+      const key = `${item.poid}_${colorValue || ''}`;
+      const pcVal = item.pcPerCarton ?? item.PcPerCarton ?? item.PCPerCarton ?? item.pcsPerCarton ?? item.PcsPerCarton ?? '';
+      if (!rowMap.has(key)) {
+        rowMap.set(key, {
+          poid: item.poid,
+          poNo: item.poNo,
+          customer: item.customer || item.customerName || '',
+          pcPerCarton: pcVal,
+          color: colorValue,
+          status: item.status,
+          qtyCompleted: item.qtyCompleted,
+          freezeCondPPSample: item.freezeCondPPSample,
+        });
+      }
+      const row = rowMap.get(key);
+      if (pcVal !== '' && pcVal != null) row.pcPerCarton = pcVal;
+      if (item.process) {
+        const proc = item.process;
+        row[`${proc}_date`] = formatGridDate(parseApiDateToDate(item.date)) || null;
+        row[`${proc}_idealDate`] = formatGridDate(parseApiDateToDate(item.idealDate)) || null;
+        row[`${proc}_actualDate`] = formatGridDate(parseApiDateToDate(item.actualDate)) || null;
+        row[`${proc}_approvalDatee`] = formatGridDate(parseApiDateToDate(item.approvalDatee)) || null;
+        row[`${proc}_estimatedDate`] = formatGridDate(parseApiDateToDate(item.estimatedDate)) || null;
+        row[`${proc}_dateSpan`] = item.dateSpan;
+        row[`${proc}_units`] = item.units || item.Units || '';
+        row[`${proc}_status`] = item.status || '';
+        row[`${proc}_preFilledRemarks`] = item.preFilledRemarks || item.PreFilledRemarks || item.prefilledRemarks || '';
+        row[`${proc}_qtyCompleted`] = item.qtyCompleted || item.QtyCompleted || '';
+        row[`${proc}_freezeCondPPSample`] = formatGridDate(parseApiDateToDate(item.freezeCondPPSample)) || null;
+        row[`${proc}_tnaChartID`] = item.tnaChartID ?? item.tnaChartId ?? 0;
+        row[`${proc}_sequence`] = item.sequence ?? 0;
+      }
+    });
+
+    const finalData = Array.from(rowMap.values()).sort((a, b) => b.poid - a.poid);
+    setFullData(finalData);
+    setSelectedPoNumbers([]);
+    setSelectedColors([]);
+    setModifiedRows(new Map());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productPortfolios]);
+
+  const handlePortfolioChange = (event) => {
+    const newPortfolioId = Number(event.target.value);
+    setSelectedPortfolioId(newPortfolioId);
+    buildGridForPortfolio(newPortfolioId, portfolioGroupsRef);
   };
 
   const handlePoChange = (event, newValue) => {
     if (newValue.length === 0) {
-      // Clear all selections
       setSelectedPoNumbers([]);
-      setSelectedPortfolioId(null);
+      // Restore first portfolio grid when PO selection is cleared
+      const firstPortfolioId = portfolioGroupsRef[0]?.portfolioID ?? null;
+      if (firstPortfolioId && firstPortfolioId !== selectedPortfolioId) {
+        setSelectedPortfolioId(firstPortfolioId);
+        buildGridForPortfolio(firstPortfolioId, portfolioGroupsRef);
+      }
       return;
     }
 
@@ -645,7 +872,6 @@ export default function TNAChartPage() {
     const uniquePortfolios = [...new Set(selectedPortfolioData.map(p => p.portfolioID))];
     
     if (uniquePortfolios.length > 1) {
-      // Show error - can't select POs from different portfolios
       const portfolioNames = [...new Set(selectedPortfolioData.map(p => p.portfolioName))];
       setSnackbar({
         open: true,
@@ -655,9 +881,18 @@ export default function TNAChartPage() {
       return;
     }
 
-    // Update selections
-    setSelectedPoNumbers(newValue);
-    setSelectedPortfolioId(uniquePortfolios[0]);
+    const newPortfolioId = uniquePortfolios[0];
+
+    // If selected PO belongs to a different portfolio, rebuild grid
+    if (newPortfolioId !== selectedPortfolioId && portfolioGroupsRef.length > 0) {
+      setSelectedPortfolioId(newPortfolioId);
+      buildGridForPortfolio(newPortfolioId, portfolioGroupsRef);
+      // After grid rebuild, set the PO filter (setTimeout so state settles)
+      setTimeout(() => setSelectedPoNumbers(newValue), 0);
+    } else {
+      setSelectedPoNumbers(newValue);
+      setSelectedPortfolioId(newPortfolioId);
+    }
   };
 
   const handleColorChange = (event, newValue) => {
@@ -770,6 +1005,9 @@ export default function TNAChartPage() {
             'units',
             'preFilledRemarks',
             'tnaChartID',
+            'dateSpan',
+            'date',
+            'freezeCondPPSample',
           ]);
 
           if (editableSuffixes.has(suffix)) {
@@ -779,10 +1017,9 @@ export default function TNAChartPage() {
 
         processesInRow.forEach((proc) => {
           const tnaChartID = row[`${proc}_tnaChartID`] ?? 0;
-          if (!tnaChartID) return; // without ID we can't update
+          if (!tnaChartID) return;
 
           const payload = {
-            // Identity / linkage fields expected by backend
             tnaChartID,
             poid: row.poid ?? 0,
             poNo: row.poNo ?? '',
@@ -916,7 +1153,7 @@ export default function TNAChartPage() {
                     size="small"
                     helperText={
                       selectedPortfolioId 
-                        ? `${allPoOptions.find(opt => opt.portfolioID === selectedPortfolioId)?.portfolioName || `Portfolio ${selectedPortfolioId}`} selected`
+                        ? `${allPoOptions.find(opt => opt.portfolioID === selectedPortfolioId)?.portfolioName || 'Other'} selected`
                         : ''
                     }
                   />

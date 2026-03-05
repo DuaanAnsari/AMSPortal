@@ -106,7 +106,7 @@ export function useNavData() {
               { title: t('TNA Chart'), path: paths.dashboard.supplyChain.tnaChart },
               { title: t('Quick Search'), path: paths.dashboard.supplyChain.cards },
               { title: t('My Shipments'), path: paths.dashboard.supplyChain.list },
-              { title: t('Merchandisers Backlog'), path: paths.dashboard.supplyChain.new },
+              { title: t('Merchandisers Backlog'), path: paths.dashboard.supplyChain.merchandiserBacklog },
               { title: t('Cancellations'), path: paths.dashboard.supplyChain.cancellations },
               { title: t('Order Tracking'), path: paths.dashboard.supplyChain.orderTracking },
               { title: t('Merchant Inquiry'), path: paths.dashboard.supplyChain.merchantInquiry },

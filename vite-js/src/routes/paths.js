@@ -116,7 +116,7 @@ export const paths = {
     },
     supplyChain: {
       root: `${ROOTS.DASHBOARD}/supply-chain`,
-      new: `${ROOTS.DASHBOARD}/supply-chain/new`,
+      merchandiserBacklog: `${ROOTS.DASHBOARD}/supply-chain/merchandiser-backlog`,
       list: `${ROOTS.DASHBOARD}/supply-chain/list`,
       cards: `${ROOTS.DASHBOARD}/supply-chain/quick-search`,
       profile: `${ROOTS.DASHBOARD}/supply-chain/profile`,

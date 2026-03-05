@@ -1,17 +1,17 @@
 import { Helmet } from 'react-helmet-async';
 
-import { UserCreateView } from 'src/sections/Supply-Chain/view';
+import { MerchandiserBacklogView } from 'src/sections/Supply-Chain/view';
 
 // ----------------------------------------------------------------------
 
-export default function UserCreatePage() {
+export default function MerchandiserBacklogPage() {
   return (
     <>
       <Helmet>
-        <title> Dashboard: Create a new user</title>
+        <title> Dashboard: Merchandiser Backlog</title>
       </Helmet>
 
-      <UserCreateView />
+      <MerchandiserBacklogView />
     </>
   );
 }

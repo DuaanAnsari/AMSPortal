@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Box, Button, FormControl, MenuItem, Select, Typography, TextField } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
+import { Box, Button, Container, FormControl, MenuItem, Select, Typography, TextField } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
 
-export default function ReportFilter() {
+export default function MerchandiserBacklog() {
+  const navigate = useNavigate();
   const [poNumber, setPoNumber] = useState('MUHAMMAD SHAHZAIB');
   const [fromDate, setFromDate] = useState(dayjs('2015-01-01'));
   const [toDate, setToDate] = useState(dayjs('2015-12-31'));
@@ -19,19 +21,36 @@ export default function ReportFilter() {
   };
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 5,
-        backgroundColor: '#fff',
-        padding: { xs: '20px', md: '40px 60px' },
-        borderRadius: '10px',
-        boxShadow: '0 0 10px rgba(0,0,0,0.1)',
-        width: 'fit-content',
-      }}
-    >
+    <Container maxWidth="xl" sx={{ py: 1 }}>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h4" sx={{ mb: 0.5, fontWeight: 700, letterSpacing: 0.5 }}>
+          MERCHANDISER BACKLOG
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          <Box
+            component="span"
+            sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+            onClick={() => navigate('/dashboard')}
+          >
+            Dashboard
+          </Box>
+          &nbsp; • &nbsp; Merchandiser Backlog
+        </Typography>
+      </Box>
+
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 5,
+          backgroundColor: '#fff',
+          padding: { xs: '20px', md: '40px 60px' },
+          borderRadius: '10px',
+          boxShadow: '0 0 10px rgba(0,0,0,0.1)',
+          width: 'fit-content',
+        }}
+      >
       {/* Fields Row */}
       <Box
         sx={{
@@ -138,6 +157,7 @@ export default function ReportFilter() {
       >
         View Report
       </Button>
-    </Box>
+      </Box>
+    </Container>
   );
 }
