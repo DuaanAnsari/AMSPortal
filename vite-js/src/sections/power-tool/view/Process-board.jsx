@@ -16,6 +16,7 @@ import {
   IconButton,
   FormControl,
   Select,
+  FormControlLabel,
 } from '@mui/material';
 import { ArrowUpward, ArrowDownward, ViewColumn } from '@mui/icons-material';
 
@@ -58,8 +59,11 @@ export default function ProcessSchedule() {
   const handleMenuOpen = (e) => setAnchorEl(e.currentTarget);
   const handleMenuClose = () => setAnchorEl(null);
 
-  const toggleColumn = (col) => {
-    setVisibleColumns((prev) => ({ ...prev, [col]: !prev[col] }));
+  const setColumnVisibility = (col, checked) => {
+    setVisibleColumns((prev) => {
+      if (prev[col] === checked) return prev;
+      return { ...prev, [col]: checked };
+    });
   };
 
   return (
@@ -109,14 +113,22 @@ export default function ProcessSchedule() {
           <ViewColumn sx={{ color: PURPLE }} />
         </IconButton>
         <Menu anchorEl={anchorEl} open={open} onClose={handleMenuClose}>
-          {Object.keys(visibleColumns).map((col) => (
-            <MenuItem key={col} onClick={() => toggleColumn(col)}>
-              <Checkbox checked={visibleColumns[col]} />
-              <Typography sx={{ textTransform: 'capitalize' }}>
-                {col === 'process' ? 'Process Name' : 'Scheduled Days %'}
-              </Typography>
-            </MenuItem>
-          ))}
+          <Box sx={{ px: 1, py: 0.5 }}>
+            {Object.keys(visibleColumns).map((col) => (
+              <FormControlLabel
+                key={col}
+                onClick={(e) => e.stopPropagation()}
+                control={
+                  <Checkbox
+                    checked={visibleColumns[col]}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setColumnVisibility(col, e.target.checked)}
+                  />
+                }
+                label={col === 'process' ? 'Process Name' : 'Scheduled Days %'}
+              />
+            ))}
+          </Box>
         </Menu>
       </Box>
 
