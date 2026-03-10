@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 import {
   Box,
@@ -18,7 +19,9 @@ import {
   Button,
   Snackbar,
   Alert,
+  IconButton,
 } from '@mui/material';
+import { History } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 
 import { AgGridReact } from 'ag-grid-react';
@@ -59,13 +62,65 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Checkbox that blocks AG Grid's native range-selection mousedown via capture phase
+const SelectCheckbox = React.memo(({ isChecked, onToggle }) => {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const stopIt = (e) => e.stopImmediatePropagation();
+    el.addEventListener('mousedown', stopIt, true); // capture: fires before AG Grid
+    return () => el.removeEventListener('mousedown', stopIt, true);
+  }, []);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={isChecked}
+      onChange={onToggle}
+      style={{ cursor: 'pointer', margin: 0, width: 16, height: 16, accentColor: '#1976d2' }}
+    />
+  );
+});
+
+// Custom group header with checkbox for marking all rows as Not Applicable
+const ProcessGroupHeader = (params) => {
+  const { displayName, onSelectAll } = params;
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', overflow: 'hidden' }}>
+      <input
+        type="checkbox"
+        style={{
+          margin: 0,
+          cursor: 'pointer',
+          flexShrink: 0,
+          width: 16,
+          height: 16,
+          accentColor: '#1976d2',
+          borderRadius: 3,
+        }}
+        title={`Select all rows for: ${displayName}`}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => {
+          if (onSelectAll) onSelectAll(displayName, e.target.checked);
+        }}
+      />
+      <span style={{ fontWeight: 600, fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {displayName}
+      </span>
+    </Box>
+  );
+};
+
 // ----------------------------------------------------------------------
 
 export default function TNAChartPage() {
   const theme = useTheme();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const gridRef = useRef(null);
-  const dragScrollRef = useRef({ active: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
+  const dragScrollRef = useRef({ active: false, wasDragged: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
 
   const onGridReady = useCallback((params) => {
     const gridDiv = params.api.getGridBody?.()?.eGridBody
@@ -86,6 +141,7 @@ export default function TNAChartPage() {
       if (e.button !== 0) return;
       const ds = dragScrollRef.current;
       ds.active = true;
+      ds.wasDragged = false;
       ds.startX = e.clientX;
       ds.startY = e.clientY;
       ds.scrollLeftH = hScroll ? hScroll.scrollLeft : 0;
@@ -97,15 +153,20 @@ export default function TNAChartPage() {
     const onMouseMove = (e) => {
       const ds = dragScrollRef.current;
       if (!ds.active) return;
+      const dx = Math.abs(e.clientX - ds.startX);
+      const dy = Math.abs(e.clientY - ds.startY);
+      if (dx > 5 || dy > 5) ds.wasDragged = true;
       e.preventDefault();
       if (hScroll) hScroll.scrollLeft = ds.scrollLeftH - (e.clientX - ds.startX);
       if (vScroll) vScroll.scrollTop = ds.scrollTopV - (e.clientY - ds.startY);
     };
 
     const onMouseUp = () => {
-      dragScrollRef.current.active = false;
+      const ds = dragScrollRef.current;
+      ds.active = false;
       target.style.cursor = 'grab';
       document.body.style.userSelect = '';
+      setTimeout(() => { ds.wasDragged = false; }, 100);
     };
 
     target.addEventListener('mousedown', onMouseDown);
@@ -162,9 +223,7 @@ export default function TNAChartPage() {
         'units',
         'preFilledRemarks',
         'tnaChartID',
-        'dateSpan',
         'date',
-        'freezeCondPPSample',
       ]);
 
       changedFields.forEach((key) => {
@@ -272,6 +331,21 @@ export default function TNAChartPage() {
     fetchProductPortfolios();
   }, []);
 
+  // Auto-refetch when returning from TNA View (Applicable action)
+  useEffect(() => {
+    if (location.state?.refreshFromTNAView) {
+      // Prefer customerID from state, fall back to sessionStorage
+      const customerToLoad = location.state?.customerID || sessionStorage.getItem('tna_last_customer');
+      if (customerToLoad) {
+        setSelectedCustomer(customerToLoad);
+        handleSearch(customerToLoad);
+      }
+      // Clear the state so it doesn't trigger again on re-render
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
+
   // Recompute dropdown options and visible rows whenever selections or data change
   useEffect(() => {
     if (fullData.length === 0) return;
@@ -327,7 +401,7 @@ export default function TNAChartPage() {
     setLoading(true);
     try {
       // Fetch TNA data grouped by portfolio
-      const response = await apiClient.get(`/Milestone/GetTNAandPO?CustomerID=${idToUse}`);
+      const response = await apiClient.get(`/Milestone/GetTNAandPO?CustomerID=${idToUse}&Selected=true`);
       const rawGroups = response.data || [];
       // eslint-disable-next-line no-console
       console.log('[TNA] API Response (portfolioGroups):', rawGroups);
@@ -416,134 +490,152 @@ export default function TNAChartPage() {
           },
         },
         { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true, cellStyle: { borderRight: '2px solid #999' } },
-        ...processList.map((proc) => ({
-          headerName: proc,
-          children: [
-            {
-              headerName: 'Target Date',
-              field: `${proc}_idealDate`,
-              minWidth: 110,
-              editable: true,
-              filter: 'agDateColumnFilter',
-              filterParams: {
-                comparator: (filterDate, cellValue) => {
-                  if (!cellValue) return -1;
-                  const cellDate = parseApiDateToDate(cellValue);
-                  if (!cellDate) return -1;
-                  if (cellDate < filterDate) return -1;
-                  if (cellDate > filterDate) return 1;
-                  return 0;
-                },
+        ...processList.map((proc) => {
+          const noProcessRenderer = (params) => {
+            if (!params.data?.[`_processExists_${proc}`]) {
+              return <span style={{ color: '#999', fontStyle: 'italic', fontSize: '12px' }}>This process not exist in this PO</span>;
+            }
+            return params.value ?? '';
+          };
+          const emptyIfNoProcess = (params) => {
+            if (!params.data?.[`_processExists_${proc}`]) return '';
+            return params.value ?? '';
+          };
+          const notEditableIfNoProcess = (params) => !!params.data?.[`_processExists_${proc}`];
+          const noProcessCellStyle = (params) => {
+            const base = {};
+            if (!params.data?.[`_processExists_${proc}`]) {
+              return { ...base, backgroundColor: '#f5f5f5', color: '#bbb' };
+            }
+            return base;
+          };
+          const dateFilterParams = {
+            comparator: (filterDate, cellValue) => {
+              if (!cellValue) return -1;
+              const cellDate = parseApiDateToDate(cellValue);
+              if (!cellDate) return -1;
+              if (cellDate < filterDate) return -1;
+              if (cellDate > filterDate) return 1;
+              return 0;
+            },
+          };
+          return {
+            headerName: proc,
+            headerGroupComponent: ProcessGroupHeader,
+            headerGroupComponentParams: { onSelectAll: handleSelectAllForProcess },
+            children: [
+              {
+                headerName: 'Target Date',
+                field: `${proc}_idealDate`,
+                minWidth: 110,
+                editable: false,
+                filter: false,
+                sortable: false,
+                suppressHeaderMenuButton: true,
+                cellRenderer: noProcessRenderer,
+                cellStyle: noProcessCellStyle,
               },
-            },
-            {
-              headerName: 'Factory Commitment Date',
-              field: `${proc}_actualDate`,
-              minWidth: 130,
-              editable: true,
-              filter: 'agDateColumnFilter',
-              filterParams: {
-                comparator: (filterDate, cellValue) => {
-                  if (!cellValue) return -1;
-                  const cellDate = parseApiDateToDate(cellValue);
-                  if (!cellDate) return -1;
-                  if (cellDate < filterDate) return -1;
-                  if (cellDate > filterDate) return 1;
-                  return 0;
-                },
+              {
+                headerName: 'Factory Commitment Date',
+                field: `${proc}_actualDate`,
+                minWidth: 130,
+                editable: notEditableIfNoProcess,
+                filter: 'agDateColumnFilter',
+                filterParams: dateFilterParams,
+                cellRenderer: emptyIfNoProcess,
+                cellStyle: noProcessCellStyle,
               },
-            },
-            {
-              headerName: 'Submission Date',
-              field: `${proc}_approvalDatee`,
-              minWidth: 110,
-              editable: true,
-              filter: 'agDateColumnFilter',
-              filterParams: {
-                comparator: (filterDate, cellValue) => {
-                  if (!cellValue) return -1;
-                  const cellDate = parseApiDateToDate(cellValue);
-                  if (!cellDate) return -1;
-                  if (cellDate < filterDate) return -1;
-                  if (cellDate > filterDate) return 1;
-                  return 0;
-                },
+              {
+                headerName: 'Submission Date',
+                field: `${proc}_approvalDatee`,
+                minWidth: 110,
+                editable: notEditableIfNoProcess,
+                filter: 'agDateColumnFilter',
+                filterParams: dateFilterParams,
+                cellRenderer: emptyIfNoProcess,
+                cellStyle: noProcessCellStyle,
               },
-            },
-            {
-              headerName: 'Approval Date',
-              field: `${proc}_estimatedDate`,
-              minWidth: 110,
-              editable: true,
-              filter: 'agDateColumnFilter',
-              filterParams: {
-                comparator: (filterDate, cellValue) => {
-                  if (!cellValue) return -1;
-                  const cellDate = parseApiDateToDate(cellValue);
-                  if (!cellDate) return -1;
-                  if (cellDate < filterDate) return -1;
-                  if (cellDate > filterDate) return 1;
-                  return 0;
-                },
+              {
+                headerName: 'Approval Date',
+                field: `${proc}_estimatedDate`,
+                minWidth: 110,
+                editable: notEditableIfNoProcess,
+                filter: 'agDateColumnFilter',
+                filterParams: dateFilterParams,
+                cellRenderer: emptyIfNoProcess,
+                cellStyle: noProcessCellStyle,
               },
-            },
-            {
-              headerName: 'Date Span',
-              field: `${proc}_dateSpan`,
-              minWidth: 60,
-              editable: true,
-            },
-            {
-              headerName: 'Freeze Cond PP Sample',
-              field: `${proc}_freezeCondPPSample`,
-              minWidth: 150,
-              editable: true,
-              filter: 'agDateColumnFilter',
-              filterParams: {
-                comparator: (filterDate, cellValue) => {
-                  if (!cellValue) return -1;
-                  const cellDate = parseApiDateToDate(cellValue);
-                  if (!cellDate) return -1;
-                  if (cellDate < filterDate) return -1;
-                  if (cellDate > filterDate) return 1;
-                  return 0;
-                },
+              {
+                headerName: 'Quantity Completed',
+                field: `${proc}_qtyCompleted`,
+                minWidth: 120,
+                editable: notEditableIfNoProcess,
+                cellRenderer: emptyIfNoProcess,
+                cellStyle: noProcessCellStyle,
               },
-            },
-            { headerName: 'Units', field: `${proc}_units`, minWidth: 70, editable: true },
-            { headerName: 'Status', field: `${proc}_status`, minWidth: 80, editable: true },
-            {
-              headerName: 'Remarks',
-              field: `${proc}_preFilledRemarks`,
-              minWidth: 140,
-              editable: true,
-            },
-            {
-              headerName: 'Qty Completed',
-              field: `${proc}_qtyCompleted`,
-              minWidth: 100,
-              editable: true,
-              cellStyle: { borderRight: '2px solid #999' },
-              headerClass: 'ag-group-last-header',
-            },
-          ],
-        })),
+              { headerName: 'Unit', field: `${proc}_units`, minWidth: 70, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
+              { headerName: 'Status', field: `${proc}_status`, minWidth: 80, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
+              {
+                headerName: 'Remarks',
+                field: `${proc}_preFilledRemarks`,
+                minWidth: 140,
+                editable: notEditableIfNoProcess,
+                cellRenderer: emptyIfNoProcess,
+                cellStyle: noProcessCellStyle,
+              },
+              {
+                headerName: 'Select',
+                field: `${proc}_select`,
+                minWidth: 65,
+                maxWidth: 65,
+                editable: false,
+                sortable: false,
+                filter: false,
+                cellRenderer: (params) => {
+                  if (!params.data?.[`_processExists_${proc}`]) return '';
+                  return (
+                    <SelectCheckbox
+                      isChecked={!!params.value}
+                      onToggle={(e) => params.node.setDataValue(`${proc}_select`, e.target.checked)}
+                    />
+                  );
+                },
+                cellStyle: (params) => ({
+                  ...noProcessCellStyle(params),
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }),
+              },
+              {
+                headerName: 'History',
+                field: `${proc}_history`,
+                minWidth: 70,
+                maxWidth: 70,
+                editable: false,
+                sortable: false,
+                filter: false,
+                cellRenderer: (params) => {
+                  if (!params.data?.[`_processExists_${proc}`]) return '';
+                  return (
+                    <IconButton size="small" color="primary" sx={{ p: 0 }}>
+                      <History fontSize="small" />
+                    </IconButton>
+                  );
+                },
+                cellStyle: (params) => {
+                  const base = { borderRight: '2px solid #999' };
+                  if (!params.data?.[`_processExists_${proc}`]) {
+                    return { ...base, backgroundColor: '#f5f5f5', color: '#bbb' };
+                  }
+                  return base;
+                },
+                headerClass: 'ag-group-last-header',
+              },
+            ],
+          };
+        }),
       ];
-
-      // Check if any data has these fields before adding columns
-      const hasStatus = poData.some(item => item.status);
-      const hasQtyCompleted = poData.some(item => item.qtyCompleted);
-      const hasFreezeCondPPSample = poData.some(item => item.freezeCondPPSample);
-
-      if (hasStatus) {
-        newColDefs.push({ headerName: 'Status', field: 'status', minWidth: 85 });
-      }
-      if (hasQtyCompleted) {
-        newColDefs.push({ headerName: 'Qty Completed', field: 'qtyCompleted', minWidth: 90 });
-      }
-      if (hasFreezeCondPPSample) {
-        newColDefs.push({ headerName: 'Freeze Cond PP Sample', field: 'freezeCondPPSample', minWidth: 120 });
-      }
 
       setColumnDefs(newColDefs);
 
@@ -617,11 +709,18 @@ export default function TNAChartPage() {
         }
       });
 
-      const finalData = Array.from(rowMap.values()).sort((a, b) => b.poid - a.poid);
+      const rawFinalData = Array.from(rowMap.values()).sort((a, b) => b.poid - a.poid);
+
+      const finalData = rawFinalData.map(row => {
+        processList.forEach(proc => {
+          row[`_processExists_${proc}`] = !!row[`${proc}_tnaChartID`];
+        });
+        return row;
+      });
+
       // eslint-disable-next-line no-console
       console.log('[TNA] finalData rows (poNo, color, pcPerCarton):', finalData.map((r) => ({ poNo: r.poNo, color: r.color, pcPerCarton: r.pcPerCarton })));
 
-      // Store full data (filters & dropdown options are handled in useEffect)
       setFullData(finalData);
     } catch (error) {
       console.error('Error fetching TNA data:', error);
@@ -638,6 +737,8 @@ export default function TNAChartPage() {
     setSelectedPortfolioId(null);
     setAvailablePortfolios([]);
     setPortfolioGroupsRef([]);
+    // Remember last selected customer so we can auto-refetch on return from TNA View
+    sessionStorage.setItem('tna_last_customer', value);
     handleSearch(value);
   };
 
@@ -689,108 +790,144 @@ export default function TNAChartPage() {
         },
       },
       { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true, cellStyle: { borderRight: '2px solid #999' } },
-      ...processList.map((proc) => ({
-        headerName: proc,
-        children: [
-          {
-            headerName: 'Target Date',
-            field: `${proc}_idealDate`,
-            minWidth: 110,
-            editable: true,
-            filter: 'agDateColumnFilter',
-            filterParams: {
-              comparator: (filterDate, cellValue) => {
-                if (!cellValue) return -1;
-                const cellDate = parseApiDateToDate(cellValue);
-                if (!cellDate) return -1;
-                if (cellDate < filterDate) return -1;
-                if (cellDate > filterDate) return 1;
-                return 0;
-              },
+      ...processList.map((proc) => {
+        const noProcessRenderer = (params) => {
+          if (!params.data?.[`_processExists_${proc}`]) {
+            return <span style={{ color: '#999', fontStyle: 'italic', fontSize: '12px' }}>This process not exist in this PO</span>;
+          }
+          return params.value ?? '';
+        };
+        const emptyIfNoProcess = (params) => {
+          if (!params.data?.[`_processExists_${proc}`]) return '';
+          return params.value ?? '';
+        };
+        const notEditableIfNoProcess = (params) => !!params.data?.[`_processExists_${proc}`];
+        const noProcessCellStyle = (params) => {
+          const base = {};
+          if (!params.data?.[`_processExists_${proc}`]) {
+            return { ...base, backgroundColor: '#f5f5f5', color: '#bbb' };
+          }
+          return base;
+        };
+        const dateFilterParams = {
+          comparator: (filterDate, cellValue) => {
+            if (!cellValue) return -1;
+            const cellDate = parseApiDateToDate(cellValue);
+            if (!cellDate) return -1;
+            if (cellDate < filterDate) return -1;
+            if (cellDate > filterDate) return 1;
+            return 0;
+          },
+        };
+        return {
+          headerName: proc,
+          headerGroupComponent: ProcessGroupHeader,
+          headerGroupComponentParams: { onSelectAll: handleSelectAllForProcess },
+          children: [
+            {
+              headerName: 'Target Date',
+              field: `${proc}_idealDate`,
+              minWidth: 110,
+              editable: false,
+              filter: false,
+              sortable: false,
+              suppressHeaderMenuButton: true,
+              cellRenderer: noProcessRenderer,
+              cellStyle: noProcessCellStyle,
             },
-          },
-          {
-            headerName: 'Factory Commitment Date',
-            field: `${proc}_actualDate`,
-            minWidth: 130,
-            editable: true,
-            filter: 'agDateColumnFilter',
-            filterParams: {
-              comparator: (filterDate, cellValue) => {
-                if (!cellValue) return -1;
-                const cellDate = parseApiDateToDate(cellValue);
-                if (!cellDate) return -1;
-                if (cellDate < filterDate) return -1;
-                if (cellDate > filterDate) return 1;
-                return 0;
-              },
+            {
+              headerName: 'Factory Commitment Date',
+              field: `${proc}_actualDate`,
+              minWidth: 130,
+              editable: notEditableIfNoProcess,
+              filter: 'agDateColumnFilter',
+              filterParams: dateFilterParams,
+              cellRenderer: emptyIfNoProcess,
+              cellStyle: noProcessCellStyle,
             },
-          },
-          {
-            headerName: 'Submission Date',
-            field: `${proc}_approvalDatee`,
-            minWidth: 110,
-            editable: true,
-            filter: 'agDateColumnFilter',
-            filterParams: {
-              comparator: (filterDate, cellValue) => {
-                if (!cellValue) return -1;
-                const cellDate = parseApiDateToDate(cellValue);
-                if (!cellDate) return -1;
-                if (cellDate < filterDate) return -1;
-                if (cellDate > filterDate) return 1;
-                return 0;
-              },
+            {
+              headerName: 'Submission Date',
+              field: `${proc}_approvalDatee`,
+              minWidth: 110,
+              editable: notEditableIfNoProcess,
+              filter: 'agDateColumnFilter',
+              filterParams: dateFilterParams,
+              cellRenderer: emptyIfNoProcess,
+              cellStyle: noProcessCellStyle,
             },
-          },
-          {
-            headerName: 'Approval Date',
-            field: `${proc}_estimatedDate`,
-            minWidth: 110,
-            editable: true,
-            filter: 'agDateColumnFilter',
-            filterParams: {
-              comparator: (filterDate, cellValue) => {
-                if (!cellValue) return -1;
-                const cellDate = parseApiDateToDate(cellValue);
-                if (!cellDate) return -1;
-                if (cellDate < filterDate) return -1;
-                if (cellDate > filterDate) return 1;
-                return 0;
-              },
+            {
+              headerName: 'Approval Date',
+              field: `${proc}_estimatedDate`,
+              minWidth: 110,
+              editable: notEditableIfNoProcess,
+              filter: 'agDateColumnFilter',
+              filterParams: dateFilterParams,
+              cellRenderer: emptyIfNoProcess,
+              cellStyle: noProcessCellStyle,
             },
-          },
-          { headerName: 'Date Span', field: `${proc}_dateSpan`, minWidth: 60, editable: true },
-          {
-            headerName: 'Freeze Cond PP Sample',
-            field: `${proc}_freezeCondPPSample`,
-            minWidth: 150,
-            editable: true,
-            filter: 'agDateColumnFilter',
-            filterParams: {
-              comparator: (filterDate, cellValue) => {
-                if (!cellValue) return -1;
-                const cellDate = parseApiDateToDate(cellValue);
-                if (!cellDate) return -1;
-                if (cellDate < filterDate) return -1;
-                if (cellDate > filterDate) return 1;
-                return 0;
-              },
+            {
+              headerName: 'Quantity Completed',
+              field: `${proc}_qtyCompleted`,
+              minWidth: 120,
+              editable: notEditableIfNoProcess,
+              cellRenderer: emptyIfNoProcess,
+              cellStyle: noProcessCellStyle,
             },
-          },
-          { headerName: 'Units', field: `${proc}_units`, minWidth: 70, editable: true },
-          { headerName: 'Status', field: `${proc}_status`, minWidth: 80, editable: true },
-          { headerName: 'Remarks', field: `${proc}_preFilledRemarks`, minWidth: 140, editable: true },
-          {
-            headerName: 'Qty Completed',
-            field: `${proc}_qtyCompleted`,
-            minWidth: 100,
-            editable: true,
-            cellStyle: { borderRight: '2px solid #999' },
-            headerClass: 'ag-group-last-header',
-          },
-        ],
-      })),
+            { headerName: 'Unit', field: `${proc}_units`, minWidth: 70, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
+            { headerName: 'Status', field: `${proc}_status`, minWidth: 80, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
+            { headerName: 'Remarks', field: `${proc}_preFilledRemarks`, minWidth: 140, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
+            {
+              headerName: 'Select',
+              field: `${proc}_select`,
+              minWidth: 65,
+              maxWidth: 65,
+              editable: false,
+              sortable: false,
+              filter: false,
+              cellRenderer: (params) => {
+                if (!params.data?.[`_processExists_${proc}`]) return '';
+                return (
+                  <SelectCheckbox
+                    isChecked={!!params.value}
+                    onToggle={(e) => params.node.setDataValue(`${proc}_select`, e.target.checked)}
+                  />
+                );
+              },
+              cellStyle: (params) => ({
+                ...noProcessCellStyle(params),
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }),
+            },
+            {
+              headerName: 'History',
+              field: `${proc}_history`,
+              minWidth: 70,
+              maxWidth: 70,
+              editable: false,
+              sortable: false,
+              filter: false,
+              cellRenderer: (params) => {
+                if (!params.data?.[`_processExists_${proc}`]) return '';
+                return (
+                  <IconButton size="small" color="primary" sx={{ p: 0 }}>
+                    <History fontSize="small" />
+                  </IconButton>
+                );
+              },
+              cellStyle: (params) => {
+                const base = { borderRight: '2px solid #999' };
+                if (!params.data?.[`_processExists_${proc}`]) {
+                  return { ...base, backgroundColor: '#f5f5f5', color: '#bbb' };
+                }
+                return base;
+              },
+              headerClass: 'ag-group-last-header',
+            },
+          ],
+        };
+      }),
     ];
     setColumnDefs(newColDefs);
 
@@ -833,7 +970,15 @@ export default function TNAChartPage() {
       }
     });
 
-    const finalData = Array.from(rowMap.values()).sort((a, b) => b.poid - a.poid);
+    const rawFinalData = Array.from(rowMap.values()).sort((a, b) => b.poid - a.poid);
+
+    const finalData = rawFinalData.map(row => {
+      processList.forEach(proc => {
+        row[`_processExists_${proc}`] = !!row[`${proc}_tnaChartID`];
+      });
+      return row;
+    });
+
     setFullData(finalData);
     setSelectedPoNumbers([]);
     setSelectedColors([]);
@@ -1005,9 +1150,7 @@ export default function TNAChartPage() {
             'units',
             'preFilledRemarks',
             'tnaChartID',
-            'dateSpan',
             'date',
-            'freezeCondPPSample',
           ]);
 
           if (editableSuffixes.has(suffix)) {
@@ -1087,6 +1230,99 @@ export default function TNAChartPage() {
 
   const handleSnackbarClose = () => {
     setSnackbar((prev) => ({ ...prev, open: false }));
+  };
+
+  // Header checkbox: select/deselect all rows of a process
+  const handleSelectAllForProcess = useCallback((procName, selected) => {
+    const api = gridRef.current?.api;
+    if (!api) return;
+    api.forEachNode((node) => {
+      const row = node.data;
+      if (!row || !row[`_processExists_${procName}`]) return;
+      node.setDataValue(`${procName}_select`, selected);
+    });
+  }, []);
+
+  // Not Applicable button: call API → store in sessionStorage → navigate to TNA View
+  const handleNotApplicable = async () => {
+    const api = gridRef.current?.api;
+    if (!api) return;
+
+    const processNames = columnDefs.filter(c => c.children).map(c => c.headerName);
+    const selectedProcesses = [];
+
+    api.forEachNode((node) => {
+      const row = node.data;
+      if (!row) return;
+      processNames.forEach((proc) => {
+        if (row[`${proc}_select`]) {
+          selectedProcesses.push({
+            poid: row.poid,
+            poNo: row.poNo,
+            customer: row.customer,
+            color: row.color,
+            process: proc,
+            tnaChartID: row[`${proc}_tnaChartID`] || 0,
+            targetDate: row[`${proc}_idealDate`] || '',
+            factoryCommitmentDate: row[`${proc}_actualDate`] || '',
+            submissionDate: row[`${proc}_approvalDatee`] || '',
+            approvalDate: row[`${proc}_estimatedDate`] || '',
+            quantityCompleted: row[`${proc}_qtyCompleted`] || '',
+            unit: row[`${proc}_units`] || '',
+            status: row[`${proc}_status`] || '',
+            remarks: row[`${proc}_preFilledRemarks`] || '',
+            markedAt: new Date().toISOString(),
+          });
+          node.setDataValue(`${proc}_select`, false);
+        }
+      });
+    });
+
+    if (selectedProcesses.length === 0) {
+      setSnackbar({ open: true, message: 'Please select at least one checkbox first.', severity: 'warning' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Call API for each selected process: mark selected = 0 (Not Applicable)
+      for (const proc of selectedProcesses) {
+        if (proc.tnaChartID) {
+          // eslint-disable-next-line no-await-in-loop
+          await apiClient.post('/Milestone/UpdateProcessStatus', {
+            tnaChartID: proc.tnaChartID,
+            selected: 0,
+          });
+        }
+      }
+
+      // Immediately hide selected processes from the grid (set _processExists = false)
+      const gridApi = gridRef.current?.api;
+      if (gridApi) {
+        selectedProcesses.forEach(({ poNo, color, process: proc }) => {
+          gridApi.forEachNode((node) => {
+            if (node.data?.poNo === poNo && node.data?.color === color) {
+              // eslint-disable-next-line no-param-reassign
+              node.data[`_processExists_${proc}`] = false;
+            }
+          });
+        });
+        gridApi.refreshCells({ force: true });
+      }
+
+      setSnackbar({ open: true, message: "Selected Process update with 'Not Applicable' Successfully.", severity: 'success' });
+      setTimeout(() => navigate('/dashboard/supply-chain/tna-view', { state: { customerID: selectedCustomer } }), 1200);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('UpdateProcessStatus error:', error?.response?.data || error);
+      setSnackbar({ open: true, message: 'Error updating process status. Please try again.', severity: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleShowNotApplicable = () => {
+    navigate('/dashboard/supply-chain/tna-view', { state: { customerID: selectedCustomer } });
   };
 
   return (
@@ -1439,8 +1675,6 @@ export default function TNAChartPage() {
                     '_actualDate',
                     '_approvalDatee',
                     '_estimatedDate',
-                    '_dateSpan',
-                    '_freezeCondPPSample',
                   ];
                   return editableSuffixes.some((suffix) => field.endsWith(suffix));
                 },
@@ -1466,14 +1700,32 @@ export default function TNAChartPage() {
               )}
               onCellValueChanged={onCellValueChanged}
               onFillOperation={onFillOperation}
+              onCellClicked={(params) => {
+                if (dragScrollRef.current.wasDragged) return;
+                const field = params.colDef?.field || '';
+                if (!field.includes('_')) return;
+
+                const suffixes = ['_idealDate', '_actualDate', '_approvalDatee', '_estimatedDate', '_qtyCompleted', '_units', '_status', '_preFilledRemarks', '_select', '_history'];
+                const suffix = suffixes.find(s => field.endsWith(s));
+                if (!suffix) return;
+                const procName = field.slice(0, -suffix.length);
+                const targetCol = params.api.getColumn(`${procName}_idealDate`);
+                if (targetCol) {
+                  setTimeout(() => {
+                    params.api.ensureColumnVisible(targetCol, 'start');
+                  }, 0);
+                }
+              }}
             />
           </div>
         </Box>
       </Card>
 
-      {/* Save Button - shows when there are modified rows */}
-      {modifiedRows.size > 0 && (
-        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+      <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 2, flexWrap: 'wrap' }}>
+        <Button variant="contained" color="primary" sx={{ minWidth: 160 }} onClick={handleNotApplicable}>
+          Not Applicable
+        </Button>
+        {modifiedRows.size > 0 && (
           <Button
             variant="contained"
             color="primary"
@@ -1490,8 +1742,16 @@ export default function TNAChartPage() {
               `Save Changes (${modifiedProcessCount})`
             )}
           </Button>
-        </Box>
-      )}
+        )}
+        <Button
+          variant="contained"
+          color="primary"
+          sx={{ minWidth: 220 }}
+          onClick={handleShowNotApplicable}
+        >
+          Show Not Applicable Process
+        </Button>
+      </Box>
       <Snackbar
         open={snackbar.open}
         autoHideDuration={3000}

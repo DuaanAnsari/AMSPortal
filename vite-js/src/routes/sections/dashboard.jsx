@@ -49,6 +49,7 @@ const AddOrderPage = lazy(() => import('src/sections/Supply-Chain/view/Add-Order
 const MilestonePage = lazy(() => import('src/sections/Supply-Chain/view/Milestone'));
 const view = lazy(() => import('src/sections/Supply-Chain/view/'));
 const TNAChartPage = lazy(() => import('src/sections/Supply-Chain/view/TNA-Chart'));
+const TNAViewPage = lazy(() => import('src/sections/Supply-Chain/view/TNA-View'));
 const CancellationsPage = lazy(() => import('src/sections/Supply-Chain/view/Cancellations'));
 const OrderTrackingPage = lazy(() => import('src/sections/Supply-Chain/view/Orders-tracking'));
 const MerchantInquiryPage = lazy(() => import('src/sections/Supply-Chain/view/Merchant-inquiry'));
@@ -202,6 +203,7 @@ export const dashboardRoutes = [
           { path: 'size-specs/:id', element: <SizeSpecsPage /> },
           { path: 'milestone/:id', element: <Milestone /> },
           { path: 'tna-chart', element: <TNAChartPage /> },
+          { path: 'tna-view', element: <TNAViewPage /> },
           { path: 'shipment-release/add', element: <ShipmentReleaseAddPage /> },
           { path: 'shipment/:id/edit', element: <ShipmentEditViewPage /> },
           { path: 'view/:id', element: <CompletePurchaseOrderFormEdit /> },

@@ -19,7 +19,13 @@ export default defineConfig({
     ],
   },
   server: {
-    port: 3030, // frontend sirf yahan chalega
+    port: 3030,
+    proxy: {
+      '/api': {
+        target: 'http://192.168.18.13',
+        changeOrigin: true,
+      },
+    },
   },
   preview: {
     port: 3030, // build ke baad bhi isi port pe chalega
