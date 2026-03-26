@@ -177,6 +177,7 @@ export default function TNAChartPage() {
   const gridRef = useRef(null);
   const dragScrollRef = useRef({ active: false, wasDragged: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
   const fullColDefsRef = useRef([]); // stores unfiltered column defs for dynamic visibility
+  const processKeyToNameRef = useRef(new Map()); // safeKey(proc) -> original process name
 
   const onGridReady = useCallback((params) => {
     const gridDiv = params.api.getGridBody?.()?.eGridBody
@@ -301,6 +302,36 @@ export default function TNAChartPage() {
 
   const [columnDefs, setColumnDefs] = useState([]);
   const restoredFromCacheRef = useRef(false);
+
+  const fetchProcessListByPortfolio = useCallback(async (portfolioId) => {
+    if (!portfolioId) return [];
+    try {
+      const resp = await apiClient.get(`/Milestone/GetprocessByPortfolio?ProductPortfolioID=${portfolioId}`);
+      const raw = resp.data || [];
+
+      // API may return: ["Yarn Booking", ...] OR [{processName:"Yarn Booking"}, ...] etc.
+      const names = (Array.isArray(raw) ? raw : [])
+        .map((x) => {
+          if (!x) return null;
+          if (typeof x === 'string') return x;
+          return x.processName || x.process || x.name || x.ProcessName || x.Process || x.Name || null;
+        })
+        .filter(Boolean);
+
+      // rebuild mapping for save/not-applicable flows
+      const m = new Map();
+      names.forEach((n) => {
+        const safe = getSafeKey(n);
+        if (!m.has(safe)) m.set(safe, n);
+      });
+      processKeyToNameRef.current = m;
+
+      return names;
+    } catch (err) {
+      console.error('[TNA Chart] Error fetching processes by portfolio:', err);
+      return [];
+    }
+  }, []);
 
   // Parse date coming from API (string) into JS Date for grid/editor
   const parseApiDateToDate = (value) => {
@@ -552,19 +583,29 @@ export default function TNAChartPage() {
       // eslint-disable-next-line no-console
       console.log('[TNA Chart] STEP 1 - all processes in data:', [...new Set(allTnaData.map(i => i.process))].filter(Boolean));
 
-      // Extract all unique processes and sort by sequence so headings stay in consistent order
-      const processSeqMap = new Map();
-      allTnaData.forEach(item => {
-        if (item.process) {
-          const seq = item.sequence ?? 9999;
-          if (!processSeqMap.has(item.process) || seq < processSeqMap.get(item.process)) {
-            processSeqMap.set(item.process, seq);
+      // Process headers should come from API by selected portfolio
+      let processList = await fetchProcessListByPortfolio(firstPortfolioId);
+      if (!processList || processList.length === 0) {
+        // fallback: derive from data (old behavior) if process API returns nothing
+        const processSeqMap = new Map();
+        allTnaData.forEach(item => {
+          if (item.process) {
+            const seq = item.sequence ?? 9999;
+            if (!processSeqMap.has(item.process) || seq < processSeqMap.get(item.process)) {
+              processSeqMap.set(item.process, seq);
+            }
           }
-        }
-      });
-      const processList = Array.from(processSeqMap.keys()).sort(
-        (a, b) => processSeqMap.get(a) - processSeqMap.get(b)
-      );
+        });
+        processList = Array.from(processSeqMap.keys()).sort(
+          (a, b) => processSeqMap.get(a) - processSeqMap.get(b)
+        );
+        const m = new Map();
+        processList.forEach((n) => {
+          const safe = getSafeKey(n);
+          if (!m.has(safe)) m.set(safe, n);
+        });
+        processKeyToNameRef.current = m;
+      }
       // eslint-disable-next-line no-console
       console.log('[TNA Chart] STEP 2 - processList (sorted):', processList);
 
@@ -882,34 +923,43 @@ export default function TNAChartPage() {
   };
 
   const buildGridForPortfolio = useCallback((portfolioId, groups) => {
-    const selectedGroup = groups.find(g => g.portfolioID === portfolioId);
-    if (!selectedGroup?.tnaData) {
-      setTableData([]);
-      setFullData([]);
-      setColumnDefs([]);
-      setAllPoOptions([]);
-      return;
-    }
-
-    const allTnaData = selectedGroup.tnaData.map(item => ({
-      ...item,
-      portfolioID: selectedGroup.portfolioID,
-      pcPerCarton: item.pcPerCarton ?? selectedGroup.pcPerCarton,
-    }));
-
-    // Processes sorted by sequence
-    const processSeqMap = new Map();
-    allTnaData.forEach(item => {
-      if (item.process) {
-        const seq = item.sequence ?? 9999;
-        if (!processSeqMap.has(item.process) || seq < processSeqMap.get(item.process)) {
-          processSeqMap.set(item.process, seq);
-        }
+    const run = async () => {
+      const selectedGroup = groups.find(g => g.portfolioID === portfolioId);
+      if (!selectedGroup?.tnaData) {
+        setTableData([]);
+        setFullData([]);
+        setColumnDefs([]);
+        setAllPoOptions([]);
+        return;
       }
-    });
-    const processList = Array.from(processSeqMap.keys()).sort(
-      (a, b) => processSeqMap.get(a) - processSeqMap.get(b)
-    );
+
+      const allTnaData = selectedGroup.tnaData.map(item => ({
+        ...item,
+        portfolioID: selectedGroup.portfolioID,
+        pcPerCarton: item.pcPerCarton ?? selectedGroup.pcPerCarton,
+      }));
+
+      let processList = await fetchProcessListByPortfolio(portfolioId);
+      if (!processList || processList.length === 0) {
+        const processSeqMap = new Map();
+        allTnaData.forEach(item => {
+          if (item.process) {
+            const seq = item.sequence ?? 9999;
+            if (!processSeqMap.has(item.process) || seq < processSeqMap.get(item.process)) {
+              processSeqMap.set(item.process, seq);
+            }
+          }
+        });
+        processList = Array.from(processSeqMap.keys()).sort(
+          (a, b) => processSeqMap.get(a) - processSeqMap.get(b)
+        );
+        const m = new Map();
+        processList.forEach((n) => {
+          const safe = getSafeKey(n);
+          if (!m.has(safe)) m.set(safe, n);
+        });
+        processKeyToNameRef.current = m;
+      }
 
     // Column defs
     const newColDefs = [
@@ -930,18 +980,20 @@ export default function TNAChartPage() {
       },
       { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true, cellStyle: { borderRight: '2px solid #999' } },
       ...processList.map((proc) => {
+        const safeKey = (suffix) => getSafeKey(proc, suffix);
+        const existsKey = `_processExists_${getSafeKey(proc)}`;
         const noProcessRenderer = (params) => {
-          if (!params.data?.[`_processExists_${proc}`]) return '';
+          if (!params.data?.[existsKey]) return '';
           return params.value ?? '';
         };
         const emptyIfNoProcess = (params) => {
-          if (!params.data?.[`_processExists_${proc}`]) return '';
+          if (!params.data?.[existsKey]) return '';
           return params.value ?? '';
         };
-        const notEditableIfNoProcess = (params) => !!params.data?.[`_processExists_${proc}`];
+        const notEditableIfNoProcess = (params) => !!params.data?.[existsKey];
         const noProcessCellStyle = (params) => {
           const base = {};
-          if (!params.data?.[`_processExists_${proc}`]) {
+          if (!params.data?.[existsKey]) {
             return { ...base, backgroundColor: '#f5f5f5', color: '#bbb' };
           }
           return base;
@@ -963,7 +1015,7 @@ export default function TNAChartPage() {
           children: [
             {
               headerName: 'Target Date',
-              field: `${proc}_idealDate`,
+              field: safeKey('idealDate'),
               minWidth: 110,
               editable: false,
               filter: false,
@@ -974,7 +1026,7 @@ export default function TNAChartPage() {
             },
             {
               headerName: 'Factory Commitment Date',
-              field: `${proc}_actualDate`,
+              field: safeKey('actualDate'),
               minWidth: 130,
               editable: notEditableIfNoProcess,
               filter: 'agDateColumnFilter',
@@ -984,7 +1036,7 @@ export default function TNAChartPage() {
             },
             {
               headerName: 'Submission Date',
-              field: `${proc}_approvalDatee`,
+              field: safeKey('approvalDatee'),
               minWidth: 110,
               editable: notEditableIfNoProcess,
               filter: 'agDateColumnFilter',
@@ -994,7 +1046,7 @@ export default function TNAChartPage() {
             },
             {
               headerName: 'Approval Date',
-              field: `${proc}_estimatedDate`,
+              field: safeKey('estimatedDate'),
               minWidth: 110,
               editable: notEditableIfNoProcess,
               filter: 'agDateColumnFilter',
@@ -1004,26 +1056,26 @@ export default function TNAChartPage() {
             },
             {
               headerName: 'Quantity Completed',
-              field: `${proc}_qtyCompleted`,
+              field: safeKey('qtyCompleted'),
               minWidth: 120,
               editable: notEditableIfNoProcess,
               cellRenderer: emptyIfNoProcess,
               cellStyle: noProcessCellStyle,
             },
-            { headerName: 'Unit', field: `${proc}_units`, minWidth: 70, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
-            { headerName: 'Status', field: `${proc}_status`, minWidth: 110, editable: notEditableIfNoProcess, cellEditor: 'agSelectCellEditor', cellEditorParams: (p) => { const base = ['Pending', 'Completed', 'No Activity']; const cur = p.value; return { values: cur && !base.includes(cur) ? [cur, ...base] : base }; }, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
-            { headerName: 'Remarks', field: `${proc}_preFilledRemarks`, minWidth: 140, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
+            { headerName: 'Unit', field: safeKey('units'), minWidth: 70, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
+            { headerName: 'Status', field: safeKey('status'), minWidth: 110, editable: notEditableIfNoProcess, cellEditor: 'agSelectCellEditor', cellEditorParams: (p) => { const base = ['Pending', 'Completed', 'No Activity']; const cur = p.value; return { values: cur && !base.includes(cur) ? [cur, ...base] : base }; }, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
+            { headerName: 'Remarks', field: safeKey('preFilledRemarks'), minWidth: 140, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
             {
               headerName: 'History',
-              field: `${proc}_history`,
+              field: safeKey('history'),
               minWidth: 70,
               maxWidth: 70,
               editable: false,
               sortable: false,
               filter: false,
               cellRenderer: (params) => {
-                if (!params.data?.[`_processExists_${proc}`]) return '';
-                const tnaChartID = params.data[`${proc}_tnaChartID`];
+                if (!params.data?.[existsKey]) return '';
+                const tnaChartID = params.data[safeKey('tnaChartID')];
                 return (
                   <IconButton
                     size="small"
@@ -1039,7 +1091,7 @@ export default function TNAChartPage() {
               },
               cellStyle: (params) => {
                 const base = { borderRight: '2px solid #999' };
-                if (!params.data?.[`_processExists_${proc}`]) {
+                if (!params.data?.[existsKey]) {
                   return { ...base, backgroundColor: '#f5f5f5', color: '#bbb' };
                 }
                 return base;
@@ -1076,6 +1128,7 @@ export default function TNAChartPage() {
       if (pcVal !== '' && pcVal != null) row.pcPerCarton = pcVal;
       if (item.process) {
         const proc = item.process;
+        const safe = (suffix) => getSafeKey(proc, suffix);
         const formattedIdealDate = formatGridDate(parseApiDateToDate(item.idealDate)) || null;
         const formattedActualDate = formatGridDate(parseApiDateToDate(item.actualDate)) || null;
         const formattedApprovalDatee = formatGridDate(parseApiDateToDate(item.approvalDatee)) || null;
@@ -1089,19 +1142,19 @@ export default function TNAChartPage() {
           .filter(([, value]) => !value)
           .map(([field]) => field);
 
-        row[`${proc}_date`] = formatGridDate(parseApiDateToDate(item.date)) || null;
-        row[`${proc}_idealDate`] = formattedIdealDate;
-        row[`${proc}_actualDate`] = formattedActualDate;
-        row[`${proc}_approvalDatee`] = formattedApprovalDatee;
-        row[`${proc}_estimatedDate`] = formattedEstimatedDate;
-        row[`${proc}_dateSpan`] = item.dateSpan;
-        row[`${proc}_units`] = item.units || item.Units || '';
-        row[`${proc}_status`] = item.status || '';
-        row[`${proc}_preFilledRemarks`] = item.preFilledRemarks || item.PreFilledRemarks || item.prefilledRemarks || '';
-        row[`${proc}_qtyCompleted`] = item.qtyCompleted ?? item.QtyCompleted ?? '';
-        row[`${proc}_freezeCondPPSample`] = formatGridDate(parseApiDateToDate(item.freezeCondPPSample)) || null;
-        row[`${proc}_tnaChartID`] = item.tnaChartID ?? item.tnaChartId ?? 0;
-        row[`${proc}_sequence`] = item.sequence ?? 0;
+        row[safe('date')] = formatGridDate(parseApiDateToDate(item.date)) || null;
+        row[safe('idealDate')] = formattedIdealDate;
+        row[safe('actualDate')] = formattedActualDate;
+        row[safe('approvalDatee')] = formattedApprovalDatee;
+        row[safe('estimatedDate')] = formattedEstimatedDate;
+        row[safe('dateSpan')] = item.dateSpan;
+        row[safe('units')] = item.units || item.Units || '';
+        row[safe('status')] = item.status || '';
+        row[safe('preFilledRemarks')] = item.preFilledRemarks || item.PreFilledRemarks || item.prefilledRemarks || '';
+        row[safe('qtyCompleted')] = item.qtyCompleted ?? item.QtyCompleted ?? '';
+        row[safe('freezeCondPPSample')] = formatGridDate(parseApiDateToDate(item.freezeCondPPSample)) || null;
+        row[safe('tnaChartID')] = item.tnaChartID ?? item.tnaChartId ?? 0;
+        row[safe('sequence')] = item.sequence ?? 0;
       }
     });
 
@@ -1109,7 +1162,8 @@ export default function TNAChartPage() {
 
     const finalData = rawFinalData.map(row => {
       processList.forEach(proc => {
-        row[`_processExists_${proc}`] = !!row[`${proc}_tnaChartID`];
+        const safeProc = getSafeKey(proc);
+        row[`_processExists_${safeProc}`] = !!row[`${safeProc}_tnachartid`];
       });
       return row;
     });
@@ -1123,8 +1177,11 @@ export default function TNAChartPage() {
     setSelectedPoNumbers([]);
     setSelectedColors([]);
     setModifiedRows(new Map());
+    };
+
+    run();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productPortfolios]);
+  }, [productPortfolios, fetchProcessListByPortfolio, navigate]);
 
   const handlePortfolioChange = (event) => {
     const newPortfolioId = Number(event.target.value);
@@ -1334,7 +1391,8 @@ export default function TNAChartPage() {
         });
 
         processesInRow.forEach((proc) => {
-          const tnaChartID = row[`${proc}_tnaChartID`] ?? 0;
+          const originalProcName = processKeyToNameRef.current.get(proc) || proc;
+          const tnaChartID = row[`${proc}_tnachartid`] ?? row[`${proc}_tnaChartID`] ?? 0;
           if (!tnaChartID) return;
 
           const payload = {
@@ -1343,26 +1401,26 @@ export default function TNAChartPage() {
             poNo: row.poNo ?? '',
             color: row.color ?? '',
             customerName: row.customer ?? '',
-            process: proc,
-            sequence: row[`${proc}_sequence`] ?? 0,
+            process: originalProcName,
+            sequence: row[`${proc}_sequence`] ?? row[`${proc}_sequence`] ?? 0,
 
             // Status & quantities
             status: row[`${proc}_status`] ?? row.status ?? '',
-            qtyCompleted: Number(row[`${proc}_qtyCompleted`] ?? 0),
-            dateSpan: Number(row[`${proc}_dateSpan`] ?? 0),
+            qtyCompleted: Number(row[`${proc}_qtycompleted`] ?? row[`${proc}_qtyCompleted`] ?? 0),
+            dateSpan: Number(row[`${proc}_datespan`] ?? row[`${proc}_dateSpan`] ?? 0),
 
             // Text fields
             units: row[`${proc}_units`] ?? '',
-            preFilledRemarks: row[`${proc}_preFilledRemarks`] ?? '',
+            preFilledRemarks: row[`${proc}_prefilledremarks`] ?? row[`${proc}_preFilledRemarks`] ?? '',
 
             // Dates – always send in API string format
             date: toApiDateTime(row[`${proc}_date`] ?? row.date),
-            idealDate: toApiDateTime(row[`${proc}_idealDate`]),
-            actualDate: toApiDateTime(row[`${proc}_actualDate`]),
-            approvalDatee: toApiDateTime(row[`${proc}_approvalDatee`]),
-            estimatedDate: toApiDateTime(row[`${proc}_estimatedDate`]),
+            idealDate: toApiDateTime(row[`${proc}_idealdate`] ?? row[`${proc}_idealDate`]),
+            actualDate: toApiDateTime(row[`${proc}_actualdate`] ?? row[`${proc}_actualDate`]),
+            approvalDatee: toApiDateTime(row[`${proc}_approvaldatee`] ?? row[`${proc}_approvalDatee`]),
+            estimatedDate: toApiDateTime(row[`${proc}_estimateddate`] ?? row[`${proc}_estimatedDate`]),
             freezeCondPPSample: toApiDateTime(
-              row[`${proc}_freezeCondPPSample`] ?? row.freezeCondPPSample
+              row[`${proc}_freezecondppsample`] ?? row[`${proc}_freezeCondPPSample`] ?? row.freezeCondPPSample
             ),
           };
 
@@ -1402,12 +1460,13 @@ export default function TNAChartPage() {
   const handleSelectAllForProcess = useCallback((procName, selected) => {
     const api = gridRef.current?.api;
     if (!api) return;
+    const safeProc = getSafeKey(procName);
     api.forEachNode((node) => {
       const row = node.data;
-      if (!row || !row[`_processExists_${procName}`]) return;
+      if (!row || !row[`_processExists_${safeProc}`]) return;
       // Directly mutate data — no column needed, grid stays visually unchanged
       // eslint-disable-next-line no-param-reassign
-      row[`${procName}_select`] = selected;
+      row[`${safeProc}_select`] = selected;
     });
   }, []);
 
@@ -1424,22 +1483,23 @@ export default function TNAChartPage() {
       // Scan all _select keys directly — no dependency on columnDefs
       Object.keys(row).forEach((key) => {
         if (key.endsWith('_select') && row[key]) {
-          const proc = key.slice(0, -'_select'.length);
+          const procKey = key.slice(0, -'_select'.length);
+          const proc = processKeyToNameRef.current.get(procKey) || procKey;
           selectedProcesses.push({
             poid: row.poid,
             poNo: row.poNo,
             customer: row.customer,
             color: row.color,
             process: proc,
-            tnaChartID: row[`${proc}_tnaChartID`] || 0,
-            targetDate: row[`${proc}_idealDate`] || '',
-            factoryCommitmentDate: row[`${proc}_actualDate`] || '',
-            submissionDate: row[`${proc}_approvalDatee`] || '',
-            approvalDate: row[`${proc}_estimatedDate`] || '',
-            quantityCompleted: row[`${proc}_qtyCompleted`] || '',
-            unit: row[`${proc}_units`] || '',
-            status: row[`${proc}_status`] || '',
-            remarks: row[`${proc}_preFilledRemarks`] || '',
+            tnaChartID: row[`${procKey}_tnachartid`] || 0,
+            targetDate: row[`${procKey}_idealdate`] || '',
+            factoryCommitmentDate: row[`${procKey}_actualdate`] || '',
+            submissionDate: row[`${procKey}_approvaldatee`] || '',
+            approvalDate: row[`${procKey}_estimateddate`] || '',
+            quantityCompleted: row[`${procKey}_qtycompleted`] || '',
+            unit: row[`${procKey}_units`] || '',
+            status: row[`${procKey}_status`] || '',
+            remarks: row[`${procKey}_prefilledremarks`] || '',
             markedAt: new Date().toISOString(),
           });
           // eslint-disable-next-line no-param-reassign
@@ -1470,10 +1530,11 @@ export default function TNAChartPage() {
       const gridApi = gridRef.current?.api;
       if (gridApi) {
         selectedProcesses.forEach(({ poNo, color, process: proc }) => {
+          const safeProc = getSafeKey(proc);
           gridApi.forEachNode((node) => {
             if (node.data?.poNo === poNo && node.data?.color === color) {
               // eslint-disable-next-line no-param-reassign
-              node.data[`_processExists_${proc}`] = false;
+              node.data[`_processExists_${safeProc}`] = false;
             }
           });
         });
@@ -1739,8 +1800,6 @@ export default function TNAChartPage() {
             '& .ag-header-cell, & .ag-header-group-cell': {
               backgroundColor: 'transparent',
               color: 'inherit',
-            },
-            '& .ag-header-cell, & .ag-header-group-cell': {
               paddingLeft: '2px !important',
               paddingRight: '2px !important',
             },
