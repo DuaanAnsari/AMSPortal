@@ -55,10 +55,40 @@ const TABLE_HEAD = [
 
 // ----------------------------------------------------------------------
 
+const parseDateValue = (val) => {
+  if (!val) return null;
+  if (val instanceof Date && !Number.isNaN(val.getTime())) return val;
+
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!trimmed) return null;
+
+    // dd/MM/yyyy
+    let match = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (match) {
+      const [, dd, mm, yyyy] = match;
+      const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+      if (!Number.isNaN(d.getTime())) return d;
+    }
+
+    // yyyy-MM-dd (or yyyy-MM-ddTHH:mm:ss)
+    match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
+    if (match) {
+      const [, yyyy, mm, dd] = match;
+      const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+      if (!Number.isNaN(d.getTime())) return d;
+    }
+  }
+
+  const d = new Date(val);
+  if (!Number.isNaN(d.getTime())) return d;
+  return null;
+};
+
 const formatDate = (val) => {
   if (!val) return '';
-  const d = new Date(val);
-  if (Number.isNaN(d.getTime())) return val;
+  const d = parseDateValue(val);
+  if (!d) return val;
   return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 };
 
@@ -78,8 +108,28 @@ const formatTimestamp = (val) => {
 
 const isDefaultDate = (val) => {
   if (!val) return true;
-  const d = new Date(val);
-  return Number.isNaN(d.getTime()) || d.getFullYear() <= 2000;
+  const d = parseDateValue(val);
+  if (!d) return true;
+
+  const yyyy = d.getFullYear();
+  const mm = d.getMonth() + 1;
+  const dd = d.getDate();
+
+  // Hide only known placeholder sentinel dates from API
+  const isPlaceholderDate =
+    (yyyy === 2000 && mm === 1 && dd === 1) ||
+    (yyyy === 1900 && mm === 1 && dd === 1) ||
+    (yyyy === 1 && mm === 1 && dd === 1);
+
+  return isPlaceholderDate;
+};
+
+const pickFirst = (obj, keys) => {
+  for (const key of keys) {
+    const value = obj?.[key];
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return '';
 };
 
 // ----------------------------------------------------------------------
@@ -91,6 +141,12 @@ const cellStyle = {
 };
 
 function HistoryTableRow({ row }) {
+  // Required mapping:
+  // approvalDate => Submission Date
+  // dateEstemated => Approval Date
+  const submissionDate = pickFirst(row, ['approvalDate', 'approvalDatee', 'submissionDate']);
+  const approvalDate = pickFirst(row, ['dateEstemated', 'dateEstimated', 'estimatedDate']);
+
   return (
     <tr>
       <td style={{ ...cellStyle }}>
@@ -106,10 +162,10 @@ function HistoryTableRow({ row }) {
         {isDefaultDate(row.actualDate) ? '' : formatDate(row.actualDate)}
       </td>
       <td style={{ ...cellStyle, color: '#c62828', fontWeight: 500 }}>
-        {isDefaultDate(row.approvalDate) ? '' : formatDate(row.approvalDate)}
+        {isDefaultDate(submissionDate) ? '' : formatDate(submissionDate)}
       </td>
       <td style={{ ...cellStyle, color: '#c62828', fontWeight: 500 }}>
-        {isDefaultDate(row.dateEstemated) ? '' : formatDate(row.dateEstemated)}
+        {isDefaultDate(approvalDate) ? '' : formatDate(approvalDate)}
       </td>
       <td style={{ ...cellStyle, color: '#c62828', fontWeight: 500, textAlign: 'center' }}>
         {row.qtyCompleted ?? 0}

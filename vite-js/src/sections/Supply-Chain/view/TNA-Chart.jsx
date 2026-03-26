@@ -347,23 +347,19 @@ export default function TNAChartPage() {
         return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
       }
 
-      // 2. Handle yyyy-MM-dd (often from API)
-      // We parse manually to avoid the "UTC shift" (where "2024-05-10" becomes May 9th in some timezones)
-      const yyyymmdd = /^(\d{4})-(\d{2})-(\d{2})/;
+      // 2. Handle pure yyyy-MM-dd (date-only from API)
+      // Parse manually only for pure date strings (no time/timezone part).
+      const yyyymmdd = /^(\d{4})-(\d{2})-(\d{2})$/;
       match = value.match(yyyymmdd);
       if (match) {
         const [, yyyy, mm, dd] = match;
         return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
       }
 
-      // 3. Fallback for ISO strings or other formats
+      // 3. Handle ISO date-time strings (with time/timezone) using native Date
+      // so local calendar day stays correct after timezone conversion.
       const d = new Date(value);
       if (!Number.isNaN(d.getTime())) {
-        // If it's an ISO string like "2024-05-10T00:00:00Z", 
-        // JS will treat it as UTC. For TNA, we almost always want the "calendar date".
-        if (typeof value === 'string' && value.includes('T') && value.includes('Z')) {
-           return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-        }
         return d;
       }
     }
@@ -428,6 +424,20 @@ export default function TNAChartPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
+
+  // Auto-refetch when user returns from History page (without hard refresh)
+  useEffect(() => {
+    const cameBackFromHistory = sessionStorage.getItem('tna_back_from_view') === '1';
+    if (!cameBackFromHistory) return;
+
+    sessionStorage.removeItem('tna_back_from_view');
+    const customerToLoad = selectedCustomer || sessionStorage.getItem('tna_last_customer');
+    if (!customerToLoad) return;
+
+    setSelectedCustomer(customerToLoad);
+    handleSearch(customerToLoad);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
 
   // Restore cached state ONLY when returning via back button from TNA-View
   useEffect(() => {
