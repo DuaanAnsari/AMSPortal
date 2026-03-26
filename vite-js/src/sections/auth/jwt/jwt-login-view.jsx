@@ -54,7 +54,7 @@ export default function JwtLoginView() {
   const onSubmit = handleSubmit(async (data) => {
     try {
       // ✅ Global axios instance use kar rahe hain (baseURL + interceptors)
-      const response = await axiosInstance.post('/api/Auth/login', {
+      const response = await axios.post('/api/Auth/login', {
         username: data.username,
         password: data.password,
       });
@@ -62,6 +62,7 @@ export default function JwtLoginView() {
       // ✅ Agar token mila to store karke redirect karo
       if (response.data && response.data.token) {
         localStorage.setItem('accessToken', response.data.token);
+        sessionStorage.setItem('accessToken', response.data.token);
 
         const target = returnTo ? decodeURIComponent(returnTo) : PATH_AFTER_LOGIN;
         router.push(target);

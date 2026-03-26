@@ -32,10 +32,11 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs from 'dayjs';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 
 export default function MilestoneView() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
 
   const [form, setForm] = useState({
@@ -107,9 +108,10 @@ export default function MilestoneView() {
             const targetDateValue = item.idealDate || ''; // ✅ Correct key
             return {
               id: item.id || index + 1,
+              tnaChartID: item.tnaChartID ?? item.tnaChartId ?? null,
               processRoute: item.processRoute || item.process || item.route || '',
               targetDate: targetDateValue,
-              factoryCommitmentDate: targetDateValue ? dayjs(targetDateValue) : null, // ✅ Copy from Target Date
+              factoryCommitmentDate: targetDateValue ? dayjs(targetDateValue) : null,
               submissionDate: item.submissionDate ? dayjs(item.submissionDate) : null,
               approvalDate: null,
               quantityCompleted: item.quantityCompleted || item.quantity || '',
@@ -865,7 +867,18 @@ export default function MilestoneView() {
                           <Checkbox color="secondary" />
                         </TableCell>
                         <TableCell sx={{ textAlign: 'center' }}>
-                          <IconButton color="primary">
+                          <IconButton
+                            color="primary"
+                            onClick={() =>
+                              navigate('/dashboard/supply-chain/tna-history', {
+                                state: {
+                                  tnaChartID: row.tnaChartID,
+                                  processName: row.processRoute,
+                                  portfolioName: '',
+                                },
+                              })
+                            }
+                          >
                             <History fontSize="small" />
                           </IconButton>
                         </TableCell>

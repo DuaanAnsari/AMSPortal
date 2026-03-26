@@ -16,7 +16,7 @@ import {
   Alert,
   IconButton,
 } from '@mui/material';
-import { History } from '@mui/icons-material';
+import { History, ArrowBack } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 
 import { AgGridReact } from 'ag-grid-react';
@@ -73,29 +73,26 @@ const SelectCheckbox = React.memo(({ isChecked, onToggle }) => {
   );
 });
 
-// Custom group header with checkbox for marking all rows as Applicable
+// Process group header — checkbox to select all rows for this process
 const ProcessGroupHeader = (params) => {
   const { displayName, onSelectAll } = params;
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', overflow: 'hidden' }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', height: '100%', overflow: 'visible' }}>
       <input
         type="checkbox"
-        style={{
-          margin: 0,
-          cursor: 'pointer',
-          flexShrink: 0,
-          width: 16,
-          height: 16,
-          accentColor: '#1976d2',
-          borderRadius: 3,
-        }}
+        style={{ margin: 0, cursor: 'pointer', flexShrink: 0, width: 16, height: 16, accentColor: '#1976d2' }}
         title={`Select all rows for: ${displayName}`}
         onClick={(e) => e.stopPropagation()}
-        onChange={(e) => {
-          if (onSelectAll) onSelectAll(displayName, e.target.checked);
-        }}
+        onChange={(e) => { if (onSelectAll) onSelectAll(displayName, e.target.checked); }}
       />
-      <span style={{ fontWeight: 600, fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span style={{
+        fontWeight: 600,
+        fontSize: '12px',
+        whiteSpace: 'nowrap',
+        position: 'sticky',
+        left: 6,
+        zIndex: 1,
+      }}>
         {displayName}
       </span>
     </Box>
@@ -415,26 +412,14 @@ export default function TNAViewPage() {
               { headerName: 'Approval Date', field: `${proc}_estimatedDate`, minWidth: 110, editable: notEditableIfNoProcess, filter: 'agDateColumnFilter', filterParams: dateFilterParams, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
               { headerName: 'Quantity Completed', field: `${proc}_qtyCompleted`, minWidth: 120, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
               { headerName: 'Unit', field: `${proc}_units`, minWidth: 70, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
-              { headerName: 'Status', field: `${proc}_status`, minWidth: 80, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
+              { headerName: 'Status', field: `${proc}_status`, minWidth: 110, editable: notEditableIfNoProcess, cellEditor: 'agSelectCellEditor', cellEditorParams: (p) => { const base = ['Pending', 'Completed', 'No Activity']; const cur = p.value; return { values: cur && !base.includes(cur) ? [cur, ...base] : base }; }, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
               { headerName: 'Remarks', field: `${proc}_preFilledRemarks`, minWidth: 140, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
-              {
-                headerName: 'Select', field: `${proc}_select`, minWidth: 65, maxWidth: 65, editable: false, sortable: false, filter: false,
-                cellRenderer: (params) => {
-                  if (!params.data?.[`_processExists_${proc}`]) return '';
-                  return (
-                    <SelectCheckbox
-                      isChecked={!!params.value}
-                      onToggle={(e) => params.node.setDataValue(`${proc}_select`, e.target.checked)}
-                    />
-                  );
-                },
-                cellStyle: (params) => ({ ...noProcessCellStyle(params), display: 'flex', alignItems: 'center', justifyContent: 'center' }),
-              },
               {
                 headerName: 'History', field: `${proc}_history`, minWidth: 70, maxWidth: 70, editable: false, sortable: false, filter: false,
                 cellRenderer: (params) => {
                   if (!params.data?.[`_processExists_${proc}`]) return '';
-                  return <IconButton size="small" color="primary" sx={{ p: 0 }}><History fontSize="small" /></IconButton>;
+                  const tnaChartID = params.data[`${proc}_tnaChartID`];
+                  return <IconButton size="small" color="primary" sx={{ p: 0 }} onClick={() => navigate('/dashboard/supply-chain/tna-history', { state: { tnaChartID, processName: proc, portfolioName: params.data.customer || '' } })}><History fontSize="small" /></IconButton>;
                 },
                 cellStyle: (params) => {
                   const base = { borderRight: '2px solid #999' };
@@ -558,19 +543,11 @@ export default function TNAViewPage() {
             { headerName: 'Approval Date', field: `${proc}_estimatedDate`, minWidth: 110, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
             { headerName: 'Quantity Completed', field: `${proc}_qtyCompleted`, minWidth: 120, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
             { headerName: 'Unit', field: `${proc}_units`, minWidth: 70, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
-            { headerName: 'Status', field: `${proc}_status`, minWidth: 80, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
+            { headerName: 'Status', field: `${proc}_status`, minWidth: 110, editable: notEditableIfNoProcess, cellEditor: 'agSelectCellEditor', cellEditorParams: (p) => { const base = ['Pending', 'Completed', 'No Activity']; const cur = p.value; return { values: cur && !base.includes(cur) ? [cur, ...base] : base }; }, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
             { headerName: 'Remarks', field: `${proc}_preFilledRemarks`, minWidth: 140, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
             {
-              headerName: 'Select', field: `${proc}_select`, minWidth: 65, maxWidth: 65, editable: false, sortable: false, filter: false,
-              cellRenderer: (params) => {
-                if (!params.data?.[`_processExists_${proc}`]) return '';
-                return <SelectCheckbox isChecked={!!params.value} onToggle={(e) => params.node.setDataValue(`${proc}_select`, e.target.checked)} />;
-              },
-              cellStyle: (params) => ({ ...noProcessCellStyle(params), display: 'flex', alignItems: 'center', justifyContent: 'center' }),
-            },
-            {
               headerName: 'History', field: `${proc}_history`, minWidth: 70, maxWidth: 70, editable: false, sortable: false, filter: false,
-              cellRenderer: (params) => { if (!params.data?.[`_processExists_${proc}`]) return ''; return <IconButton size="small" color="primary" sx={{ p: 0 }}><History fontSize="small" /></IconButton>; },
+              cellRenderer: (params) => { if (!params.data?.[`_processExists_${proc}`]) return ''; const tnaChartID = params.data[`${proc}_tnaChartID`]; return <IconButton size="small" color="primary" sx={{ p: 0 }} onClick={() => navigate('/dashboard/supply-chain/tna-history', { state: { tnaChartID, processName: proc, portfolioName: params.data.customer || '' } })}><History fontSize="small" /></IconButton>; },
               cellStyle: (params) => { const base = { borderRight: '2px solid #999' }; if (!params.data?.[`_processExists_${proc}`]) return { ...base, backgroundColor: '#f5f5f5', color: '#bbb' }; return base; },
               headerClass: 'ag-group-last-header',
             },
@@ -755,36 +732,40 @@ export default function TNAViewPage() {
 
   const handleSnackbarClose = () => { setSnackbar((prev) => ({ ...prev, open: false })); };
 
+  // Header checkbox: mark all rows of a process as selected in data (no column, no visual highlight)
   const handleSelectAllForProcess = useCallback((procName, selected) => {
     const api = gridRef.current?.api;
     if (!api) return;
     api.forEachNode((node) => {
       const row = node.data;
       if (!row || !row[`_processExists_${procName}`]) return;
-      node.setDataValue(`${procName}_select`, selected);
+      // eslint-disable-next-line no-param-reassign
+      row[`${procName}_select`] = selected;
     });
   }, []);
 
-  // Applicable button: mark selected processes as selected=1, then go back to TNA Chart
+  // Applicable button: mark selected processes as selected=1
   const handleApplicable = async () => {
     const api = gridRef.current?.api;
     if (!api) return;
 
-    const processNames = columnDefs.filter(c => c.children).map(c => c.headerName);
     const selectedProcesses = [];
 
     api.forEachNode((node) => {
       const row = node.data;
       if (!row) return;
-      processNames.forEach((proc) => {
-        if (row[`${proc}_select`]) {
+      // Scan all _select keys directly on the row — no dependency on columnDefs
+      Object.keys(row).forEach((key) => {
+        if (key.endsWith('_select') && row[key]) {
+          const proc = key.slice(0, -'_select'.length);
           selectedProcesses.push({
             poid: row.poid,
             poNo: row.poNo,
             process: proc,
             tnaChartID: row[`${proc}_tnaChartID`] || 0,
           });
-          node.setDataValue(`${proc}_select`, false);
+          // eslint-disable-next-line no-param-reassign
+          row[key] = false;
         }
       });
     });
@@ -809,19 +790,36 @@ export default function TNAViewPage() {
       // Hide made-applicable processes from the grid immediately
       const gridApi = gridRef.current?.api;
       if (gridApi) {
-        selectedProcesses.forEach(({ poNo, color, process: proc }) => {
-          gridApi.forEachNode((node) => {
-            if (node.data?.poNo === poNo && node.data?.color === color) {
+        const markedProcessNames = new Set(selectedProcesses.map((p) => p.process));
+        gridApi.forEachNode((node) => {
+          if (!node.data) return;
+          markedProcessNames.forEach((proc) => {
+            if (node.data[`_processExists_${proc}`]) {
               // eslint-disable-next-line no-param-reassign
               node.data[`_processExists_${proc}`] = false;
             }
           });
         });
         gridApi.refreshCells({ force: true });
+
+        // Check if any process still exists in any row
+        let anyProcessLeft = false;
+        gridApi.forEachNode((node) => {
+          if (!node.data) return;
+          const hasProcess = Object.keys(node.data).some(
+            (k) => k.startsWith('_processExists_') && node.data[k] === true
+          );
+          if (hasProcess) anyProcessLeft = true;
+        });
+
+        if (!anyProcessLeft) {
+          setSnackbar({ open: true, message: "All processes marked as Applicable. Redirecting to TNA Chart...", severity: 'success' });
+          setTimeout(() => navigate('/dashboard/supply-chain/tna-chart', { state: { refreshFromTNAView: true, customerID: selectedCustomer } }), 1500);
+          return;
+        }
       }
 
       setSnackbar({ open: true, message: "Selected processes marked as 'Applicable' successfully.", severity: 'success' });
-      setTimeout(() => navigate('/dashboard/supply-chain/tna-chart', { state: { refreshFromTNAView: true, customerID: selectedCustomer } }), 1200);
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('UpdateProcessStatus error:', error?.response?.data || error);
@@ -837,16 +835,21 @@ export default function TNAViewPage() {
 
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
-      <CustomBreadcrumbs
-        heading="Not Applicable Processes"
-        links={[
-          { name: 'Dashboard', href: '/dashboard' },
-          { name: 'Purchase Orders', href: paths.dashboard.supplyChain.root },
-          { name: 'TNA Chart', href: '/dashboard/supply-chain/tna-chart' },
-          { name: 'TNA View' },
-        ]}
-        sx={{ mb: { xs: 2, md: 3 } }}
-      />
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+        <IconButton onClick={() => navigate(-1)} size="small" sx={{ color: 'text.primary' }}>
+          <ArrowBack />
+        </IconButton>
+        <CustomBreadcrumbs
+          heading="Not Applicable Processes"
+          links={[
+            { name: 'Dashboard', href: '/dashboard' },
+            { name: 'Purchase Orders', href: paths.dashboard.supplyChain.root },
+            { name: 'TNA Chart', href: '/dashboard/supply-chain/tna-chart' },
+            { name: 'TNA View' },
+          ]}
+          sx={{ mb: 0, flex: 1 }}
+        />
+      </Box>
 
       {/* Filters */}
       <Card sx={{ p: 2, mb: 2 }}>
@@ -998,16 +1001,18 @@ export default function TNAViewPage() {
               noRowsOverlayComponent={() => <div style={{ padding: '20px', textAlign: 'center' }}>No data available</div>}
               onCellValueChanged={onCellValueChanged}
               onFillOperation={onFillOperation}
+              onColumnHeaderClicked={(e) => {
+                if (e.column?.getColId()?.endsWith('_idealDate')) {
+                  e.api.ensureColumnVisible(e.column.getColId(), 'start');
+                }
+              }}
               onCellClicked={(params) => {
                 if (dragScrollRef.current.wasDragged) return;
                 const field = params.colDef?.field || '';
-                if (!field.includes('_')) return;
-                const suffixes = ['_idealDate', '_actualDate', '_approvalDatee', '_estimatedDate', '_qtyCompleted', '_units', '_status', '_preFilledRemarks', '_select', '_history'];
-                const suffix = suffixes.find(s => field.endsWith(s));
-                if (!suffix) return;
-                const procName = field.slice(0, -suffix.length);
-                const targetCol = params.api.getColumn(`${procName}_idealDate`);
-                if (targetCol) setTimeout(() => { params.api.ensureColumnVisible(targetCol, 'start'); }, 0);
+                if (!field.endsWith('_idealDate')) return;
+                setTimeout(() => {
+                  params.api.ensureColumnVisible(params.column, 'start');
+                }, 0);
               }}
             />
           </div>
@@ -1015,7 +1020,7 @@ export default function TNAViewPage() {
       </Card>
 
       <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 2, flexWrap: 'wrap' }}>
-        <Button variant="contained" color="success" sx={{ minWidth: 160 }} onClick={handleApplicable} disabled={saving}>
+        <Button variant="contained" color="primary" sx={{ minWidth: 160 }} onClick={handleApplicable} disabled={saving}>
           {saving ? <><CircularProgress size={20} sx={{ mr: 1, color: 'inherit' }} />Saving...</> : 'Applicable'}
         </Button>
         {modifiedRows.size > 0 && (
