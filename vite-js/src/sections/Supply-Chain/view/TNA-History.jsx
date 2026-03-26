@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 
-import Card from '@mui/material/Card';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableContainer from '@mui/material/TableContainer';
-import Container from '@mui/material/Container';
-import Typography from '@mui/material/Typography';
-import Box from '@mui/material/Box';
-import CircularProgress from '@mui/material/CircularProgress';
+import {
+  Box,
+  Card,
+  Table,
+  TableBody,
+  Container,
+  Typography,
+  IconButton,
+  TableContainer,
+  CircularProgress,
+} from '@mui/material';
+import { ArrowBack } from '@mui/icons-material';
 
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 import { paths } from 'src/routes/paths';
@@ -93,19 +97,19 @@ function HistoryTableRow({ row }) {
         {row.userName || row.UserName || row.username || ''}
       </td>
       <td style={{ ...cellStyle, color: '#2e7d32', fontWeight: 500 }}>
-        {formatDate(row.creationDate)}
+        {isDefaultDate(row.idealDate) ? '' : formatDate(row.idealDate)}
       </td>
       <td style={{ ...cellStyle, color: '#2e7d32', fontWeight: 500 }}>
         {row.status || ''}
       </td>
       <td style={{ ...cellStyle, color: '#2e7d32', fontWeight: 500 }}>
-        {isDefaultDate(row.dateEstemated) ? '' : formatDate(row.dateEstemated)}
-      </td>
-      <td style={{ ...cellStyle, color: '#c62828', fontWeight: 500 }}>
         {isDefaultDate(row.actualDate) ? '' : formatDate(row.actualDate)}
       </td>
       <td style={{ ...cellStyle, color: '#c62828', fontWeight: 500 }}>
         {isDefaultDate(row.approvalDate) ? '' : formatDate(row.approvalDate)}
+      </td>
+      <td style={{ ...cellStyle, color: '#c62828', fontWeight: 500 }}>
+        {isDefaultDate(row.dateEstemated) ? '' : formatDate(row.dateEstemated)}
       </td>
       <td style={{ ...cellStyle, color: '#c62828', fontWeight: 500, textAlign: 'center' }}>
         {row.qtyCompleted ?? 0}
@@ -123,8 +127,17 @@ function HistoryTableRow({ row }) {
 // ----------------------------------------------------------------------
 
 export default function TNAHistoryPage() {
+  const navigate = useNavigate();
   const location = useLocation();
   const { tnaChartID, processName, portfolioName } = location.state || {};
+
+  // eslint-disable-next-line no-console
+  console.log('TNA History tnaChartID:', tnaChartID);
+
+  const handleBack = () => {
+    sessionStorage.setItem('tna_back_from_view', '1');
+    navigate(-1);
+  };
 
   const table = useTable({ defaultRowsPerPage: 10 });
 
@@ -142,6 +155,8 @@ export default function TNAHistoryPage() {
       setError('');
       try {
         const res = await apiClient.get(`/Milestone/GetTNAHistory/${tnaChartID}`);
+        // eslint-disable-next-line no-console
+        console.log('[TNA History] API Response:', res.data);
         setRows(Array.isArray(res.data) ? res.data : []);
       } catch (err) {
         console.error('TNA History fetch error:', err);
@@ -165,16 +180,21 @@ export default function TNAHistoryPage() {
 
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
-      <CustomBreadcrumbs
-        heading="TNA History"
-        links={[
-          { name: 'Dashboard', href: '/dashboard' },
-          { name: 'Purchase Orders', href: paths.dashboard.supplyChain.root },
-          { name: 'TNA Chart', href: '/dashboard/supply-chain/tna-chart' },
-          { name: 'TNA History' },
-        ]}
-        sx={{ mb: { xs: 2, md: 3 } }}
-      />
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+        <IconButton onClick={handleBack} size="small" sx={{ color: 'text.primary' }}>
+          <ArrowBack />
+        </IconButton>
+        <CustomBreadcrumbs
+          heading="TNA History"
+          links={[
+            { name: 'Dashboard', href: '/dashboard' },
+            { name: 'Purchase Orders', href: paths.dashboard.supplyChain.root },
+            { name: 'TNA Chart', href: '/dashboard/supply-chain/tna-chart' },
+            { name: 'TNA History' },
+          ]}
+          sx={{ mb: 0, flex: 1 }}
+        />
+      </Box>
 
       {title && (
         <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2, color: 'text.secondary' }}>

@@ -204,22 +204,32 @@ export default function TNAViewPage() {
   const parseApiDateToDate = (value) => {
     if (!value) return null;
     if (value instanceof Date) return value;
+
     if (typeof value === 'string') {
+      // 1. Handle dd/MM/yyyy
       const ddmmyyyy = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-      const match = value.match(ddmmyyyy);
+      let match = value.match(ddmmyyyy);
       if (match) {
         const [, dd, mm, yyyy] = match;
-        const d = Number(dd); const m = Number(mm); const y = Number(yyyy);
-        if (!Number.isNaN(d) && !Number.isNaN(m) && !Number.isNaN(y) && d >= 1 && d <= 31 && m >= 1 && m <= 12) {
-          return new Date(y, m - 1, d);
+        return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+      }
+
+      // 2. Handle yyyy-MM-dd
+      const yyyymmdd = /^(\d{4})-(\d{2})-(\d{2})/;
+      match = value.match(yyyymmdd);
+      if (match) {
+        const [, yyyy, mm, dd] = match;
+        return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+      }
+
+      // 3. ISO / Fallback
+      const d = new Date(value);
+      if (!Number.isNaN(d.getTime())) {
+        if (typeof value === 'string' && value.includes('T') && value.includes('Z')) {
+           return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
         }
+        return d;
       }
-      if (value.includes('T') || value.includes('-')) {
-        const d = new Date(value);
-        if (!Number.isNaN(d.getTime())) return d;
-      }
-      const parsed = new Date(value);
-      if (!Number.isNaN(parsed.getTime())) return parsed;
     }
     return null;
   };

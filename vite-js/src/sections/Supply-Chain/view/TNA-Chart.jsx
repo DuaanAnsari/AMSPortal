@@ -272,22 +272,22 @@ export default function TNAChartPage() {
 
       const editableSuffixes = new Set([
         'status',
-        'qtyCompleted',
-        'actualDate',
-        'idealDate',
-        'estimatedDate',
-        'approvalDatee',
+        'qtycompleted',
+        'actualdate',
+        'idealdate',
+        'estimateddate',
+        'approvaldatee',
         'units',
-        'preFilledRemarks',
-        'tnaChartID',
+        'prefilledremarks',
+        'tnachartid',
         'date',
       ]);
 
       changedFields.forEach((key) => {
-        const underscoreIndex = key.indexOf('_');
-        if (underscoreIndex === -1) return;
-        const proc = key.slice(0, underscoreIndex);
-        const suffix = key.slice(underscoreIndex + 1);
+        const lastUnderscore = key.lastIndexOf('_');
+        if (lastUnderscore === -1) return;
+        const proc = key.slice(0, lastUnderscore);
+        const suffix = key.slice(lastUnderscore + 1);
 
         if (editableSuffixes.has(suffix)) {
           processesInRow.add(proc);
@@ -336,41 +336,36 @@ export default function TNAChartPage() {
   // Parse date coming from API (string) into JS Date for grid/editor
   const parseApiDateToDate = (value) => {
     if (!value) return null;
-
-    // Already a Date instance
     if (value instanceof Date) return value;
 
     if (typeof value === 'string') {
-      // dd/MM/yyyy (e.g. 31/12/1999)
+      // 1. Handle dd/MM/yyyy
       const ddmmyyyy = /^(\d{2})\/(\d{2})\/(\d{4})$/;
       let match = value.match(ddmmyyyy);
       if (match) {
         const [, dd, mm, yyyy] = match;
-        const d = Number(dd);
-        const m = Number(mm);
-        const y = Number(yyyy);
-        if (
-          !Number.isNaN(d) &&
-          !Number.isNaN(m) &&
-          !Number.isNaN(y) &&
-          d >= 1 &&
-          d <= 31 &&
-          m >= 1 &&
-          m <= 12
-        ) {
-          return new Date(y, m - 1, d);
+        return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+      }
+
+      // 2. Handle yyyy-MM-dd (often from API)
+      // We parse manually to avoid the "UTC shift" (where "2024-05-10" becomes May 9th in some timezones)
+      const yyyymmdd = /^(\d{4})-(\d{2})-(\d{2})/;
+      match = value.match(yyyymmdd);
+      if (match) {
+        const [, yyyy, mm, dd] = match;
+        return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+      }
+
+      // 3. Fallback for ISO strings or other formats
+      const d = new Date(value);
+      if (!Number.isNaN(d.getTime())) {
+        // If it's an ISO string like "2024-05-10T00:00:00Z", 
+        // JS will treat it as UTC. For TNA, we almost always want the "calendar date".
+        if (typeof value === 'string' && value.includes('T') && value.includes('Z')) {
+           return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
         }
+        return d;
       }
-
-      // ISO-like string handled by Date constructor
-      if (value.includes('T') || value.includes('-')) {
-        const d = new Date(value);
-        if (!Number.isNaN(d.getTime())) return d;
-      }
-
-      // Fallback: let JS try to parse, e.g. "Nov 10, 2025"
-      const parsed = new Date(value);
-      if (!Number.isNaN(parsed.getTime())) return parsed;
     }
 
     return null;
@@ -1266,8 +1261,8 @@ export default function TNAChartPage() {
     if (fieldKey?.endsWith('_select')) return;
 
     // --- Quantity Completed validation (only when unit contains %) ---
-    if (fieldKey?.endsWith('_qtyCompleted')) {
-      const procName = fieldKey.slice(0, -'_qtyCompleted'.length);
+    if (fieldKey?.endsWith('_qtycompleted')) {
+      const procName = fieldKey.slice(0, -'_qtycompleted'.length);
       const unitVal = String(data[`${procName}_units`] || '').trim();
 
       if (unitVal.includes('%')) {
@@ -1352,7 +1347,7 @@ export default function TNAChartPage() {
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       const dd = String(d.getDate()).padStart(2, '0');
 
-      return `${yyyy}-${mm}-${dd}T09:46:42.397Z`;
+      return `${yyyy}-${mm}-${dd}T00:00:00`;
     };
 
     setSaving(true);
@@ -1367,21 +1362,21 @@ export default function TNAChartPage() {
 
         // Find all processes for which any editable field was actually changed
         changedFields.forEach((key) => {
-          const underscoreIndex = key.indexOf('_');
-          if (underscoreIndex === -1) return;
-          const proc = key.slice(0, underscoreIndex);
-          const suffix = key.slice(underscoreIndex + 1);
+          const lastUnderscore = key.lastIndexOf('_');
+          if (lastUnderscore === -1) return;
+          const proc = key.slice(0, lastUnderscore);
+          const suffix = key.slice(lastUnderscore + 1);
 
           const editableSuffixes = new Set([
             'status',
-            'qtyCompleted',
-            'actualDate',
-            'idealDate',
-            'estimatedDate',
-            'approvalDatee',
+            'qtycompleted',
+            'actualdate',
+            'idealdate',
+            'estimateddate',
+            'approvaldatee',
             'units',
-            'preFilledRemarks',
-            'tnaChartID',
+            'prefilledremarks',
+            'tnachartid',
             'date',
           ]);
 
@@ -1402,7 +1397,7 @@ export default function TNAChartPage() {
             color: row.color ?? '',
             customerName: row.customer ?? '',
             process: originalProcName,
-            sequence: row[`${proc}_sequence`] ?? row[`${proc}_sequence`] ?? 0,
+            sequence: row[`${proc}_sequence`] ?? 0,
 
             // Status & quantities
             status: row[`${proc}_status`] ?? row.status ?? '',
@@ -1917,14 +1912,14 @@ export default function TNAChartPage() {
                 editable: (params) => {
                   const field = params.colDef.field || '';
                   const editableSuffixes = [
-                    '_preFilledRemarks',
+                    '_prefilledremarks',
                     '_units',
                     '_status',
-                    '_qtyCompleted',
-                    '_idealDate',
-                    '_actualDate',
-                    '_approvalDatee',
-                    '_estimatedDate',
+                    '_qtycompleted',
+                    '_idealdate',
+                    '_actualdate',
+                    '_approvaldatee',
+                    '_estimateddate',
                   ];
                   return editableSuffixes.some((suffix) => field.endsWith(suffix));
                 },
@@ -1951,14 +1946,14 @@ export default function TNAChartPage() {
               onCellValueChanged={onCellValueChanged}
               onFillOperation={onFillOperation}
               onColumnHeaderClicked={(e) => {
-                if (e.column?.getColId()?.endsWith('_idealDate')) {
+                if (e.column?.getColId()?.endsWith('_idealdate')) {
                   e.api.ensureColumnVisible(e.column.getColId(), 'start');
                 }
               }}
               onCellClicked={(params) => {
                 if (dragScrollRef.current.wasDragged) return;
                 const field = params.colDef?.field || '';
-                if (!field.endsWith('_idealDate')) return;
+                if (!field.endsWith('_idealdate')) return;
                 setTimeout(() => {
                   params.api.ensureColumnVisible(params.column, 'start');
                 }, 0);
