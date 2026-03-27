@@ -5,6 +5,7 @@ import { HelmetProvider } from 'react-helmet-async';
 
 import App from './app';
 import './utils/axios'; // 👈 yahan add kiya axios global interceptor
+import './utils/fetch-auth';
 
 // ----------------------------------------------------------------------
 
