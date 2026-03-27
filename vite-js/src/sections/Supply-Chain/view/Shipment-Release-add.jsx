@@ -93,6 +93,66 @@ const ARTICLE_API = `${API_BASE_URL}/api/ShipmentRelease/GetArticleNo`;
 const SAVE_SHIPMENT_API = `${API_BASE_URL}/api/ShipmentRelease/AddShipment`;
 const NEXT_SHIPMENT_API = `${API_BASE_URL}/api/ShipmentRelease/GetNextShipmentNo`;
 
+const extractSupplierId = (row) => {
+  if (!row || typeof row !== 'object') return 0;
+
+  const direct =
+    row.supplierID ??
+    row.supplierId ??
+    row.SupplierID ??
+    row.supplierid ??
+    row.SupplierId ??
+    row.supplier_ID ??
+    row.Supplier_ID ??
+    row.supplieridFk ??
+    row.supplierFk;
+
+  const directNumber = Number(direct);
+  if (!Number.isNaN(directNumber) && directNumber > 0) return directNumber;
+
+  // Fallback: detect any key that looks like supplier+id (e.g. supplier_id, SupplierMasterID)
+  const dynamicEntry = Object.entries(row).find(([key, value]) => {
+    const lower = String(key || '').toLowerCase();
+    if (!lower.includes('supplier')) return false;
+    if (!lower.includes('id')) return false;
+    const num = Number(value);
+    return !Number.isNaN(num) && num > 0;
+  });
+
+  if (dynamicEntry) {
+    const num = Number(dynamicEntry[1]);
+    if (!Number.isNaN(num) && num > 0) return num;
+  }
+
+  return 0;
+};
+
+const extractSupplierIdDeep = (input) => {
+  if (!input) return 0;
+
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      const found = extractSupplierIdDeep(item);
+      if (found > 0) return found;
+    }
+    return 0;
+  }
+
+  if (typeof input !== 'object') return 0;
+
+  const direct = extractSupplierId(input);
+  if (direct > 0) return direct;
+
+  for (const value of Object.values(input)) {
+    if (value && typeof value === 'object') {
+      const found = extractSupplierIdDeep(value);
+      if (found > 0) return found;
+    }
+  }
+
+  return 0;
+};
+
 export default function ShipmentReleaseAddPage() {
   const { enqueueSnackbar } = useSnackbar();
   const [form, setForm] = useState(defaultFormValues);
@@ -153,7 +213,11 @@ export default function ShipmentReleaseAddPage() {
         throw new Error('Unable to load article data');
       }
       const data = await response.json();
-      const rows = Array.isArray(data) ? data : data ? [data] : [];
+      const rowsRaw = Array.isArray(data) ? data : data ? [data] : [];
+      const rows = rowsRaw.map((row) => ({
+        ...row,
+        supplierID: extractSupplierId(row),
+      }));
       setDialogRows(rows);
       setDialogSelectedRow(rows[0] ?? null);
     } catch (error) {
@@ -306,22 +370,61 @@ export default function ShipmentReleaseAddPage() {
     }
 
     const safeIsoDate = (dateVal) => {
-      if (!dateVal) return '';
+      if (!dateVal) return null;
       const d = new Date(dateVal);
-      if (isNaN(d.getTime())) return '';
+      if (isNaN(d.getTime())) return null;
       // Send date-only string to avoid SQL datetime conversion errors
       return d.toISOString().split('T')[0];
     };
 
     setSaveLoading(true);
     try {
-      const details = articleRows.map((row) => ({
+      const token = localStorage.getItem('accessToken');
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+      // If supplierID is missing in ShipmentRelease/GetArticleNo rows,
+      // resolve it from Purchase Order API using poid.
+      const poIdsToResolve = Array.from(
+        new Set(
+          articleRows
+            .filter((row) => extractSupplierId(row) <= 0)
+            .map((row) => Number(row?.poid) || 0)
+            .filter((id) => id > 0)
+        )
+      );
+
+      const supplierByPoId = {};
+      if (poIdsToResolve.length > 0) {
+        const resolveResults = await Promise.all(
+          poIdsToResolve.map(async (poid) => {
+            try {
+              const res = await fetch(`${API_BASE_URL}/api/MyOrders/GetPurchaseOrder/${poid}`, {
+                headers: authHeaders,
+              });
+              if (!res.ok) return { poid, supplierID: 0 };
+              const data = await res.json();
+              const supplierID = extractSupplierIdDeep(data);
+              return { poid, supplierID };
+            } catch (err) {
+              console.warn(`Unable to resolve supplierID for poid ${poid}`, err);
+              return { poid, supplierID: 0 };
+            }
+          })
+        );
+
+        resolveResults.forEach((item) => {
+          supplierByPoId[item.poid] = item.supplierID;
+        });
+      }
+
+      const draftDetails = articleRows.map((row) => ({
         poid: Number(row.poid) || 0,
         quantity: Number(row.remainQTY) || 0,
         styles: row.styleNo || '',
         cartons: Number(row.cartons) || 0,
         customerID: Number(row.customerID) || 0,
-        supplierID: Number(row.supplierID) || 0,
+        supplierID:
+          extractSupplierId(row) || supplierByPoId[Number(row.poid) || 0] || 0,
         popoid: Number(row.popoid) || 0,
         shippedRate: Number(row.rate) || 0,
         cartonNo: row.cartonNo || '',
@@ -329,6 +432,22 @@ export default function ShipmentReleaseAddPage() {
         itemDescriptionInvoice: row.itemDescriptionShippingInvoice || '',
         colorway: row.colorway || '',
         sizeRange: row.size || '',
+      }));
+
+      const shipmentSupplierID =
+        draftDetails.find((d) => Number(d.supplierID) > 0)?.supplierID || extractSupplierId(articleRows[0]);
+
+      if (!shipmentSupplierID) {
+        enqueueSnackbar('Supplier ID missing for selected PO(s). Please check PO master data.', {
+          variant: 'error',
+        });
+        return;
+      }
+
+      // Ensure every detail row has supplierID (backend can reject rows with 0)
+      const details = draftDetails.map((detail) => ({
+        ...detail,
+        supplierID: Number(detail.supplierID) > 0 ? Number(detail.supplierID) : Number(shipmentSupplierID),
       }));
 
       const subTotalDetails = Object.entries(subTotalsByLdp)
@@ -366,6 +485,7 @@ export default function ShipmentReleaseAddPage() {
         exporterInvoiceNo: '',
         exporterInvoiceDate: new Date().toISOString(),
         countryOfOrigin: 'INDIA',
+        supplierID: Number(shipmentSupplierID) || 0,
         destination: form.destination || '',
         portOfLoading: form.portOfLoading || '',
         portOfDischarge: form.portOfDischarge || '',
