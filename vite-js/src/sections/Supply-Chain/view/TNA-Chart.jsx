@@ -20,10 +20,6 @@ import {
   Snackbar,
   Alert,
   IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
 } from '@mui/material';
 import { History } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
@@ -1278,40 +1274,21 @@ export default function TNAChartPage() {
     if (fieldKey?.endsWith('_qtycompleted')) {
       const procName = fieldKey.slice(0, -'_qtycompleted'.length);
       const unitVal = String(data[`${procName}_units`] || '').trim();
-      const unitValUpper = unitVal.toUpperCase();
-      
-      const pcsVal = parseFloat(data.pcPerCarton);
-      const numNew = parseFloat(newValue);
 
-      // --- New Validation: Cannot exceed PCS + 5% ---
-      // This rule only applies if the unit is "PSC" or "PCS"
-      if ((unitValUpper === 'PSC' || unitValUpper === 'PCS') && !Number.isNaN(pcsVal) && !Number.isNaN(numNew)) {
-        const maxAllowed = pcsVal * 1.05;
-        if (numNew > maxAllowed) {
-          params.node.setDataValue(fieldKey, oldValue);
-          setSnackbar({
-            open: true,
-            message: `Quantity Completed (${numNew}) cannot exceed PCS (${pcsVal}) by more than 5%. Max allowed: ${Math.floor(maxAllowed)}`,
-            severity: 'error',
-          });
-          return;
-        }
-      }
-
-      // --- Existing Quantity Completed validation (only when unit contains %) ---
       if (unitVal.includes('%')) {
         const numericMatch = unitVal.match(/(\d+(\.\d+)?)/);
         const numericPart = numericMatch ? parseFloat(numericMatch[1]) : 0;
+        const numNew = parseFloat(newValue);
         const numOld = parseFloat(oldValue) || 0;
 
         // If unit is "5%" → max = oldValue + 5; if unit is just "%" → max = 100
-        const maxAllowedUnit = numericPart > 0 ? numOld + numericPart : 100;
+        const maxAllowed = numericPart > 0 ? numOld + numericPart : 100;
 
-        if (!isNaN(numNew) && numNew > maxAllowedUnit) {
+        if (!isNaN(numNew) && numNew > maxAllowed) {
           params.node.setDataValue(fieldKey, oldValue);
           setSnackbar({
             open: true,
-            message: `Quantity Completed cannot exceed ${maxAllowedUnit} when unit is "${unitVal}"`,
+            message: `Quantity Completed cannot exceed ${maxAllowed} when unit is "${unitVal}"`,
             severity: 'error',
           });
           return;
@@ -2027,50 +2004,20 @@ export default function TNAChartPage() {
           Show Not Applicable Process
         </Button>
       </Box>
-      <Dialog
+      <Snackbar
         open={snackbar.open}
+        autoHideDuration={3000}
         onClose={handleSnackbarClose}
-        maxWidth="xs"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            boxShadow: theme.shadows[10],
-          },
-        }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <DialogTitle 
-           sx={{ 
-             pb: 1, 
-             display: 'flex', 
-             alignItems: 'center', 
-             gap: 1.5,
-             color: snackbar.severity === 'error' ? 'error.main' : 'primary.main',
-             fontWeight: 700
-           }}
+        <Alert
+          onClose={handleSnackbarClose}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
         >
-          {snackbar.severity === 'error' ? 'Validation Error' : 'Notification'}
-        </DialogTitle>
-        
-        <DialogContent sx={{ py: 2 }}>
-          <Typography variant="body1" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-            {snackbar.message}
-          </Typography>
-        </DialogContent>
-        
-        <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button 
-            onClick={handleSnackbarClose} 
-            variant="contained" 
-            color={snackbar.severity === 'error' ? 'error' : 'primary'}
-            autoFocus
-            fullWidth
-            sx={{ fontWeight: 600, py: 1 }}
-          >
-            Got it
-          </Button>
-        </DialogActions>
-      </Dialog>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 }
