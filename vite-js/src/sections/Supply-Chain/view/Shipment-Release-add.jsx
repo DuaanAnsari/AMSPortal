@@ -91,7 +91,7 @@ const defaultFormValues = {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const ARTICLE_API = `${API_BASE_URL}/api/ShipmentRelease/GetArticleNo`;
 const SAVE_SHIPMENT_API = `${API_BASE_URL}/api/ShipmentRelease/AddShipment`;
-const NEXT_SHIPMENT_API = `${API_BASE_URL || 'https://localhost:55861'}/api/ShipmentRelease/GetNextAMSRefNo`;
+const NEXT_SHIPMENT_API = `${API_BASE_URL}/api/ShipmentRelease/GetNextShipmentNo`;
 
 const extractSupplierId = (row) => {
   if (!row || typeof row !== 'object') return 0;

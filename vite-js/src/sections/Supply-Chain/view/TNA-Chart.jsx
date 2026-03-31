@@ -20,6 +20,10 @@ import {
   Snackbar,
   Alert,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import { History } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
@@ -252,6 +256,54 @@ export default function TNAChartPage() {
     severity: 'success',
   });
 
+  // ----------------------------------------------------------------------
+  // Assign Team (popup) state
+  // ----------------------------------------------------------------------
+  const [assignTeamModalOpen, setAssignTeamModalOpen] = useState(false);
+  const [assignOptionsLoading, setAssignOptionsLoading] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const assignOptionsFetchedRef = useRef(false);
+
+  const [assignTargets, setAssignTargets] = useState([]); // Selected grid processes for assignment
+  const [assignForm, setAssignForm] = useState({
+    merchandiserAssistant: [],
+    qa: [],
+    printQa: 'N/A',
+    productionFollowup: 'Zubair Ashraf',
+    shippingPerson: 'MEHWISH RIAZ',
+    productionStatus: 'N/A',
+  });
+
+  const [merchAssistantOptions, setMerchAssistantOptions] = useState([]);
+  const [qaList, setQaList] = useState([]);
+  const [printQaList, setPrintQaList] = useState([]);
+  const [productionList, setProductionList] = useState([]);
+  const [shippingList, setShippingList] = useState([]);
+
+  const merchAssistantOptionsWithNA = useMemo(() => {
+    const names = merchAssistantOptions
+      .map((x) => x?.userName)
+      .filter(Boolean);
+    const uniqueNames = [...new Set(names)];
+    return ['N/A', ...uniqueNames];
+  }, [merchAssistantOptions]);
+
+  const qaOptions = useMemo(() => {
+    const names = qaList
+      .map((x) => x?.userName)
+      .filter(Boolean);
+    const uniqueNames = [...new Set(names)];
+    return ['N/A', ...uniqueNames];
+  }, [qaList]);
+
+  const printQaOptionsWithNA = useMemo(() => {
+    const names = printQaList
+      .map((x) => x?.userName)
+      .filter(Boolean);
+    const uniqueNames = [...new Set(names)];
+    return ['N/A', ...uniqueNames];
+  }, [printQaList]);
+
   const containerStyle = useMemo(
     () => ({
       width: '100%',
@@ -425,19 +477,8 @@ export default function TNAChartPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
 
-  // Auto-refetch when user returns from History page (without hard refresh)
-  useEffect(() => {
-    const cameBackFromHistory = sessionStorage.getItem('tna_back_from_view') === '1';
-    if (!cameBackFromHistory) return;
-
-    sessionStorage.removeItem('tna_back_from_view');
-    const customerToLoad = selectedCustomer || sessionStorage.getItem('tna_last_customer');
-    if (!customerToLoad) return;
-
-    setSelectedCustomer(customerToLoad);
-    handleSearch(customerToLoad);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.key]);
+  // When returning from History/TNA-View via back, state is restored from session cache
+  // in the dedicated "Restore cached state" effect below. No extra refetch here.
 
   // Restore cached state ONLY when returning via back button from TNA-View
   useEffect(() => {
@@ -462,6 +503,21 @@ export default function TNAChartPage() {
       setAvailablePortfolios(cache.portfolioOptions || []);
       setAllPoOptions(cache.poOptions || []);
       buildGridForPortfolio(cache.portfolioId, cache.portfolioGroups);
+
+      const cachedPoNumbers = cache.selectedPoNumbers || [];
+      const cachedColors = cache.selectedColors || [];
+
+      if (cachedPoNumbers.length > 0 || cachedColors.length > 0) {
+        // Delay setting filters so grid data/columns are ready
+        setTimeout(() => {
+          if (cachedPoNumbers.length > 0) {
+            setSelectedPoNumbers(cachedPoNumbers);
+          }
+          if (cachedColors.length > 0) {
+            setSelectedColors(cachedColors);
+          }
+        }, 0);
+      }
     } catch (_) {
       sessionStorage.removeItem('tna_back_from_view');
     }
@@ -511,6 +567,23 @@ export default function TNAChartPage() {
       setColumnDefs(filteredCols);
     }
   }, [fullData, selectedColors, selectedPoNumbers]);
+
+  // Persist PO / Color filters in sessionStorage so they survive navigation
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('tna_chart_cache');
+      if (!raw) return;
+      const cache = JSON.parse(raw);
+      const updated = {
+        ...cache,
+        selectedPoNumbers,
+        selectedColors,
+      };
+      sessionStorage.setItem('tna_chart_cache', JSON.stringify(updated));
+    } catch {
+      // ignore JSON / storage errors
+    }
+  }, [selectedPoNumbers, selectedColors]);
 
   const handleSearch = async (customerId) => {
     const idToUse = customerId || selectedCustomer;
@@ -1179,8 +1252,6 @@ export default function TNAChartPage() {
     setColumnDefs(filteredColDefs);
 
     setFullData(finalData);
-    setSelectedPoNumbers([]);
-    setSelectedColors([]);
     setModifiedRows(new Map());
     };
 
@@ -1563,6 +1634,172 @@ export default function TNAChartPage() {
   const handleShowNotApplicable = () => {
     sessionStorage.setItem('tna_back_from_view', '1');
     navigate('/dashboard/supply-chain/tna-view', { state: { customerID: selectedCustomer } });
+  };
+
+  const getSelectedAssignTargets = useCallback(() => {
+    // Derive targets from current filters (selected PO/Color) instead of grid header checkboxes.
+    // `tableData` is already filtered whenever user selects PO(s) and/or Color(s).
+    const rows = tableData || [];
+
+    // columnDefs includes 4 fixed columns at start, then process groups
+    const processNames =
+      Array.isArray(columnDefs) && columnDefs.length > 4
+        ? columnDefs.slice(4).map((c) => c?.headerName).filter(Boolean)
+        : [];
+
+    const selected = [];
+
+    rows.forEach((row) => {
+      if (!row) return;
+      processNames.forEach((procName) => {
+        const safeProc = getSafeKey(procName);
+        const existsKey = `_processExists_${safeProc}`;
+        const tnaChartID = row[`${safeProc}_tnachartid`] ?? row[`${safeProc}_tnaChartID`] ?? 0;
+
+        if (!row[existsKey]) return;
+        if (!tnaChartID) return;
+
+        const procLabel = processKeyToNameRef.current.get(safeProc) || procName;
+
+        selected.push({
+          tnaChartID,
+          poid: row.poid,
+          poNo: row.poNo,
+          customer: row.customer,
+          color: row.color,
+          process: procLabel,
+        });
+      });
+    });
+
+    // Deduplicate by tnaChartID (each tnaChartID corresponds to one process entry)
+    const seen = new Set();
+    return selected.filter((x) => {
+      if (seen.has(x.tnaChartID)) return false;
+      seen.add(x.tnaChartID);
+      return true;
+    });
+  }, [tableData, columnDefs]);
+
+  const fetchAssignTeamOptions = useCallback(async () => {
+    if (assignOptionsFetchedRef.current) return;
+
+    assignOptionsFetchedRef.current = true;
+    setAssignOptionsLoading(true);
+
+    try {
+      const [merchRes, qaRes, printQaRes, productionRes, shippingRes] = await Promise.all([
+        apiClient.get('/Milestone/GetMerchandiserAssistant'),
+        apiClient.get('/Milestone/GetQA'),
+        apiClient.get('/Milestone/GetPrintQA'),
+        apiClient.get('/Milestone/GetProductionPerson'),
+        apiClient.get('/Milestone/GetShipPerson'),
+      ]);
+
+      const normalizeList = (data) => {
+        if (!data) return [];
+        if (Array.isArray(data)) {
+          return data
+            .map((x) => {
+              if (!x) return null;
+              if (typeof x === 'string') return { userId: '', userName: x };
+              return { userId: x.userId ?? x.id ?? x.userID ?? '', userName: x.userName ?? x.name ?? '' };
+            })
+            .filter((x) => x && x.userName);
+        }
+        if (typeof data === 'object' && (data.userName || data.name)) {
+          return [{ userId: data.userId ?? data.id ?? data.userID ?? '', userName: data.userName ?? data.name }];
+        }
+        return [];
+      };
+
+      setMerchAssistantOptions(normalizeList(merchRes.data));
+      setQaList(normalizeList(qaRes.data));
+      setPrintQaList(normalizeList(printQaRes.data));
+      setProductionList(normalizeList(productionRes.data));
+      setShippingList(normalizeList(shippingRes.data));
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('[TNA Chart] fetchAssignTeamOptions error:', error?.response?.data || error);
+      setSnackbar({
+        open: true,
+        message: 'Error loading team dropdown data',
+        severity: 'error',
+      });
+    } finally {
+      setAssignOptionsLoading(false);
+    }
+  }, []);
+
+  const handleOpenAsignTeam = () => {
+    const targets = getSelectedAssignTargets();
+    if (targets.length === 0) {
+      setSnackbar({ open: true, message: 'No applicable milestones found in current grid data.', severity: 'warning' });
+      return;
+    }
+
+    setAssignTargets(targets);
+    setAssignForm({
+      merchandiserAssistant: [],
+      qa: [],
+      printQa: 'N/A',
+      productionFollowup: 'Zubair Ashraf',
+      shippingPerson: 'MEHWISH RIAZ',
+      productionStatus: 'N/A',
+    });
+    setAssignTeamModalOpen(true);
+    fetchAssignTeamOptions();
+  };
+
+  const handleConfirmAsignTeam = async () => {
+    const targets = assignTargets.length ? assignTargets : getSelectedAssignTargets();
+
+    if (targets.length === 0) {
+      setSnackbar({ open: true, message: 'No applicable milestones found for selected PO(s).', severity: 'warning' });
+      return;
+    }
+
+    const validTargets = targets.filter((t) => t.tnaChartID);
+    if (validTargets.length === 0) {
+      setSnackbar({ open: true, message: 'Selected processes are missing TNA Chart ID.', severity: 'error' });
+      return;
+    }
+
+    setAssigning(true);
+    try {
+      for (const t of validTargets) {
+        // NOTE: API payload keys may need adjustment to match backend implementation.
+        // UI is built as requested; server integration will confirm final field names.
+        // eslint-disable-next-line no-await-in-loop
+        await apiClient.post('/Milestone/AssignTeam', {
+          tnaChartID: t.tnaChartID,
+          merchandiserAssistant: assignForm.merchandiserAssistant,
+          qa: assignForm.qa,
+          printQa: assignForm.printQa,
+          productionFollowup: assignForm.productionFollowup,
+          shipping: assignForm.shippingPerson,
+          productionStatus: assignForm.productionStatus || 'N/A',
+        });
+      }
+
+      setAssignTeamModalOpen(false);
+      setAssignTargets([]);
+      setSnackbar({
+        open: true,
+        message: `Team assigned successfully (${validTargets.length} process${validTargets.length > 1 ? 'es' : ''})`,
+        severity: 'success',
+      });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('[TNA Chart] AssignTeam error:', error?.response?.data || error);
+      setSnackbar({
+        open: true,
+        message: 'Error assigning team. Please try again.',
+        severity: 'error',
+      });
+    } finally {
+      setAssigning(false);
+    }
   };
 
   return (
@@ -1974,6 +2211,9 @@ export default function TNAChartPage() {
       </Card>
 
       <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 2, flexWrap: 'wrap' }}>
+        <Button variant="contained" color="primary" sx={{ minWidth: 160 }} onClick={handleOpenAsignTeam}>
+          Assign Team
+        </Button>
         <Button variant="contained" color="primary" sx={{ minWidth: 160 }} onClick={handleNotApplicable}>
           Not Applicable
         </Button>
@@ -2004,6 +2244,190 @@ export default function TNAChartPage() {
           Show Not Applicable Process
         </Button>
       </Box>
+
+      <Dialog
+        open={assignTeamModalOpen}
+        onClose={() => {
+          if (assigning) return;
+          setAssignTeamModalOpen(false);
+        }}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Assign Team</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 0.5 }}>
+            <Autocomplete
+              multiple
+              disableCloseOnSelect
+              options={merchAssistantOptionsWithNA}
+              value={assignForm.merchandiserAssistant}
+              loading={assignOptionsLoading}
+              onChange={(event, newValue) => {
+                // If user selects N/A, keep only N/A; otherwise remove N/A.
+                let next = Array.isArray(newValue) ? newValue : [];
+                next = next.filter(Boolean);
+                if (next.includes('N/A')) next = ['N/A'];
+                else next = next.filter((v) => v !== 'N/A');
+                setAssignForm((prev) => ({ ...prev, merchandiserAssistant: next }));
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Merchandiser Assistant"
+                  placeholder="Please select"
+                  size="small"
+                />
+              )}
+              renderOption={(props, option, { selected }) => (
+                <li {...props}>
+                  <Checkbox
+                    checked={selected}
+                    style={{ marginRight: 8 }}
+                  />
+                  {option}
+                </li>
+              )}
+              renderTags={(value) => {
+                if (value.length === 0) return null;
+                if (value.length === 1) {
+                  return (
+                    <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                      {value[0]}
+                    </Typography>
+                  );
+                }
+                return (
+                  <Typography variant="body2" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                    {value.length} selected
+                  </Typography>
+                );
+              }}
+            />
+
+            <Autocomplete
+              multiple
+              disableCloseOnSelect
+              options={qaOptions}
+              value={assignForm.qa}
+              loading={assignOptionsLoading}
+              onChange={(event, newValue) => {
+                // Keep `N/A` exclusive (if selected, remove others)
+                let next = Array.isArray(newValue) ? newValue.filter(Boolean) : [];
+                if (next.includes('N/A')) next = ['N/A'];
+                else next = next.filter((v) => v !== 'N/A');
+                setAssignForm((prev) => ({ ...prev, qa: next }));
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="QA"
+                  placeholder="Please select"
+                  size="small"
+                />
+              )}
+              renderOption={(props, option, { selected }) => (
+                <li {...props}>
+                  <Checkbox
+                    checked={selected}
+                    style={{ marginRight: 8 }}
+                  />
+                  {option}
+                </li>
+              )}
+              renderTags={(value) => {
+                if (value.length === 0) return null;
+                if (value.length === 1) {
+                  return (
+                    <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                      {value[0]}
+                    </Typography>
+                  );
+                }
+                return (
+                  <Typography variant="body2" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                    {value.length} selected
+                  </Typography>
+                );
+              }}
+            />
+
+            <TextField
+              select
+              fullWidth
+              label="Print QA"
+              size="small"
+              value={assignForm.printQa || 'N/A'}
+              onChange={(e) => setAssignForm((prev) => ({ ...prev, printQa: e.target.value }))}
+            >
+              {printQaOptionsWithNA.map((name) => (
+                <MenuItem key={name} value={name}>
+                  {name}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <Autocomplete
+              options={productionList.map((x) => x.userName)}
+              value={assignForm.productionFollowup || null}
+              loading={assignOptionsLoading}
+              onChange={(event, newValue) => {
+                setAssignForm((prev) => ({ ...prev, productionFollowup: newValue || '' }));
+              }}
+              renderInput={(params) => (
+                <TextField {...params} label="Production Followup" size="small" />
+              )}
+              isOptionEqualToValue={(option, value) => option === value}
+              clearOnEscape
+            />
+
+            <Autocomplete
+              options={shippingList.map((x) => x.userName)}
+              value={assignForm.shippingPerson || null}
+              loading={assignOptionsLoading}
+              onChange={(event, newValue) => {
+                setAssignForm((prev) => ({ ...prev, shippingPerson: newValue || '' }));
+              }}
+              renderInput={(params) => <TextField {...params} label="Shipping Person" size="small" />}
+              isOptionEqualToValue={(option, value) => option === value}
+              clearOnEscape
+            />
+
+            <TextField
+              fullWidth
+              label="Production Status"
+              value={assignForm.productionStatus}
+              onChange={(e) => setAssignForm((prev) => ({ ...prev, productionStatus: e.target.value }))}
+              size="small"
+            />
+          </Box>
+        </DialogContent>
+
+        <DialogActions>
+          <Button
+            onClick={() => {
+              if (assigning) return;
+              setAssignTeamModalOpen(false);
+            }}
+            disabled={assigning}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleConfirmAsignTeam}
+            disabled={assigning || assignOptionsLoading}
+          >
+            {assigning ? (
+              <CircularProgress size={20} sx={{ color: 'inherit' }} />
+            ) : (
+              'Assign'
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar
         open={snackbar.open}
         autoHideDuration={3000}
