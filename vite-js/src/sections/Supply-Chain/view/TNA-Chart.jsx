@@ -88,8 +88,8 @@ const hasActivity = (proc, data) =>
 // Unified helper to filter column definitions based on data presence
 const getFilteredColumnDefs = (allColDefs, data, pList) => {
   try {
-    const fixedCols = allColDefs.slice(0, 4);
-    const processCols = allColDefs.slice(4).filter((colDef) => {
+    const fixedCols = allColDefs.slice(0, 5);
+    const processCols = allColDefs.slice(5).filter((colDef) => {
       const proc = colDef.headerName;
       if (!proc) return false;
 
@@ -262,14 +262,25 @@ export default function TNAChartPage() {
   const [assignTeamModalOpen, setAssignTeamModalOpen] = useState(false);
   const [assignOptionsLoading, setAssignOptionsLoading] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const [setDataLoading, setSetDataLoading] = useState(false);
   const assignOptionsFetchedRef = useRef(false);
+  /** Last successful dropdown lists — avoids stale React closure on early-return path */
+  const assignTeamListsRef = useRef({
+    merch: [],
+    qa: [],
+    printQa: [],
+    production: [],
+    shipping: [],
+  });
+  const setDataRequestIdRef = useRef(0);
 
-  const [assignTargets, setAssignTargets] = useState([]); // Selected grid processes for assignment
+  const [assignPoIds, setAssignPoIds] = useState([]); // PO IDs to update via SetDataUpdate
   const [assignForm, setAssignForm] = useState({
     merchandiserAssistant: [],
     qa: [],
     printQa: 'N/A',
-    productionFollowup: 'Zubair Ashraf',
+    productionFollowup: '',
+    prodPersonID: null,
     shippingPerson: 'MEHWISH RIAZ',
     productionStatus: 'N/A',
   });
@@ -303,6 +314,39 @@ export default function TNAChartPage() {
     const uniqueNames = [...new Set(names)];
     return ['N/A', ...uniqueNames];
   }, [printQaList]);
+
+  const normalizeText = (v) => String(v ?? '').trim().toLowerCase();
+
+  const extractNumericId = (item) => {
+    if (!item) return null;
+    const rawId =
+      item.userId ??
+      item.userID ??
+      item.id ??
+      item.employeeId ??
+      item.employeeID ??
+      item.empId ??
+      item.empID ??
+      item.qaid ??
+      item.printQAID ??
+      item.prodPersonID ??
+      item.shipPersonID ??
+      item.marchandID;
+    const n = Number(rawId);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  const getUserIdByName = (list, name) => {
+    if (!name || name === 'N/A' || name === 'Please select' || name === 'Please Select') return null;
+    const target = normalizeText(name);
+    const hit = (list || []).find((x) => normalizeText(x?.userName ?? x?.name) === target);
+    return extractNumericId(hit);
+  };
+
+  const getVisiblePoIds = useCallback(() => {
+    const ids = [...new Set((tableData || []).map((r) => Number(r?.poid)).filter((v) => Number.isFinite(v) && v > 0))];
+    return ids;
+  }, [tableData]);
 
   const containerStyle = useMemo(
     () => ({
@@ -558,7 +602,7 @@ export default function TNAChartPage() {
 
     // Remove process column groups that have no activity in filtered rows
     if (fullColDefsRef.current.length > 0) {
-      const pList = fullColDefsRef.current.slice(4).map((c) => c.headerName);
+      const pList = fullColDefsRef.current.slice(5).map((c) => c.headerName);
       const filteredCols = getFilteredColumnDefs(
         fullColDefsRef.current,
         filteredData,
@@ -721,6 +765,31 @@ export default function TNAChartPage() {
 
       // 1. Construct Columns (group headers) - fixed sub‑columns per process
       const newColDefs = [
+        {
+          headerName: '',
+          field: '__assignDot',
+          pinned: 'left',
+          maxWidth: 48,
+          minWidth: 48,
+          sortable: false,
+          filter: false,
+          suppressHeaderMenuButton: true,
+          cellRenderer: (params) => (
+            <IconButton
+              size="small"
+              sx={{ p: 0 }}
+              title="Assign Team"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenAssignTeamForPo(params.data?.poid);
+              }}
+            >
+              <Box component="span" sx={{ fontSize: 20, lineHeight: 1, color: '#1976d2' }}>
+                •
+              </Box>
+            </IconButton>
+          ),
+        },
         { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
         { headerName: 'Customer', field: 'customer', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
         {
@@ -992,6 +1061,14 @@ export default function TNAChartPage() {
     setSelectedPortfolioId(null);
     setAvailablePortfolios([]);
     setPortfolioGroupsRef([]);
+    assignOptionsFetchedRef.current = false;
+    assignTeamListsRef.current = {
+      merch: [],
+      qa: [],
+      printQa: [],
+      production: [],
+      shipping: [],
+    };
     // Clear cache so old customer data doesn't restore on next mount
     sessionStorage.removeItem('tna_chart_cache');
     restoredFromCacheRef.current = false;
@@ -1041,6 +1118,31 @@ export default function TNAChartPage() {
 
     // Column defs
     const newColDefs = [
+      {
+        headerName: '',
+        field: '__assignDot',
+        pinned: 'left',
+        maxWidth: 48,
+        minWidth: 48,
+        sortable: false,
+        filter: false,
+        suppressHeaderMenuButton: true,
+        cellRenderer: (params) => (
+          <IconButton
+            size="small"
+            sx={{ p: 0 }}
+            title="Assign Team"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenAssignTeamForPo(params.data?.poid);
+            }}
+          >
+            <Box component="span" sx={{ fontSize: 20, lineHeight: 1, color: '#1976d2' }}>
+              •
+            </Box>
+          </IconButton>
+        ),
+      },
       { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
       { headerName: 'Customer', field: 'customer', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
       {
@@ -1636,55 +1738,11 @@ export default function TNAChartPage() {
     navigate('/dashboard/supply-chain/tna-view', { state: { customerID: selectedCustomer } });
   };
 
-  const getSelectedAssignTargets = useCallback(() => {
-    // Derive targets from current filters (selected PO/Color) instead of grid header checkboxes.
-    // `tableData` is already filtered whenever user selects PO(s) and/or Color(s).
-    const rows = tableData || [];
-
-    // columnDefs includes 4 fixed columns at start, then process groups
-    const processNames =
-      Array.isArray(columnDefs) && columnDefs.length > 4
-        ? columnDefs.slice(4).map((c) => c?.headerName).filter(Boolean)
-        : [];
-
-    const selected = [];
-
-    rows.forEach((row) => {
-      if (!row) return;
-      processNames.forEach((procName) => {
-        const safeProc = getSafeKey(procName);
-        const existsKey = `_processExists_${safeProc}`;
-        const tnaChartID = row[`${safeProc}_tnachartid`] ?? row[`${safeProc}_tnaChartID`] ?? 0;
-
-        if (!row[existsKey]) return;
-        if (!tnaChartID) return;
-
-        const procLabel = processKeyToNameRef.current.get(safeProc) || procName;
-
-        selected.push({
-          tnaChartID,
-          poid: row.poid,
-          poNo: row.poNo,
-          customer: row.customer,
-          color: row.color,
-          process: procLabel,
-        });
-      });
-    });
-
-    // Deduplicate by tnaChartID (each tnaChartID corresponds to one process entry)
-    const seen = new Set();
-    return selected.filter((x) => {
-      if (seen.has(x.tnaChartID)) return false;
-      seen.add(x.tnaChartID);
-      return true;
-    });
-  }, [tableData, columnDefs]);
-
   const fetchAssignTeamOptions = useCallback(async () => {
-    if (assignOptionsFetchedRef.current) return;
+    if (assignOptionsFetchedRef.current) {
+      return { ...assignTeamListsRef.current };
+    }
 
-    assignOptionsFetchedRef.current = true;
     setAssignOptionsLoading(true);
 
     try {
@@ -1703,21 +1761,64 @@ export default function TNAChartPage() {
             .map((x) => {
               if (!x) return null;
               if (typeof x === 'string') return { userId: '', userName: x };
-              return { userId: x.userId ?? x.id ?? x.userID ?? '', userName: x.userName ?? x.name ?? '' };
+              return {
+                userId:
+                  x.userId ??
+                  x.userID ??
+                  x.id ??
+                  x.employeeId ??
+                  x.employeeID ??
+                  x.empId ??
+                  x.empID ??
+                  x.qaid ??
+                  x.printQAID ??
+                  x.prodPersonID ??
+                  x.shipPersonID ??
+                  x.marchandID ??
+                  '',
+                userName: x.userName ?? x.name ?? x.employeeName ?? x.fullName ?? '',
+              };
             })
             .filter((x) => x && x.userName);
         }
         if (typeof data === 'object' && (data.userName || data.name)) {
-          return [{ userId: data.userId ?? data.id ?? data.userID ?? '', userName: data.userName ?? data.name }];
+          return [{
+            userId:
+              data.userId ??
+              data.userID ??
+              data.id ??
+              data.employeeId ??
+              data.employeeID ??
+              data.empId ??
+              data.empID ??
+              data.qaid ??
+              data.printQAID ??
+              data.prodPersonID ??
+              data.shipPersonID ??
+              data.marchandID ??
+              '',
+            userName: data.userName ?? data.name ?? data.employeeName ?? data.fullName ?? '',
+          }];
         }
         return [];
       };
 
-      setMerchAssistantOptions(normalizeList(merchRes.data));
-      setQaList(normalizeList(qaRes.data));
-      setPrintQaList(normalizeList(printQaRes.data));
-      setProductionList(normalizeList(productionRes.data));
-      setShippingList(normalizeList(shippingRes.data));
+      const merch = normalizeList(merchRes.data);
+      const qa = normalizeList(qaRes.data);
+      const printQa = normalizeList(printQaRes.data);
+      const production = normalizeList(productionRes.data);
+      const shipping = normalizeList(shippingRes.data);
+
+      assignTeamListsRef.current = { merch, qa, printQa, production, shipping };
+      assignOptionsFetchedRef.current = true;
+
+      setMerchAssistantOptions(merch);
+      setQaList(qa);
+      setPrintQaList(printQa);
+      setProductionList(production);
+      setShippingList(shipping);
+
+      return { ...assignTeamListsRef.current };
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('[TNA Chart] fetchAssignTeamOptions error:', error?.response?.data || error);
@@ -1729,69 +1830,176 @@ export default function TNAChartPage() {
     } finally {
       setAssignOptionsLoading(false);
     }
+    return null;
   }, []);
 
-  const handleOpenAsignTeam = () => {
-    const targets = getSelectedAssignTargets();
-    if (targets.length === 0) {
-      setSnackbar({ open: true, message: 'No applicable milestones found in current grid data.', severity: 'warning' });
+  const applySetDataResponseToForm = useCallback((respData, optionLists) => {
+    // eslint-disable-next-line no-console
+    console.log('[TNA Chart] applySetDataResponseToForm raw respData:', respData);
+    const merchList = optionLists?.merch || merchAssistantOptions;
+    const qaOptionsList = optionLists?.qa || qaList;
+    const printQaOptionsList = optionLists?.printQa || printQaList;
+    const productionOptionsList = optionLists?.production || productionList;
+    const shippingOptionsList = optionLists?.shipping || shippingList;
+
+    const qaid = Number(respData?.qaid);
+    const printQAID = Number(respData?.printQAID);
+    const prodPersonID = Number(respData?.prodPersonID);
+    const shipPersonID = Number(respData?.shipPersonID);
+    const marchandID = Number(respData?.marchandID);
+
+    // eslint-disable-next-line no-console
+    console.log('[TNA Chart] Mapped IDs from SetData:', {
+      qaid,
+      printQAID,
+      prodPersonID,
+      shipPersonID,
+      marchandID,
+    });
+
+    const findNameById = (list, id) => {
+      if (!Number.isFinite(id) || id <= 0) return '';
+      const hit = (list || []).find((x) => extractNumericId(x) === id);
+      return hit?.userName || hit?.name || '';
+    };
+
+    const qaName = findNameById(qaOptionsList, qaid);
+    const printQaName = findNameById(printQaOptionsList, printQAID) || 'N/A';
+    const prodName = findNameById(productionOptionsList, prodPersonID) || '';
+    const shipName = findNameById(shippingOptionsList, shipPersonID) || 'MEHWISH RIAZ';
+    const merchName = findNameById(merchList, marchandID);
+
+    // eslint-disable-next-line no-console
+    console.log('[TNA Chart] Names resolved from SetData IDs:', {
+      qaName,
+      printQaName,
+      prodName,
+      shipName,
+      merchName,
+    });
+
+    const resolvedProdId =
+      Number.isFinite(prodPersonID) && prodPersonID > 0 ? prodPersonID : null;
+
+    setAssignForm((prev) => ({
+      ...prev,
+      merchandiserAssistant: merchName ? [merchName] : [],
+      qa: qaName ? [qaName] : [],
+      printQa: printQaName,
+      productionFollowup: prodName,
+      prodPersonID: resolvedProdId,
+      shippingPerson: shipName,
+      productionStatus: 'N/A',
+    }));
+  }, [merchAssistantOptions, qaList, printQaList, productionList, shippingList]);
+
+  const handleOpenAsignTeam = async () => {
+    const poIDs = getVisiblePoIds();
+    if (poIDs.length === 0) {
+      setSnackbar({ open: true, message: 'No PO found in current grid data.', severity: 'warning' });
       return;
     }
 
-    setAssignTargets(targets);
+    setAssignPoIds(poIDs);
     setAssignForm({
       merchandiserAssistant: [],
       qa: [],
       printQa: 'N/A',
-      productionFollowup: 'Zubair Ashraf',
+      productionFollowup: '',
+      prodPersonID: null,
       shippingPerson: 'MEHWISH RIAZ',
       productionStatus: 'N/A',
     });
     setAssignTeamModalOpen(true);
-    fetchAssignTeamOptions();
+    await fetchAssignTeamOptions();
+  };
+
+  const handleOpenAssignTeamForPo = async (poid) => {
+    const poidNum = Number(poid);
+    if (!Number.isFinite(poidNum) || poidNum <= 0) return;
+
+    const requestId = Date.now();
+    setDataRequestIdRef.current = requestId;
+    setSetDataLoading(true);
+
+    setAssignPoIds([poidNum]);
+    setAssignForm({
+      merchandiserAssistant: [],
+      qa: [],
+      printQa: 'N/A',
+      productionFollowup: '',
+      prodPersonID: null,
+      shippingPerson: 'MEHWISH RIAZ',
+      productionStatus: 'N/A',
+    });
+    setAssignTeamModalOpen(true);
+
+    try {
+      // eslint-disable-next-line no-console
+      console.log(`[TNA Chart] Calling SetData for POID ${poidNum}...`);
+      const [optionLists, resp] = await Promise.all([
+        fetchAssignTeamOptions(),
+        apiClient.get(`/Milestone/SetData/${poidNum}`),
+      ]);
+
+      // Ignore stale response if user clicked another PO dot quickly
+      if (setDataRequestIdRef.current !== requestId) return;
+
+      // eslint-disable-next-line no-console
+      console.log(`[TNA Chart] SetData GET response for POID ${poidNum}:`, resp.data);
+      applySetDataResponseToForm(resp.data || {}, optionLists);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('[TNA Chart] SetData fetch error:', error?.response?.data || error);
+      setSnackbar({
+        open: true,
+        message: 'Could not load existing team data for this PO.',
+        severity: 'warning',
+      });
+    } finally {
+      if (setDataRequestIdRef.current === requestId) {
+        setSetDataLoading(false);
+      }
+    }
   };
 
   const handleConfirmAsignTeam = async () => {
-    const targets = assignTargets.length ? assignTargets : getSelectedAssignTargets();
-
-    if (targets.length === 0) {
-      setSnackbar({ open: true, message: 'No applicable milestones found for selected PO(s).', severity: 'warning' });
+    const poIDs = assignPoIds.length > 0 ? assignPoIds : getVisiblePoIds();
+    if (poIDs.length === 0) {
+      setSnackbar({ open: true, message: 'No PO selected for update.', severity: 'warning' });
       return;
     }
 
-    const validTargets = targets.filter((t) => t.tnaChartID);
-    if (validTargets.length === 0) {
-      setSnackbar({ open: true, message: 'Selected processes are missing TNA Chart ID.', severity: 'error' });
-      return;
-    }
+    const payload = {
+      poIDs,
+      qaid: getUserIdByName(qaList, assignForm.qa?.[0]) || 0,
+      printQAID: getUserIdByName(printQaList, assignForm.printQa) || 0,
+      prodPersonID:
+        (assignForm.prodPersonID != null && Number(assignForm.prodPersonID) > 0
+          ? Number(assignForm.prodPersonID)
+          : getUserIdByName(productionList, assignForm.productionFollowup)) || 0,
+      shipPersonID: getUserIdByName(shippingList, assignForm.shippingPerson) || 0,
+      marchandID: getUserIdByName(merchAssistantOptions, assignForm.merchandiserAssistant?.[0]) || 0,
+    };
 
     setAssigning(true);
     try {
-      for (const t of validTargets) {
-        // NOTE: API payload keys may need adjustment to match backend implementation.
-        // UI is built as requested; server integration will confirm final field names.
-        // eslint-disable-next-line no-await-in-loop
-        await apiClient.post('/Milestone/AssignTeam', {
-          tnaChartID: t.tnaChartID,
-          merchandiserAssistant: assignForm.merchandiserAssistant,
-          qa: assignForm.qa,
-          printQa: assignForm.printQa,
-          productionFollowup: assignForm.productionFollowup,
-          shipping: assignForm.shippingPerson,
-          productionStatus: assignForm.productionStatus || 'N/A',
-        });
-      }
+      // eslint-disable-next-line no-console
+      console.log('[TNA Chart] Assign form values:', assignForm);
+      // eslint-disable-next-line no-console
+      console.log('[TNA Chart] SetDataUpdate payload:', payload);
+      await apiClient.post('/Milestone/SetDataUpdate', payload);
 
       setAssignTeamModalOpen(false);
-      setAssignTargets([]);
+      setAssignPoIds([]);
       setSnackbar({
         open: true,
-        message: `Team assigned successfully (${validTargets.length} process${validTargets.length > 1 ? 'es' : ''})`,
+        message: `Team assigned successfully (${poIDs.length} PO${poIDs.length > 1 ? 's' : ''})`,
         severity: 'success',
       });
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.error('[TNA Chart] AssignTeam error:', error?.response?.data || error);
+      console.error('[TNA Chart] SetDataUpdate error:', error?.response?.data || error);
       setSnackbar({
         open: true,
         message: 'Error assigning team. Please try again.',
@@ -2368,16 +2576,29 @@ export default function TNAChartPage() {
             </TextField>
 
             <Autocomplete
-              options={productionList.map((x) => x.userName)}
-              value={assignForm.productionFollowup || null}
+              options={productionList}
+              getOptionLabel={(option) => option?.userName || ''}
+              value={
+                productionList.find(
+                  (x) => extractNumericId(x) === Number(assignForm.prodPersonID)
+                ) ||
+                productionList.find(
+                  (x) => normalizeText(x?.userName) === normalizeText(assignForm.productionFollowup)
+                ) ||
+                null
+              }
               loading={assignOptionsLoading}
               onChange={(event, newValue) => {
-                setAssignForm((prev) => ({ ...prev, productionFollowup: newValue || '' }));
+                setAssignForm((prev) => ({
+                  ...prev,
+                  productionFollowup: newValue?.userName || '',
+                  prodPersonID: extractNumericId(newValue),
+                }));
               }}
               renderInput={(params) => (
                 <TextField {...params} label="Production Followup" size="small" />
               )}
-              isOptionEqualToValue={(option, value) => option === value}
+              isOptionEqualToValue={(a, b) => extractNumericId(a) === extractNumericId(b)}
               clearOnEscape
             />
 
@@ -2417,9 +2638,9 @@ export default function TNAChartPage() {
             variant="contained"
             color="primary"
             onClick={handleConfirmAsignTeam}
-            disabled={assigning || assignOptionsLoading}
+            disabled={assigning || assignOptionsLoading || setDataLoading}
           >
-            {assigning ? (
+            {assigning || setDataLoading ? (
               <CircularProgress size={20} sx={{ color: 'inherit' }} />
             ) : (
               'Assign'
