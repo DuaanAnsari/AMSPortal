@@ -2511,8 +2511,9 @@ export default function TNAChartPage() {
         fullWidth
         PaperProps={{
           sx: {
-            width: { xs: '96vw', md: '980px' },
-            maxWidth: '98vw',
+            width: { xs: '94vw', md: '920px' },
+            maxWidth: '96vw',
+            minHeight: { xs: 'auto', md: 'min(72vh, 500px)' },
             borderRadius: 2,
             overflow: 'hidden',
           },
@@ -2520,7 +2521,9 @@ export default function TNAChartPage() {
       >
         <DialogTitle
           sx={{
-            pb: 1.25,
+            px: 3,
+            pt: 2.5,
+            pb: 2,
             borderBottom: '1px solid',
             borderColor: 'divider',
             background: 'linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%)',
@@ -2546,22 +2549,38 @@ export default function TNAChartPage() {
             />
           </Stack>
         </DialogTitle>
-        <DialogContent sx={{ p: 2.5 }}>
+        <DialogContent
+          sx={{
+            px: 3,
+            py: 3,
+            pt: 4,
+            '& .MuiInputBase-root': {
+              minHeight: 52,
+              fontSize: '1rem',
+            },
+            '& .MuiInputLabel-root': {
+              fontSize: '1rem',
+            },
+            '& .MuiAutocomplete-tag': {
+              fontSize: '0.8125rem',
+            },
+          }}
+        >
           {(assignOptionsLoading || setDataLoading) && (
             <LinearProgress sx={{ mb: 2, borderRadius: 1 }} />
           )}
           <Box
             sx={{
               display: 'grid',
-              gap: 2,
+              gap: 2.5,
               gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
               '& .MuiFormControl-root, & .MuiAutocomplete-root, & .MuiTextField-root': {
                 width: '100%',
               },
             }}
           >
-            <Box sx={{ gridColumn: { xs: '1 / -1', md: '1 / -1' } }}>
-              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+            <Box sx={{ gridColumn: { xs: '1 / -1', md: '1 / -1' }, mt: 2.5, mb: 0.5 }}>
+              <Stack direction="row" alignItems="center" spacing={1}>
                 <SettingsSuggest fontSize="small" color="action" />
                 <Typography
                   variant="subtitle2"
@@ -2570,7 +2589,7 @@ export default function TNAChartPage() {
                     color: 'text.secondary',
                     textTransform: 'uppercase',
                     letterSpacing: 0.5,
-                    fontSize: '0.75rem',
+                    fontSize: '0.8125rem',
                   }}
                 >
                   Team Assignment
@@ -2597,7 +2616,7 @@ export default function TNAChartPage() {
                   {...params}
                   label="Merchandiser Assistant"
                   placeholder="Please select"
-                  size="small"
+                  size="medium"
                 />
               )}
               renderOption={(props, option, { selected }) => (
@@ -2649,7 +2668,7 @@ export default function TNAChartPage() {
                   {...params}
                   label="QA"
                   placeholder="Please select"
-                  size="small"
+                  size="medium"
                 />
               )}
               renderOption={(props, option, { selected }) => (
@@ -2685,7 +2704,7 @@ export default function TNAChartPage() {
             <TextField
               select
               label="Print QA"
-              size="small"
+              size="medium"
               value={assignForm.printQa || 'N/A'}
               disabled={assignViewOnly}
               onChange={(e) => setAssignForm((prev) => ({ ...prev, printQa: e.target.value }))}
@@ -2719,7 +2738,7 @@ export default function TNAChartPage() {
                 }));
               }}
               renderInput={(params) => (
-                <TextField {...params} label="Production Followup" size="small" />
+                <TextField {...params} label="Production Followup" size="medium" />
               )}
               isOptionEqualToValue={(a, b) => extractNumericId(a) === extractNumericId(b)}
               clearOnEscape
@@ -2733,7 +2752,7 @@ export default function TNAChartPage() {
               onChange={(event, newValue) => {
                 setAssignForm((prev) => ({ ...prev, shippingPerson: newValue || '' }));
               }}
-              renderInput={(params) => <TextField {...params} label="Shipping Person" size="small" />}
+              renderInput={(params) => <TextField {...params} label="Shipping Person" size="medium" />}
               isOptionEqualToValue={(option, value) => option === value}
               clearOnEscape
             />
@@ -2744,7 +2763,7 @@ export default function TNAChartPage() {
               value={assignForm.productionStatus}
               disabled={assignViewOnly}
               onChange={(e) => setAssignForm((prev) => ({ ...prev, productionStatus: e.target.value }))}
-              size="small"
+              size="medium"
             />
           </Box>
         </DialogContent>
