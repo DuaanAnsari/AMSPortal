@@ -24,8 +24,11 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Stack,
+  Chip,
+  LinearProgress,
 } from '@mui/material';
-import { History } from '@mui/icons-material';
+import { History, Group, SettingsSuggest } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 
 import { AgGridReact } from 'ag-grid-react';
@@ -260,6 +263,7 @@ export default function TNAChartPage() {
   // Assign Team (popup) state
   // ----------------------------------------------------------------------
   const [assignTeamModalOpen, setAssignTeamModalOpen] = useState(false);
+  const [assignViewOnly, setAssignViewOnly] = useState(false);
   const [assignOptionsLoading, setAssignOptionsLoading] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [setDataLoading, setSetDataLoading] = useState(false);
@@ -341,6 +345,15 @@ export default function TNAChartPage() {
     const target = normalizeText(name);
     const hit = (list || []).find((x) => normalizeText(x?.userName ?? x?.name) === target);
     return extractNumericId(hit);
+  };
+
+  const getUserIdsByNames = (list, names) => {
+    if (!Array.isArray(names) || names.length === 0) return [];
+    const ids = names
+      .map((name) => getUserIdByName(list, name))
+      .filter((id) => Number.isFinite(id) && Number(id) > 0)
+      .map((id) => Number(id));
+    return [...new Set(ids)];
   };
 
   const getVisiblePoIds = useCallback(() => {
@@ -1842,19 +1855,40 @@ export default function TNAChartPage() {
     const productionOptionsList = optionLists?.production || productionList;
     const shippingOptionsList = optionLists?.shipping || shippingList;
 
-    const qaid = Number(respData?.qaid);
-    const printQAID = Number(respData?.printQAID);
-    const prodPersonID = Number(respData?.prodPersonID);
-    const shipPersonID = Number(respData?.shipPersonID);
-    const marchandID = Number(respData?.marchandID);
+    const parseIds = (raw) => {
+      if (raw == null || raw === '') return [];
+      if (Array.isArray(raw)) {
+        return [...new Set(raw.map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0))];
+      }
+      if (typeof raw === 'string') {
+        return [...new Set(raw
+          .split(',')
+          .map((x) => Number(String(x).trim()))
+          .filter((n) => Number.isFinite(n) && n > 0))];
+      }
+      const n = Number(raw);
+      return Number.isFinite(n) && n > 0 ? [n] : [];
+    };
+
+    const qaIds = parseIds(respData?.qaid ?? respData?.qaiDs);
+    const printQaIds = parseIds(respData?.printQAID ?? respData?.printQAIDs);
+    const prodPersonIds = parseIds(respData?.prodPersonID ?? respData?.prodPersonIDs);
+    const shipPersonIds = parseIds(respData?.shipPersonID ?? respData?.shipPersonIDs);
+    const marchandIds = parseIds(respData?.marchandID ?? respData?.marchandIDs);
+    const productionStatusFromApi =
+      respData?.productionstatus ??
+      respData?.productionStatus ??
+      respData?.ProductionStatus ??
+      'N/A';
 
     // eslint-disable-next-line no-console
     console.log('[TNA Chart] Mapped IDs from SetData:', {
-      qaid,
-      printQAID,
-      prodPersonID,
-      shipPersonID,
-      marchandID,
+      qaIds,
+      printQaIds,
+      prodPersonIds,
+      shipPersonIds,
+      marchandIds,
+      productionStatusFromApi,
     });
 
     const findNameById = (list, id) => {
@@ -1863,33 +1897,33 @@ export default function TNAChartPage() {
       return hit?.userName || hit?.name || '';
     };
 
-    const qaName = findNameById(qaOptionsList, qaid);
-    const printQaName = findNameById(printQaOptionsList, printQAID) || 'N/A';
-    const prodName = findNameById(productionOptionsList, prodPersonID) || '';
-    const shipName = findNameById(shippingOptionsList, shipPersonID) || 'MEHWISH RIAZ';
-    const merchName = findNameById(merchList, marchandID);
+    const qaNames = qaIds.map((id) => findNameById(qaOptionsList, id)).filter(Boolean);
+    const printQaName = findNameById(printQaOptionsList, printQaIds[0]) || 'N/A';
+    const prodName = findNameById(productionOptionsList, prodPersonIds[0]) || '';
+    const shipName = findNameById(shippingOptionsList, shipPersonIds[0]) || 'MEHWISH RIAZ';
+    const merchNames = marchandIds.map((id) => findNameById(merchList, id)).filter(Boolean);
 
     // eslint-disable-next-line no-console
     console.log('[TNA Chart] Names resolved from SetData IDs:', {
-      qaName,
+      qaNames,
       printQaName,
       prodName,
       shipName,
-      merchName,
+      merchNames,
     });
 
     const resolvedProdId =
-      Number.isFinite(prodPersonID) && prodPersonID > 0 ? prodPersonID : null;
+      Number.isFinite(prodPersonIds[0]) && prodPersonIds[0] > 0 ? prodPersonIds[0] : null;
 
     setAssignForm((prev) => ({
       ...prev,
-      merchandiserAssistant: merchName ? [merchName] : [],
-      qa: qaName ? [qaName] : [],
+      merchandiserAssistant: merchNames.length > 0 ? merchNames : [],
+      qa: qaNames.length > 0 ? qaNames : [],
       printQa: printQaName,
       productionFollowup: prodName,
       prodPersonID: resolvedProdId,
       shippingPerson: shipName,
-      productionStatus: 'N/A',
+      productionStatus: productionStatusFromApi || 'N/A',
     }));
   }, [merchAssistantOptions, qaList, printQaList, productionList, shippingList]);
 
@@ -1901,6 +1935,7 @@ export default function TNAChartPage() {
     }
 
     setAssignPoIds(poIDs);
+    setAssignViewOnly(false);
     setAssignForm({
       merchandiserAssistant: [],
       qa: [],
@@ -1923,6 +1958,7 @@ export default function TNAChartPage() {
     setSetDataLoading(true);
 
     setAssignPoIds([poidNum]);
+    setAssignViewOnly(true);
     setAssignForm({
       merchandiserAssistant: [],
       qa: [],
@@ -1971,15 +2007,25 @@ export default function TNAChartPage() {
     }
 
     const payload = {
-      poIDs,
-      qaid: getUserIdByName(qaList, assignForm.qa?.[0]) || 0,
-      printQAID: getUserIdByName(printQaList, assignForm.printQa) || 0,
-      prodPersonID:
-        (assignForm.prodPersonID != null && Number(assignForm.prodPersonID) > 0
-          ? Number(assignForm.prodPersonID)
-          : getUserIdByName(productionList, assignForm.productionFollowup)) || 0,
-      shipPersonID: getUserIdByName(shippingList, assignForm.shippingPerson) || 0,
-      marchandID: getUserIdByName(merchAssistantOptions, assignForm.merchandiserAssistant?.[0]) || 0,
+      poiDs: poIDs,
+      qaiDs: getUserIdsByNames(qaList, assignForm.qa),
+      printQAIDs: (() => {
+        const id = getUserIdByName(printQaList, assignForm.printQa);
+        return id ? [id] : [];
+      })(),
+      prodPersonIDs: (() => {
+        const id =
+          (assignForm.prodPersonID != null && Number(assignForm.prodPersonID) > 0
+            ? Number(assignForm.prodPersonID)
+            : getUserIdByName(productionList, assignForm.productionFollowup));
+        return id ? [id] : [];
+      })(),
+      shipPersonIDs: (() => {
+        const id = getUserIdByName(shippingList, assignForm.shippingPerson);
+        return id ? [id] : [];
+      })(),
+      marchandIDs: getUserIdsByNames(merchAssistantOptions, assignForm.merchandiserAssistant),
+      productionstatus: assignForm.productionStatus || 'N/A',
     };
 
     setAssigning(true);
@@ -1988,6 +2034,8 @@ export default function TNAChartPage() {
       console.log('[TNA Chart] Assign form values:', assignForm);
       // eslint-disable-next-line no-console
       console.log('[TNA Chart] SetDataUpdate payload:', payload);
+      // eslint-disable-next-line no-console
+      console.log('[TNA Chart] SetDataUpdate payload (json):', JSON.stringify(payload, null, 2));
       await apiClient.post('/Milestone/SetDataUpdate', payload);
 
       setAssignTeamModalOpen(false);
@@ -2459,17 +2507,82 @@ export default function TNAChartPage() {
           if (assigning) return;
           setAssignTeamModalOpen(false);
         }}
-        maxWidth="md"
+        maxWidth="lg"
         fullWidth
+        PaperProps={{
+          sx: {
+            width: { xs: '96vw', md: '980px' },
+            maxWidth: '98vw',
+            borderRadius: 2,
+            overflow: 'hidden',
+          },
+        }}
       >
-        <DialogTitle>Assign Team</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 0.5 }}>
+        <DialogTitle
+          sx={{
+            pb: 1.25,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            background: 'linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%)',
+          }}
+        >
+          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Group fontSize="small" color="primary" />
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                  Assign Team
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Set team members for selected PO(s)
+                </Typography>
+              </Box>
+            </Stack>
+            <Chip
+              size="small"
+              color="primary"
+              variant="outlined"
+              label={`${assignPoIds.length || 0} PO${assignPoIds.length === 1 ? '' : 's'}`}
+            />
+          </Stack>
+        </DialogTitle>
+        <DialogContent sx={{ p: 2.5 }}>
+          {(assignOptionsLoading || setDataLoading) && (
+            <LinearProgress sx={{ mb: 2, borderRadius: 1 }} />
+          )}
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 2,
+              gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+              '& .MuiFormControl-root, & .MuiAutocomplete-root, & .MuiTextField-root': {
+                width: '100%',
+              },
+            }}
+          >
+            <Box sx={{ gridColumn: { xs: '1 / -1', md: '1 / -1' } }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                <SettingsSuggest fontSize="small" color="action" />
+                <Typography
+                  variant="subtitle2"
+                  sx={{
+                    fontWeight: 700,
+                    color: 'text.secondary',
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                    fontSize: '0.75rem',
+                  }}
+                >
+                  Team Assignment
+                </Typography>
+              </Stack>
+            </Box>
             <Autocomplete
               multiple
               disableCloseOnSelect
               options={merchAssistantOptionsWithNA}
               value={assignForm.merchandiserAssistant}
+              disabled={assignViewOnly}
               loading={assignOptionsLoading}
               onChange={(event, newValue) => {
                 // If user selects N/A, keep only N/A; otherwise remove N/A.
@@ -2498,16 +2611,20 @@ export default function TNAChartPage() {
               )}
               renderTags={(value) => {
                 if (value.length === 0) return null;
-                if (value.length === 1) {
-                  return (
-                    <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-                      {value[0]}
-                    </Typography>
-                  );
-                }
                 return (
-                  <Typography variant="body2" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                    {value.length} selected
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontSize: '0.875rem',
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      maxWidth: '100%',
+                    }}
+                    title={value.join(', ')}
+                  >
+                    {value.join(', ')}
                   </Typography>
                 );
               }}
@@ -2518,6 +2635,7 @@ export default function TNAChartPage() {
               disableCloseOnSelect
               options={qaOptions}
               value={assignForm.qa}
+              disabled={assignViewOnly}
               loading={assignOptionsLoading}
               onChange={(event, newValue) => {
                 // Keep `N/A` exclusive (if selected, remove others)
@@ -2545,16 +2663,20 @@ export default function TNAChartPage() {
               )}
               renderTags={(value) => {
                 if (value.length === 0) return null;
-                if (value.length === 1) {
-                  return (
-                    <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-                      {value[0]}
-                    </Typography>
-                  );
-                }
                 return (
-                  <Typography variant="body2" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                    {value.length} selected
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontSize: '0.875rem',
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      maxWidth: '100%',
+                    }}
+                    title={value.join(', ')}
+                  >
+                    {value.join(', ')}
                   </Typography>
                 );
               }}
@@ -2562,10 +2684,10 @@ export default function TNAChartPage() {
 
             <TextField
               select
-              fullWidth
               label="Print QA"
               size="small"
               value={assignForm.printQa || 'N/A'}
+              disabled={assignViewOnly}
               onChange={(e) => setAssignForm((prev) => ({ ...prev, printQa: e.target.value }))}
             >
               {printQaOptionsWithNA.map((name) => (
@@ -2588,6 +2710,7 @@ export default function TNAChartPage() {
                 null
               }
               loading={assignOptionsLoading}
+              disabled={assignViewOnly}
               onChange={(event, newValue) => {
                 setAssignForm((prev) => ({
                   ...prev,
@@ -2605,6 +2728,7 @@ export default function TNAChartPage() {
             <Autocomplete
               options={shippingList.map((x) => x.userName)}
               value={assignForm.shippingPerson || null}
+              disabled={assignViewOnly}
               loading={assignOptionsLoading}
               onChange={(event, newValue) => {
                 setAssignForm((prev) => ({ ...prev, shippingPerson: newValue || '' }));
@@ -2618,34 +2742,49 @@ export default function TNAChartPage() {
               fullWidth
               label="Production Status"
               value={assignForm.productionStatus}
+              disabled={assignViewOnly}
               onChange={(e) => setAssignForm((prev) => ({ ...prev, productionStatus: e.target.value }))}
               size="small"
             />
           </Box>
         </DialogContent>
 
-        <DialogActions>
+        <DialogActions
+          sx={{
+            px: 2.5,
+            py: 1.75,
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            bgcolor: 'grey.50',
+          }}
+        >
           <Button
             onClick={() => {
               if (assigning) return;
               setAssignTeamModalOpen(false);
             }}
             disabled={assigning}
+            variant="outlined"
+            color="inherit"
+            sx={{ minWidth: 110 }}
           >
             Cancel
           </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleConfirmAsignTeam}
-            disabled={assigning || assignOptionsLoading || setDataLoading}
-          >
-            {assigning || setDataLoading ? (
-              <CircularProgress size={20} sx={{ color: 'inherit' }} />
-            ) : (
-              'Assign'
-            )}
-          </Button>
+          {!assignViewOnly && (
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleConfirmAsignTeam}
+              disabled={assigning || assignOptionsLoading || setDataLoading}
+              sx={{ minWidth: 130 }}
+            >
+              {assigning || setDataLoading ? (
+                <CircularProgress size={20} sx={{ color: 'inherit' }} />
+              ) : (
+                'Assign'
+              )}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 
