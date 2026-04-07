@@ -82,6 +82,9 @@ const RateDiffPage = lazy(
 const TrackingInShipmentPage = lazy(
   () => import('src/sections/Supply-Chain/view/Tracking-in-shipment')
 );
+const MasterOrderForQDSheetPage = lazy(
+  () => import('src/sections/Supply-Chain/view/Master-Order-For-QD-Sheet')
+);
 
 // Power_TOOL
 const ProcessBoardPage = lazy(() => import('src/sections/power-tool/view/Process-board'));
@@ -117,6 +120,9 @@ const ConsigneeViewPage = lazy(() => import('src/sections/power-tool/view/Consig
 const AddConsigneePage = lazy(() => import('src/sections/power-tool/view/Add-Consignee'));
 const ContainerHandlingViewPage = lazy(
   () => import('src/sections/power-tool/view/Container-handling-view')
+);
+const ContainerLoadingViewPage = lazy(
+  () => import('src/sections/power-tool/view/Container-loading-view')
 );
 const ContainerHandlingReportPage = lazy(
   () => import('src/sections/power-tool/view/Container-handling-report')
@@ -177,6 +183,8 @@ export const dashboardRoutes = [
     ),
     children: [
       { element: <IndexPage />, index: true },
+      { path: 'container-loading', element: <ContainerLoadingViewPage /> },
+      { path: 'MasterOrderForQDSheet', element: <MasterOrderForQDSheetPage /> },
       { path: 'customers', element: <OverviewEcommercePage /> },
       { path: 'supplier', element: <OverviewAnalyticsPage /> },
       { path: 'banking', element: <OverviewBankingPage /> },

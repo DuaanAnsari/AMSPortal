@@ -99,6 +99,8 @@ export const paths = {
   // DASHBOARD
   dashboard: {
     root: ROOTS.DASHBOARD,
+    containerLoading: `${ROOTS.DASHBOARD}/container-loading`,
+    masterOrderForQDSheet: `${ROOTS.DASHBOARD}/MasterOrderForQDSheet`,
     mail: `${ROOTS.DASHBOARD}/mail`,
     chat: `${ROOTS.DASHBOARD}/chat`,
     blank: `${ROOTS.DASHBOARD}/blank`,

@@ -48,11 +48,50 @@ const ICONS = {
 
 // ----------------------------------------------------------------------
 
+const QA_MANAGER_DESIGNATION = 'QA Manager';
+
+/** Sidebar for users with designation "QA Manager" (from login `userInfo.designation`). */
+function getQaManagerNav(t) {
+  return [
+    {
+      subheader: t(''),
+      items: [
+        { title: 'Home', path: paths.dashboard.root, icon: ICONS.dashboard },
+        {
+          title: 'Container Loading',
+          path: paths.dashboard.containerLoading,
+          icon: ICONS.order,
+        },
+        { title: 'SOPs', path: paths.dashboard.general.file, icon: ICONS.folder },
+        { title: 'Inspection', path: paths.dashboard.masterOrderForQDSheet, icon: ICONS.analytics },
+        {
+          title: 'Inspection Report',
+          path: paths.dashboard.supplyChain.list,
+          icon: ICONS.invoice,
+        },
+        {
+          title: 'Sample Inspection Report',
+          path: paths.dashboard.supplyChain.samplingProgram,
+          icon: ICONS.label,
+        },
+        { title: 'Size Specs', path: paths.dashboard.supplyChain.cards, icon: ICONS.file },
+      ],
+    },
+  ];
+}
+
+// ----------------------------------------------------------------------
+
 export function useNavData() {
   const { t } = useTranslate();
 
-  const data = useMemo(
-    () => [
+  const data = useMemo(() => {
+    const designation =
+      typeof window !== 'undefined' ? localStorage.getItem('designation')?.trim() ?? '' : '';
+    if (designation === QA_MANAGER_DESIGNATION) {
+      return getQaManagerNav(t);
+    }
+    return [
       // OVERVIEW
       // ----------------------------------------------------------------------
       {
@@ -359,9 +398,8 @@ export function useNavData() {
           //     },
         ],
       },
-    ],
-    [t]
-  );
+    ];
+  }, [t]);
 
   return data;
 }
