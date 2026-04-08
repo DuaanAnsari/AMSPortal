@@ -85,6 +85,15 @@ const TrackingInShipmentPage = lazy(
 const MasterOrderForQDSheetPage = lazy(
   () => import('src/sections/Supply-Chain/view/Master-Order-For-QD-Sheet')
 );
+const QualityDepartmentInspectionPage = lazy(
+  () => import('src/sections/Supply-Chain/view/Quality-Department-Inspection')
+);
+const QDPurchaseOrderPreviewPage = lazy(
+  () => import('src/sections/Supply-Chain/view/QD-Purchase-Order-Preview')
+);
+const QDInspectionProcessEntryPage = lazy(
+  () => import('src/sections/Supply-Chain/view/QD-Inspection-Process-Entry')
+);
 
 // Power_TOOL
 const ProcessBoardPage = lazy(() => import('src/sections/power-tool/view/Process-board'));
@@ -185,6 +194,9 @@ export const dashboardRoutes = [
       { element: <IndexPage />, index: true },
       { path: 'container-loading', element: <ContainerLoadingViewPage /> },
       { path: 'MasterOrderForQDSheet', element: <MasterOrderForQDSheetPage /> },
+      { path: 'qd-inspection', element: <QualityDepartmentInspectionPage /> },
+      { path: 'qd-po-preview', element: <QDPurchaseOrderPreviewPage /> },
+      { path: 'qd-process-entry', element: <QDInspectionProcessEntryPage /> },
       { path: 'customers', element: <OverviewEcommercePage /> },
       { path: 'supplier', element: <OverviewAnalyticsPage /> },
       { path: 'banking', element: <OverviewBankingPage /> },
