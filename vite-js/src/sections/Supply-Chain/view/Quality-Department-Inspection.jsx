@@ -26,19 +26,21 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
 import IconButton from '@mui/material/IconButton';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { alpha, useTheme } from '@mui/material/styles';
 
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 import { paths } from 'src/routes/paths';
 import { qdApi } from 'src/sections/Supply-Chain/utils/qd-api';
 
-const SECTION_HEADER_SX = {
+const getSectionHeaderSx = (theme) => ({
   px: 2,
   py: 1.5,
-  bgcolor: '#5a7892',
-  color: '#fff',
+  bgcolor: alpha(theme.palette.primary.main, 0.12),
+  color: theme.palette.text.primary,
   fontWeight: 700,
-  fontSize: '1.35rem',
-};
+  fontSize: '1.1rem',
+  borderBottom: `1px solid ${theme.palette.divider}`,
+});
 
 const OK_NOT_OK = ['OK', 'Not OK'];
 const YES_NO = ['Yes', 'No'];
@@ -315,9 +317,10 @@ function buildQdSavePayload(form, discRows, mstId, isMainSave) {
 }
 
 function SectionCard({ title, children, subtitle }) {
+  const theme = useTheme();
   return (
     <Card variant="outlined" sx={{ overflow: 'hidden' }}>
-      <Box sx={SECTION_HEADER_SX}>{title}</Box>
+      <Box sx={getSectionHeaderSx(theme)}>{title}</Box>
       {subtitle ? (
         <Box sx={{ px: 2, pt: 1, pb: 0 }}>
           <Typography variant="caption" color="text.secondary">
@@ -416,6 +419,7 @@ ImageUploadBox.defaultProps = {
  * Master + discrepancy lines persist via POST; uploads / measurement specs grid remain pending.
  */
 export default function QualityDepartmentInspectionView() {
+  const theme = useTheme();
   const [searchParams] = useSearchParams();
   const poid = searchParams.get('poid');
   const inspType = searchParams.get('inspType') ?? '';
@@ -935,7 +939,7 @@ export default function QualityDepartmentInspectionView() {
       />
 
       <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} sx={{ mb: 2 }}>
-        <Typography variant="h4" fontWeight={800} sx={{ color: '#2c3e50' }}>
+        <Typography variant="h4" fontWeight={800} color="text.primary">
           INSPECTION INFORMATION — {field(h, 'pono', 'poNo', 'pONo', 'PONo') || '—'}
         </Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap">
@@ -1267,7 +1271,7 @@ export default function QualityDepartmentInspectionView() {
             <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 440, mb: 2 }}>
               <Table size="small" stickyHeader>
                 <TableHead>
-                  <TableRow sx={{ bgcolor: '#f0f0f0' }}>
+                  <TableRow sx={{ bgcolor: 'action.hover' }}>
                     <TableCell>Style</TableCell>
                     <TableCell>Order Qty</TableCell>
                     <TableCell>Inspected Qty</TableCell>
@@ -1362,7 +1366,12 @@ export default function QualityDepartmentInspectionView() {
             <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
               <Table size="small">
                 <TableHead>
-                  <TableRow sx={{ bgcolor: '#f58f62', '& th': { color: '#fff', fontWeight: 700 } }}>
+                  <TableRow
+                    sx={{
+                      bgcolor: alpha(theme.palette.primary.main, 0.14),
+                      '& th': { color: 'text.primary', fontWeight: 700 },
+                    }}
+                  >
                     <TableCell>Size / Type</TableCell>
                     {SIZE_BREAK_COLS.map((c) => (
                       <TableCell key={c} align="center">
@@ -1717,7 +1726,7 @@ export default function QualityDepartmentInspectionView() {
                     size="small"
                     value={form.sampleSize ?? ''}
                     onChange={(e) => setF('sampleSize', e.target.value)}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: '#80BFFF' } }}
+                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
                   />
                 </Grid>
                 <Grid xs={6} sm={2}>
@@ -1727,7 +1736,7 @@ export default function QualityDepartmentInspectionView() {
                     size="small"
                     value={form.criticalQty ?? ''}
                     InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: '#80BFFF' } }}
+                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
                   />
                 </Grid>
                 <Grid xs={6} sm={2}>
@@ -1737,7 +1746,7 @@ export default function QualityDepartmentInspectionView() {
                     size="small"
                     value={form.majQty ?? ''}
                     InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: '#80BFFF' } }}
+                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
                   />
                 </Grid>
                 <Grid xs={6} sm={2}>
@@ -1747,7 +1756,7 @@ export default function QualityDepartmentInspectionView() {
                     size="small"
                     value={form.minQty ?? ''}
                     InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: '#80BFFF' } }}
+                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
                   />
                 </Grid>
               </Grid>
@@ -1761,7 +1770,7 @@ export default function QualityDepartmentInspectionView() {
                     size="small"
                     value={form.reliability ?? 'II'}
                     onChange={(e) => setF('reliability', e.target.value)}
-                    sx={{ '& .MuiInputBase-root': { bgcolor: '#5a7892', color: '#fff' } }}
+                    sx={{ '& .MuiInputBase-root': { bgcolor: alpha(theme.palette.primary.main, 0.12) } }}
                   >
                     {RELIABILITY.map((r) => (
                       <MenuItem key={r.value} value={r.value}>
@@ -1783,7 +1792,7 @@ export default function QualityDepartmentInspectionView() {
                       size="small"
                       value={normalizeAqlFieldValue(form[k] != null && form[k] !== '' ? form[k] : defVal)}
                       onChange={(e) => setF(k, e.target.value)}
-                      sx={{ '& .MuiInputBase-root': { bgcolor: '#5a7892', color: '#fff' } }}
+                      sx={{ '& .MuiInputBase-root': { bgcolor: alpha(theme.palette.primary.main, 0.12) } }}
                     >
                       {AQL_LEVEL_MENU_ITEMS.map((o) => (
                         <MenuItem key={o.value} value={o.value}>
@@ -1807,7 +1816,7 @@ export default function QualityDepartmentInspectionView() {
                     size="small"
                     value={form.allowCrit ?? ''}
                     InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: '#80BFFF' } }}
+                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
                   />
                 </Grid>
                 <Grid xs={12} sm={2}>
@@ -1816,7 +1825,7 @@ export default function QualityDepartmentInspectionView() {
                     size="small"
                     value={form.allowMaj ?? ''}
                     InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: '#80BFFF' } }}
+                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
                   />
                 </Grid>
                 <Grid xs={12} sm={2}>
@@ -1825,7 +1834,7 @@ export default function QualityDepartmentInspectionView() {
                     size="small"
                     value={form.allowMin ?? ''}
                     InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: '#80BFFF' } }}
+                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
                   />
                 </Grid>
               </Grid>
