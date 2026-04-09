@@ -467,6 +467,7 @@ export default function QualityDepartmentInspectionView() {
   const [searchParams] = useSearchParams();
   const poid = searchParams.get('poid');
   const inspType = searchParams.get('inspType') ?? '';
+  const qdInspectionMstIdParam = searchParams.get('qdInspectionMstId');
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -508,7 +509,12 @@ export default function QualityDepartmentInspectionView() {
       try {
         const { data: res } = await qdApi.get(
           `/MasterOrderForQDSheet/quality-department-inspection/${encodeURIComponent(poid)}`,
-          { params: { inspType } }
+          {
+            params: {
+              inspType,
+              ...(qdInspectionMstIdParam ? { qdInspectionMstId: Number(qdInspectionMstIdParam) } : {}),
+            },
+          }
         );
         if (!cancelled) setData(res);
       } catch (e) {
@@ -527,7 +533,7 @@ export default function QualityDepartmentInspectionView() {
     return () => {
       cancelled = true;
     };
-  }, [poid, inspType]);
+  }, [poid, inspType, qdInspectionMstIdParam]);
 
   const h = data?.header ?? data?.Header;
   const poLines = data?.poLines ?? data?.PoLines ?? [];

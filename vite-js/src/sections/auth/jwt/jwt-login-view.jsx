@@ -60,9 +60,11 @@ export default function JwtLoginView() {
       });
 
       // ✅ Agar token mila to store karke redirect karo
-      if (response.data && response.data.token) {
-        localStorage.setItem('accessToken', response.data.token);
-        sessionStorage.setItem('accessToken', response.data.token);
+      const accessToken = response.data?.token || response.data?.accessToken;
+
+      if (accessToken) {
+        localStorage.setItem('accessToken', accessToken);
+        sessionStorage.setItem('accessToken', accessToken);
 
         const target = returnTo ? decodeURIComponent(returnTo) : PATH_AFTER_LOGIN;
         router.push(target);
