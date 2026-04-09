@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
@@ -13,8 +13,13 @@ import RadioGroup from '@mui/material/RadioGroup';
 import Paper from '@mui/material/Paper';
 import Link from '@mui/material/Link';
 import Alert from '@mui/material/Alert';
+import Tooltip from '@mui/material/Tooltip';
+import IconButton from '@mui/material/IconButton';
+import RemoveRedEyeIcon from '@mui/icons-material/RemoveRedEye';
+import NoteAltIcon from '@mui/icons-material/NoteAlt';
+import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import { DataGrid } from '@mui/x-data-grid';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 import { paths } from 'src/routes/paths';
@@ -47,11 +52,44 @@ function mapApiRow(r) {
 }
 
 export default function MasterOrderForQDSheetView() {
+  const navigate = useNavigate();
   const [filteringItem, setFilteringItem] = useState('yes');
   const [poNo, setPoNo] = useState('');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // ── Drag-to-scroll (same as My-Order) ─────────────────────────────
+  const tableContainerRef = useRef(null);
+  const [isDragging,  setIsDragging]  = useState(false);
+  const [startX,      setStartX]      = useState(0);
+  const [scrollLeft,  setScrollLeft]  = useState(0);
+
+  const getScroller = () =>
+    tableContainerRef.current?.querySelector('.MuiDataGrid-virtualScroller') ??
+    tableContainerRef.current;
+
+  const handleMouseDown = (e) => {
+    if (e.target.closest('button, a, input, [role="columnheader"]')) return;
+    const scroller = getScroller();
+    if (!scroller) return;
+    setIsDragging(true);
+    setStartX(e.pageX - scroller.offsetLeft);
+    setScrollLeft(scroller.scrollLeft);
+  };
+
+  const handleMouseLeave = () => setIsDragging(false);
+  const handleMouseUp    = () => setIsDragging(false);
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    const scroller = getScroller();
+    if (!scroller) return;
+    const x    = e.pageX - scroller.offsetLeft;
+    const walk = (x - startX) * 2;
+    scroller.scrollLeft = scrollLeft - walk;
+  };
 
   const fetchData = useCallback(async (searchPoNo) => {
     setLoading(true);
@@ -82,13 +120,58 @@ export default function MasterOrderForQDSheetView() {
 
   const columns = useMemo(
     () => [
-      { field: 'customer', headerName: 'Customer', minWidth: 170, flex: 0.6 },
-      { field: 'supplier', headerName: 'Supplier', minWidth: 230, flex: 0.7 },
+      {
+        field: 'customer', headerName: 'Customer', minWidth: 120,
+        renderCell: (params) => (
+          <Tooltip title={params.value || ''}>
+            <Box component="span">
+              {params.value?.length > 12 ? `${params.value.slice(0, 12)}...` : params.value}
+            </Box>
+          </Tooltip>
+        ),
+      },
+      {
+        field: 'supplier', headerName: 'Supplier', minWidth: 120,
+        renderCell: (params) => (
+          <Tooltip title={params.value || ''}>
+            <Box component="span">
+              {params.value?.length > 12 ? `${params.value.slice(0, 12)}...` : params.value}
+            </Box>
+          </Tooltip>
+        ),
+      },
       { field: 'ams', headerName: 'AMS', minWidth: 70 },
-      { field: 'merchant', headerName: 'Merchant', minWidth: 180, flex: 0.5 },
+      {
+        field: 'merchant', headerName: 'Merchant', minWidth: 120,
+        renderCell: (params) => (
+          <Tooltip title={params.value || ''}>
+            <Box component="span">
+              {params.value?.length > 12 ? `${params.value.slice(0, 12)}...` : params.value}
+            </Box>
+          </Tooltip>
+        ),
+      },
       { field: 'season', headerName: 'Season', minWidth: 95 },
-      { field: 'productGroup', headerName: 'Product Group', minWidth: 130 },
-      { field: 'composition', headerName: 'Composition', minWidth: 120 },
+      {
+        field: 'productGroup', headerName: 'Product Group', minWidth: 110,
+        renderCell: (params) => (
+          <Tooltip title={params.value || ''}>
+            <Box component="span">
+              {params.value?.length > 12 ? `${params.value.slice(0, 12)}...` : params.value}
+            </Box>
+          </Tooltip>
+        ),
+      },
+      {
+        field: 'composition', headerName: 'Composition', minWidth: 110,
+        renderCell: (params) => (
+          <Tooltip title={params.value || ''}>
+            <Box component="span">
+              {params.value?.length > 12 ? `${params.value.slice(0, 12)}...` : params.value}
+            </Box>
+          </Tooltip>
+        ),
+      },
       { field: 'poNumber', headerName: 'PO NO.', minWidth: 105 },
       {
         field: 'itemQty',
@@ -117,196 +200,79 @@ export default function MasterOrderForQDSheetView() {
         type: 'number',
       },
       {
-        field: 'ipc',
-        headerName: 'IPC',
-        minWidth: 75,
+        field: 'inspection',
+        headerName: 'Inspection',
+        minWidth: 90,
         align: 'center',
         headerAlign: 'center',
         sortable: false,
         filterable: false,
         renderCell: (params) => (
-          <Link
-            component={RouterLink}
-            to={`${paths.dashboard.qdInspection}?poid=${params.row.poid}&inspType=IPC`}
-            underline="hover"
-          >
-            IPC
-          </Link>
-        ),
-      },
-      {
-        field: 'mpc',
-        headerName: 'MPC',
-        minWidth: 75,
-        align: 'center',
-        headerAlign: 'center',
-        sortable: false,
-        filterable: false,
-        renderCell: (params) => (
-          <Link
-            component={RouterLink}
-            to={`${paths.dashboard.qdInspection}?poid=${params.row.poid}&inspType=MPC`}
-            underline="hover"
-          >
-            MPC
-          </Link>
-        ),
-      },
-      {
-        field: 'preFinal',
-        headerName: 'Pre-Final',
-        minWidth: 105,
-        align: 'center',
-        headerAlign: 'center',
-        sortable: false,
-        filterable: false,
-        renderCell: (params) => (
-          <Link
-            component={RouterLink}
-            to={`${paths.dashboard.qdInspection}?poid=${params.row.poid}&inspType=${encodeURIComponent('Pre-Final')}`}
-            underline="hover"
-          >
-            Pre-Final
-          </Link>
-        ),
-      },
-      {
-        field: 'final',
-        headerName: 'Final',
-        minWidth: 85,
-        align: 'center',
-        headerAlign: 'center',
-        sortable: false,
-        filterable: false,
-        renderCell: (params) => {
-          const ok = Number(params.row.isMPCCreated) > 0;
-          return (
-            <Link
-              component={RouterLink}
-              to={
-                ok
-                  ? `${paths.dashboard.qdInspection}?poid=${params.row.poid}&inspType=Final`
-                  : '#'
+          <Tooltip title="Open Inspection">
+            <IconButton
+              size="small"
+              onClick={() =>
+                navigate(
+                  `${paths.dashboard.qdInspection}?poid=${params.row.poid}&inspType=IPC`
+                )
               }
-              underline="hover"
-              onClick={(e) => {
-                if (!ok) {
-                  e.preventDefault();
-                  window.alert('MPC is not created.');
-                }
-              }}
+              sx={{ color: 'success.main' }}
             >
-              Final
-            </Link>
-          );
-        },
+              <AssignmentTurnedInIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        ),
       },
       {
         field: 'viewPO',
         headerName: 'View PO',
-        minWidth: 95,
+        minWidth: 80,
         align: 'center',
         headerAlign: 'center',
         sortable: false,
         filterable: false,
         renderCell: (params) => (
-          <Link
-            component={RouterLink}
-            to={`${paths.dashboard.qdPoPreview}?poid=${params.row.poid}`}
-            underline="hover"
-          >
-            PO View
-          </Link>
+          <Tooltip title="View PO">
+            <IconButton
+              size="small"
+              color="primary"
+              onClick={() =>
+                navigate(`${paths.dashboard.qdPoPreview}?poid=${params.row.poid}`)
+              }
+            >
+              <RemoveRedEyeIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         ),
       },
       {
         field: 'protoFit',
-        headerName: 'Proto Fit',
-        minWidth: 95,
+        headerName: 'Sample',
+        minWidth: 80,
         align: 'center',
         headerAlign: 'center',
         sortable: false,
         filterable: false,
         renderCell: (params) => (
-          <Link
-            component={RouterLink}
-            to={`${paths.dashboard.qdProcessEntry}?poid=${params.row.poid}&inspType=${encodeURIComponent('Proto Fit')}`}
-            underline="hover"
-          >
-            PF
-          </Link>
-        ),
-      },
-      {
-        field: 'dyelot',
-        headerName: 'Dyelot',
-        minWidth: 85,
-        align: 'center',
-        headerAlign: 'center',
-        sortable: false,
-        filterable: false,
-        renderCell: (params) => (
-          <Link
-            component={RouterLink}
-            to={`${paths.dashboard.qdProcessEntry}?poid=${params.row.poid}&inspType=${encodeURIComponent('Dyelot')}`}
-            underline="hover"
-          >
-            DL
-          </Link>
-        ),
-      },
-      {
-        field: 'strikeoff',
-        headerName: 'Strikeoff',
-        minWidth: 95,
-        align: 'center',
-        headerAlign: 'center',
-        sortable: false,
-        filterable: false,
-        renderCell: (params) => (
-          <Link
-            component={RouterLink}
-            to={`${paths.dashboard.qdProcessEntry}?poid=${params.row.poid}&inspType=${encodeURIComponent('Strikeoff')}`}
-            underline="hover"
-          >
-            SO
-          </Link>
-        ),
-      },
-      {
-        field: 'ppSample',
-        headerName: 'PP Sample',
-        minWidth: 100,
-        align: 'center',
-        headerAlign: 'center',
-        sortable: false,
-        filterable: false,
-        renderCell: (params) => (
-          <Link
-            component={RouterLink}
-            to={`${paths.dashboard.qdProcessEntry}?poid=${params.row.poid}&inspType=${encodeURIComponent('PP Sample')}`}
-            underline="hover"
-          >
-            PPS
-          </Link>
-        ),
-      },
-      {
-        field: 'sizeSet',
-        headerName: 'Size Set',
-        minWidth: 95,
-        align: 'center',
-        headerAlign: 'center',
-        sortable: false,
-        filterable: false,
-        renderCell: (params) => (
-          <Link
-            component={RouterLink}
-            to={`${paths.dashboard.qdProcessEntry}?poid=${params.row.poid}&inspType=${encodeURIComponent('Size Set')}`}
-            underline="hover"
-          >
-            SS
-          </Link>
+          <Tooltip title="Proto Fit">
+            <IconButton
+              size="small"
+              onClick={() =>
+                navigate(
+                  `${paths.dashboard.qdProcessEntry}?poid=${params.row.poid}&inspType=${encodeURIComponent('Proto Fit')}`
+                )
+              }
+              sx={{
+                bgcolor: '#222',
+                color: '#fff',
+                borderRadius: 1,
+                p: '3px',
+                '&:hover': { bgcolor: '#444' },
+              }}
+            >
+              <NoteAltIcon sx={{ fontSize: 13 }} />
+            </IconButton>
+          </Tooltip>
         ),
       },
     ],
@@ -396,7 +362,22 @@ export default function MasterOrderForQDSheetView() {
             Drag a column header and drop it here to group by that column
           </Box>
 
-          <Box sx={{ height: 430 }}>
+          <Box
+            ref={tableContainerRef}
+            onMouseDown={handleMouseDown}
+            onMouseLeave={handleMouseLeave}
+            onMouseUp={handleMouseUp}
+            onMouseMove={handleMouseMove}
+            sx={{
+              height: 430,
+              cursor: isDragging ? 'grabbing' : 'grab',
+              userSelect: isDragging ? 'none' : 'auto',
+              overflowX: 'auto',
+              '&::-webkit-scrollbar': { height: 6 },
+              '&::-webkit-scrollbar-thumb': { bgcolor: 'grey.400', borderRadius: 3 },
+              '&::-webkit-scrollbar-track': { bgcolor: 'grey.100' },
+            }}
+          >
             <DataGrid
               rows={rows}
               columns={columns}
@@ -425,6 +406,12 @@ export default function MasterOrderForQDSheetView() {
                 '& .MuiDataGrid-cell': {
                   borderColor: '#d9d9d9',
                   fontSize: 14,
+                },
+                '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within': {
+                  outline: 'none',
+                },
+                '& .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within': {
+                  outline: 'none',
                 },
               }}
             />

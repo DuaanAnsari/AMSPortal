@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
-import { useSearchParams, Link as RouterLink } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
@@ -95,6 +95,26 @@ function normalizeAqlFieldValue(raw) {
   return formatAqlMenuValue(raw);
 }
 const SIZE_BREAK_COLS = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL', '7XL', '8XL', 'Total'];
+const SIZE_BREAK_ROW_DEFS = [
+  { key: 'orderQty',           label: 'ORDER QTY',             readOnly: true },
+  { key: 'offerQty',           label: 'OFFER QTY',             readOnly: false },
+  { key: 'fabricInHouse',      label: 'FABRIC IN HOUSE',       readOnly: false },
+  { key: 'cutQty',             label: 'CUT QTY',               readOnly: false },
+  { key: 'inLine',             label: 'IN-LINE',               readOnly: false },
+  { key: 'offLine',            label: 'OFF-LINE',              readOnly: false },
+  { key: 'qtyPackedPcsSet',    label: 'QTY PACKED PCS / SET',  readOnly: false },
+  { key: 'qtyPackedCarton',    label: 'QTY PACKED CARTON',     readOnly: false },
+  { key: 'qtyInspectedCarton', label: 'QTY INSPECTED CARTON',  readOnly: false },
+  { key: 'qtyBalanceExtra',    label: 'QTY BALANCE/EXTRA',     readOnly: false },
+];
+const initSizeGrid = () =>
+  SIZE_BREAK_ROW_DEFS.reduce(
+    (acc, { key }) => ({
+      ...acc,
+      [key]: SIZE_BREAK_COLS.reduce((a, col) => ({ ...a, [col]: '' }), {}),
+    }),
+    {}
+  );
 const DISCREPANCY_ROWS = 18;
 const FUNDAMENTAL_IMAGE_SLOTS = [
   'Carton Stacking',
@@ -112,7 +132,24 @@ const COMPLIMENTARY_IMAGE_SLOTS = [
   'HangTag Images',
   'Major Defect Images',
   'Minor Defect Images',
-  'Inner Label Image',
+  'Critical Defect Images',
+  'Measurement Sheet Images',
+  'Packing List Images',
+  'P.O Sheet Images',
+  'Price Ticket Images',
+  'Factory Images',
+  'Production Line Images',
+  'Cutting Images',
+  'Finishing Images',
+  'Empty Carton',
+  'Carton PLY',
+  'Conformity',
+  'Size Grading',
+  'Poly Bag Warning',
+  'Product View',
+  'Shading',
+  'Assortments / Solid Packaging',
+  'Vpo Label',
 ];
 
 function field(obj, ...keys) {
@@ -155,24 +192,30 @@ function parseAqlDecimal(v) {
  * dropKey: accDrop field when it differs from checkbox key (e.g. Fold Method select).
  */
 const ACCESSORY_UI_ROWS = [
-  { accKey: 'dyeLot', label: 'Dye Lot', options: CHECKED },
-  { accKey: 'zipper', label: 'Zipper', options: YES_NO },
-  { accKey: 'pattern', label: 'Pattern', options: CHECKED },
-  { accKey: 'drawingString', label: 'Drawing String', options: YES_NO },
-  { accKey: 'generalAppearance', label: 'General Appearance', options: CONFORM },
-  { accKey: 'hangTag', label: 'Hangtag', options: YES_NO },
-  { accKey: 'mainLabel', label: 'Main Label', textMode: true, textKey: 'mainLabel' },
-  { accKey: 'mainLabelPlacement', label: 'Main Label Placement', options: SIDE_SEAM_CB },
-  { accKey: 'priceTicket', label: 'Price Ticket', options: YES_NO },
-  { accKey: 'careLabelPlacement', label: 'Care Label Placement', options: SIDE_SEAM_CB },
-  { accKey: 'careLabel', label: 'Care Label', textMode: true, textKey: 'careLabel' },
+  // Row 1
+  { accKey: 'dyeLot',              label: 'Dye Lot',               options: CHECKED },
+  { accKey: 'zipper',              label: 'Zipper',                options: YES_NO },
+  { accKey: 'pattern',             label: 'Pattern',               options: CHECKED },
+  // Row 2
+  { accKey: 'drawingString',       label: 'Drawing String',        options: YES_NO },
+  { accKey: 'generalAppearance',   label: 'General Appearance',    options: CONFORM },
+  { accKey: 'hangTag',             label: 'Hangtag',               options: YES_NO },
+  // Row 3
+  { accKey: 'mainLabel',           label: 'Main Label',            textMode: true, textKey: 'mainLabel' },
+  { accKey: 'mainLabelPlacement',  label: 'Main Label Placement',  options: SIDE_SEAM_CB },
+  { accKey: 'priceTicket',         label: 'Price Ticket',          options: YES_NO },
+  // Row 4
+  { accKey: 'careLabelPlacement',  label: 'Care Label Placement',  options: SIDE_SEAM_CB },
+  { accKey: 'contentLabel',        label: 'Content Label',         textMode: true, textKey: 'contentLabel' },
   { accKey: 'contentLabelPlacement', label: 'Content Label Placement', options: SIDE_SEAM_CB },
-  { accKey: 'contentLabel', label: 'Content Label', textMode: true, textKey: 'contentLabel' },
-  { accKey: 'hanger', label: 'Hanger', options: YES_NO },
-  { accKey: 'foldMethod', label: 'Fold Method', options: FOLD_METHOD, dropKey: 'foldMethodDdl' },
-  { accKey: 'button', label: 'Buttons', options: YES_NO },
-  { accKey: 'interlining', label: 'Inner Lining', textMode: true, textKey: 'interlining' },
-  { accKey: 'additionalLabel', label: 'Additional Label', options: YES_NO },
+  // Row 5
+  { accKey: 'hanger',              label: 'Hanger',                options: YES_NO },
+  { accKey: 'foldMethod',          label: 'Fold Method',           options: FOLD_METHOD, dropKey: 'foldMethodDdl' },
+  { accKey: 'button',              label: 'Buttons',               options: YES_NO },
+  // Row 6
+  { accKey: 'interlining',         label: 'Inner Lining',          textMode: true, textKey: 'interlining' },
+  { accKey: 'careLabel',           label: 'Care Label',            textMode: true, textKey: 'careLabel' },
+  { accKey: 'additionalLabel',     label: 'Additional Label',      options: YES_NO },
 ];
 
 const DEFAULT_ACC_DROP = {
@@ -263,12 +306,12 @@ function buildQdSavePayload(form, discRows, mstId, isMainSave) {
     grossWT: !!pack.grossWt,
     hanger: !!acc.hanger,
     hangerSticker: false,
-    noOfPcsInnerPack: false,
-    noOfPcsCarton: false,
+    noOfPcsInnerPack: !!pack.noOfPcsInnerPack,
+    noOfPcsCarton: !!pack.noOfPcsCarton,
     foldMethod: !!acc.foldMethod,
-    polyBag: false,
+    polyBag: !!pack.polyBag,
     cartonSticker: false,
-    ups: false,
+    ups: !!pack.ups,
     otherBit: false,
     otherCom1: null,
     otherCom2: null,
@@ -294,15 +337,15 @@ function buildQdSavePayload(form, discRows, mstId, isMainSave) {
     crtnStickerCom: null,
     careLblCom: accText.careLabel || null,
     hangerStickerSizerCom: null,
-    uPCCom: null,
+    uPCCom: packText.upc || null,
     careLblPlacementCom: accDrop.careLabelPlacement || null,
-    noOfPcsInnerPackCom: null,
+    noOfPcsInnerPackCom: packText.noOfPcsInnerPack || null,
     contentLblCom: accText.contentLabel || null,
-    noOfPcsCrtnCom: null,
+    noOfPcsCrtnCom: packText.noOfPcsCarton || null,
     contentLblPlacementCom: accDrop.contentLabelPlacement || null,
     foldMethodCom: accDrop.foldMethodDdl || null,
     buttonsCom: accDrop.button || null,
-    polyBagBlisterBagCom: null,
+    polyBagBlisterBagCom: packDrop.polyBag || null,
     interLiningCom: accText.interlining || null,
     cartonMarkingCom: packDrop.cartonMarking || null,
     discrepancies: discRows.map((r) => ({
@@ -420,6 +463,7 @@ ImageUploadBox.defaultProps = {
  */
 export default function QualityDepartmentInspectionView() {
   const theme = useTheme();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const poid = searchParams.get('poid');
   const inspType = searchParams.get('inspType') ?? '';
@@ -443,6 +487,7 @@ export default function QualityDepartmentInspectionView() {
   const [saveMsg, setSaveMsg] = useState(null);
   const [saveErr, setSaveErr] = useState(null);
   const [lineRows, setLineRows] = useState([]);
+  const [sizeGrid, setSizeGrid] = useState({});
   const [measurementTypes, setMeasurementTypes] = useState([]);
   const [measurementTypeId, setMeasurementTypeId] = useState('');
   const [specRows, setSpecRows] = useState([]);
@@ -468,11 +513,12 @@ export default function QualityDepartmentInspectionView() {
         if (!cancelled) setData(res);
       } catch (e) {
         if (!cancelled) {
-          setError(
+          const msg =
             typeof e?.response?.data === 'string'
               ? e.response.data
-              : e?.message || 'Failed to load inspection'
-          );
+              : e?.response?.data?.message || e?.message || 'Failed to load inspection';
+          setToast(msg);
+          setLoading(false);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -487,6 +533,18 @@ export default function QualityDepartmentInspectionView() {
   const poLines = data?.poLines ?? data?.PoLines ?? [];
   const aqlSystems = data?.aqlSystems ?? data?.AqlSystems ?? [];
   const aqlRanges = useMemo(() => data?.aqlRanges ?? data?.AqlRanges ?? [], [data]);
+  const isMPCCreated = Number(data?.isMPCCreated ?? data?.IsMPCCreated ?? 0) > 0;
+
+  /** Dynamic size columns derived from PO lines */
+  const sizeColumns = useMemo(() => {
+    const cols = (poLines || []).map((r) => ({
+      key: String(r.podetailID ?? r.PodetailID),
+      label: r.styleNo ?? r.StyleNo ?? '',
+      orderQty: numOrEmpty(r.orderQty ?? r.OrderQty),
+    }));
+    if (cols.length === 0) return [];
+    return [...cols, { key: 'total', label: 'TOTAL', orderQty: '' }];
+  }, [poLines]);
   const bindDef = data?.bindGridDefaults ?? data?.BindGridDefaults;
   const mstId = data?.qdInspectionMstId ?? data?.QdInspectionMstId;
   const snap = data?.savedInspection ?? data?.SavedInspection;
@@ -610,20 +668,28 @@ export default function QualityDepartmentInspectionView() {
         interlining: field(snap, 'interLiningCom', 'InterLiningCom'),
       },
       pack: {
-        cartonDimen: !!(snap?.cartonDimen ?? snap?.CartonDimen),
-        cartonMarking: !!(snap?.cartonMarking ?? snap?.CartonMarking),
-        cartonThickness: !!(snap?.cartonThickness ?? snap?.CartonThickness),
-        netWt: !!(snap?.netWT ?? snap?.NetWT),
-        grossWt: !!(snap?.grossWT ?? snap?.GrossWT),
+        cartonDimen:      !!(snap?.cartonDimen      ?? snap?.CartonDimen),
+        cartonMarking:    !!(snap?.cartonMarking     ?? snap?.CartonMarking),
+        cartonThickness:  !!(snap?.cartonThickness   ?? snap?.CartonThickness),
+        netWt:            !!(snap?.netWT             ?? snap?.NetWT),
+        grossWt:          !!(snap?.grossWT           ?? snap?.GrossWT),
+        noOfPcsCarton:    !!(snap?.noOfPcsCarton     ?? snap?.NoOfPcsCarton),
+        noOfPcsInnerPack: !!(snap?.noOfPcsInnerPack  ?? snap?.NoOfPcsInnerPack),
+        polyBag:          !!(snap?.polyBag           ?? snap?.PolyBag),
+        ups:              !!(snap?.ups               ?? snap?.Ups),
       },
       packDrop: {
-        cartonMarking: field(snap, 'cartonMarkingCom', 'CartonMarkingCom') || '1 Side',
-        cartonThickness: field(snap, 'crtnThicknessCom', 'CrtnThicknessCom') || '03 ply',
+        cartonMarking:  field(snap, 'cartonMarkingCom',      'CartonMarkingCom')      || '1 Side',
+        cartonThickness: field(snap, 'crtnThicknessCom',     'CrtnThicknessCom')      || '03 ply',
+        polyBag:        field(snap, 'polyBagBlisterBagCom',  'PolyBagBlisterBagCom')  || '',
       },
       packText: {
-        cartonDimen: field(snap, 'cartonDimmCom', 'CartonDimmCom'),
-        netWt: field(snap, 'netWTCom', 'NetWTCom'),
-        grossWt: field(snap, 'grossWTCom', 'GrossWTCom'),
+        cartonDimen:      field(snap, 'cartonDimmCom',        'CartonDimmCom'),
+        netWt:            field(snap, 'netWTCom',             'NetWTCom'),
+        grossWt:          field(snap, 'grossWTCom',           'GrossWTCom'),
+        noOfPcsCarton:    field(snap, 'noOfPcsCrtnCom',       'NoOfPcsCrtnCom'),
+        noOfPcsInnerPack: field(snap, 'noOfPcsInnerPackCom',  'NoOfPcsInnerPackCom'),
+        upc:              field(snap, 'uPCCom',               'UPCCom'),
       },
     });
   }, [data, h, snap, bindDef, firstSystemId, rangesForFirstSystem]);
@@ -702,6 +768,31 @@ export default function QualityDepartmentInspectionView() {
       next[index] = { ...next[index], [key]: value };
       return next;
     });
+
+  const setSizeCell = (rowKey, col, value) =>
+    setSizeGrid((prev) => ({
+      ...prev,
+      [rowKey]: { ...(prev[rowKey] || {}), [col]: value },
+    }));
+
+  useEffect(() => {
+    if (sizeColumns.length === 0) return;
+    setSizeGrid(
+      SIZE_BREAK_ROW_DEFS.reduce(
+        (acc, { key }) => ({
+          ...acc,
+          [key]: sizeColumns.reduce(
+            (a, col) => ({
+              ...a,
+              [col.key]: key === 'orderQty' ? col.orderQty : '',
+            }),
+            {}
+          ),
+        }),
+        {}
+      )
+    );
+  }, [sizeColumns]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reloadInspection = async () => {
     const { data: res } = await qdApi.get(
@@ -940,16 +1031,38 @@ export default function QualityDepartmentInspectionView() {
 
       <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} sx={{ mb: 2 }}>
         <Typography variant="h4" fontWeight={800} color="text.primary">
-          INSPECTION INFORMATION — {field(h, 'pono', 'poNo', 'pONo', 'PONo') || '—'}
+          INSPECTION INFORMATION
         </Typography>
-        <Stack direction="row" spacing={1} flexWrap="wrap">
-          <Chip label={inspType} color="primary" />
+        <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
           <Chip label={`POID ${poid}`} size="small" variant="outlined" />
           {mstId != null ? (
-            <Chip label={`Saved QDInspectionMst ${mstId}`} color="success" size="small" />
+            <Chip label={`Saved #${mstId}`} color="success" size="small" />
           ) : (
             <Chip label="New inspection (not saved)" size="small" variant="outlined" />
           )}
+          {/* Inspection type navigation buttons */}
+          {[
+            { label: 'IPC',       type: 'IPC' },
+            { label: 'MPC',       type: 'MPC' },
+            { label: 'Pre-Final', type: 'Pre-Final' },
+            { label: 'Final',     type: 'Final' },
+          ].map(({ label, type }) => {
+            const isActive = inspType === type;
+            return (
+              <Button
+                key={type}
+                size="small"
+                variant={isActive ? 'contained' : 'outlined'}
+                color="primary"
+                onClick={() => {
+                  navigate(`${paths.dashboard.qdInspection}?poid=${poid}&inspType=${encodeURIComponent(type)}`);
+                }}
+                sx={{ minWidth: 70, fontWeight: isActive ? 700 : 400 }}
+              >
+                {label}
+              </Button>
+            );
+          })}
         </Stack>
       </Stack>
 
@@ -1227,12 +1340,10 @@ export default function QualityDepartmentInspectionView() {
             </Grid>
           </SectionCard>
 
-          <SectionCard
-            title="OVERALL CONCLUSION"
-            subtitle="Line-level inspection grid (legacy dgPurchaseOrder). Line-level QDInspection rows are not in this API yet."
-          >
+          <SectionCard title="OVERALL CONCLUSION">
+            {/* Pass/Fail + % */}
             <Grid container spacing={2} sx={{ mb: 2 }}>
-              <Grid xs={12} sm={4}>
+              <Grid xs={12} sm={4} md={3}>
                 <TextField
                   select
                   label="PASS / FAIL"
@@ -1245,7 +1356,7 @@ export default function QualityDepartmentInspectionView() {
                   <MenuItem value="0">FAIL</MenuItem>
                 </TextField>
               </Grid>
-              <Grid xs={12} sm={4}>
+              <Grid xs={12} sm={4} md={3}>
                 <TextField
                   label="%"
                   fullWidth
@@ -1255,145 +1366,91 @@ export default function QualityDepartmentInspectionView() {
                   onChange={(e) => setF('calPerc', e.target.value)}
                 />
               </Grid>
-              <Grid xs={12}>
-                <TextField
-                  label="QA Remarks"
-                  fullWidth
-                  multiline
-                  minRows={2}
-                  size="small"
-                  value={form.qaRemarks ?? ''}
-                  onChange={(e) => setF('qaRemarks', e.target.value)}
-                />
-              </Grid>
             </Grid>
 
-            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 440, mb: 2 }}>
-              <Table size="small" stickyHeader>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: 'action.hover' }}>
-                    <TableCell>Style</TableCell>
-                    <TableCell>Order Qty</TableCell>
-                    <TableCell>Inspected Qty</TableCell>
-                    <TableCell>Inspection Qty</TableCell>
-                    <TableCell>QA Name</TableCell>
-                    <TableCell>Insp. Type</TableCell>
-                    <TableCell>Insp. Status</TableCell>
-                    <TableCell>QA Remarks</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {lineRows.length === 0 ? (
+            {/* Size Breakdown Grid */}
+            {sizeColumns.length > 0 ? (
+              <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto', mb: 2 }}>
+                <Table size="small">
+                  <TableHead>
                     <TableRow>
-                      <TableCell colSpan={8}>
-                        <Typography variant="body2" color="text.secondary">
-                          No lines.
-                        </Typography>
+                      <TableCell
+                        sx={{
+                          bgcolor: 'grey.700',
+                          color: '#fff',
+                          fontWeight: 700,
+                          fontSize: 13,
+                          minWidth: 160,
+                          whiteSpace: 'nowrap',
+                          position: 'sticky',
+                          left: 0,
+                          zIndex: 3,
+                        }}
+                      >
+                        SIZE
                       </TableCell>
-                    </TableRow>
-                  ) : (
-                    lineRows.map((row, idx) => (
-                      <TableRow key={row.podetailId}>
-                        <TableCell>{row.style}</TableCell>
-                        <TableCell align="right">{row.orderQty}</TableCell>
-                        <TableCell align="right">{row.inspectedQty}</TableCell>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            fullWidth
-                            placeholder="0"
-                            value={row.inspectionQty}
-                            onChange={(e) => setLine(idx, 'inspectionQty', e.target.value)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            fullWidth
-                            value={row.qdName}
-                            onChange={(e) => setLine(idx, 'qdName', e.target.value)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            fullWidth
-                            value={row.inspType}
-                            onChange={(e) => setLine(idx, 'inspType', e.target.value)}
-                          >
-                            <MenuItem value="IPC">IPC</MenuItem>
-                            <MenuItem value="MPC">MPC</MenuItem>
-                            <MenuItem value="Pre-Final">Pre-Final</MenuItem>
-                            <MenuItem value="Final">Final</MenuItem>
-                          </TextField>
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            select
-                            size="small"
-                            fullWidth
-                            value={row.inspStatus}
-                            onChange={(e) => setLine(idx, 'inspStatus', e.target.value)}
-                          >
-                            <MenuItem value="">—</MenuItem>
-                            <MenuItem value="Pass">Pass</MenuItem>
-                            <MenuItem value="Fail">Fail</MenuItem>
-                          </TextField>
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            fullWidth
-                            value={row.remarks}
-                            onChange={(e) => setLine(idx, 'remarks', e.target.value)}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <Stack direction="row" justifyContent="flex-end">
-              <Button variant="outlined" size="small" onClick={saveLines} disabled={!mstId}>
-                Save Line Inspections
-              </Button>
-            </Stack>
-
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>
-              Size breakdown (legacy dgInspectionDtl — XS–8XL + Total)
-            </Typography>
-            <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow
-                    sx={{
-                      bgcolor: alpha(theme.palette.primary.main, 0.14),
-                      '& th': { color: 'text.primary', fontWeight: 700 },
-                    }}
-                  >
-                    <TableCell>Size / Type</TableCell>
-                    {SIZE_BREAK_COLS.map((c) => (
-                      <TableCell key={c} align="center">
-                        {c}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {['Order Qty', 'Inspected Qty'].map((label) => (
-                    <TableRow key={label}>
-                      <TableCell>{label}</TableCell>
-                      {SIZE_BREAK_COLS.map((c) => (
-                        <TableCell key={c}>
-                          <TextField size="small" fullWidth disabled placeholder="—" />
+                      {sizeColumns.map((col) => (
+                        <TableCell
+                          key={col.key}
+                          align="center"
+                          sx={{
+                            bgcolor: col.key === 'total' ? 'grey.700' : 'grey.500',
+                            color: '#fff',
+                            fontWeight: 700,
+                            fontSize: 12,
+                            minWidth: 75,
+                            px: 0.5,
+                          }}
+                        >
+                          {col.label}
                         </TableCell>
                       ))}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {SIZE_BREAK_ROW_DEFS.map(({ key, label, readOnly }, rowIdx) => (
+                      <TableRow
+                        key={key}
+                        sx={{ bgcolor: rowIdx % 2 === 0 ? 'background.paper' : 'action.hover' }}
+                      >
+                        <TableCell
+                          sx={{
+                            fontWeight: 600,
+                            fontSize: 12,
+                            whiteSpace: 'nowrap',
+                            position: 'sticky',
+                            left: 0,
+                            zIndex: 1,
+                            bgcolor: rowIdx % 2 === 0 ? 'background.paper' : '#f5f5f5',
+                          }}
+                        >
+                          {label}
+                        </TableCell>
+                        {sizeColumns.map((col) => (
+                          <TableCell key={col.key} align="center" sx={{ p: 0.5 }}>
+                            <TextField
+                              size="small"
+                              value={sizeGrid[key]?.[col.key] ?? ''}
+                              onChange={(e) => !readOnly && setSizeCell(key, col.key, e.target.value)}
+                              InputProps={{ readOnly }}
+                              placeholder="0"
+                              inputProps={{
+                                style: { textAlign: 'center', padding: '3px 4px', width: 55 },
+                              }}
+                            />
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                No PO lines found.
+              </Typography>
+            )}
+
           </SectionCard>
 
           <SectionCard title="Accessories Markings">
@@ -1418,7 +1475,6 @@ export default function QualityDepartmentInspectionView() {
                         <TextField
                           size="small"
                           fullWidth
-                          label="Comment"
                           value={form.accText?.[row.textKey] ?? ''}
                           onChange={(e) => setAccText(row.textKey, e.target.value)}
                           placeholder="—"
@@ -1428,7 +1484,6 @@ export default function QualityDepartmentInspectionView() {
                           select
                           size="small"
                           fullWidth
-                          label="Comment"
                           value={dropVal}
                           onChange={(e) => setAccDrop(dropKey, e.target.value)}
                         >
@@ -1448,21 +1503,15 @@ export default function QualityDepartmentInspectionView() {
 
           <SectionCard title="Packing">
             <Grid container spacing={2}>
+              {/* Row 1 */}
               <Grid xs={12} sm={6} md={4}>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={!!form.pack?.cartonDimen}
-                        onChange={(e) => setPack('cartonDimen', e.target.checked)}
-                      />
-                    }
+                    control={<Checkbox checked={!!form.pack?.cartonDimen} onChange={(e) => setPack('cartonDimen', e.target.checked)} />}
                     label="Carton Dimension"
                   />
                   <TextField
-                    size="small"
-                    fullWidth
-                    label="Remarks"
+                    size="small" fullWidth
                     value={form.packText?.cartonDimen ?? ''}
                     onChange={(e) => setPackText('cartonDimen', e.target.value)}
                     placeholder="—"
@@ -1472,69 +1521,43 @@ export default function QualityDepartmentInspectionView() {
               <Grid xs={12} sm={6} md={4}>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={!!form.pack?.cartonMarking}
-                        onChange={(e) => setPack('cartonMarking', e.target.checked)}
-                      />
-                    }
+                    control={<Checkbox checked={!!form.pack?.cartonMarking} onChange={(e) => setPack('cartonMarking', e.target.checked)} />}
                     label="Carton Marking"
                   />
                   <TextField
-                    select
-                    size="small"
-                    fullWidth
-                    label="Remarks"
+                    select size="small" fullWidth
                     value={form.packDrop?.cartonMarking ?? CARTON_MARKING_SIDES[0]}
                     onChange={(e) => setPackDrop('cartonMarking', e.target.value)}
                   >
-                    {CARTON_MARKING_SIDES.map((o) => (
-                      <MenuItem key={o} value={o}>
-                        {o}
-                      </MenuItem>
-                    ))}
+                    {CARTON_MARKING_SIDES.map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
                   </TextField>
                 </Stack>
               </Grid>
               <Grid xs={12} sm={6} md={4}>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={!!form.pack?.cartonThickness}
-                        onChange={(e) => setPack('cartonThickness', e.target.checked)}
-                      />
-                    }
+                    control={<Checkbox checked={!!form.pack?.cartonThickness} onChange={(e) => setPack('cartonThickness', e.target.checked)} />}
                     label="Carton Thickness"
                   />
                   <TextField
-                    select
-                    size="small"
-                    fullWidth
-                    label="Remarks"
+                    select size="small" fullWidth
                     value={form.packDrop?.cartonThickness ?? CARTON_THICKNESS_PLY[0]}
                     onChange={(e) => setPackDrop('cartonThickness', e.target.value)}
                   >
-                    {CARTON_THICKNESS_PLY.map((o) => (
-                      <MenuItem key={o} value={o}>
-                        {o}
-                      </MenuItem>
-                    ))}
+                    {CARTON_THICKNESS_PLY.map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
                   </TextField>
                 </Stack>
               </Grid>
+
+              {/* Row 2 */}
               <Grid xs={12} sm={6} md={4}>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <FormControlLabel
-                    control={
-                      <Checkbox checked={!!form.pack?.netWt} onChange={(e) => setPack('netWt', e.target.checked)} />
-                    }
+                    control={<Checkbox checked={!!form.pack?.netWt} onChange={(e) => setPack('netWt', e.target.checked)} />}
                     label="Net WT"
                   />
                   <TextField
-                    size="small"
-                    fullWidth
-                    label="Remarks"
+                    size="small" fullWidth
                     value={form.packText?.netWt ?? ''}
                     onChange={(e) => setPackText('netWt', e.target.value)}
                     placeholder="—"
@@ -1544,20 +1567,74 @@ export default function QualityDepartmentInspectionView() {
               <Grid xs={12} sm={6} md={4}>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={!!form.pack?.grossWt}
-                        onChange={(e) => setPack('grossWt', e.target.checked)}
-                      />
-                    }
+                    control={<Checkbox checked={!!form.pack?.grossWt} onChange={(e) => setPack('grossWt', e.target.checked)} />}
                     label="Gross WT"
                   />
                   <TextField
-                    size="small"
-                    fullWidth
-                    label="Remarks"
+                    size="small" fullWidth
                     value={form.packText?.grossWt ?? ''}
                     onChange={(e) => setPackText('grossWt', e.target.value)}
+                    placeholder="—"
+                  />
+                </Stack>
+              </Grid>
+              <Grid xs={12} sm={6} md={4}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <FormControlLabel
+                    control={<Checkbox checked={!!form.pack?.noOfPcsCarton} onChange={(e) => setPack('noOfPcsCarton', e.target.checked)} />}
+                    label="No. Of PCS/Carton"
+                  />
+                  <TextField
+                    size="small" fullWidth
+                    value={form.packText?.noOfPcsCarton ?? ''}
+                    onChange={(e) => setPackText('noOfPcsCarton', e.target.value)}
+                    placeholder="—"
+                  />
+                </Stack>
+              </Grid>
+
+              {/* Row 3 */}
+              <Grid xs={12} sm={6} md={4}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <FormControlLabel
+                    control={<Checkbox checked={!!form.pack?.noOfPcsInnerPack} onChange={(e) => setPack('noOfPcsInnerPack', e.target.checked)} />}
+                    label="No. Of PCS/InnerPack"
+                  />
+                  <TextField
+                    size="small" fullWidth
+                    value={form.packText?.noOfPcsInnerPack ?? ''}
+                    onChange={(e) => setPackText('noOfPcsInnerPack', e.target.value)}
+                    placeholder="—"
+                  />
+                </Stack>
+              </Grid>
+              <Grid xs={12} sm={6} md={4}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <FormControlLabel
+                    control={<Checkbox checked={!!form.pack?.polyBag} onChange={(e) => setPack('polyBag', e.target.checked)} />}
+                    label="Poly Bag/Blister Bag"
+                  />
+                  <TextField
+                    select size="small" fullWidth
+                    value={form.packDrop?.polyBag ?? ''}
+                    onChange={(e) => setPackDrop('polyBag', e.target.value)}
+                  >
+                    <MenuItem value="">Please Select</MenuItem>
+                    <MenuItem value="Yes">Yes</MenuItem>
+                    <MenuItem value="No">No</MenuItem>
+                  </TextField>
+                </Stack>
+              </Grid>
+              <Grid xs={12} sm={6} md={4}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <FormControlLabel
+                    control={<Checkbox checked={!!form.pack?.ups} onChange={(e) => setPack('ups', e.target.checked)} />}
+                    label="U.P.C"
+                  />
+                  <TextField
+                    size="small" fullWidth
+                    value={form.packText?.upc ?? ''}
+                    onChange={(e) => setPackText('upc', e.target.value)}
                     placeholder="—"
                   />
                 </Stack>
@@ -1565,286 +1642,30 @@ export default function QualityDepartmentInspectionView() {
             </Grid>
           </SectionCard>
 
-          <SectionCard
-            title="Size Specs"
-            subtitle="Measurement points grid (legacy dgKikInspMeasurementPoint)"
-          >
-            <Stack spacing={2}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  select
-                  size="small"
-                  label="Measurement type"
-                  fullWidth
-                  sx={{ maxWidth: 360 }}
-                  value={measurementTypeId}
-                  onChange={(e) => setMeasurementTypeId(e.target.value)}
-                >
-                  <MenuItem value="">Select type…</MenuItem>
-                  {measurementTypes.map((t) => {
-                    const id = t.measurementTypeID ?? t.MeasurementTypeID;
-                    const label = t.measurementType ?? t.MeasurementType;
-                    return (
-                      <MenuItem key={id} value={String(id)}>
-                        {label}
-                      </MenuItem>
-                    );
-                  })}
-                </TextField>
-                <Button variant="outlined" onClick={saveSpecs} disabled={!mstId || !measurementTypeId || savingSpecs}>
-                  Save Specs
-                </Button>
-                <Button
-                  variant="text"
-                  onClick={() =>
-                    setSpecRows((prev) => [
-                      ...prev,
-                      {
-                        measurementPointId: '',
-                        measurementPoints: '',
-                        measurements: '',
-                        tolerance: '',
-                        header1: '',
-                        header2: '',
-                        header3: '',
-                        header4: '',
-                        q1: '',
-                        q2: '',
-                        q3: '',
-                        q4: '',
-                      },
-                    ])
-                  }
-                >
-                  Add Row
-                </Button>
-              </Stack>
-              <TableContainer component={Paper} variant="outlined">
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Measurement Point ID</TableCell>
-                      <TableCell>Measurement Point</TableCell>
-                      <TableCell>Measurement</TableCell>
-                      <TableCell>Tolerance</TableCell>
-                      <TableCell>H1</TableCell>
-                      <TableCell>H2</TableCell>
-                      <TableCell>H3</TableCell>
-                      <TableCell>H4</TableCell>
-                      <TableCell>Q1</TableCell>
-                      <TableCell>Q2</TableCell>
-                      <TableCell>Q3</TableCell>
-                      <TableCell>Q4</TableCell>
-                      <TableCell />
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {specRows.map((r, idx) => (
-                      <TableRow key={`${r.measurementPointId}-${idx}`}>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            value={r.measurementPointId}
-                            onChange={(e) => setSpec(idx, 'measurementPointId', e.target.value)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            value={r.measurementPoints}
-                            onChange={(e) => setSpec(idx, 'measurementPoints', e.target.value)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.measurements} onChange={(e) => setSpec(idx, 'measurements', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.tolerance} onChange={(e) => setSpec(idx, 'tolerance', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.header1} onChange={(e) => setSpec(idx, 'header1', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.header2} onChange={(e) => setSpec(idx, 'header2', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.header3} onChange={(e) => setSpec(idx, 'header3', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.header4} onChange={(e) => setSpec(idx, 'header4', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.q1} onChange={(e) => setSpec(idx, 'q1', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.q2} onChange={(e) => setSpec(idx, 'q2', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.q3} onChange={(e) => setSpec(idx, 'q3', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.q4} onChange={(e) => setSpec(idx, 'q4', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <IconButton size="small" onClick={() => setSpecRows((prev) => prev.filter((_, i) => i !== idx))}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {!loadingSpecs && specRows.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={13} align="center">
-                          <Typography variant="body2" color="text.secondary">
-                            No rows for selected measurement type.
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-
-              <Divider />
-
-              <Typography variant="subtitle2">AQL — Sample size &amp; limits (legacy below discrepancies)</Typography>
-              <Grid container spacing={2} alignItems="flex-end">
-                <Grid xs={6} sm={2}>
-                  <Button variant="contained" color="success" disabled fullWidth sx={{ mb: 0.5 }}>
-                    Calculate
-                  </Button>
-                </Grid>
-                <Grid xs={6} sm={2}>
-                  <Typography variant="caption" display="block" align="center">
-                    Total
-                  </Typography>
-                </Grid>
-                <Grid xs={6} sm={2}>
-                  <TextField
-                    label="Sample Size"
-                    fullWidth
-                    size="small"
-                    value={form.sampleSize ?? ''}
-                    onChange={(e) => setF('sampleSize', e.target.value)}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
-                  />
-                </Grid>
-                <Grid xs={6} sm={2}>
-                  <TextField
-                    label="Critical"
-                    fullWidth
-                    size="small"
-                    value={form.criticalQty ?? ''}
-                    InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
-                  />
-                </Grid>
-                <Grid xs={6} sm={2}>
-                  <TextField
-                    label="Major"
-                    fullWidth
-                    size="small"
-                    value={form.majQty ?? ''}
-                    InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
-                  />
-                </Grid>
-                <Grid xs={6} sm={2}>
-                  <TextField
-                    label="Minor"
-                    fullWidth
-                    size="small"
-                    value={form.minQty ?? ''}
-                    InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
-                  />
-                </Grid>
-              </Grid>
-
-              <Grid container spacing={2}>
-                <Grid xs={12} sm={2} offset={{ sm: 4 }}>
-                  <TextField
-                    select
-                    label="Reliability"
-                    fullWidth
-                    size="small"
-                    value={form.reliability ?? 'II'}
-                    onChange={(e) => setF('reliability', e.target.value)}
-                    sx={{ '& .MuiInputBase-root': { bgcolor: alpha(theme.palette.primary.main, 0.12) } }}
-                  >
-                    {RELIABILITY.map((r) => (
-                      <MenuItem key={r.value} value={r.value}>
-                        {r.label}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
-                {[
-                  ['critAql', 'Critical AQL', '0.0'],
-                  ['majAql', 'Major AQL', '2.5'],
-                  ['minAql', 'Minor AQL', '4.0'],
-                ].map(([k, lbl, defVal]) => (
-                  <Grid key={k} xs={12} sm={2}>
-                    <TextField
-                      select
-                      label={lbl}
-                      fullWidth
-                      size="small"
-                      value={normalizeAqlFieldValue(form[k] != null && form[k] !== '' ? form[k] : defVal)}
-                      onChange={(e) => setF(k, e.target.value)}
-                      sx={{ '& .MuiInputBase-root': { bgcolor: alpha(theme.palette.primary.main, 0.12) } }}
-                    >
-                      {AQL_LEVEL_MENU_ITEMS.map((o) => (
-                        <MenuItem key={o.value} value={o.value}>
-                          {o.label}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  </Grid>
-                ))}
-              </Grid>
-
-              <Grid container spacing={2}>
-                <Grid xs={12} sm={2} offset={{ sm: 4 }}>
-                  <Typography variant="caption" align="center" display="block">
-                    Allowed
-                  </Typography>
-                </Grid>
-                <Grid xs={12} sm={2}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    value={form.allowCrit ?? ''}
-                    InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
-                  />
-                </Grid>
-                <Grid xs={12} sm={2}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    value={form.allowMaj ?? ''}
-                    InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
-                  />
-                </Grid>
-                <Grid xs={12} sm={2}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    value={form.allowMin ?? ''}
-                    InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
-                  />
-                </Grid>
-              </Grid>
-
-              <Typography variant="caption" color="text.secondary">
-                Default sample size band from PO qty: {bindDef?.defaultSampleSize ?? bindDef?.DefaultSampleSize ?? '—'} ·
-                Range label (first system, index {bindDef?.defaultRangeIndex ?? bindDef?.DefaultRangeIndex ?? '—'}):{' '}
-                {defaultRangeLabel || '—'}
+          <SectionCard title="Size Specs">
+            <Box sx={{ maxWidth: 240 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                Type
               </Typography>
-            </Stack>
+              <TextField
+                select
+                size="small"
+                fullWidth
+                value={measurementTypeId}
+                onChange={(e) => setMeasurementTypeId(e.target.value)}
+              >
+                <MenuItem value="">Select</MenuItem>
+                {measurementTypes.map((t) => {
+                  const id = t.measurementTypeID ?? t.MeasurementTypeID;
+                  const lbl = t.measurementType ?? t.MeasurementType;
+                  return (
+                    <MenuItem key={id} value={String(id)}>
+                      {lbl}
+                    </MenuItem>
+                  );
+                })}
+              </TextField>
+            </Box>
           </SectionCard>
 
           <SectionCard title="DISCREPANCIES">
@@ -1912,15 +1733,136 @@ export default function QualityDepartmentInspectionView() {
                 </TableBody>
               </Table>
             </TableContainer>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-              Rows save with Save / Draft (legacy dgDiscrepanices).
-            </Typography>
+            {/* AQL / Sample Size section */}
+            <Box sx={{ mt: 2 }}>
+              {/* Column headers */}
+              <Grid container spacing={1} sx={{ mb: 0.5 }}>
+                <Grid xs={12} sm={2}>
+                  <Typography variant="caption" align="center" display="block" fontWeight={600}>Total</Typography>
+                </Grid>
+                <Grid xs={12} sm={2}>
+                  <Typography variant="caption" align="center" display="block" fontWeight={600}>Sample Size</Typography>
+                </Grid>
+                <Grid xs={12} sm={2}>
+                  <Typography variant="caption" align="center" display="block" fontWeight={600}>Critical</Typography>
+                </Grid>
+                <Grid xs={12} sm={2}>
+                  <Typography variant="caption" align="center" display="block" fontWeight={600}>Major</Typography>
+                </Grid>
+                <Grid xs={12} sm={2}>
+                  <Typography variant="caption" align="center" display="block" fontWeight={600}>Minor</Typography>
+                </Grid>
+              </Grid>
+
+              {/* Calculate + qty values */}
+              <Grid container spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                <Grid xs={12} sm={2}>
+                  <Button variant="contained" color="success" fullWidth size="small">
+                    Calculate
+                  </Button>
+                </Grid>
+                <Grid xs={12} sm={2}>
+                  <TextField
+                    size="small" fullWidth
+                    value={form.sampleSize ?? ''}
+                    onChange={(e) => setF('sampleSize', e.target.value)}
+                    inputProps={{ style: { textAlign: 'center' } }}
+                    sx={{ '& .MuiInputBase-root': { bgcolor: alpha(theme.palette.info.main, 0.25) } }}
+                  />
+                </Grid>
+                <Grid xs={12} sm={2}>
+                  <TextField size="small" fullWidth value={form.criticalQty ?? ''} InputProps={{ readOnly: true }}
+                    inputProps={{ style: { textAlign: 'center' } }} />
+                </Grid>
+                <Grid xs={12} sm={2}>
+                  <TextField size="small" fullWidth value={form.majQty ?? ''} InputProps={{ readOnly: true }}
+                    inputProps={{ style: { textAlign: 'center' } }} />
+                </Grid>
+                <Grid xs={12} sm={2}>
+                  <TextField size="small" fullWidth value={form.minQty ?? ''} InputProps={{ readOnly: true }}
+                    inputProps={{ style: { textAlign: 'center' } }} />
+                </Grid>
+              </Grid>
+
+              {/* AQL Dropdowns */}
+              <Grid container spacing={1} sx={{ mb: 1 }}>
+                <Grid xs={12} sm={2} />
+                <Grid xs={12} sm={2}>
+                  <TextField
+                    select size="small" fullWidth
+                    value={form.reliability ?? 'II'}
+                    onChange={(e) => setF('reliability', e.target.value)}
+                    sx={{ '& .MuiInputBase-root': { bgcolor: 'grey.600', color: '#fff' }, '& .MuiSvgIcon-root': { color: '#fff' } }}
+                  >
+                    {RELIABILITY.map((r) => <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>)}
+                  </TextField>
+                </Grid>
+                {[
+                  ['critAql', '0.0'],
+                  ['majAql', '2.5'],
+                  ['minAql', '4.0'],
+                ].map(([k, defVal]) => (
+                  <Grid key={k} xs={12} sm={2}>
+                    <TextField
+                      select size="small" fullWidth
+                      value={normalizeAqlFieldValue(form[k] != null && form[k] !== '' ? form[k] : defVal)}
+                      onChange={(e) => setF(k, e.target.value)}
+                      sx={{ '& .MuiInputBase-root': { bgcolor: 'grey.600', color: '#fff' }, '& .MuiSvgIcon-root': { color: '#fff' } }}
+                    >
+                      {AQL_LEVEL_MENU_ITEMS.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
+                    </TextField>
+                  </Grid>
+                ))}
+              </Grid>
+
+              {/* Allowed row */}
+              <Grid container spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                <Grid xs={12} sm={2}>
+                  <Typography variant="body2" fontWeight={600}>Allowed</Typography>
+                </Grid>
+                <Grid xs={12} sm={2} />
+                <Grid xs={12} sm={2}>
+                  <TextField size="small" fullWidth value={form.allowCrit ?? ''} InputProps={{ readOnly: true }}
+                    inputProps={{ style: { textAlign: 'center' } }} />
+                </Grid>
+                <Grid xs={12} sm={2}>
+                  <TextField size="small" fullWidth value={form.allowMaj ?? ''} InputProps={{ readOnly: true }}
+                    inputProps={{ style: { textAlign: 'center' } }} />
+                </Grid>
+                <Grid xs={12} sm={2}>
+                  <TextField size="small" fullWidth value={form.allowMin ?? ''} InputProps={{ readOnly: true }}
+                    inputProps={{ style: { textAlign: 'center' } }} />
+                </Grid>
+              </Grid>
+
+              {/* Remarks */}
+              <TextField
+                label="Remarks"
+                fullWidth
+                multiline
+                minRows={2}
+                size="small"
+                value={form.qaRemarks ?? ''}
+                onChange={(e) => setF('qaRemarks', e.target.value)}
+                sx={{ mb: 2 }}
+              />
+
+              {/* Sign buttons */}
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
+                {['QA Sign', 'V Sign', 'M QA Sign'].map((label) => (
+                  <Button
+                    key={label}
+                    variant="contained"
+                    sx={{ minWidth: 160 }}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </Stack>
+            </Box>
           </SectionCard>
 
-          <SectionCard
-            title="FUNDAMENTAL IMAGES"
-            subtitle="Upload / view / delete"
-          >
+          <SectionCard title="FUNDAMENTAL IMAGES">
             <Grid container spacing={1.5}>
               {FUNDAMENTAL_IMAGE_SLOTS.map((slot) => (
                 <Grid xs={12} sm={6} md={4} key={slot}>
@@ -1938,10 +1880,7 @@ export default function QualityDepartmentInspectionView() {
             </Grid>
           </SectionCard>
 
-          <SectionCard
-            title="COMPLIMENTARY IMAGES"
-            subtitle="Matches old popup section with multiple image boxes."
-          >
+          <SectionCard title="COMPLIMENTARY IMAGES">
             <Grid container spacing={1.5}>
               {COMPLIMENTARY_IMAGE_SLOTS.map((slot) => (
                 <Grid xs={12} sm={6} md={4} key={slot}>
@@ -1959,20 +1898,44 @@ export default function QualityDepartmentInspectionView() {
             </Grid>
           </SectionCard>
 
-          <Alert severity="info" variant="outlined">
-            Master, discrepancy, line inspections, size specs, and image APIs are wired to the new backend.
-          </Alert>
+          <Stack spacing={1.5}>
+            {/* Show / Add Email Info */}
+            <Stack direction="row" justifyContent="flex-end">
+              <Button
+                variant="contained"
+                sx={{ minWidth: 200 }}
+              >
+                Show / Add Email Info
+              </Button>
+            </Stack>
 
-          <Stack direction="row" spacing={2} flexWrap="wrap">
-            <Button variant="contained" disabled={saving} onClick={() => handleSave(true)}>
-              {saving ? 'Saving…' : 'Save'}
-            </Button>
-            <Button variant="outlined" disabled={saving} onClick={() => handleSave(false)}>
-              {saving ? 'Saving…' : 'Draft'}
-            </Button>
-            <Button component={RouterLink} to={paths.dashboard.masterOrderForQDSheet} variant="outlined">
-              Back to Master Order For QD Sheet
-            </Button>
+            {/* Save as Draft | Save & Email | Cancel */}
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <Button
+                variant="contained"
+                disabled={saving}
+                onClick={() => handleSave(false)}
+                sx={{ minWidth: 160 }}
+              >
+                {saving ? 'Saving…' : 'Save as Draft'}
+              </Button>
+              <Button
+                variant="contained"
+                disabled={saving}
+                onClick={() => handleSave(true)}
+                sx={{ minWidth: 160 }}
+              >
+                {saving ? 'Saving…' : 'Save & Email'}
+              </Button>
+              <Button
+                variant="contained"
+                component={RouterLink}
+                to={paths.dashboard.masterOrderForQDSheet}
+                sx={{ minWidth: 160 }}
+              >
+                Cancel
+              </Button>
+            </Stack>
           </Stack>
         </Stack>
       )}

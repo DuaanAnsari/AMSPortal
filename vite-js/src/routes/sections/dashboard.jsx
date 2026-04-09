@@ -55,6 +55,10 @@ const CancellationsPage = lazy(() => import('src/sections/Supply-Chain/view/Canc
 const OrderTrackingPage = lazy(() => import('src/sections/Supply-Chain/view/Orders-tracking'));
 const MerchantInquiryPage = lazy(() => import('src/sections/Supply-Chain/view/Merchant-inquiry'));
 const OrderDetailPage = lazy(() => import('src/sections/Supply-Chain/view/Order-detail'));
+const SamplingProgramPage = lazy(() => import('src/sections/Supply-Chain/view/Inspection-Process-View'));
+const InspectionProcessViewPage = lazy(
+  () => import('src/sections/Supply-Chain/view/Inspection-Process-View')
+);
 const SamplingProgramPage = lazy(() => import('src/sections/Supply-Chain/view/Sampling-program'));
 const AddSamplingProgramPage = lazy(
   () => import('src/sections/Supply-Chain/view/Add-sampling-program')
@@ -90,9 +94,6 @@ const QualityDepartmentInspectionPage = lazy(
 );
 const QDPurchaseOrderPreviewPage = lazy(
   () => import('src/sections/Supply-Chain/view/QD-Purchase-Order-Preview')
-);
-const QDInspectionProcessEntryPage = lazy(
-  () => import('src/sections/Supply-Chain/view/QD-Inspection-Process-Entry')
 );
 
 // Power_TOOL
