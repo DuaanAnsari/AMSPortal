@@ -33,14 +33,16 @@ export default function AMSLogin() {
 
       console.log('Full Response:', response.data);
 
-      if (response.data?.token) {
-        // 🔹 Save token
-        localStorage.setItem('accessToken', response.data.token);
+      const accessToken = response.data?.token || response.data?.accessToken;
 
-        // 🔹 Save roleId safely
-        const userInfo = response.data.userInfo;
+      if (accessToken) {
+        // Save token with fallback key support
+        localStorage.setItem('accessToken', accessToken);
+
+        // Save user info from either legacy or new response shape
+        const userInfo = response.data?.userInfo || response.data?.user;
         if (userInfo) {
-          if (userInfo.roleId !== undefined) localStorage.setItem('roleId', userInfo.roleId);
+          if (userInfo.roleId !== undefined) localStorage.setItem('roleId', String(userInfo.roleId));
           if (userInfo.userCode) localStorage.setItem('userCode', userInfo.userCode);
           if (userInfo.designation) localStorage.setItem('designation', userInfo.designation);
         }
