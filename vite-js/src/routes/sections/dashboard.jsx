@@ -95,6 +95,9 @@ const QualityDepartmentInspectionPage = lazy(
 const QDPurchaseOrderPreviewPage = lazy(
   () => import('src/sections/Supply-Chain/view/QD-Purchase-Order-Preview')
 );
+const QDInspectionProcessEntryPage = lazy(
+  () => import('src/sections/Supply-Chain/view/QD-Inspection-Process-Entry')
+);
 
 // Power_TOOL
 const ProcessBoardPage = lazy(() => import('src/sections/power-tool/view/Process-board'));
