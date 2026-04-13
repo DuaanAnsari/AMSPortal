@@ -1,0 +1,20 @@
+{
+  "name": "AMS Portal",
+  "short_name": "AMS",
+  "display": "standalone",
+  "start_url": "/",
+  "theme_color": "#000000",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "logo/AMSlogo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "logo/AMSlogo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
