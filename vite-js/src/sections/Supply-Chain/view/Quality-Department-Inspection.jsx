@@ -36,16 +36,6 @@ import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 import { paths } from 'src/routes/paths';
 import { qdApi } from 'src/sections/Supply-Chain/utils/qd-api';
 
-const getSectionHeaderSx = (theme) => ({
-  px: 2,
-  py: 1.5,
-  bgcolor: alpha(theme.palette.primary.main, 0.12),
-  color: theme.palette.text.primary,
-  fontWeight: 700,
-  fontSize: '1.1rem',
-  borderBottom: `1px solid ${theme.palette.divider}`,
-});
-
 const OK_NOT_OK = ['OK', 'Not OK'];
 const YES_NO = ['Yes', 'No'];
 const CHECKED = ['Checked', 'Not Checked'];
@@ -98,8 +88,132 @@ function normalizeAqlFieldValue(raw) {
   if (AQL_VALUE_SET.has(s)) return s;
   return formatAqlMenuValue(raw);
 }
-const SIZE_BREAK_COLS = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL', '7XL', '8XL', 'Total'];
+
+/** Table column header row — aligned with QD-Inspection-Process-Entry / theme primary */
+function tableHeadRowSx(theme) {
+  return {
+    bgcolor: alpha(theme.palette.primary.main, 0.12),
+    '& th': {
+      color: 'primary.dark',
+      fontWeight: 700,
+      fontSize: 12,
+      borderColor: 'divider',
+    },
+  };
+}
+
 const DISCREPANCY_ROWS = 18;
+/** Legacy grid always has 12 size slots (Size1…Size12) + Total — must match API QDInspectionDtl. */
+const INSPECTION_DTL_SIZE_SLOTS = 12;
+
+/**
+ * Same order as API `QdQualityDeptInspectionDtlSchema.RowTypeOrder` — only used when API omits `inspectionDtlRowTypes`.
+ */
+const QD_INSPECTION_DTL_ROW_TYPES_FALLBACK = [
+  'SIZE',
+  'ORDER QTY',
+  'OFFER QTY',
+  'FABRIC IN HOUSE',
+  'CUT QTY',
+  'IN-LINE',
+  'OFF-LINE',
+  'QTY PACKED PCS / SET',
+  'QTY PACKED CARTON',
+  'QTY INSPECTED CARTON',
+  'QTY BALANCE/EXTRA',
+];
+
+function emptyInspectionDtlRow(sizeType) {
+  const row = { sizeType };
+  for (let i = 1; i <= INSPECTION_DTL_SIZE_SLOTS; i++) {
+    row[`size${i}`] = '';
+  }
+  row.sizeTotal = '';
+  return row;
+}
+
+/** When GET returns no `inspectionDtlRows` (old API) or [], build legacy-shaped rows from GetSizeQty breakdown. */
+function buildDefaultInspectionDtlRows(breakdown, rowTypes) {
+  const types =
+    Array.isArray(rowTypes) && rowTypes.length > 0 ? rowTypes : QD_INSPECTION_DTL_ROW_TYPES_FALLBACK;
+  return types.map((sizeType) => {
+    if (sizeType === 'SIZE') {
+      const row = emptyInspectionDtlRow('SIZE');
+      for (let i = 0; i < INSPECTION_DTL_SIZE_SLOTS; i++) {
+        const b = breakdown[i];
+        row[`size${i + 1}`] = b ? String(b.size ?? b.Size ?? '').trim() : '';
+      }
+      return row;
+    }
+    if (sizeType === 'ORDER QTY') {
+      const row = emptyInspectionDtlRow('ORDER QTY');
+      for (let i = 0; i < INSPECTION_DTL_SIZE_SLOTS; i++) {
+        const b = breakdown[i];
+        const q = b?.quantity ?? b?.Quantity;
+        row[`size${i + 1}`] = q == null || q === '' ? '' : String(q);
+      }
+      row.sizeTotal = sumDtlRowSlots(row, INSPECTION_DTL_SIZE_SLOTS);
+      return row;
+    }
+    return emptyInspectionDtlRow(sizeType);
+  });
+}
+
+function padInspectionDtlRowToSlots(row) {
+  const out = { ...row };
+  for (let i = 1; i <= INSPECTION_DTL_SIZE_SLOTS; i++) {
+    const k = `size${i}`;
+    const p = `Size${i}`;
+    if (out[k] == null || out[k] === '') {
+      if (out[p] != null && out[p] !== '') out[k] = String(out[p]);
+    }
+  }
+  if (out.sizeTotal == null && out.SizeTotal != null) out.sizeTotal = out.SizeTotal;
+  if (out.sizeType == null && out.SizeType != null) out.sizeType = out.SizeType;
+  return out;
+}
+
+function getDtlCell(row, col1To12) {
+  const k = `size${col1To12}`;
+  const pascal = `Size${col1To12}`;
+  if (row[k] != null && row[k] !== '') return String(row[k]);
+  if (row[pascal] != null && row[pascal] !== '') return String(row[pascal]);
+  return '';
+}
+
+function sumDtlRowSlots(row, numSlots) {
+  let s = 0;
+  let any = false;
+  for (let i = 1; i <= numSlots; i++) {
+    const v = getDtlCell(row, i);
+    if (v === '') continue;
+    const n = Number(String(v).replace(',', '.'));
+    if (Number.isFinite(n)) {
+      s += n;
+      any = true;
+    }
+  }
+  return any ? String(s) : '';
+}
+
+function buildInspectionDtlPayload(rows) {
+  return (rows || []).map((r) => ({
+    sizeType: r.sizeType ?? r.SizeType ?? '',
+    size1: r.size1 ?? r.Size1 ?? null,
+    size2: r.size2 ?? r.Size2 ?? null,
+    size3: r.size3 ?? r.Size3 ?? null,
+    size4: r.size4 ?? r.Size4 ?? null,
+    size5: r.size5 ?? r.Size5 ?? null,
+    size6: r.size6 ?? r.Size6 ?? null,
+    size7: r.size7 ?? r.Size7 ?? null,
+    size8: r.size8 ?? r.Size8 ?? null,
+    size9: r.size9 ?? r.Size9 ?? null,
+    size10: r.size10 ?? r.Size10 ?? null,
+    size11: r.size11 ?? r.Size11 ?? null,
+    size12: r.size12 ?? r.Size12 ?? null,
+    sizeTotal: r.sizeTotal ?? r.SizeTotal ?? null,
+  }));
+}
 const FUNDAMENTAL_IMAGE_SLOTS = [
   'Carton Stacking',
   'Carton Marking',
@@ -196,7 +310,7 @@ const DEFAULT_ACC_DROP = {
   additionalLabel: 'Yes',
 };
 
-function buildQdSavePayload(form, discRows, mstId, isMainSave) {
+function buildQdSavePayload(form, discRows, mstId, isMainSave, inspectionDtlRows) {
   const acc = form.acc || {};
   const accDrop = form.accDrop || {};
   const accText = form.accText || {};
@@ -317,22 +431,34 @@ function buildQdSavePayload(form, discRows, mstId, isMainSave) {
       major: parseOptionalDecimal(r.major),
       minor: parseOptionalDecimal(r.minor),
     })),
+    inspectionDtl: buildInspectionDtlPayload(inspectionDtlRows),
   };
 }
 
 function SectionCard({ title, children, subtitle }) {
   const theme = useTheme();
   return (
-    <Card variant="outlined" sx={{ overflow: 'hidden' }}>
-      <Box sx={getSectionHeaderSx(theme)}>{title}</Box>
+    <Card variant="outlined" sx={{ overflow: 'hidden', borderRadius: 2, boxShadow: theme.shadows[1] }}>
+      <Box
+        sx={{
+          px: 3,
+          py: 1.5,
+          bgcolor: alpha(theme.palette.primary.main, 0.08),
+          borderBottom: `1px solid ${theme.palette.divider}`,
+        }}
+      >
+        <Typography variant="subtitle1" fontWeight={700} color="primary.dark">
+          {title}
+        </Typography>
+      </Box>
       {subtitle ? (
-        <Box sx={{ px: 2, pt: 1, pb: 0 }}>
+        <Box sx={{ px: 3, pt: 1, pb: 0 }}>
           <Typography variant="caption" color="text.secondary">
             {subtitle}
           </Typography>
         </Box>
       ) : null}
-      <Box sx={{ p: 2 }}>{children}</Box>
+      <Box sx={{ p: 3 }}>{children}</Box>
     </Card>
   );
 }
@@ -460,13 +586,44 @@ export default function QualityDepartmentInspectionView() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState(null);
   const [saveErr, setSaveErr] = useState(null);
-  const [lineRows, setLineRows] = useState([]);
   const [measurementTypes, setMeasurementTypes] = useState([]);
   const [measurementTypeId, setMeasurementTypeId] = useState('');
   const [specRows, setSpecRows] = useState([]);
   const [loadingSpecs, setLoadingSpecs] = useState(false);
   const [savingSpecs, setSavingSpecs] = useState(false);
   const [imageMap, setImageMap] = useState({});
+  /** QDInspectionDtl matrix (OVERALL CONCLUSION) — synced from API, posted on save. */
+  const [dtlRows, setDtlRows] = useState([]);
+
+  const sizeQtyBreakdown = useMemo(
+    () => data?.sizeQtyBreakdown ?? data?.SizeQtyBreakdown ?? [],
+    [data]
+  );
+
+  /** Legacy: always 12 intermediate columns (+ TOTAL), like dgInspectionDtl. */
+  const numMatrixSlots = INSPECTION_DTL_SIZE_SLOTS;
+
+  const matrixColumnTitles = useMemo(() => {
+    const sizeRow = dtlRows.find((r) => String(r.sizeType ?? r.SizeType ?? '').trim() === 'SIZE');
+    return Array.from({ length: INSPECTION_DTL_SIZE_SLOTS }, (_, i) => {
+      if (sizeRow) return getDtlCell(sizeRow, i + 1) || '';
+      const b = sizeQtyBreakdown[i];
+      return (b?.size ?? b?.Size ?? '').trim() || '';
+    });
+  }, [dtlRows, sizeQtyBreakdown]);
+
+  useEffect(() => {
+    if (!data) return;
+    const bd = data.sizeQtyBreakdown ?? data.SizeQtyBreakdown ?? [];
+    const rt =
+      data.inspectionDtlRowTypes ?? data.InspectionDtlRowTypes ?? QD_INSPECTION_DTL_ROW_TYPES_FALLBACK;
+    let rows = data.inspectionDtlRows ?? data.InspectionDtlRows ?? null;
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      setDtlRows(buildDefaultInspectionDtlRows(bd, rt));
+      return;
+    }
+    setDtlRows(rows.map((r) => padInspectionDtlRowToSlots({ ...r })));
+  }, [data]);
 
   useEffect(() => {
     if (!poid || !inspType) {
@@ -502,7 +659,6 @@ export default function QualityDepartmentInspectionView() {
   }, [poid, inspType]);
 
   const h = data?.header ?? data?.Header;
-  const poLines = data?.poLines ?? data?.PoLines ?? [];
   const aqlSystems = data?.aqlSystems ?? data?.AqlSystems ?? [];
   const aqlRanges = useMemo(() => data?.aqlRanges ?? data?.AqlRanges ?? [], [data]);
   const bindDef = data?.bindGridDefaults ?? data?.BindGridDefaults;
@@ -530,8 +686,15 @@ export default function QualityDepartmentInspectionView() {
 
     const passFailValue = snap == null || !(snap.passFail === false || snap.PassFail === false) ? '1' : '0';
 
+    const suggestedInspNo = String(data?.suggestedInspNo ?? data?.SuggestedInspNo ?? '').trim();
+    const headerPono = field(h, 'pONo', 'PONo', 'pono', 'poNo');
+    const inspNoDisplay =
+      field(snap, 'inspNo', 'InspNo') ||
+      suggestedInspNo ||
+      (headerPono && inspType ? `${headerPono}-${inspType}-pending` : '');
+
     setForm({
-      inspNo: field(snap, 'inspNo', 'InspNo'),
+      inspNo: inspNoDisplay,
       shipmentDate: field(h, 'shipmentdatee', 'shipmentdatee'),
       poQtyLabel: `${field(h, 'poQty', 'pOQty', 'POQty')} / ${field(h, 'orderQty', 'OrderQty')}`,
       aqlSystemId: snap?.aqlSysytemId ?? snap?.AQLSysytemId ?? firstSystemId ?? '',
@@ -644,7 +807,7 @@ export default function QualityDepartmentInspectionView() {
         grossWt: field(snap, 'grossWTCom', 'GrossWTCom'),
       },
     });
-  }, [data, h, snap, bindDef, firstSystemId, rangesForFirstSystem]);
+  }, [data, h, snap, bindDef, firstSystemId, rangesForFirstSystem, inspType]);
 
   useEffect(() => {
     if (!data) return;
@@ -672,31 +835,17 @@ export default function QualityDepartmentInspectionView() {
   useEffect(() => {
     if (!data) return;
     if (mstId) {
-      loadLines(mstId);
       [...FUNDAMENTAL_IMAGE_SLOTS, ...COMPLIMENTARY_IMAGE_SLOTS].forEach((s) => {
         loadSlotImages(s, mstId);
       });
-    } else {
-      setLineRows(
-        (poLines || []).map((row) => ({
-          podetailId: Number(row.podetailID ?? row.PodetailID),
-          style: row.styleNo ?? row.StyleNo ?? '',
-          orderQty: numOrEmpty(row.orderQty ?? row.OrderQty),
-          inspectedQty: numOrEmpty(row.inspectedQty ?? row.InspectedQty),
-          inspectionQty: '',
-          qdUserId: '',
-          inspType,
-          inspStatus: '',
-          remarks: '',
-          qdName: '',
-          inspectionDate: '',
-        }))
-      );
     }
-  }, [data, mstId, poLines, inspType]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, mstId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!mstId || !measurementTypeId) return;
+    if (!mstId || !measurementTypeId) {
+      if (!measurementTypeId) setSpecRows([]);
+      return;
+    }
     loadSpecs(mstId, measurementTypeId);
   }, [mstId, measurementTypeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -721,6 +870,19 @@ export default function QualityDepartmentInspectionView() {
       return next;
     });
 
+  const updateDtlCell = (rowIdx, slot1To12, value) => {
+    setDtlRows((prev) => {
+      if (!prev[rowIdx]) return prev;
+      const label = String(prev[rowIdx].sizeType ?? prev[rowIdx].SizeType ?? '').trim();
+      if (label === 'SIZE') return prev;
+      const next = prev.map((r, i) => (i === rowIdx ? { ...r } : r));
+      const key = `size${slot1To12}`;
+      next[rowIdx][key] = value;
+      next[rowIdx].sizeTotal = sumDtlRowSlots(next[rowIdx], INSPECTION_DTL_SIZE_SLOTS);
+      return next;
+    });
+  };
+
   const reloadInspection = async () => {
     const { data: res } = await qdApi.get(
       `/MasterOrderForQDSheet/quality-department-inspection/${encodeURIComponent(poid)}`,
@@ -734,7 +896,7 @@ export default function QualityDepartmentInspectionView() {
     setSaveMsg(null);
     setSaveErr(null);
     try {
-      const body = buildQdSavePayload(form, discRows, mstId, isMainSave);
+      const body = buildQdSavePayload(form, discRows, mstId, isMainSave, dtlRows);
       await qdApi.post(
         `/MasterOrderForQDSheet/quality-department-inspection/${encodeURIComponent(poid)}`,
         body,
@@ -753,74 +915,11 @@ export default function QualityDepartmentInspectionView() {
     }
   };
 
-  const setLine = (idx, key, value) =>
-    setLineRows((prev) => {
-      const next = [...prev];
-      next[idx] = { ...next[idx], [key]: value };
-      return next;
-    });
-
-  const loadLines = async (currentMstId) => {
-    if (!currentMstId) return;
-    const { data: lineData } = await qdApi.get(
-      `/MasterOrderForQDSheet/quality-department-inspection/${encodeURIComponent(poid)}/lines`,
-      { params: { qdInspectionMstId: currentMstId } }
-    );
-    const mapByDetail = new Map((lineData || []).map((x) => [String(x.podetailID ?? x.PODetailID), x]));
-    setLineRows(
-      (poLines || []).map((row) => {
-        const key = String(row.podetailID ?? row.PodetailID);
-        const m = mapByDetail.get(key);
-        return {
-          podetailId: Number(row.podetailID ?? row.PodetailID),
-          style: row.styleNo ?? row.StyleNo ?? '',
-          orderQty: numOrEmpty(row.orderQty ?? row.OrderQty),
-          inspectedQty: numOrEmpty(row.inspectedQty ?? row.InspectedQty),
-          inspectionQty: numOrEmpty(m?.inspectedQty ?? m?.InspectedQty),
-          qdUserId: m?.qDUserID ?? m?.QDUserID ?? '',
-          inspType: m?.inspectionStatus ?? m?.InspectionStatus ?? inspType,
-          inspStatus: m?.inspStatus ?? m?.InspStatus ?? '',
-          remarks: m?.remarks ?? m?.Remarks ?? '',
-          qdName: m?.qDName ?? m?.QDName ?? '',
-          inspectionDate: toDateInput(m?.inspectionDate ?? m?.InspectionDate),
-        };
-      })
-    );
-  };
-
-  const saveLines = async () => {
-    if (!mstId) {
-      setSaveErr('Please save master inspection first.');
-      return;
-    }
-    await qdApi.post(
-      `/MasterOrderForQDSheet/quality-department-inspection/${encodeURIComponent(poid)}/lines`,
-      {
-        lines: lineRows.map((r) => ({
-          podetailId: r.podetailId,
-          inspectedQty: parseOptionalDecimal(r.inspectionQty),
-          qdUserId: parseOptionalLong(r.qdUserId),
-          inspectionDate: r.inspectionDate ? new Date(r.inspectionDate).toISOString() : null,
-          inspectionStatus: r.inspType || inspType,
-          inspStatus: r.inspStatus || null,
-          remarks: r.remarks || null,
-          qdName: r.qdName || null,
-        })),
-      },
-      { params: { qdInspectionMstId: mstId, inspType } }
-    );
-    setSaveMsg('Line inspections saved.');
-    await loadLines(mstId);
-  };
-
   const loadMeasurementTypes = async () => {
     const { data: mt } = await qdApi.get(
       `/MasterOrderForQDSheet/quality-department-inspection/${encodeURIComponent(poid)}/measurement-types`
     );
     setMeasurementTypes(mt || []);
-    if ((mt || []).length > 0 && !measurementTypeId) {
-      setMeasurementTypeId(String(mt[0].measurementTypeID ?? mt[0].MeasurementTypeID));
-    }
   };
 
   const loadSpecs = async (currentMstId, typeId) => {
@@ -945,7 +1044,7 @@ export default function QualityDepartmentInspectionView() {
   }
 
   return (
-    <Container maxWidth={false} sx={{ py: 2, px: { xs: 1, sm: 2 } }}>
+    <Container maxWidth="xl" sx={{ py: 3 }}>
       <CustomBreadcrumbs
         heading="INSPECTION INFORMATION"
         links={[
@@ -953,7 +1052,7 @@ export default function QualityDepartmentInspectionView() {
           { name: 'Master Order QD Sheet', href: paths.dashboard.masterOrderForQDSheet },
           { name: 'Inspection' },
         ]}
-        sx={{ mb: 2 }}
+        sx={{ mb: { xs: 2, md: 3 } }}
       />
 
       {/* ── InspType Switcher ─────────────────────────────────────────────── */}
@@ -963,13 +1062,13 @@ export default function QualityDepartmentInspectionView() {
         alignItems={{ xs: 'flex-start', sm: 'center' }}
         flexWrap="wrap"
         gap={2}
-        sx={{ mb: 2 }}
+        sx={{ mb: 3 }}
       >
         {/* Left: back + title */}
         <Stack direction="row" spacing={1.5} alignItems="center">
           <Button
             component={RouterLink}
-            to={`/dashboard/supply-chain/master-order-qd-sheet`}
+            to={paths.dashboard.masterOrderForQDSheet}
             startIcon={<ArrowBackIcon />}
             variant="outlined"
             size="small"
@@ -1074,7 +1173,7 @@ export default function QualityDepartmentInspectionView() {
       )}
 
       {!loading && !error && h && (
-        <Stack spacing={2.5}>
+        <Stack spacing={3}>
           <SectionCard title="INSPECTION INFORMATION">
             <Grid container spacing={2}>
               <Grid xs={12} sm={6} md={3}>
@@ -1328,7 +1427,7 @@ export default function QualityDepartmentInspectionView() {
 
           <SectionCard
             title="OVERALL CONCLUSION"
-            subtitle="Line-level inspection grid (legacy dgPurchaseOrder). Line-level QDInspection rows are not in this API yet."
+            subtitle="Size × quantity matrix (QDInspectionDtl + GetSizeQty): 12 size columns + TOTAL like legacy. If the API sends no matrix rows, they are built from sizeQtyBreakdown. Saves with the main Save button."
           >
             <Grid container spacing={2} sx={{ mb: 2 }}>
               <Grid xs={12} sm={4}>
@@ -1354,142 +1453,69 @@ export default function QualityDepartmentInspectionView() {
                   onChange={(e) => setF('calPerc', e.target.value)}
                 />
               </Grid>
-              <Grid xs={12}>
-                <TextField
-                  label="QA Remarks"
-                  fullWidth
-                  multiline
-                  minRows={2}
-                  size="small"
-                  value={form.qaRemarks ?? ''}
-                  onChange={(e) => setF('qaRemarks', e.target.value)}
-                />
-              </Grid>
             </Grid>
 
-            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 440, mb: 2 }}>
-              <Table size="small" stickyHeader>
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
+              Size matrix (legacy dgInspectionDtl)
+            </Typography>
+            <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto', mb: 3 }}>
+              <Table size="small" sx={{ minWidth: 1100 }}>
                 <TableHead>
-                  <TableRow sx={{ bgcolor: 'action.hover' }}>
-                    <TableCell>Style</TableCell>
-                    <TableCell>Order Qty</TableCell>
-                    <TableCell>Inspected Qty</TableCell>
-                    <TableCell>Inspection Qty</TableCell>
-                    <TableCell>QA Name</TableCell>
-                    <TableCell>Insp. Type</TableCell>
-                    <TableCell>Insp. Status</TableCell>
-                    <TableCell>QA Remarks</TableCell>
+                  <TableRow sx={tableHeadRowSx(theme)}>
+                    <TableCell sx={{ minWidth: 168 }}>SIZE</TableCell>
+                    {matrixColumnTitles.map((title, i) => (
+                      <TableCell key={`h-${i}`} align="center" sx={{ minWidth: 72 }}>
+                        {title}
+                      </TableCell>
+                    ))}
+                    <TableCell align="center" sx={{ minWidth: 88 }}>
+                      TOTAL
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {lineRows.length === 0 ? (
+                  {dtlRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8}>
+                      <TableCell colSpan={numMatrixSlots + 2}>
                         <Typography variant="body2" color="text.secondary">
-                          No lines.
+                          {loading ? 'Loading matrix…' : 'No matrix data.'}
                         </Typography>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    lineRows.map((row, idx) => (
-                      <TableRow key={row.podetailId}>
-                        <TableCell>{row.style}</TableCell>
-                        <TableCell align="right">{row.orderQty}</TableCell>
-                        <TableCell align="right">{row.inspectedQty}</TableCell>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            fullWidth
-                            placeholder="0"
-                            value={row.inspectionQty}
-                            onChange={(e) => setLine(idx, 'inspectionQty', e.target.value)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            fullWidth
-                            value={row.qdName}
-                            onChange={(e) => setLine(idx, 'qdName', e.target.value)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            fullWidth
-                            value={row.inspType}
-                            onChange={(e) => setLine(idx, 'inspType', e.target.value)}
-                          >
-                            <MenuItem value="IPC">IPC</MenuItem>
-                            <MenuItem value="MPC">MPC</MenuItem>
-                            <MenuItem value="Pre-Final">Pre-Final</MenuItem>
-                            <MenuItem value="Final">Final</MenuItem>
-                          </TextField>
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            select
-                            size="small"
-                            fullWidth
-                            value={row.inspStatus}
-                            onChange={(e) => setLine(idx, 'inspStatus', e.target.value)}
-                          >
-                            <MenuItem value="">—</MenuItem>
-                            <MenuItem value="Pass">Pass</MenuItem>
-                            <MenuItem value="Fail">Fail</MenuItem>
-                          </TextField>
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            fullWidth
-                            value={row.remarks}
-                            onChange={(e) => setLine(idx, 'remarks', e.target.value)}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    dtlRows.map((row, rowIdx) => {
+                      const st = String(row.sizeType ?? row.SizeType ?? '').trim();
+                      if (st === 'SIZE') return null;
+                      return (
+                        <TableRow key={`${st}-${rowIdx}`}>
+                          <TableCell sx={{ fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap' }}>{st}</TableCell>
+                          {Array.from({ length: numMatrixSlots }, (_, si) => {
+                            const slot = si + 1;
+                            return (
+                              <TableCell key={slot} align="right" sx={{ py: 0.5, px: 0.5 }}>
+                                <TextField
+                                  size="small"
+                                  fullWidth
+                                  value={getDtlCell(row, slot)}
+                                  onChange={(e) => updateDtlCell(rowIdx, slot, e.target.value)}
+                                  InputProps={{ sx: { fontSize: 12 } }}
+                                />
+                              </TableCell>
+                            );
+                          })}
+                          <TableCell align="right" sx={{ py: 0.5, px: 0.5 }}>
+                            <TextField
+                              size="small"
+                              fullWidth
+                              value={row.sizeTotal ?? row.SizeTotal ?? ''}
+                              disabled
+                              InputProps={{ sx: { fontSize: 12 } }}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <Stack direction="row" justifyContent="flex-end">
-              <Button variant="outlined" size="small" onClick={saveLines} disabled={!mstId}>
-                Save Line Inspections
-              </Button>
-            </Stack>
-
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>
-              Size breakdown (legacy dgInspectionDtl — XS–8XL + Total)
-            </Typography>
-            <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow
-                    sx={{
-                      bgcolor: alpha(theme.palette.primary.main, 0.14),
-                      '& th': { color: 'text.primary', fontWeight: 700 },
-                    }}
-                  >
-                    <TableCell>Size / Type</TableCell>
-                    {SIZE_BREAK_COLS.map((c) => (
-                      <TableCell key={c} align="center">
-                        {c}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {['Order Qty', 'Inspected Qty'].map((label) => (
-                    <TableRow key={label}>
-                      <TableCell>{label}</TableCell>
-                      {SIZE_BREAK_COLS.map((c) => (
-                        <TableCell key={c}>
-                          <TextField size="small" fullWidth disabled placeholder="—" />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -1664,356 +1690,397 @@ export default function QualityDepartmentInspectionView() {
             </Grid>
           </SectionCard>
 
-          <SectionCard
-            title="Size Specs"
-            subtitle="Measurement points grid (legacy dgKikInspMeasurementPoint)"
-          >
+          <SectionCard title="Size Specs">
             <Stack spacing={2}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  select
-                  size="small"
-                  label="Measurement type"
-                  fullWidth
-                  sx={{ maxWidth: 360 }}
-                  value={measurementTypeId}
-                  onChange={(e) => setMeasurementTypeId(e.target.value)}
-                >
-                  <MenuItem value="">Select type…</MenuItem>
-                  {measurementTypes.map((t) => {
-                    const id = t.measurementTypeID ?? t.MeasurementTypeID;
-                    const label = t.measurementType ?? t.MeasurementType;
-                    return (
-                      <MenuItem key={id} value={String(id)}>
-                        {label}
-                      </MenuItem>
-                    );
-                  })}
-                </TextField>
-                <Button variant="outlined" onClick={saveSpecs} disabled={!mstId || !measurementTypeId || savingSpecs}>
-                  Save Specs
-                </Button>
-                <Button
-                  variant="text"
-                  onClick={() =>
-                    setSpecRows((prev) => [
-                      ...prev,
-                      {
-                        measurementPointId: '',
-                        measurementPoints: '',
-                        measurements: '',
-                        tolerance: '',
-                        header1: '',
-                        header2: '',
-                        header3: '',
-                        header4: '',
-                        q1: '',
-                        q2: '',
-                        q3: '',
-                        q4: '',
-                      },
-                    ])
-                  }
-                >
-                  Add Row
-                </Button>
-              </Stack>
-              <TableContainer component={Paper} variant="outlined">
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Measurement Point ID</TableCell>
-                      <TableCell>Measurement Point</TableCell>
-                      <TableCell>Measurement</TableCell>
-                      <TableCell>Tolerance</TableCell>
-                      <TableCell>H1</TableCell>
-                      <TableCell>H2</TableCell>
-                      <TableCell>H3</TableCell>
-                      <TableCell>H4</TableCell>
-                      <TableCell>Q1</TableCell>
-                      <TableCell>Q2</TableCell>
-                      <TableCell>Q3</TableCell>
-                      <TableCell>Q4</TableCell>
-                      <TableCell />
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {specRows.map((r, idx) => (
-                      <TableRow key={`${r.measurementPointId}-${idx}`}>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            value={r.measurementPointId}
-                            onChange={(e) => setSpec(idx, 'measurementPointId', e.target.value)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            value={r.measurementPoints}
-                            onChange={(e) => setSpec(idx, 'measurementPoints', e.target.value)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.measurements} onChange={(e) => setSpec(idx, 'measurements', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.tolerance} onChange={(e) => setSpec(idx, 'tolerance', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.header1} onChange={(e) => setSpec(idx, 'header1', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.header2} onChange={(e) => setSpec(idx, 'header2', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.header3} onChange={(e) => setSpec(idx, 'header3', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.header4} onChange={(e) => setSpec(idx, 'header4', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.q1} onChange={(e) => setSpec(idx, 'q1', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.q2} onChange={(e) => setSpec(idx, 'q2', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.q3} onChange={(e) => setSpec(idx, 'q3', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={r.q4} onChange={(e) => setSpec(idx, 'q4', e.target.value)} />
-                        </TableCell>
-                        <TableCell>
-                          <IconButton size="small" onClick={() => setSpecRows((prev) => prev.filter((_, i) => i !== idx))}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {!loadingSpecs && specRows.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={13} align="center">
-                          <Typography variant="body2" color="text.secondary">
-                            No rows for selected measurement type.
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              <TextField
+                select
+                size="small"
+                label="Type"
+                sx={{ maxWidth: 400 }}
+                value={measurementTypeId}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setMeasurementTypeId(v);
+                  if (!v) setSpecRows([]);
+                }}
+              >
+                <MenuItem value="">Select</MenuItem>
+                {measurementTypes.map((t) => {
+                  const id = t.measurementTypeID ?? t.MeasurementTypeID;
+                  const label = t.measurementType ?? t.MeasurementType;
+                  return (
+                    <MenuItem key={id} value={String(id)}>
+                      {label}
+                    </MenuItem>
+                  );
+                })}
+              </TextField>
 
-              <Divider />
-
-              <Typography variant="subtitle2">AQL — Sample size &amp; limits (legacy below discrepancies)</Typography>
-              <Grid container spacing={2} alignItems="flex-end">
-                <Grid xs={6} sm={2}>
-                  <Button variant="contained" color="success" disabled fullWidth sx={{ mb: 0.5 }}>
-                    Calculate
-                  </Button>
-                </Grid>
-                <Grid xs={6} sm={2}>
-                  <Typography variant="caption" display="block" align="center">
-                    Total
-                  </Typography>
-                </Grid>
-                <Grid xs={6} sm={2}>
-                  <TextField
-                    label="Sample Size"
-                    fullWidth
-                    size="small"
-                    value={form.sampleSize ?? ''}
-                    onChange={(e) => setF('sampleSize', e.target.value)}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
-                  />
-                </Grid>
-                <Grid xs={6} sm={2}>
-                  <TextField
-                    label="Critical"
-                    fullWidth
-                    size="small"
-                    value={form.criticalQty ?? ''}
-                    InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
-                  />
-                </Grid>
-                <Grid xs={6} sm={2}>
-                  <TextField
-                    label="Major"
-                    fullWidth
-                    size="small"
-                    value={form.majQty ?? ''}
-                    InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
-                  />
-                </Grid>
-                <Grid xs={6} sm={2}>
-                  <TextField
-                    label="Minor"
-                    fullWidth
-                    size="small"
-                    value={form.minQty ?? ''}
-                    InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
-                  />
-                </Grid>
-              </Grid>
-
-              <Grid container spacing={2}>
-                <Grid xs={12} sm={2} offset={{ sm: 4 }}>
-                  <TextField
-                    select
-                    label="Reliability"
-                    fullWidth
-                    size="small"
-                    value={form.reliability ?? 'II'}
-                    onChange={(e) => setF('reliability', e.target.value)}
-                    sx={{ '& .MuiInputBase-root': { bgcolor: alpha(theme.palette.primary.main, 0.12) } }}
-                  >
-                    {RELIABILITY.map((r) => (
-                      <MenuItem key={r.value} value={r.value}>
-                        {r.label}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
-                {[
-                  ['critAql', 'Critical AQL', '0.0'],
-                  ['majAql', 'Major AQL', '2.5'],
-                  ['minAql', 'Minor AQL', '4.0'],
-                ].map(([k, lbl, defVal]) => (
-                  <Grid key={k} xs={12} sm={2}>
-                    <TextField
-                      select
-                      label={lbl}
-                      fullWidth
-                      size="small"
-                      value={normalizeAqlFieldValue(form[k] != null && form[k] !== '' ? form[k] : defVal)}
-                      onChange={(e) => setF(k, e.target.value)}
-                      sx={{ '& .MuiInputBase-root': { bgcolor: alpha(theme.palette.primary.main, 0.12) } }}
+              {measurementTypeId ? (
+                <Stack spacing={2}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+                    <Button variant="outlined" onClick={saveSpecs} disabled={!mstId || savingSpecs}>
+                      Save Specs
+                    </Button>
+                    <Button
+                      variant="text"
+                      onClick={() =>
+                        setSpecRows((prev) => [
+                          ...prev,
+                          {
+                            measurementPointId: '',
+                            measurementPoints: '',
+                            measurements: '',
+                            tolerance: '',
+                            header1: '',
+                            header2: '',
+                            header3: '',
+                            header4: '',
+                            q1: '',
+                            q2: '',
+                            q3: '',
+                            q4: '',
+                          },
+                        ])
+                      }
                     >
-                      {AQL_LEVEL_MENU_ITEMS.map((o) => (
-                        <MenuItem key={o.value} value={o.value}>
-                          {o.label}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  </Grid>
-                ))}
-              </Grid>
-
-              <Grid container spacing={2}>
-                <Grid xs={12} sm={2} offset={{ sm: 4 }}>
-                  <Typography variant="caption" align="center" display="block">
-                    Allowed
-                  </Typography>
-                </Grid>
-                <Grid xs={12} sm={2}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    value={form.allowCrit ?? ''}
-                    InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
-                  />
-                </Grid>
-                <Grid xs={12} sm={2}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    value={form.allowMaj ?? ''}
-                    InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
-                  />
-                </Grid>
-                <Grid xs={12} sm={2}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    value={form.allowMin ?? ''}
-                    InputProps={{ readOnly: true }}
-                    sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
-                  />
-                </Grid>
-              </Grid>
-
-              <Typography variant="caption" color="text.secondary">
-                Default sample size band from PO qty: {bindDef?.defaultSampleSize ?? bindDef?.DefaultSampleSize ?? '—'} ·
-                Range label (first system, index {bindDef?.defaultRangeIndex ?? bindDef?.DefaultRangeIndex ?? '—'}):{' '}
-                {defaultRangeLabel || '—'}
-              </Typography>
+                      Add Row
+                    </Button>
+                  </Stack>
+                  <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Measurement Point ID</TableCell>
+                          <TableCell>Measurement Point</TableCell>
+                          <TableCell>Measurement</TableCell>
+                          <TableCell>Tolerance</TableCell>
+                          <TableCell>H1</TableCell>
+                          <TableCell>H2</TableCell>
+                          <TableCell>H3</TableCell>
+                          <TableCell>H4</TableCell>
+                          <TableCell>Q1</TableCell>
+                          <TableCell>Q2</TableCell>
+                          <TableCell>Q3</TableCell>
+                          <TableCell>Q4</TableCell>
+                          <TableCell />
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {specRows.map((r, idx) => (
+                          <TableRow key={`${r.measurementPointId}-${idx}`}>
+                            <TableCell>
+                              <TextField
+                                size="small"
+                                value={r.measurementPointId}
+                                onChange={(e) => setSpec(idx, 'measurementPointId', e.target.value)}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                size="small"
+                                value={r.measurementPoints}
+                                onChange={(e) => setSpec(idx, 'measurementPoints', e.target.value)}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                size="small"
+                                value={r.measurements}
+                                onChange={(e) => setSpec(idx, 'measurements', e.target.value)}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                size="small"
+                                value={r.tolerance}
+                                onChange={(e) => setSpec(idx, 'tolerance', e.target.value)}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField size="small" value={r.header1} onChange={(e) => setSpec(idx, 'header1', e.target.value)} />
+                            </TableCell>
+                            <TableCell>
+                              <TextField size="small" value={r.header2} onChange={(e) => setSpec(idx, 'header2', e.target.value)} />
+                            </TableCell>
+                            <TableCell>
+                              <TextField size="small" value={r.header3} onChange={(e) => setSpec(idx, 'header3', e.target.value)} />
+                            </TableCell>
+                            <TableCell>
+                              <TextField size="small" value={r.header4} onChange={(e) => setSpec(idx, 'header4', e.target.value)} />
+                            </TableCell>
+                            <TableCell>
+                              <TextField size="small" value={r.q1} onChange={(e) => setSpec(idx, 'q1', e.target.value)} />
+                            </TableCell>
+                            <TableCell>
+                              <TextField size="small" value={r.q2} onChange={(e) => setSpec(idx, 'q2', e.target.value)} />
+                            </TableCell>
+                            <TableCell>
+                              <TextField size="small" value={r.q3} onChange={(e) => setSpec(idx, 'q3', e.target.value)} />
+                            </TableCell>
+                            <TableCell>
+                              <TextField size="small" value={r.q4} onChange={(e) => setSpec(idx, 'q4', e.target.value)} />
+                            </TableCell>
+                            <TableCell>
+                              <IconButton size="small" onClick={() => setSpecRows((prev) => prev.filter((_, i) => i !== idx))}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {!loadingSpecs && specRows.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={13} align="center">
+                              <Typography variant="body2" color="text.secondary">
+                                No rows for selected measurement type.
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Stack>
+              ) : null}
             </Stack>
           </SectionCard>
 
           <SectionCard title="DISCREPANCIES">
-            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 360 }}>
-              <Table size="small" stickyHeader>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>During inspection found following discrepancies</TableCell>
-                    <TableCell>Remarks</TableCell>
-                    <TableCell>Critical</TableCell>
-                    <TableCell>Major</TableCell>
-                    <TableCell>Minor</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {discRows.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          fullWidth
-                          value={r.discrepancy}
-                          onChange={(e) => setDisc(r.id, 'discrepancy', e.target.value)}
-                          placeholder="—"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          fullWidth
-                          value={r.remarks}
-                          onChange={(e) => setDisc(r.id, 'remarks', e.target.value)}
-                          placeholder="—"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          fullWidth
-                          value={r.critical}
-                          onChange={(e) => setDisc(r.id, 'critical', e.target.value)}
-                          placeholder="0"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          fullWidth
-                          value={r.major}
-                          onChange={(e) => setDisc(r.id, 'major', e.target.value)}
-                          placeholder="0"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          fullWidth
-                          value={r.minor}
-                          onChange={(e) => setDisc(r.id, 'minor', e.target.value)}
-                          placeholder="0"
-                        />
-                      </TableCell>
+            <Stack spacing={2}>
+              <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 360 }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow sx={tableHeadRowSx(theme)}>
+                      <TableCell>During inspection found following discrepancies</TableCell>
+                      <TableCell>Remarks</TableCell>
+                      <TableCell>Critical</TableCell>
+                      <TableCell>Major</TableCell>
+                      <TableCell>Minor</TableCell>
                     </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {discRows.map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell>
+                          <TextField
+                            size="small"
+                            fullWidth
+                            value={r.discrepancy}
+                            onChange={(e) => setDisc(r.id, 'discrepancy', e.target.value)}
+                            placeholder="—"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <TextField
+                            size="small"
+                            fullWidth
+                            value={r.remarks}
+                            onChange={(e) => setDisc(r.id, 'remarks', e.target.value)}
+                            placeholder="—"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <TextField
+                            size="small"
+                            fullWidth
+                            value={r.critical}
+                            onChange={(e) => setDisc(r.id, 'critical', e.target.value)}
+                            placeholder="0"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <TextField
+                            size="small"
+                            fullWidth
+                            value={r.major}
+                            onChange={(e) => setDisc(r.id, 'major', e.target.value)}
+                            placeholder="0"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <TextField
+                            size="small"
+                            fullWidth
+                            value={r.minor}
+                            onChange={(e) => setDisc(r.id, 'minor', e.target.value)}
+                            placeholder="0"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 2 }}>
+                <Grid container spacing={2} alignItems="flex-end">
+                  <Grid xs={6} sm={2}>
+                    <Button variant="contained" color="success" disabled fullWidth sx={{ mb: 0.5 }}>
+                      Calculate
+                    </Button>
+                  </Grid>
+                  <Grid xs={6} sm={2}>
+                    <Typography variant="caption" display="block" align="center">
+                      Total
+                    </Typography>
+                  </Grid>
+                  <Grid xs={6} sm={2}>
+                    <TextField
+                      label="Sample Size"
+                      fullWidth
+                      size="small"
+                      value={form.sampleSize ?? ''}
+                      onChange={(e) => setF('sampleSize', e.target.value)}
+                      sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
+                    />
+                  </Grid>
+                  <Grid xs={6} sm={2}>
+                    <TextField
+                      label="Critical"
+                      fullWidth
+                      size="small"
+                      value={form.criticalQty ?? ''}
+                      InputProps={{ readOnly: true }}
+                      sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
+                    />
+                  </Grid>
+                  <Grid xs={6} sm={2}>
+                    <TextField
+                      label="Major"
+                      fullWidth
+                      size="small"
+                      value={form.majQty ?? ''}
+                      InputProps={{ readOnly: true }}
+                      sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
+                    />
+                  </Grid>
+                  <Grid xs={6} sm={2}>
+                    <TextField
+                      label="Minor"
+                      fullWidth
+                      size="small"
+                      value={form.minQty ?? ''}
+                      InputProps={{ readOnly: true }}
+                      sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
+                    />
+                  </Grid>
+                </Grid>
+
+                <Grid container spacing={2} sx={{ mt: 1 }}>
+                  <Grid xs={12} sm={2} offset={{ sm: 4 }}>
+                    <TextField
+                      select
+                      label="Reliability"
+                      fullWidth
+                      size="small"
+                      value={form.reliability ?? 'II'}
+                      onChange={(e) => setF('reliability', e.target.value)}
+                      sx={{ '& .MuiInputBase-root': { bgcolor: alpha(theme.palette.primary.main, 0.12) } }}
+                    >
+                      {RELIABILITY.map((r) => (
+                        <MenuItem key={r.value} value={r.value}>
+                          {r.label}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  {[
+                    ['critAql', 'Critical AQL', '0.0'],
+                    ['majAql', 'Major AQL', '2.5'],
+                    ['minAql', 'Minor AQL', '4.0'],
+                  ].map(([k, lbl, defVal]) => (
+                    <Grid key={k} xs={12} sm={2}>
+                      <TextField
+                        select
+                        label={lbl}
+                        fullWidth
+                        size="small"
+                        value={normalizeAqlFieldValue(form[k] != null && form[k] !== '' ? form[k] : defVal)}
+                        onChange={(e) => setF(k, e.target.value)}
+                        sx={{ '& .MuiInputBase-root': { bgcolor: alpha(theme.palette.primary.main, 0.12) } }}
+                      >
+                        {AQL_LEVEL_MENU_ITEMS.map((o) => (
+                          <MenuItem key={o.value} value={o.value}>
+                            {o.label}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
                   ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-              Rows save with Save / Draft (legacy dgDiscrepanices).
-            </Typography>
+                </Grid>
+
+                <Grid container spacing={2} sx={{ mt: 1 }}>
+                  <Grid xs={12} sm={2} offset={{ sm: 4 }}>
+                    <Typography variant="caption" align="center" display="block">
+                      Allowed
+                    </Typography>
+                  </Grid>
+                  <Grid xs={12} sm={2}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      value={form.allowCrit ?? ''}
+                      InputProps={{ readOnly: true }}
+                      sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
+                    />
+                  </Grid>
+                  <Grid xs={12} sm={2}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      value={form.allowMaj ?? ''}
+                      InputProps={{ readOnly: true }}
+                      sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
+                    />
+                  </Grid>
+                  <Grid xs={12} sm={2}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      value={form.allowMin ?? ''}
+                      InputProps={{ readOnly: true }}
+                      sx={{ '& .MuiInputBase-input': { fontWeight: 700, bgcolor: 'action.selected' } }}
+                    />
+                  </Grid>
+                </Grid>
+
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  Default sample size band from PO qty: {bindDef?.defaultSampleSize ?? bindDef?.DefaultSampleSize ?? '—'} · Range label
+                  (first system, index {bindDef?.defaultRangeIndex ?? bindDef?.DefaultRangeIndex ?? '—'}): {defaultRangeLabel || '—'}
+                </Typography>
+
+                <Grid container spacing={2} sx={{ mt: 2 }} alignItems="flex-start">
+                  <Grid xs={12} md={8}>
+                    <TextField
+                      label="Comments"
+                      fullWidth
+                      multiline
+                      minRows={3}
+                      size="small"
+                      value={form.qaRemarks ?? ''}
+                      onChange={(e) => setF('qaRemarks', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid xs={12} md={4}>
+                    <Stack spacing={1} alignItems={{ xs: 'stretch', md: 'flex-end' }}>
+                      <Button fullWidth variant="contained" color="secondary" disabled>
+                        QA Sign
+                      </Button>
+                      <Button fullWidth variant="contained" color="secondary" disabled>
+                        V Sign
+                      </Button>
+                      <Button fullWidth variant="contained" color="secondary" disabled>
+                        M Ctrl Sign
+                      </Button>
+                    </Stack>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              <Typography variant="caption" color="text.secondary">
+                Rows save with Save / Draft (legacy dgDiscrepanices).
+              </Typography>
+            </Stack>
           </SectionCard>
 
           <SectionCard
