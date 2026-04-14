@@ -10,6 +10,9 @@ import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -197,21 +200,22 @@ function sumDtlRowSlots(row, numSlots) {
 }
 
 function buildInspectionDtlPayload(rows) {
+  const parse = (v) => (v == null || String(v).trim() === '' ? null : String(v));
   return (rows || []).map((r) => ({
     sizeType: r.sizeType ?? r.SizeType ?? '',
-    size1: r.size1 ?? r.Size1 ?? null,
-    size2: r.size2 ?? r.Size2 ?? null,
-    size3: r.size3 ?? r.Size3 ?? null,
-    size4: r.size4 ?? r.Size4 ?? null,
-    size5: r.size5 ?? r.Size5 ?? null,
-    size6: r.size6 ?? r.Size6 ?? null,
-    size7: r.size7 ?? r.Size7 ?? null,
-    size8: r.size8 ?? r.Size8 ?? null,
-    size9: r.size9 ?? r.Size9 ?? null,
-    size10: r.size10 ?? r.Size10 ?? null,
-    size11: r.size11 ?? r.Size11 ?? null,
-    size12: r.size12 ?? r.Size12 ?? null,
-    sizeTotal: r.sizeTotal ?? r.SizeTotal ?? null,
+    size1: parse(r.size1 ?? r.Size1),
+    size2: parse(r.size2 ?? r.Size2),
+    size3: parse(r.size3 ?? r.Size3),
+    size4: parse(r.size4 ?? r.Size4),
+    size5: parse(r.size5 ?? r.Size5),
+    size6: parse(r.size6 ?? r.Size6),
+    size7: parse(r.size7 ?? r.Size7),
+    size8: parse(r.size8 ?? r.Size8),
+    size9: parse(r.size9 ?? r.Size9),
+    size10: parse(r.size10 ?? r.Size10),
+    size11: parse(r.size11 ?? r.Size11),
+    size12: parse(r.size12 ?? r.Size12),
+    sizeTotal: parse(r.sizeTotal ?? r.SizeTotal),
   }));
 }
 const FUNDAMENTAL_IMAGE_SLOTS = [
@@ -435,7 +439,7 @@ function buildQdSavePayload(form, discRows, mstId, isMainSave, inspectionDtlRows
   };
 }
 
-function SectionCard({ title, children, subtitle }) {
+function SectionCard({ title, children, subtitle, headerRight }) {
   const theme = useTheme();
   return (
     <Card variant="outlined" sx={{ overflow: 'hidden', borderRadius: 2, boxShadow: theme.shadows[1] }}>
@@ -445,11 +449,15 @@ function SectionCard({ title, children, subtitle }) {
           py: 1.5,
           bgcolor: alpha(theme.palette.primary.main, 0.08),
           borderBottom: `1px solid ${theme.palette.divider}`,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
         }}
       >
-        <Typography variant="subtitle1" fontWeight={700} color="primary.dark">
+        <Typography variant="subtitle1" fontWeight={700} color="primary.dark" sx={{ m: 0 }}>
           {title}
         </Typography>
+        {headerRight && <Box>{headerRight}</Box>}
       </Box>
       {subtitle ? (
         <Box sx={{ px: 3, pt: 1, pb: 0 }}>
@@ -464,61 +472,103 @@ function SectionCard({ title, children, subtitle }) {
 }
 
 function ImageUploadBox({ title, images = [], onUpload, onDelete, getImageUrl }) {
+  const [previewInfo, setPreviewInfo] = useState(null);
+
+  const handlePreview = async (id, name) => {
+    try {
+      const url = getImageUrl(id).replace(qdApi.defaults.baseURL || '', '');
+      const res = await qdApi.get(url, { responseType: 'blob' });
+      const objectUrl = URL.createObjectURL(res.data);
+      setPreviewInfo({ name, url: objectUrl });
+    } catch (e) {
+      console.error('Failed to load image blob', e);
+      setPreviewInfo({ name, url: getImageUrl(id) });
+    }
+  };
+
+  const closePreview = () => {
+    if (previewInfo?.url && previewInfo.url.startsWith('blob:')) {
+      URL.revokeObjectURL(previewInfo.url);
+    }
+    setPreviewInfo(null);
+  };
+
   return (
-    <Paper variant="outlined" sx={{ p: 1.5, height: '100%' }}>
-      <Typography variant="subtitle2" sx={{ mb: 1 }}>
-        {title}
-      </Typography>
-      <Box
-        sx={{
-          border: '1px dashed',
-          borderColor: 'divider',
-          borderRadius: 1,
-          minHeight: 120,
-          bgcolor: 'action.hover',
-          mb: 1,
-          p: 1,
-        }}
-      >
-        {images.length === 0 ? (
-          <Typography variant="caption" color="text.secondary" align="center">
-            No images uploaded
-          </Typography>
-        ) : (
-          <Stack spacing={0.5} sx={{ width: '100%' }}>
-            {images.map((img) => {
-              const id = img.digitalID ?? img.DigitalID;
-              const name = img.photoName ?? img.PhotoName ?? `Image ${id}`;
-              return (
-                <Stack key={id} direction="row" spacing={1} justifyContent="space-between" alignItems="center">
-                  <Button size="small" onClick={() => window.open(getImageUrl(id), '_blank')}>
-                    {name}
-                  </Button>
-                  <IconButton size="small" color="error" onClick={() => onDelete(id)}>
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Stack>
-              );
-            })}
-          </Stack>
-        )}
-      </Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Button size="small" variant="contained" component="label">
-          Upload
-          <input
-            hidden
-            type="file"
-            accept="image/*"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) onUpload(file);
-              e.target.value = '';
-            }}
-          />
-        </Button>
-      </Stack>
-    </Paper>
+    <>
+      <Paper variant="outlined" sx={{ p: 1.5, height: '100%' }}>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          {title}
+        </Typography>
+        <Box
+          sx={{
+            border: '1px dashed',
+            borderColor: 'divider',
+            borderRadius: 1,
+            minHeight: 120,
+            bgcolor: 'action.hover',
+            mb: 1,
+            p: 1,
+          }}
+        >
+          {images.length === 0 ? (
+            <Typography variant="caption" color="text.secondary" align="center">
+              No images uploaded
+            </Typography>
+          ) : (
+            <Stack spacing={0.5} sx={{ width: '100%' }}>
+              {images.map((img) => {
+                const id = img.digitalID ?? img.DigitalID;
+                const name = img.photoName ?? img.PhotoName ?? `Image ${id}`;
+                return (
+                  <Stack key={id} direction="row" spacing={1} justifyContent="space-between" alignItems="center">
+                    <Button size="small" onClick={() => handlePreview(id, name)}>
+                      {name}
+                    </Button>
+                    <IconButton size="small" color="error" onClick={() => onDelete(id)}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                );
+              })}
+            </Stack>
+          )}
+        </Box>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Button size="small" variant="contained" component="label">
+            Upload
+            <input
+              hidden
+              multiple
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const files = e.target.files;
+                if (files && files.length > 0) {
+                  onUpload(Array.from(files));
+                }
+                e.target.value = '';
+              }}
+            />
+          </Button>
+        </Stack>
+      </Paper>
+      
+      <Dialog open={!!previewInfo} onClose={closePreview} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {previewInfo?.name || 'Preview'}
+          <Button onClick={closePreview} color="inherit" size="small">Close</Button>
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 0, textAlign: 'center', bgcolor: 'background.neutral' }}>
+          {previewInfo?.url && (
+            <img 
+              src={previewInfo.url} 
+              alt={previewInfo.name} 
+              style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }} 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -905,11 +955,19 @@ export default function QualityDepartmentInspectionView() {
       await reloadInspection();
       setSaveMsg(isMainSave ? 'Saved.' : 'Saved as draft.');
     } catch (e) {
-      setSaveErr(
-        typeof e?.response?.data === 'string'
-          ? e.response.data
-          : e?.response?.data?.message || e?.message || 'Save failed'
-      );
+      console.error('Save error response:', e?.response?.data);
+      const data = e?.response?.data;
+      let msg = e?.message || 'Save failed';
+      if (typeof data === 'string') {
+        msg = data;
+      } else if (data?.errors) {
+        msg = Object.entries(data.errors).map(([k, v]) => `${k}: ${v.join(', ')}`).join(' | ');
+      } else if (data?.message) {
+        msg = data.message;
+      } else if (data?.title) {
+        msg = data.title;
+      }
+      setSaveErr(msg);
     } finally {
       setSaving(false);
     }
@@ -1010,24 +1068,29 @@ export default function QualityDepartmentInspectionView() {
     setImageMap((prev) => ({ ...prev, [slot]: imgs || [] }));
   };
 
-  const uploadSlotImage = async (slot, file) => {
+  const uploadSlotImage = async (slot, files) => {
     if (!mstId) {
       setSaveErr('Save master first to upload images.');
       return;
     }
     const q = slotQuery(slot);
-    const fd = new FormData();
-    fd.append('file', file);
-    await qdApi.post(
-      `/MasterOrderForQDSheet/quality-department-inspection/${encodeURIComponent(poid)}/images`,
-      fd,
-      {
-        params: { qdInspectionMstId: mstId, photoName: q.photoName ?? file.name, imgHeader: q.imgHeader },
-        headers: { 'Content-Type': 'multipart/form-data' },
-      }
-    );
+    const fileArray = Array.isArray(files) ? files : [files];
+    
+    for (const file of fileArray) {
+      const fd = new FormData();
+      fd.append('file', file);
+      await qdApi.post(
+        `/MasterOrderForQDSheet/quality-department-inspection/${encodeURIComponent(poid)}/images`,
+        fd,
+        {
+          params: { qdInspectionMstId: mstId, photoName: q.photoName ?? file.name, imgHeader: q.imgHeader },
+          headers: { 'Content-Type': 'multipart/form-data' },
+        }
+      );
+    }
+    
     await loadSlotImages(slot, mstId);
-    setSaveMsg(`${slot} image uploaded.`);
+    setSaveMsg(`${slot} images uploaded.`);
   };
 
   const deleteImage = async (slot, digitalId) => {
@@ -1142,12 +1205,7 @@ export default function QualityDepartmentInspectionView() {
             </Tooltip>
           </ToggleButtonGroup>
 
-          {/* Status chips */}
-          {mstId != null ? (
-            <Chip label={`Record #${mstId}`} color="success" size="small" />
-          ) : (
-            <Chip label="New" size="small" variant="outlined" />
-          )}
+          {/* Status chips removed per request */}
         </Stack>
       </Stack>
 
@@ -1432,19 +1490,6 @@ export default function QualityDepartmentInspectionView() {
             <Grid container spacing={2} sx={{ mb: 2 }}>
               <Grid xs={12} sm={4}>
                 <TextField
-                  select
-                  label="PASS / FAIL"
-                  fullWidth
-                  size="small"
-                  value={form.passFail ?? '1'}
-                  onChange={(e) => setF('passFail', e.target.value)}
-                >
-                  <MenuItem value="1">PASS</MenuItem>
-                  <MenuItem value="0">FAIL</MenuItem>
-                </TextField>
-              </Grid>
-              <Grid xs={12} sm={4}>
-                <TextField
                   label="%"
                   fullWidth
                   size="small"
@@ -1521,7 +1566,38 @@ export default function QualityDepartmentInspectionView() {
             </TableContainer>
           </SectionCard>
 
-          <SectionCard title="Accessories Markings">
+          <SectionCard 
+            title="Accessories Markings"
+            headerRight={
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={ACCESSORY_UI_ROWS.every((row) => !!form.acc?.[row.accKey])}
+                    indeterminate={
+                      ACCESSORY_UI_ROWS.some((row) => !!form.acc?.[row.accKey]) &&
+                      !ACCESSORY_UI_ROWS.every((row) => !!form.acc?.[row.accKey])
+                    }
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setForm((prev) => {
+                        const newAcc = { ...prev.acc };
+                        ACCESSORY_UI_ROWS.forEach((row) => {
+                          newAcc[row.accKey] = checked;
+                        });
+                        return { ...prev, acc: newAcc };
+                      });
+                    }}
+                  />
+                }
+                label={
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase' }}>
+                    Select All
+                  </Typography>
+                }
+                sx={{ m: 0 }}
+              />
+            }
+          >
             <Grid container spacing={2}>
               {ACCESSORY_UI_ROWS.map((row) => {
                 const dropKey = row.dropKey ?? row.accKey;
@@ -1571,7 +1647,38 @@ export default function QualityDepartmentInspectionView() {
             </Grid>
           </SectionCard>
 
-          <SectionCard title="Packing">
+          <SectionCard 
+            title="Packing"
+            headerRight={
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={['cartonDimen', 'cartonMarking', 'cartonThickness', 'netWt', 'grossWt'].every((key) => !!form.pack?.[key])}
+                    indeterminate={
+                      ['cartonDimen', 'cartonMarking', 'cartonThickness', 'netWt', 'grossWt'].some((key) => !!form.pack?.[key]) &&
+                      !['cartonDimen', 'cartonMarking', 'cartonThickness', 'netWt', 'grossWt'].every((key) => !!form.pack?.[key])
+                    }
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setForm((prev) => {
+                        const newPack = { ...prev.pack };
+                        ['cartonDimen', 'cartonMarking', 'cartonThickness', 'netWt', 'grossWt'].forEach((key) => {
+                          newPack[key] = checked;
+                        });
+                        return { ...prev, pack: newPack };
+                      });
+                    }}
+                  />
+                }
+                label={
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase' }}>
+                    Select All
+                  </Typography>
+                }
+                sx={{ m: 0 }}
+              />
+            }
+          >
             <Grid container spacing={2}>
               <Grid xs={12} sm={6} md={4}>
                 <Stack direction="row" spacing={1} alignItems="center">

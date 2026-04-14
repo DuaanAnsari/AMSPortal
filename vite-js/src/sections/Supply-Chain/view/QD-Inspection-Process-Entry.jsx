@@ -732,18 +732,7 @@ export default function QDInspectionProcessEntryView() {
             ))}
           </ToggleButtonGroup>
 
-          {existingId ? (
-            <Chip
-              icon={<CheckCircleIcon fontSize="small" />}
-              label={`Record #${existingId}`}
-              color="success"
-              variant="outlined"
-              size="small"
-              sx={{ ml: 1 }}
-            />
-          ) : (
-            <Chip label="New" size="small" variant="outlined" sx={{ ml: 1 }} />
-          )}
+          {/* Record Status chips removed per request */}
         </Stack>
       </Stack>
 
