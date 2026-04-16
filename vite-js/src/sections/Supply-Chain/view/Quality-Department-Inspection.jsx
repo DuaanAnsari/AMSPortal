@@ -39,6 +39,8 @@ import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 import { paths } from 'src/routes/paths';
 import { qdApi } from 'src/sections/Supply-Chain/utils/qd-api';
 
+const LEGACY_WEB_BASE = (import.meta.env.VITE_LEGACY_WEB_BASE || '').trim();
+
 const OK_NOT_OK = ['OK', 'Not OK'];
 const YES_NO = ['Yes', 'No'];
 const CHECKED = ['Checked', 'Not Checked'];
@@ -270,6 +272,48 @@ function parseOptionalLong(v) {
 function parseAqlDecimal(v) {
   if (v == null || v === '' || v === 'Select') return null;
   return parseOptionalDecimal(v);
+}
+
+function calcSampleSize(offeredQty, reliability) {
+  const qty = Number(offeredQty) || 0;
+  const rel = String(reliability || '').trim().toUpperCase();
+  const aOrI = rel === 'A' || rel === 'I';
+  if (aOrI) {
+    if (qty > 0 && qty <= 150) return 8;
+    if (qty >= 151 && qty <= 280) return 13;
+    if (qty >= 281 && qty <= 500) return 20;
+    if (qty >= 501 && qty <= 1200) return 32;
+    if (qty >= 1201 && qty <= 3200) return 50;
+    if (qty >= 3201 && qty <= 10000) return 80;
+    if (qty >= 10001 && qty <= 35000) return 125;
+    if (qty > 35000) return 200;
+    return 0;
+  }
+  if (qty > 0 && qty <= 150) return 20;
+  if (qty >= 151 && qty <= 280) return 32;
+  if (qty >= 281 && qty <= 500) return 50;
+  if (qty >= 501 && qty <= 1200) return 80;
+  if (qty >= 1201 && qty <= 3200) return 125;
+  if (qty >= 3201 && qty <= 10000) return 200;
+  if (qty >= 10001 && qty <= 35000) return 315;
+  if (qty >= 35001 && qty <= 150000) return 500;
+  if (qty >= 150001 && qty <= 500000) return 800;
+  if (qty >= 500001) return 1250;
+  return 0;
+}
+
+function calcAllowedByAql(sampleSize, aqlValue) {
+  const aql = String(aqlValue || '').trim();
+  const table = {
+    '1.5': { 8: 0, 13: 0, 20: 0, 32: 1, 50: 2, 80: 3, 125: 5, 200: 7, 315: 10 },
+    '2.5': { 8: 0, 13: 0, 20: 1, 32: 2, 50: 3, 80: 5, 125: 7, 200: 10, 315: 14 },
+    '4.0': { 8: 0, 13: 1, 20: 2, 32: 3, 50: 5, 80: 7, 125: 10, 200: 14, 315: 21 },
+    '6.5': { 8: 1, 13: 2, 20: 3, 32: 5, 50: 7, 80: 10, 125: 14, 200: 21, 315: 21 },
+    '10': { 8: 2, 13: 3, 20: 5, 32: 7, 50: 10, 80: 14, 125: 21, 200: 21, 315: 21 },
+    '10.0': { 8: 2, 13: 3, 20: 5, 32: 7, 50: 10, 80: 14, 125: 21, 200: 21, 315: 21 },
+  };
+  if (!table[aql]) return 0;
+  return table[aql][sampleSize] ?? 0;
 }
 
 /**
@@ -990,6 +1034,50 @@ export default function QualityDepartmentInspectionView() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCalculate = () => {
+    const totals = discRows.reduce(
+      (acc, r) => ({
+        critical: acc.critical + (parseOptionalDecimal(r.critical) || 0),
+        major: acc.major + (parseOptionalDecimal(r.major) || 0),
+        minor: acc.minor + (parseOptionalDecimal(r.minor) || 0),
+      }),
+      { critical: 0, major: 0, minor: 0 }
+    );
+    const sampleSize = calcSampleSize(form.offeredQty, form.reliability);
+    const allowCrit = calcAllowedByAql(sampleSize, form.critAql);
+    const allowMaj = calcAllowedByAql(sampleSize, form.majAql);
+    const allowMin = calcAllowedByAql(sampleSize, form.minAql);
+    setForm((prev) => ({
+      ...prev,
+      criticalQty: String(totals.critical),
+      majQty: String(totals.major),
+      minQty: String(totals.minor),
+      sampleSize: String(sampleSize),
+      allowCrit: String(allowCrit),
+      allowMaj: String(allowMaj),
+      allowMin: String(allowMin),
+    }));
+  };
+
+  const openLegacySignPage = (pageName) => {
+    if (!LEGACY_WEB_BASE) {
+      setSaveErr('Configure VITE_LEGACY_WEB_BASE in .env to open signature pages.');
+      return;
+    }
+    if (!mstId || Number(mstId) <= 0) {
+      setSaveErr('Save inspection first, then open signature pages.');
+      return;
+    }
+    const base = LEGACY_WEB_BASE.replace(/\/+$/, '');
+    const url =
+      `${base}/BusinessProcess/${pageName}?` +
+      `lPOID=${encodeURIComponent(poid)}` +
+      `&InspType=${encodeURIComponent(inspType)}` +
+      `&GeneralID=1` +
+      `&lQDInspectionMstID=${encodeURIComponent(mstId)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const loadMeasurementTypes = async () => {
@@ -2058,7 +2146,7 @@ export default function QualityDepartmentInspectionView() {
               <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 2 }}>
                 <Grid container spacing={2} alignItems="flex-end">
                   <Grid xs={6} sm={2}>
-                    <Button variant="contained" color="success" disabled fullWidth sx={{ mb: 0.5 }}>
+                    <Button variant="contained" color="success" onClick={handleCalculate} fullWidth sx={{ mb: 0.5 }}>
                       Calculate
                     </Button>
                   </Grid>
@@ -2206,13 +2294,28 @@ export default function QualityDepartmentInspectionView() {
                   </Grid>
                   <Grid xs={12} md={4}>
                     <Stack spacing={1} alignItems={{ xs: 'stretch', md: 'flex-end' }}>
-                      <Button fullWidth variant="contained" color="secondary" disabled>
+                      <Button
+                        fullWidth
+                        variant="contained"
+                        color="secondary"
+                        onClick={() => openLegacySignPage('InspSignQA_New.aspx')}
+                      >
                         QA Sign
                       </Button>
-                      <Button fullWidth variant="contained" color="secondary" disabled>
+                      <Button
+                        fullWidth
+                        variant="contained"
+                        color="secondary"
+                        onClick={() => openLegacySignPage('InspSignVendor_New.aspx')}
+                      >
                         V Sign
                       </Button>
-                      <Button fullWidth variant="contained" color="secondary" disabled>
+                      <Button
+                        fullWidth
+                        variant="contained"
+                        color="secondary"
+                        onClick={() => openLegacySignPage('InspSignNew_NEW.aspx')}
+                      >
                         M Ctrl Sign
                       </Button>
                     </Stack>
