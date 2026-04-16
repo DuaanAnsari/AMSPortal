@@ -714,6 +714,25 @@ export default function QualityDepartmentInspectionView() {
   const bindDef = data?.bindGridDefaults ?? data?.BindGridDefaults;
   const mstId = data?.qdInspectionMstId ?? data?.QdInspectionMstId;
   const snap = data?.savedInspection ?? data?.SavedInspection;
+  const colorOptions = useMemo(() => {
+    const poLines = data?.poLines ?? data?.PoLines ?? [];
+    const raw = [];
+    poLines.forEach((r) => {
+      const color = field(r, 'colorway', 'Colorway');
+      if (!color) return;
+      String(color)
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean)
+        .forEach((x) => raw.push(x));
+    });
+
+    [field(h, 'colorway', 'Colorway'), field(snap, 'colorway', 'Colorway'), form?.color]
+      .filter((x) => x != null && String(x).trim() !== '')
+      .forEach((x) => raw.push(String(x).trim()));
+
+    return Array.from(new Set(raw));
+  }, [data, h, snap, form?.color]);
 
   const firstSystemId = aqlSystems[0]?.aqlSysytemId ?? aqlSystems[0]?.AQLSysytemId;
   const rangesForFirstSystem = useMemo(() => {
@@ -1364,7 +1383,24 @@ export default function QualityDepartmentInspectionView() {
               </Grid>
 
               <Grid xs={12} sm={6} md={4}>
-                <TextField label="Color" fullWidth size="small" value={form.color ?? ''} onChange={(e) => setF('color', e.target.value)} />
+                <TextField
+                  select
+                  label="Color"
+                  fullWidth
+                  size="small"
+                  value={form.color ?? ''}
+                  onChange={(e) => setF('color', e.target.value)}
+                  helperText={colorOptions.length > 1 ? 'Select PO color' : undefined}
+                >
+                  <MenuItem value="">
+                    <em>Select color</em>
+                  </MenuItem>
+                  {colorOptions.map((c) => (
+                    <MenuItem key={c} value={c}>
+                      {c}
+                    </MenuItem>
+                  ))}
+                </TextField>
               </Grid>
               <Grid xs={12} sm={6} md={4}>
                 <TextField label="Design" fullWidth size="small" value={form.design ?? ''} InputProps={{ readOnly: true }} />
