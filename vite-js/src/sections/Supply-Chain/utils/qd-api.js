@@ -18,3 +18,21 @@ qdApi.interceptors.request.use(
   },
   (error) => Promise.reject(error)
 );
+
+qdApi.interceptors.response.use(
+  (response) => response,
+  (error) => Promise.reject(error)
+);
+
+qdApi.getSignature = async (poid, mstId, signType) => {
+  const res = await qdApi.get(`/MasterOrderForQDSheet/quality-department-inspection/${poid}/signature`, {
+    params: { qdInspectionMstId: mstId, signType },
+  });
+  return res.data;
+};
+
+qdApi.saveSignature = async (poid, payload) => {
+  const res = await qdApi.post(`/MasterOrderForQDSheet/quality-department-inspection/${poid}/signature`, payload);
+  return res.data;
+};
+
