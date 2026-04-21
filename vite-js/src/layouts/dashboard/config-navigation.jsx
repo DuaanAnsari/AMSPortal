@@ -66,7 +66,7 @@ function getQaManagerNav(t) {
         { title: 'Inspection', path: paths.dashboard.masterOrderForQDSheet, icon: ICONS.analytics },
         {
           title: 'Inspection Report',
-          path: paths.dashboard.supplyChain.list,
+          path: paths.dashboard.qaInspectionView,
           icon: ICONS.invoice,
         },
         {
@@ -151,6 +151,7 @@ export function useNavData() {
               { title: t('Merchant Inquiry'), path: paths.dashboard.supplyChain.merchantInquiry },
               { title: t('Order Detail'), path: paths.dashboard.supplyChain.orderDetail },
               { title: t('Sampling Program'), path: paths.dashboard.supplyChain.samplingProgram },
+              { title: t('Inspection Report'), path: paths.dashboard.qaInspectionView },
               // { title: t('Edit Order'), path: paths.dashboard.supplyChain.editOrder },
 
               // { title: t('Purchase Order PDF'), path: paths.dashboard.supplyChain.purchaseOrderPDF },

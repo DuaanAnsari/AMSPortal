@@ -24,6 +24,7 @@ import Chip from '@mui/material/Chip';
 import Grid from '@mui/material/Unstable_Grid2';
 import Divider from '@mui/material/Divider';
 import TextField from '@mui/material/TextField';
+import Autocomplete from '@mui/material/Autocomplete';
 import MenuItem from '@mui/material/MenuItem';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
@@ -42,7 +43,10 @@ import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 import { paths } from 'src/routes/paths';
 import { qdApi } from 'src/sections/Supply-Chain/utils/qd-api';
 import { useSnackbar } from 'src/components/snackbar';
+import { pdf } from '@react-pdf/renderer';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import SignaturePopup from './SignaturePopup';
+import QAInspectionPDF from './QA-Inspection-PDF';
 
 const LEGACY_WEB_BASE = (import.meta.env.VITE_LEGACY_WEB_BASE || '').trim();
 
@@ -596,7 +600,15 @@ function ImageUploadBox({ title, images = [], onUpload, onDelete, getImageUrl })
               </Typography>
             </Box>
           ) : (
-            <Stack spacing={1} sx={{ width: '100%' }}>
+            <Stack 
+              spacing={1} 
+              sx={{ 
+                width: '100%', 
+                maxHeight: 185, 
+                overflowY: 'auto',
+                pr: 0.5 // right padding for scrollbar
+              }}
+            >
               {images.map((img) => {
                 const id = img.digitalID ?? img.DigitalID;
                 const name = img.photoName ?? img.PhotoName ?? `Image ${id}`;
@@ -753,6 +765,26 @@ export default function QualityDepartmentInspectionView() {
   const [specRows, setSpecRows] = useState([]);
   const [loadingSpecs, setLoadingSpecs] = useState(false);
   const [savingSpecs, setSavingSpecs] = useState(false);
+
+  // --- Auto-complete History for Discrepancies ---
+  const [descHistory, setDescHistory] = useState([]);
+  useEffect(() => {
+    qdApi.get('/MasterOrderForQDSheet/quality-department-inspection/discrepancies-history')
+      .then((res) => {
+        if (Array.isArray(res.data)) {
+          setDescHistory(res.data);
+        }
+      })
+      .catch((err) => console.log('Failed to load discrepancies history', err));
+  }, []);
+
+  const saveDiscHistory = (val) => {
+    if (!val || typeof val !== 'string' || val.trim() === '') return;
+    const v = val.trim();
+    setDescHistory((prev) => Array.from(new Set([...prev, v])));
+  };
+  // ------------------------------------------------
+
   const [imageMap, setImageMap] = useState({});
   /** QDInspectionDtl matrix (OVERALL CONCLUSION) — synced from API, posted on save. */
   const [dtlRows, setDtlRows] = useState([]);
@@ -810,8 +842,27 @@ export default function QualityDepartmentInspectionView() {
         const row = emptyInspectionDtlRow('ORDER QTY');
         for (let i = 0; i < INSPECTION_DTL_SIZE_SLOTS; i += 1) {
           const b = bd[i];
-          const q = b?.quantity ?? b?.Quantity;
-          row[`size${i + 1}`] = q == null || q === '' ? '' : String(q);
+          if (!b) continue;
+          const sizeName = (b.size ?? b.Size ?? '').trim();
+          let sum = 0;
+          let matched = false;
+          // default form color or snap color
+          const snapColors = (data?.savedInspection?.colorway ?? data?.SavedInspection?.Colorway ?? '')
+             .split(',').map(c => c.trim()).filter(Boolean);
+          const initialColors = snapColors.length > 0 ? snapColors : [];
+          
+          const poLines = data.poLines ?? data.PoLines ?? [];
+          poLines.forEach(pl => {
+            const plSize = (pl.size ?? pl.Size ?? '').trim();
+            const plColor = (pl.colorway ?? pl.Colorway ?? '').trim();
+            if (plSize === sizeName) {
+              if (initialColors.length === 0 || initialColors.includes(plColor)) {
+                sum += Number(pl.orderQty ?? pl.OrderQty ?? 0);
+                matched = true;
+              }
+            }
+          });
+          row[`size${i + 1}`] = matched && sum > 0 ? String(sum) : '';
         }
         row.sizeTotal = sumDtlRowSlots(row, INSPECTION_DTL_SIZE_SLOTS);
         finalRows.push(row);
@@ -847,6 +898,80 @@ export default function QualityDepartmentInspectionView() {
       }
     }
   }, [data]);
+
+  // Recalculate ORDER QTY dynamically when colors change
+  useEffect(() => {
+    if (!data || !form.color) return;
+    const bd = data.sizeQtyBreakdown ?? data.SizeQtyBreakdown ?? [];
+    const poLines = data.poLines ?? data.PoLines ?? [];
+    const selectedColors = Array.isArray(form.color) ? form.color : (form.color ? [form.color] : []);
+
+    setDtlRows(prevRows => {
+      const orderIdx = prevRows.findIndex(r => r.sizeType.trim().toUpperCase() === 'ORDER QTY');
+      if (orderIdx < 0) return prevRows;
+
+      const newRows = [...prevRows];
+      const orderR = { ...newRows[orderIdx] };
+      let changed = false;
+
+      for (let i = 0; i < INSPECTION_DTL_SIZE_SLOTS; i += 1) {
+        const b = bd[i];
+        if (!b) continue;
+        const sizeName = (b.size ?? b.Size ?? '').trim();
+        
+        let sum = 0;
+        let matched = false;
+        
+        poLines.forEach(pl => {
+          const plSize = (pl.size ?? pl.Size ?? '').trim();
+          const plColor = (pl.colorway ?? pl.Colorway ?? '').trim();
+          if (plSize === sizeName) {
+            if (selectedColors.length === 0 || selectedColors.includes(plColor)) {
+               sum += Number(pl.orderQty ?? pl.OrderQty ?? 0);
+               matched = true;
+            }
+          }
+        });
+        
+        const newVal = matched && sum > 0 ? String(sum) : '';
+        if (orderR[`size${i + 1}`] !== newVal) {
+          orderR[`size${i + 1}`] = newVal;
+          changed = true;
+        }
+      }
+      
+      if (!changed) return prevRows;
+
+      orderR.sizeTotal = sumDtlRowSlots(orderR, INSPECTION_DTL_SIZE_SLOTS);
+      newRows[orderIdx] = orderR;
+      
+      // Also update BALANCE
+      const offerR = newRows.find((r) => r.sizeType.trim().toUpperCase() === 'OFFER QTY');
+      const balanceIdx = newRows.findIndex((r) => r.sizeType.trim().toUpperCase() === 'QTY BALANCE/EXTRA');
+      if (offerR && balanceIdx >= 0) {
+        let hasOffer = false;
+        for (let i = 1; i <= INSPECTION_DTL_SIZE_SLOTS; i += 1) {
+          if (offerR[`size${i}`] !== '') {
+            hasOffer = true;
+            break;
+          }
+        }
+        if (hasOffer) {
+          const balanceR = { ...newRows[balanceIdx] };
+          for (let i = 1; i <= INSPECTION_DTL_SIZE_SLOTS; i += 1) {
+            const k = `size${i}`;
+            const ord = parseFloat(orderR[k] || 0);
+            const off = parseFloat(offerR[k] || 0);
+            balanceR[k] = Math.round(ord - off).toString();
+          }
+          balanceR.sizeTotal = sumDtlRowSlots(balanceR, INSPECTION_DTL_SIZE_SLOTS);
+          newRows[balanceIdx] = balanceR;
+        }
+      }
+
+      return newRows;
+    });
+  }, [form.color, data]);
 
   useEffect(() => {
     if (!poid || !inspType) {
@@ -943,7 +1068,7 @@ export default function QualityDepartmentInspectionView() {
     setForm({
       inspNo: inspNoDisplay,
       shipmentDate: field(h, 'shipmentdatee', 'shipmentdatee'),
-      poQtyLabel: `${field(h, 'poQty', 'pOQty', 'POQty')} / ${field(h, 'orderQty', 'OrderQty')}`,
+      poQtyLabel: `${field(h, 'poQty', 'pOQty', 'POQty')}`,
       aqlSystemId: snap?.aqlSysytemId ?? snap?.AQLSysytemId ?? firstSystemId ?? '',
       inspectionDate: toDateInput(snap?.mstInspectionDate ?? snap?.MstInspectionDate),
       offeredQty: numOrEmpty(snap?.shipmentQty ?? snap?.ShipmentQty ?? orderQty),
@@ -1205,6 +1330,35 @@ export default function QualityDepartmentInspectionView() {
     setData(res);
   };
 
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const handleViewPdf = async () => {
+    if (!mstId) {
+      enqueueSnackbar('Please save the inspection first to generate a PDF.', { variant: 'warning' });
+      return;
+    }
+    setPdfLoading(true);
+    try {
+      const { data } = await qdApi.get(`/QAInspection/inspection-report-data`, {
+        params: { qdMstId: mstId }
+      });
+      if (!data) {
+        enqueueSnackbar('No data found for this report', { variant: 'warning' });
+        return;
+      }
+
+      const blob = await pdf(<QAInspectionPDF data={data} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (e) {
+      console.error('PDF Generation failed', e);
+      const msg = e?.response?.data?.message || 'Failed to generate PDF';
+      enqueueSnackbar(msg, { variant: 'error' });
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   const handleSave = async (isMainSave) => {
     // Validation: Prevent save if any defect dropdown is "Not OK"
     const defectFields = {
@@ -1459,10 +1613,40 @@ export default function QualityDepartmentInspectionView() {
   };
 
   const uploadSlotImage = async (slot, files) => {
-    if (!mstId) {
-      enqueueSnackbar('Save master first to upload images.', { variant: 'error' });
+    let currentMstId = mstId;
+
+    if (!currentMstId) {
+      // Auto-save master first to get the ID
+      const defectFields = {
+        qtyD: 'Quantity', confD: 'Conformity', workD: 'Workmanship', packD: 'Packing',
+      };
+      const invalidFieldKey = Object.keys(defectFields).find((k) => form[k] === 'Not OK');
+      if (invalidFieldKey) {
+        enqueueSnackbar(`Cannot auto-save master because "${defectFields[invalidFieldKey]}" is set to "Not OK".`, { variant: 'error' });
+        return;
+      }
+      try {
+        const body = buildQdSavePayload(form, discRows, currentMstId, false, dtlRows);
+        const { data: res } = await qdApi.post(
+          `/MasterOrderForQDSheet/quality-department-inspection/${encodeURIComponent(poid)}`,
+          body,
+          { params: { inspType } }
+        );
+        currentMstId = res.qdInspectionMstId || res.QdInspectionMstId;
+        
+        // Trigger a background reload to sync the state without blocking
+        reloadInspection();
+      } catch (e) {
+        enqueueSnackbar('Failed to auto-save master to attach image.', { variant: 'error' });
+        return;
+      }
+    }
+
+    if (!currentMstId) {
+      enqueueSnackbar('Master ID could not be generated. Please save master first.', { variant: 'error' });
       return;
     }
+
     const q = slotQuery(slot);
     const fileArray = Array.isArray(files) ? files : [files];
 
@@ -1473,13 +1657,13 @@ export default function QualityDepartmentInspectionView() {
         `/MasterOrderForQDSheet/quality-department-inspection/${encodeURIComponent(poid)}/images`,
         fd,
         {
-          params: { qdInspectionMstId: mstId, photoName: q.photoName ?? file.name, imgHeader: q.imgHeader },
+          params: { qdInspectionMstId: currentMstId, photoName: q.photoName ?? file.name, imgHeader: q.imgHeader },
           headers: { 'Content-Type': 'multipart/form-data' },
         }
       );
     }
 
-    await loadSlotImages(slot, mstId);
+    await loadSlotImages(slot, currentMstId);
     enqueueSnackbar(`${slot} images uploaded.`, { variant: 'success' });
   };
 
@@ -1636,7 +1820,7 @@ export default function QualityDepartmentInspectionView() {
                   <TextField label="Shipment Date" fullWidth size="small" value={form.shipmentDate ?? ''} InputProps={{ readOnly: true }} />
                 </Grid>
                 <Grid xs={12} sm={6} md={3}>
-                  <TextField label="PO Qty / Actual Qty" fullWidth size="small" value={form.poQtyLabel ?? ''} InputProps={{ readOnly: true }} />
+                  <TextField label="PO Qty" fullWidth size="small" value={form.poQtyLabel ?? ''} InputProps={{ readOnly: true }} />
                 </Grid>
                 <Grid xs={12} sm={6} md={3}>
                   <TextField
@@ -1970,23 +2154,48 @@ export default function QualityDepartmentInspectionView() {
                             {Array.from({ length: numMatrixSlots }, (_, si) => {
                               const slot = si + 1;
                               const isReadOnly = ['SIZE', 'ORDER QTY', 'QTY BALANCE/EXTRA'].includes(st.toUpperCase());
+                              
+                              let rawVal = getDtlCell(row, slot);
+                              let displayVal = rawVal;
+                              let cellBgColor = 'transparent';
+                              let cellTextColor = isReadOnly ? 'text.primary' : 'inherit';
+
+                              if (st.toUpperCase() === 'QTY BALANCE/EXTRA' && rawVal !== '') {
+                                const num = parseFloat(rawVal);
+                                if (!isNaN(num)) {
+                                  if (num > 0) {
+                                    cellBgColor = 'error.main'; // Red fill
+                                    cellTextColor = 'error.contrastText'; // White text
+                                    displayVal = String(Math.abs(num));
+                                  } else if (num < 0) {
+                                    cellBgColor = 'success.main'; // Green fill
+                                    cellTextColor = 'success.contrastText'; // White text
+                                    displayVal = String(Math.abs(num));
+                                  } else {
+                                    displayVal = '0';
+                                  }
+                                }
+                              }
 
                               return (
                                 <TableCell key={slot} align="center" sx={{ py: 0.5, px: 0, borderRight: 1, borderColor: 'divider' }}>
                                   <TextField
                                     size="small"
                                     fullWidth
-                                    value={getDtlCell(row, slot)}
+                                    value={displayVal}
                                     onChange={(e) => updateDtlCell(rowIdx, slot, e.target.value)}
                                     inputProps={{ readOnly: isReadOnly }}
                                     InputProps={{
                                       sx: {
                                         fontSize: 11.5,
+                                        bgcolor: cellBgColor,
                                         '& .MuiInputBase-input': {
                                           py: 0.5,
                                           px: 0.5,
                                           textAlign: 'center',
-                                          ...(isReadOnly && { fontWeight: 700, color: 'text.primary' }),
+                                          ...(isReadOnly && { fontWeight: 700 }),
+                                          color: cellBgColor !== 'transparent' ? `${theme.palette.mode === 'light' ? '#fff' : '#fff'} !important` : cellTextColor,
+                                          WebkitTextFillColor: cellBgColor !== 'transparent' ? `#fff !important` : undefined,
                                         },
                                       },
                                     }}
@@ -1995,19 +2204,49 @@ export default function QualityDepartmentInspectionView() {
                               );
                             })}
                             <TableCell align="right" sx={{ py: 0.25, px: 0.25 }}>
-                              <TextField
-                                size="small"
-                                fullWidth
-                                value={row.sizeTotal ?? row.SizeTotal ?? ''}
-                                disabled
-                                InputProps={{
-                                  sx: {
-                                    fontSize: 11.5,
-                                    bgcolor: alpha(theme.palette.primary.main, 0.08),
-                                    '& .MuiInputBase-input': { py: 0.5, px: 0.5, textAlign: 'center', fontWeight: 800 },
-                                  },
-                                }}
-                              />
+                              {(() => {
+                                let totalVal = row.sizeTotal ?? row.SizeTotal ?? '';
+                                let totalBgColor = alpha(theme.palette.primary.main, 0.08);
+                                let totalTextColor = 'inherit';
+                                if (st.toUpperCase() === 'QTY BALANCE/EXTRA' && totalVal !== '') {
+                                  const tNum = parseFloat(totalVal);
+                                  if (!isNaN(tNum)) {
+                                    if (tNum > 0) {
+                                      totalBgColor = 'error.main';
+                                      totalTextColor = 'error.contrastText';
+                                      totalVal = String(Math.abs(tNum));
+                                    } else if (tNum < 0) {
+                                      totalBgColor = 'success.main';
+                                      totalTextColor = 'success.contrastText';
+                                      totalVal = String(Math.abs(tNum));
+                                    } else {
+                                      totalVal = '0';
+                                    }
+                                  }
+                                }
+                                return (
+                                  <TextField
+                                    size="small"
+                                    fullWidth
+                                    value={totalVal}
+                                    disabled
+                                    InputProps={{
+                                      sx: {
+                                        fontSize: 11.5,
+                                        bgcolor: totalBgColor,
+                                        '& .MuiInputBase-input': { 
+                                          py: 0.5, 
+                                          px: 0.5, 
+                                          textAlign: 'center', 
+                                          fontWeight: 800,
+                                          color: totalTextColor !== 'inherit' && st.toUpperCase() === 'QTY BALANCE/EXTRA' ? '#fff' : 'inherit',
+                                          WebkitTextFillColor: totalTextColor !== 'inherit' && st.toUpperCase() === 'QTY BALANCE/EXTRA' ? `#fff !important` : undefined,
+                                        },
+                                      },
+                                    }}
+                                  />
+                                );
+                              })()}
                             </TableCell>
                           </TableRow>
                         );
@@ -2019,36 +2258,29 @@ export default function QualityDepartmentInspectionView() {
             </SectionCard>
 
             <SectionCard
-              title="Accessories Markings"
-              headerRight={
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={ACCESSORY_UI_ROWS.every((row) => !!form.acc?.[row.accKey])}
-                      indeterminate={
-                        ACCESSORY_UI_ROWS.some((row) => !!form.acc?.[row.accKey]) &&
-                        !ACCESSORY_UI_ROWS.every((row) => !!form.acc?.[row.accKey])
-                      }
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setForm((prev) => {
-                          const newAcc = { ...prev.acc };
-                          ACCESSORY_UI_ROWS.forEach((row) => {
-                            newAcc[row.accKey] = checked;
-                          });
-                          return { ...prev, acc: newAcc };
+              title={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  Accessories Markings
+                  <Checkbox
+                    size="small"
+                    sx={{ p: 0 }} // minimize padding
+                    checked={ACCESSORY_UI_ROWS.every((row) => !!form.acc?.[row.accKey])}
+                    indeterminate={
+                      ACCESSORY_UI_ROWS.some((row) => !!form.acc?.[row.accKey]) &&
+                      !ACCESSORY_UI_ROWS.every((row) => !!form.acc?.[row.accKey])
+                    }
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setForm((prev) => {
+                        const newAcc = { ...prev.acc };
+                        ACCESSORY_UI_ROWS.forEach((row) => {
+                          newAcc[row.accKey] = checked;
                         });
-                      }}
-                    />
-                  }
-                  label={
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' }}>
-                      Select All
-                    </Typography>
-                  }
-                  sx={{ m: 0 }}
-                />
+                        return { ...prev, acc: newAcc };
+                      });
+                    }}
+                  />
+                </Box>
               }
             >
               <Grid container spacing={2}>
@@ -2115,36 +2347,29 @@ export default function QualityDepartmentInspectionView() {
             </SectionCard>
 
             <SectionCard
-              title="Packing"
-              headerRight={
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={['cartonDimen', 'cartonMarking', 'cartonThickness', 'netWt', 'grossWt'].every((key) => !!form.pack?.[key])}
-                      indeterminate={
-                        ['cartonDimen', 'cartonMarking', 'cartonThickness', 'netWt', 'grossWt'].some((key) => !!form.pack?.[key]) &&
-                        !['cartonDimen', 'cartonMarking', 'cartonThickness', 'netWt', 'grossWt'].every((key) => !!form.pack?.[key])
-                      }
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setForm((prev) => {
-                          const newPack = { ...prev.pack };
-                          ['cartonDimen', 'cartonMarking', 'cartonThickness', 'netWt', 'grossWt'].forEach((key) => {
-                            newPack[key] = checked;
-                          });
-                          return { ...prev, pack: newPack };
+              title={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  Packing
+                  <Checkbox
+                    size="small"
+                    sx={{ p: 0 }} // minimize padding so it aligns precisely
+                    checked={['cartonDimen', 'cartonMarking', 'cartonThickness', 'netWt', 'grossWt'].every((key) => !!form.pack?.[key])}
+                    indeterminate={
+                      ['cartonDimen', 'cartonMarking', 'cartonThickness', 'netWt', 'grossWt'].some((key) => !!form.pack?.[key]) &&
+                      !['cartonDimen', 'cartonMarking', 'cartonThickness', 'netWt', 'grossWt'].every((key) => !!form.pack?.[key])
+                    }
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setForm((prev) => {
+                        const newPack = { ...prev.pack };
+                        ['cartonDimen', 'cartonMarking', 'cartonThickness', 'netWt', 'grossWt'].forEach((key) => {
+                          newPack[key] = checked;
                         });
-                      }}
-                    />
-                  }
-                  label={
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' }}>
-                      Select All
-                    </Typography>
-                  }
-                  sx={{ m: 0 }}
-                />
+                        return { ...prev, pack: newPack };
+                      });
+                    }}
+                  />
+                </Box>
               }
             >
               <Grid container spacing={2}>
@@ -2500,12 +2725,22 @@ export default function QualityDepartmentInspectionView() {
                       {discRows.map((r) => (
                         <TableRow key={r.id}>
                           <TableCell>
-                            <TextField
-                              size="small"
-                              fullWidth
+                            <Autocomplete
+                              freeSolo
+                              options={descHistory}
                               value={r.discrepancy}
-                              onChange={(e) => setDisc(r.id, 'discrepancy', e.target.value)}
-                              placeholder="—"
+                              onInputChange={(e, newInputValue) => {
+                                setDisc(r.id, 'discrepancy', newInputValue || '');
+                              }}
+                              onBlur={() => saveDiscHistory(r.discrepancy)}
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  size="small"
+                                  fullWidth
+                                  placeholder="—"
+                                />
+                              )}
                             />
                           </TableCell>
                           <TableCell>
@@ -2804,6 +3039,16 @@ export default function QualityDepartmentInspectionView() {
             </Alert>
 
             <Stack direction="row" spacing={2} flexWrap="wrap">
+              <Button
+                variant="outlined"
+                color="info"
+                startIcon={pdfLoading ? <CircularProgress size={20} color="inherit" /> : <PictureAsPdfIcon />}
+                disabled={pdfLoading || !mstId}
+                onClick={handleViewPdf}
+              >
+                Print PDF
+              </Button>
+
               <Button variant="contained" disabled={saving} onClick={() => handleSave(true)}>
                 {saving ? 'Saving…' : 'Save'}
               </Button>

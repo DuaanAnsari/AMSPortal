@@ -94,6 +94,9 @@ const QDPurchaseOrderPreviewPage = lazy(
 const QDInspectionProcessEntryPage = lazy(
   () => import('src/sections/Supply-Chain/view/QD-Inspection-Process-Entry')
 );
+const QAInspectionViewPage = lazy(
+  () => import('src/sections/Supply-Chain/view/QA-Inspection-View')
+);
 
 // Power_TOOL
 const ProcessBoardPage = lazy(() => import('src/sections/power-tool/view/Process-board'));
@@ -197,6 +200,7 @@ export const dashboardRoutes = [
       { path: 'qd-inspection', element: <QualityDepartmentInspectionPage /> },
       { path: 'qd-po-preview', element: <QDPurchaseOrderPreviewPage /> },
       { path: 'qd-process-entry', element: <QDInspectionProcessEntryPage /> },
+      { path: 'qa-inspection-view', element: <QAInspectionViewPage /> },
       { path: 'customers', element: <OverviewEcommercePage /> },
       { path: 'supplier', element: <OverviewAnalyticsPage /> },
       { path: 'banking', element: <OverviewBankingPage /> },

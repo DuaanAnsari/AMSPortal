@@ -104,6 +104,7 @@ export const paths = {
     qdInspection: `${ROOTS.DASHBOARD}/qd-inspection`,
     qdPoPreview: `${ROOTS.DASHBOARD}/qd-po-preview`,
     qdProcessEntry: `${ROOTS.DASHBOARD}/qd-process-entry`,
+    qaInspectionView: `${ROOTS.DASHBOARD}/qa-inspection-view`,
     mail: `${ROOTS.DASHBOARD}/mail`,
     chat: `${ROOTS.DASHBOARD}/chat`,
     blank: `${ROOTS.DASHBOARD}/blank`,
