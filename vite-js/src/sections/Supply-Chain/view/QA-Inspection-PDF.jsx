@@ -61,8 +61,8 @@ const styles = StyleSheet.create({
   // ─── header ───────────────────────────────────────────────────────────────
   headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   logoArea: { width: 120, alignItems: 'center' },
-  logoText1: { fontSize: 32, fontFamily: 'Helvetica-Bold', color: '#101859', letterSpacing: -1 },
-  logoText2: { fontSize: 6, fontFamily: 'Helvetica-Bold', marginTop: -4 },
+  logoImg: { width: 110, height: 40, objectFit: 'contain', marginBottom: 4 },
+  logoText2: { fontSize: 6, fontFamily: 'Helvetica-Bold' },
   headerCenter: { flex: 1, alignItems: 'center' },
   companyTitle: { fontSize: 13, fontFamily: 'Helvetica-Bold', marginBottom: 4 },
   companySub: { fontSize: 6, marginBottom: 2 },
@@ -258,8 +258,7 @@ export default function QAInspectionPDF({ data }) {
       <Page size="A4" style={styles.page}>
         <View style={styles.headerRow}>
           <View style={styles.logoArea}>
-            {/* Minimal SVG logic to mimic AMS logo shapes if image unavailable, using just styled Text for now */}
-            <Text style={styles.logoText1}><Text style={{color:'#EC7225'}}>A</Text><Text style={{color:'#101859'}}>MS</Text></Text>
+            <Image src="/logo/AMSlogo.png" style={styles.logoImg} />
             <Text style={[styles.logoText2, { color: '#404040' }]}>APPAREL MERCHANDISING SERVICES</Text>
           </View>
           <View style={styles.headerCenter}>
