@@ -6,6 +6,8 @@ import {
   View,
   StyleSheet,
   Image,
+  Svg,
+  Path
 } from '@react-pdf/renderer';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -108,7 +110,14 @@ const styles = StyleSheet.create({
 const CheckBoxLabel = ({ label, checked }) => (
   <View style={styles.checkboxItem}>
     <View style={styles.box}>
-      {checked && <Text style={styles.checkMark}>✓</Text>}
+      {checked && (
+        <Svg viewBox="0 0 24 24" style={{ width: 7, height: 7, marginTop: 0.5 }}>
+          <Path
+            d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"
+            fill="black"
+          />
+        </Svg>
+      )}
     </View>
     <Text style={{ fontSize: 7 }}>{label}</Text>
   </View>
