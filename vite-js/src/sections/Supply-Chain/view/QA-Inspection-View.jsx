@@ -134,57 +134,125 @@ export default function QAInspectionView() {
 
   const columns = useMemo(
     () => [
-      { field: 'qaName', headerName: 'QA Name', flex: 1, minWidth: 150 },
-      { field: 'mstInspectionDate', headerName: 'Inspection Date', flex: 1, minWidth: 130 },
-      { field: 'inspNo', headerName: 'Insp No.', flex: 1.5, minWidth: 200 },
-      { field: 'aqlRange', headerName: 'AQL Range', flex: 1, minWidth: 150 },
+      {
+        field: 'inspNo',
+        headerName: 'Insp. No.',
+        flex: 1.4,
+        minWidth: 150,
+      },
+      {
+        field: 'mstInspectionDate',
+        headerName: 'Date',
+        flex: 0.9,
+        minWidth: 100,
+        valueFormatter: (value) => {
+          if (!value) return '';
+          try { return new Date(value).toLocaleDateString('en-GB'); }
+          catch { return value; }
+        },
+      },
+      {
+        field: 'inspectionType',
+        headerName: 'Type',
+        width: 80,
+      },
+      {
+        field: 'poNo',
+        headerName: 'PO No.',
+        flex: 1,
+        minWidth: 110,
+      },
+      {
+        field: 'customerName',
+        headerName: 'Customer',
+        flex: 1.2,
+        minWidth: 130,
+      },
+      {
+        field: 'venderName',
+        headerName: 'Vendor / Supplier',
+        flex: 1.4,
+        minWidth: 140,
+      },
+      {
+        field: 'qaName',
+        headerName: 'QA Name',
+        flex: 1,
+        minWidth: 120,
+      },
+      {
+        field: 'passFail',
+        headerName: 'Result',
+        width: 75,
+        align: 'center',
+        headerAlign: 'center',
+        renderCell: (params) => {
+          const v = params.value;
+          if (v === true || v === 1)
+            return (
+              <Box sx={{ color: 'success.dark', fontWeight: 700, fontSize: 12 }}>PASS</Box>
+            );
+          if (v === false || v === 0)
+            return (
+              <Box sx={{ color: 'error.main', fontWeight: 700, fontSize: 12 }}>FAIL</Box>
+            );
+          return <Box sx={{ color: 'text.disabled', fontSize: 11 }}>—</Box>;
+        },
+      },
       {
         field: 'pdf',
         headerName: 'PDF',
-        width: 100,
+        width: 64,
         sortable: false,
         filterable: false,
         align: 'center',
         headerAlign: 'center',
         renderCell: (params) => (
-          <IconButton
-            size="small"
-            color="error"
-            disabled={pdfLoadingId === params.row.qdInspectionMstID}
-            onClick={() => handleViewPdf(params.row.qdInspectionMstID)}
-          >
-            {pdfLoadingId === params.row.qdInspectionMstID ? (
-              <CircularProgress size={20} color="inherit" />
-            ) : (
-              <PictureAsPdfIcon fontSize="small" />
-            )}
-          </IconButton>
+          <Tooltip title="Download PDF">
+            <span>
+              <IconButton
+                size="small"
+                color="error"
+                disabled={pdfLoadingId === params.row.qdInspectionMstID}
+                onClick={() => handleViewPdf(params.row.qdInspectionMstID)}
+              >
+                {pdfLoadingId === params.row.qdInspectionMstID ? (
+                  <CircularProgress size={18} color="inherit" />
+                ) : (
+                  <PictureAsPdfIcon fontSize="small" />
+                )}
+              </IconButton>
+            </span>
+          </Tooltip>
         ),
       },
       {
         field: 'edit',
         headerName: 'Edit',
-        width: 100,
+        width: 64,
         sortable: false,
         filterable: false,
         align: 'center',
         headerAlign: 'center',
         renderCell: (params) => (
-          <Button
-            size="small"
-            onClick={() =>
-              navigate(
-                `${paths.dashboard.qdInspection}?poid=${params.row.poid}&inspType=${params.row.inspectionType}&qdInspectionMstId=${params.row.qdInspectionMstID}`
-              )
-            }
-            sx={{ textTransform: 'none', color: 'text.secondary', fontWeight: 400 }}
-          >
-            Edit
-          </Button>
+          <Tooltip title="Edit Inspection">
+            <IconButton
+              size="small"
+              color="primary"
+              onClick={() =>
+                navigate(
+                  `${paths.dashboard.qdInspection}?poid=${params.row.poid}&inspType=${params.row.inspectionType}&qdInspectionMstId=${params.row.qdInspectionMstID}`
+                )
+              }
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         ),
       },
     ],
-    [navigate]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [navigate, pdfLoadingId]
   );
 
   return (
