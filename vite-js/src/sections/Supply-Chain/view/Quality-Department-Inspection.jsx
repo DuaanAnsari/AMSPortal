@@ -272,7 +272,17 @@ function field(obj, ...keys) {
 
 function toDateInput(v) {
   if (!v) return '';
-  const d = new Date(v);
+  let d = new Date(v);
+  if (Number.isNaN(d.getTime())) {
+    // Try parsing DD/MM/YYYY if standard parsing fails
+    if (typeof v === 'string' && v.includes('/')) {
+      const parts = v.split(' ')[0].split('/');
+      if (parts.length === 3) {
+        const [day, month, year] = parts;
+        d = new Date(`${year}-${month}-${day}`);
+      }
+    }
+  }
   if (Number.isNaN(d.getTime())) return '';
   return d.toISOString().slice(0, 10);
 }
@@ -327,6 +337,19 @@ function calcSampleSize(offeredQty, reliability) {
   return 0;
 }
 
+const PACKING_UI_ROWS = [
+  { key: 'cartonDimen', label: 'Carton Dimension', type: 'text', textKey: 'cartonDimen' },
+  { key: 'cartonMarking', label: 'Carton Marking', type: 'select', options: CARTON_MARKING_SIDES, dropKey: 'cartonMarking' },
+  { key: 'cartonThickness', label: 'Carton Thickness', type: 'select', options: CARTON_THICKNESS_PLY, dropKey: 'cartonThickness' },
+  { key: 'netWt', label: 'Net WT', type: 'text', textKey: 'netWt' },
+  { key: 'grossWt', label: 'Gross WT', type: 'text', textKey: 'grossWt' },
+  { key: 'noOfPcsCarton', label: 'No.Of PCS/Carton', type: 'text', textKey: 'noOfPcsCarton' },
+  { key: 'noOfPcsInnerPack', label: 'No.Of PCS/InnerPack', type: 'text', textKey: 'noOfPcsInnerPack' },
+  { key: 'polyBag', label: 'Poly Bag/Blister Bag', type: 'select', options: YES_NO, dropKey: 'polyBag' },
+  { key: 'ups', label: 'U.P.C', type: 'text', textKey: 'ups' },
+  { key: 'otherM', label: '', type: 'double-text', textKey1: 'other1M', textKey2: 'other2M' },
+];
+
 function calcAllowedByAql(sampleSize, aqlValue) {
   const aql = String(aqlValue || '').trim();
   const table = {
@@ -363,6 +386,8 @@ const ACCESSORY_UI_ROWS = [
   { accKey: 'foldMethod', label: 'Fold Method', options: FOLD_METHOD, dropKey: 'foldMethodDdl' },
   { accKey: 'button', label: 'Buttons', options: YES_NO },
   { accKey: 'interlining', label: 'Inner Lining', textMode: true, textKey: 'interlining' },
+  { accKey: 'other1', label: '', textMode: true, textKey: 'other1', noCheckbox: true },
+  { accKey: 'other2', label: '', textMode: true, textKey: 'other2', noCheckbox: true },
   { accKey: 'additionalLabel', label: 'Additional Label', options: YES_NO },
 ];
 
@@ -454,18 +479,15 @@ function buildQdSavePayload(form, discRows, mstId, isMainSave, inspectionDtlRows
     grossWT: !!pack.grossWt,
     hanger: !!acc.hanger,
     hangerSticker: false,
-    noOfPcsInnerPack: false,
-    noOfPcsCarton: false,
+    ups: !!pack.ups,
+    noOfPcsInnerPack: !!pack.noOfPcsInnerPack,
+    noOfPcsCarton: !!pack.noOfPcsCarton,
     foldMethod: !!acc.foldMethod,
-    polyBag: false,
+    polyBag: !!pack.polyBag,
     cartonSticker: false,
-    ups: false,
-    otherBit: false,
-    otherCom1: null,
-    otherCom2: null,
-    otherBitM: false,
-    otherCom1M: null,
-    otherCom2M: null,
+    otherBit: !!acc.other1,
+    otherCom1: accText.other1 || null,
+    otherCom2: accText.other2 || null,
     additionalLbl: !!acc.additionalLabel,
     additionalLblComm: accDrop.additionalLabel || null,
     dyeLotCom: accDrop.dyeLot || null,
@@ -485,15 +507,17 @@ function buildQdSavePayload(form, discRows, mstId, isMainSave, inspectionDtlRows
     crtnStickerCom: null,
     careLblCom: accText.careLabel || null,
     hangerStickerSizerCom: null,
-    uPCCom: null,
-    careLblPlacementCom: accDrop.careLabelPlacement || null,
-    noOfPcsInnerPackCom: null,
+    noOfPcsInnerPackCom: packText.noOfPcsInnerPack || null,
     contentLblCom: accText.contentLabel || null,
-    noOfPcsCrtnCom: null,
+    noOfPcsCrtnCom: packText.noOfPcsCarton || null,
     contentLblPlacementCom: accDrop.contentLabelPlacement || null,
     foldMethodCom: accDrop.foldMethodDdl || null,
     buttonsCom: accDrop.button || null,
-    polyBagBlisterBagCom: null,
+    polyBagBlisterBagCom: packDrop.polyBag || null,
+    uPCCom: packText.ups || null,
+    otherBitM: !!pack.otherM,
+    otherCom1M: packText.other1M || null,
+    otherCom2M: packText.other2M || null,
     interLiningCom: accText.interlining || null,
     cartonMarkingCom: packDrop.cartonMarking || null,
     discrepancies: discRows.map((r) => ({
@@ -565,11 +589,11 @@ function ImageUploadBox({ title, images = [], onUpload, onDelete, getImageUrl })
 
   return (
     <>
-      <Paper 
-        variant="outlined" 
-        sx={{ 
-          p: 2, 
-          height: '100%', 
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 2,
+          height: '100%',
           borderRadius: 1.5,
           borderColor: 'divider',
           bgcolor: 'background.paper',
@@ -600,11 +624,11 @@ function ImageUploadBox({ title, images = [], onUpload, onDelete, getImageUrl })
               </Typography>
             </Box>
           ) : (
-            <Stack 
-              spacing={1} 
-              sx={{ 
-                width: '100%', 
-                maxHeight: 185, 
+            <Stack
+              spacing={1}
+              sx={{
+                width: '100%',
+                maxHeight: 185,
                 overflowY: 'auto',
                 pr: 0.5 // right padding for scrollbar
               }}
@@ -613,11 +637,11 @@ function ImageUploadBox({ title, images = [], onUpload, onDelete, getImageUrl })
                 const id = img.digitalID ?? img.DigitalID;
                 const name = img.photoName ?? img.PhotoName ?? `Image ${id}`;
                 return (
-                  <Stack 
-                    key={id} 
-                    direction="row" 
-                    spacing={1} 
-                    justifyContent="space-between" 
+                  <Stack
+                    key={id}
+                    direction="row"
+                    spacing={1}
+                    justifyContent="space-between"
                     alignItems="center"
                     sx={{
                       p: 0.5,
@@ -628,11 +652,11 @@ function ImageUploadBox({ title, images = [], onUpload, onDelete, getImageUrl })
                       borderColor: 'divider'
                     }}
                   >
-                    <Button 
-                      size="small" 
+                    <Button
+                      size="small"
                       onClick={() => handlePreview(id, name)}
-                      sx={{ 
-                        textTransform: 'none', 
+                      sx={{
+                        textTransform: 'none',
                         fontSize: 12,
                         color: 'primary.main',
                         justifyContent: 'flex-start',
@@ -653,10 +677,10 @@ function ImageUploadBox({ title, images = [], onUpload, onDelete, getImageUrl })
           )}
         </Box>
         <Stack direction="row" justifyContent="flex-end">
-          <Button 
-            size="small" 
-            variant="soft" 
-            component="label" 
+          <Button
+            size="small"
+            variant="soft"
+            component="label"
             startIcon={<UploadIcon />}
             sx={{ borderRadius: 1 }}
           >
@@ -772,10 +796,13 @@ export default function QualityDepartmentInspectionView() {
     qdApi.get('/MasterOrderForQDSheet/quality-department-inspection/discrepancies-history')
       .then((res) => {
         if (Array.isArray(res.data)) {
+          console.log('Discrepancies history loaded:', res.data.length, 'items');
           setDescHistory(res.data);
         }
       })
-      .catch((err) => console.log('Failed to load discrepancies history', err));
+      .catch((err) => {
+        console.error('Failed to load discrepancies history:', err);
+      });
   }, []);
 
   const saveDiscHistory = (val) => {
@@ -848,9 +875,9 @@ export default function QualityDepartmentInspectionView() {
           let matched = false;
           // default form color or snap color
           const snapColors = (data?.savedInspection?.colorway ?? data?.SavedInspection?.Colorway ?? '')
-             .split(',').map(c => c.trim()).filter(Boolean);
+            .split(',').map(c => c.trim()).filter(Boolean);
           const initialColors = snapColors.length > 0 ? snapColors : [];
-          
+
           const poLines = data.poLines ?? data.PoLines ?? [];
           poLines.forEach(pl => {
             const plSize = (pl.size ?? pl.Size ?? '').trim();
@@ -918,33 +945,33 @@ export default function QualityDepartmentInspectionView() {
         const b = bd[i];
         if (!b) continue;
         const sizeName = (b.size ?? b.Size ?? '').trim();
-        
+
         let sum = 0;
         let matched = false;
-        
+
         poLines.forEach(pl => {
           const plSize = (pl.size ?? pl.Size ?? '').trim();
           const plColor = (pl.colorway ?? pl.Colorway ?? '').trim();
           if (plSize === sizeName) {
             if (selectedColors.length === 0 || selectedColors.includes(plColor)) {
-               sum += Number(pl.orderQty ?? pl.OrderQty ?? 0);
-               matched = true;
+              sum += Number(pl.orderQty ?? pl.OrderQty ?? 0);
+              matched = true;
             }
           }
         });
-        
+
         const newVal = matched && sum > 0 ? String(sum) : '';
         if (orderR[`size${i + 1}`] !== newVal) {
           orderR[`size${i + 1}`] = newVal;
           changed = true;
         }
       }
-      
+
       if (!changed) return prevRows;
 
       orderR.sizeTotal = sumDtlRowSlots(orderR, INSPECTION_DTL_SIZE_SLOTS);
       newRows[orderIdx] = orderR;
-      
+
       // Also update BALANCE
       const offerR = newRows.find((r) => r.sizeType.trim().toUpperCase() === 'OFFER QTY');
       const balanceIdx = newRows.findIndex((r) => r.sizeType.trim().toUpperCase() === 'QTY BALANCE/EXTRA');
@@ -1140,6 +1167,8 @@ export default function QualityDepartmentInspectionView() {
         hanger: !!(snap?.hanger ?? snap?.Hanger),
         foldMethod: !!(snap?.foldMethod ?? snap?.FoldMethod),
         additionalLabel: !!(snap?.additionalLbl ?? snap?.AdditionalLbl),
+        other1: !!(snap?.otherBit ?? snap?.OtherBit),
+        other2: !!(snap?.otherBitM ?? snap?.OtherBitM),
       },
       accDrop: {
         ...DEFAULT_ACC_DROP,
@@ -1164,6 +1193,8 @@ export default function QualityDepartmentInspectionView() {
         careLabel: field(snap, 'careLblCom', 'CareLblCom'),
         contentLabel: field(snap, 'contentLblCom', 'ContentLblCom'),
         interlining: field(snap, 'interLiningCom', 'InterLiningCom'),
+        other1: field(snap, 'otherCom1', 'OtherCom1'),
+        other2: field(snap, 'otherCom2', 'OtherCom2'),
       },
       pack: {
         cartonDimen: !!(snap?.cartonDimen ?? snap?.CartonDimen),
@@ -1171,15 +1202,26 @@ export default function QualityDepartmentInspectionView() {
         cartonThickness: !!(snap?.cartonThickness ?? snap?.CartonThickness),
         netWt: !!(snap?.netWT ?? snap?.NetWT),
         grossWt: !!(snap?.grossWT ?? snap?.GrossWT),
+        noOfPcsCarton: !!(snap?.noOfPcsCarton ?? snap?.NoOfPcsCarton),
+        noOfPcsInnerPack: !!(snap?.noOfPcsInnerPack ?? snap?.NoOfPcsInnerPack),
+        polyBag: !!(snap?.polyBag ?? snap?.PolyBag),
+        ups: !!(snap?.ups ?? snap?.UPS),
+        otherM: !!(snap?.otherBitM ?? snap?.OtherBitM),
       },
       packDrop: {
-        cartonMarking: field(snap, 'cartonMarkingCom', 'CartonMarkingCom') || '1 Side',
-        cartonThickness: field(snap, 'crtnThicknessCom', 'CrtnThicknessCom') || '03 ply',
+        cartonMarking: field(snap, 'cartonMarkingCom', 'CartonMarkingCom') || CARTON_MARKING_SIDES[0],
+        cartonThickness: field(snap, 'crtnThicknessCom', 'CrtnThicknessCom') || CARTON_THICKNESS_PLY[0],
+        polyBag: field(snap, 'polyBagBlisterBagCom', 'PolyBagBlisterBagCom') || YES_NO[0],
       },
       packText: {
         cartonDimen: field(snap, 'cartonDimmCom', 'CartonDimmCom'),
         netWt: field(snap, 'netWTCom', 'NetWTCom'),
         grossWt: field(snap, 'grossWTCom', 'GrossWTCom'),
+        noOfPcsCarton: field(snap, 'noOfPcsCrtnCom', 'NoOfPcsCrtnCom'),
+        noOfPcsInnerPack: field(snap, 'noOfPcsInnerPackCom', 'NoOfPcsInnerPackCom'),
+        ups: field(snap, 'uPCCom', 'UPCCom'),
+        other1M: field(snap, 'otherCom1M', 'OtherCom1M'),
+        other2M: field(snap, 'otherCom2M', 'OtherCom2M'),
       },
     });
   }, [data, h, snap, bindDef, firstSystemId, rangesForFirstSystem, inspType]);
@@ -1204,7 +1246,7 @@ export default function QualityDepartmentInspectionView() {
 
   useEffect(() => {
     if (!data) return;
-    
+
     // 1. Use embedded measurement types if available
     if (data.measurementTypes || data.MeasurementTypes) {
       setMeasurementTypes(data.measurementTypes ?? data.MeasurementTypes ?? []);
@@ -1633,7 +1675,7 @@ export default function QualityDepartmentInspectionView() {
           { params: { inspType } }
         );
         currentMstId = res.qdInspectionMstId || res.QdInspectionMstId;
-        
+
         // Trigger a background reload to sync the state without blocking
         reloadInspection();
       } catch (e) {
@@ -2055,6 +2097,15 @@ export default function QualityDepartmentInspectionView() {
                 </Grid>
                 <Grid xs={12} sm={6} md={3}>
                   <TextField
+                    placeholder="Marking remarks"
+                    fullWidth
+                    size="small"
+                    value={form.markDR ?? ''}
+                    onChange={(e) => setF('markDR', e.target.value)}
+                  />
+                </Grid>
+                <Grid xs={12} sm={6} md={3}>
+                  <TextField
                     select
                     label="Measurement"
                     fullWidth
@@ -2068,15 +2119,6 @@ export default function QualityDepartmentInspectionView() {
                       </MenuItem>
                     ))}
                   </TextField>
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField
-                    placeholder="Marking remarks"
-                    fullWidth
-                    size="small"
-                    value={form.markDR ?? ''}
-                    onChange={(e) => setF('markDR', e.target.value)}
-                  />
                 </Grid>
                 <Grid xs={12} sm={6} md={3}>
                   <TextField
@@ -2154,7 +2196,7 @@ export default function QualityDepartmentInspectionView() {
                             {Array.from({ length: numMatrixSlots }, (_, si) => {
                               const slot = si + 1;
                               const isReadOnly = ['SIZE', 'ORDER QTY', 'QTY BALANCE/EXTRA'].includes(st.toUpperCase());
-                              
+
                               let rawVal = getDtlCell(row, slot);
                               let displayVal = rawVal;
                               let cellBgColor = 'transparent';
@@ -2234,10 +2276,10 @@ export default function QualityDepartmentInspectionView() {
                                       sx: {
                                         fontSize: 11.5,
                                         bgcolor: totalBgColor,
-                                        '& .MuiInputBase-input': { 
-                                          py: 0.5, 
-                                          px: 0.5, 
-                                          textAlign: 'center', 
+                                        '& .MuiInputBase-input': {
+                                          py: 0.5,
+                                          px: 0.5,
+                                          textAlign: 'center',
                                           fontWeight: 800,
                                           color: totalTextColor !== 'inherit' && st.toUpperCase() === 'QTY BALANCE/EXTRA' ? '#fff' : 'inherit',
                                           WebkitTextFillColor: totalTextColor !== 'inherit' && st.toUpperCase() === 'QTY BALANCE/EXTRA' ? `#fff !important` : undefined,
@@ -2291,30 +2333,38 @@ export default function QualityDepartmentInspectionView() {
                   return (
                     <Grid key={row.accKey} xs={12} sm={6} md={4}>
                       <Stack direction="column" spacing={0.5} alignItems="flex-start">
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              size="small"
-                              checked={!!form.acc?.[row.accKey]}
-                              onChange={(e) => setAcc(row.accKey, e.target.checked)}
-                            />
-                          }
-                          label={row.label}
-                          sx={{
-                            m: 0,
-                            '& .MuiFormControlLabel-label': {
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: 'text.primary',
-                              lineHeight: 1.2,
-                            },
-                          }}
-                        />
+                        {row.label || !row.noCheckbox ? (
+                          <FormControlLabel
+                            control={
+                              !row.noCheckbox ? (
+                                <Checkbox
+                                  size="small"
+                                  checked={!!form.acc?.[row.accKey]}
+                                  onChange={(e) => setAcc(row.accKey, e.target.checked)}
+                                />
+                              ) : (
+                                <Box sx={{ width: 38 }} /> 
+                              )
+                            }
+                            label={row.label}
+                            sx={{
+                              m: 0,
+                              '& .MuiFormControlLabel-label': {
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: 'text.primary',
+                                lineHeight: 1.2,
+                              },
+                            }}
+                          />
+                        ) : (
+                          <Box sx={{ height: 38 }} /> // Spacer to maintain vertical alignment
+                        )}
                         {row.textMode ? (
                           <TextField
                             size="small"
                             fullWidth
-                            label="Comment"
+                            label="Remarks"
                             value={form.accText?.[row.textKey] ?? ''}
                             onChange={(e) => setAccText(row.textKey, e.target.value)}
                             placeholder="—"
@@ -2326,7 +2376,7 @@ export default function QualityDepartmentInspectionView() {
                             select
                             size="small"
                             fullWidth
-                            label="Comment"
+                            label="Remarks"
                             value={dropVal}
                             onChange={(e) => setAccDrop(dropKey, e.target.value)}
                             InputLabelProps={{ shrink: true }}
@@ -2353,17 +2403,17 @@ export default function QualityDepartmentInspectionView() {
                   <Checkbox
                     size="small"
                     sx={{ p: 0 }} // minimize padding so it aligns precisely
-                    checked={['cartonDimen', 'cartonMarking', 'cartonThickness', 'netWt', 'grossWt'].every((key) => !!form.pack?.[key])}
+                    checked={PACKING_UI_ROWS.every((row) => !!form.pack?.[row.key])}
                     indeterminate={
-                      ['cartonDimen', 'cartonMarking', 'cartonThickness', 'netWt', 'grossWt'].some((key) => !!form.pack?.[key]) &&
-                      !['cartonDimen', 'cartonMarking', 'cartonThickness', 'netWt', 'grossWt'].every((key) => !!form.pack?.[key])
+                      PACKING_UI_ROWS.some((row) => !!form.pack?.[row.key]) &&
+                      !PACKING_UI_ROWS.every((row) => !!form.pack?.[row.key])
                     }
                     onChange={(e) => {
                       const checked = e.target.checked;
                       setForm((prev) => {
                         const newPack = { ...prev.pack };
-                        ['cartonDimen', 'cartonMarking', 'cartonThickness', 'netWt', 'grossWt'].forEach((key) => {
-                          newPack[key] = checked;
+                        PACKING_UI_ROWS.forEach((row) => {
+                          newPack[row.key] = checked;
                         });
                         return { ...prev, pack: newPack };
                       });
@@ -2373,183 +2423,84 @@ export default function QualityDepartmentInspectionView() {
               }
             >
               <Grid container spacing={2}>
-                <Grid xs={12} sm={6} md={4}>
-                  <Stack direction="column" spacing={0.5} alignItems="flex-start">
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          size="small"
-                          checked={!!form.pack?.cartonDimen}
-                          onChange={(e) => setPack('cartonDimen', e.target.checked)}
+                {PACKING_UI_ROWS.map((row) => (
+                  <Grid key={row.key} xs={12} sm={6} md={4}>
+                    <Stack direction="column" spacing={0.5} alignItems="flex-start">
+                      {row.label || row.key === 'otherM' ? (
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={!!form.pack?.[row.key]}
+                              onChange={(e) => setPack(row.key, e.target.checked)}
+                            />
+                          }
+                          label={row.label}
+                          sx={{
+                            m: 0,
+                            '& .MuiFormControlLabel-label': {
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: 'text.primary',
+                              lineHeight: 1.2,
+                            },
+                          }}
                         />
-                      }
-                      label="Carton Dimension"
-                      sx={{
-                        m: 0,
-                        '& .MuiFormControlLabel-label': {
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: 'text.primary',
-                          lineHeight: 1.2,
-                        },
-                      }}
-                    />
-                    <TextField
-                      size="small"
-                      fullWidth
-                      label="Remarks"
-                      value={form.packText?.cartonDimen ?? ''}
-                      onChange={(e) => setPackText('cartonDimen', e.target.value)}
-                      placeholder="—"
-                      InputLabelProps={{ shrink: true }}
-                      sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                    />
-                  </Stack>
-                </Grid>
-                <Grid xs={12} sm={6} md={4}>
-                  <Stack direction="column" spacing={0.5} alignItems="flex-start">
-                    <FormControlLabel
-                      control={
-                        <Checkbox
+                      ) : (
+                        <Box sx={{ height: 38 }} />
+                      )}
+
+                      {row.type === 'text' && (
+                        <TextField
                           size="small"
-                          checked={!!form.pack?.cartonMarking}
-                          onChange={(e) => setPack('cartonMarking', e.target.checked)}
+                          fullWidth
+                          label="Remarks"
+                          value={form.packText?.[row.textKey] ?? ''}
+                          onChange={(e) => setPackText(row.textKey, e.target.value)}
+                          placeholder="—"
+                          InputLabelProps={{ shrink: true }}
+                          sx={{ '& .MuiInputBase-root': { height: 40 } }}
                         />
-                      }
-                      label="Carton Marking"
-                      sx={{
-                        m: 0,
-                        '& .MuiFormControlLabel-label': {
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: 'text.primary',
-                          lineHeight: 1.2,
-                        },
-                      }}
-                    />
-                    <TextField
-                      select
-                      size="small"
-                      fullWidth
-                      label="Remarks"
-                      value={form.packDrop?.cartonMarking ?? CARTON_MARKING_SIDES[0]}
-                      onChange={(e) => setPackDrop('cartonMarking', e.target.value)}
-                      InputLabelProps={{ shrink: true }}
-                      sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                    >
-                      {CARTON_MARKING_SIDES.map((o) => (
-                        <MenuItem key={o} value={o}>
-                          {o}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  </Stack>
-                </Grid>
-                <Grid xs={12} sm={6} md={4}>
-                  <Stack direction="column" spacing={0.5} alignItems="flex-start">
-                    <FormControlLabel
-                      control={
-                        <Checkbox
+                      )}
+                      {row.type === 'select' && (
+                        <TextField
+                          select
                           size="small"
-                          checked={!!form.pack?.cartonThickness}
-                          onChange={(e) => setPack('cartonThickness', e.target.checked)}
-                        />
-                      }
-                      label="Carton Thickness"
-                      sx={{
-                        m: 0,
-                        '& .MuiFormControlLabel-label': {
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: 'text.primary',
-                          lineHeight: 1.2,
-                        },
-                      }}
-                    />
-                    <TextField
-                      select
-                      size="small"
-                      fullWidth
-                      label="Remarks"
-                      value={form.packDrop?.cartonThickness ?? CARTON_THICKNESS_PLY[0]}
-                      onChange={(e) => setPackDrop('cartonThickness', e.target.value)}
-                      InputLabelProps={{ shrink: true }}
-                      sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                    >
-                      {CARTON_THICKNESS_PLY.map((o) => (
-                        <MenuItem key={o} value={o}>
-                          {o}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  </Stack>
-                </Grid>
-                <Grid xs={12} sm={6} md={4}>
-                  <Stack direction="column" spacing={0.5} alignItems="flex-start">
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          size="small"
-                          checked={!!form.pack?.netWt}
-                          onChange={(e) => setPack('netWt', e.target.checked)}
-                        />
-                      }
-                      label="Net WT"
-                      sx={{
-                        m: 0,
-                        '& .MuiFormControlLabel-label': {
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: 'text.primary',
-                          lineHeight: 1.2,
-                        },
-                      }}
-                    />
-                    <TextField
-                      size="small"
-                      fullWidth
-                      label="Remarks"
-                      value={form.packText?.netWt ?? ''}
-                      onChange={(e) => setPackText('netWt', e.target.value)}
-                      placeholder="—"
-                      InputLabelProps={{ shrink: true }}
-                      sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                    />
-                  </Stack>
-                </Grid>
-                <Grid xs={12} sm={6} md={4}>
-                  <Stack direction="column" spacing={0.5} alignItems="flex-start">
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          size="small"
-                          checked={!!form.pack?.grossWt}
-                          onChange={(e) => setPack('grossWt', e.target.checked)}
-                        />
-                      }
-                      label="Gross WT"
-                      sx={{
-                        m: 0,
-                        '& .MuiFormControlLabel-label': {
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: 'text.primary',
-                          lineHeight: 1.2,
-                        },
-                      }}
-                    />
-                    <TextField
-                      size="small"
-                      fullWidth
-                      label="Remarks"
-                      value={form.packText?.grossWt ?? ''}
-                      onChange={(e) => setPackText('grossWt', e.target.value)}
-                      placeholder="—"
-                      InputLabelProps={{ shrink: true }}
-                      sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                    />
-                  </Stack>
-                </Grid>
+                          fullWidth
+                          label="Remarks"
+                          value={form.packDrop?.[row.dropKey] ?? row.options[0]}
+                          onChange={(e) => setPackDrop(row.dropKey, e.target.value)}
+                          InputLabelProps={{ shrink: true }}
+                          sx={{ '& .MuiInputBase-root': { height: 40 } }}
+                        >
+                          {row.options.map((o) => (
+                            <MenuItem key={o} value={o}>
+                              {o}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      )}
+                      {row.type === 'double-text' && (
+                        <Stack direction="row" spacing={1} sx={{ width: '100%' }}>
+                          <TextField
+                            size="small"
+                            fullWidth
+                            value={form.packText?.[row.textKey1] ?? ''}
+                            onChange={(e) => setPackText(row.textKey1, e.target.value)}
+                            sx={{ '& .MuiInputBase-root': { height: 40 } }}
+                          />
+                          <TextField
+                            size="small"
+                            fullWidth
+                            value={form.packText?.[row.textKey2] ?? ''}
+                            onChange={(e) => setPackText(row.textKey2, e.target.value)}
+                            sx={{ '& .MuiInputBase-root': { height: 40 } }}
+                          />
+                        </Stack>
+                      )}
+                    </Stack>
+                  </Grid>
+                ))}
               </Grid>
             </SectionCard>
 
@@ -2728,9 +2679,18 @@ export default function QualityDepartmentInspectionView() {
                             <Autocomplete
                               freeSolo
                               options={descHistory}
-                              value={r.discrepancy}
+                              filterOptions={(options, state) => {
+                                const input = state.inputValue.toLowerCase().trim();
+                                if (!input) return [];
+                                return options.filter(o => o.toLowerCase().startsWith(input));
+                              }}
+                              inputValue={r.discrepancy || ''}
                               onInputChange={(e, newInputValue) => {
                                 setDisc(r.id, 'discrepancy', newInputValue || '');
+                              }}
+                              onChange={(e, newValue) => {
+                                setDisc(r.id, 'discrepancy', newValue || '');
+                                if (newValue) saveDiscHistory(newValue);
                               }}
                               onBlur={() => saveDiscHistory(r.discrepancy)}
                               renderInput={(params) => (
@@ -2739,6 +2699,10 @@ export default function QualityDepartmentInspectionView() {
                                   size="small"
                                   fullWidth
                                   placeholder="—"
+                                  inputProps={{
+                                    ...params.inputProps,
+                                    autoComplete: 'off',
+                                  }}
                                 />
                               )}
                             />

@@ -135,74 +135,43 @@ export default function QAInspectionView() {
   const columns = useMemo(
     () => [
       {
-        field: 'inspNo',
-        headerName: 'Insp. No.',
-        flex: 1.4,
-        minWidth: 150,
-      },
-      {
-        field: 'mstInspectionDate',
-        headerName: 'Date',
-        flex: 0.9,
-        minWidth: 100,
-        valueFormatter: (value) => {
-          if (!value) return '';
-          try { return new Date(value).toLocaleDateString('en-GB'); }
-          catch { return value; }
-        },
-      },
-      {
-        field: 'inspectionType',
-        headerName: 'Type',
-        width: 80,
-      },
-      {
-        field: 'poNo',
-        headerName: 'PO No.',
-        flex: 1,
-        minWidth: 110,
-      },
-      {
-        field: 'customerName',
-        headerName: 'Customer',
-        flex: 1.2,
-        minWidth: 130,
-      },
-      {
-        field: 'venderName',
-        headerName: 'Vendor / Supplier',
-        flex: 1.4,
-        minWidth: 140,
-      },
-      {
         field: 'qaName',
         headerName: 'QA Name',
         flex: 1,
         minWidth: 120,
       },
       {
-        field: 'passFail',
-        headerName: 'Result',
-        width: 75,
-        align: 'center',
-        headerAlign: 'center',
-        renderCell: (params) => {
-          const v = params.value;
-          if (v === true || v === 1)
-            return (
-              <Box sx={{ color: 'success.dark', fontWeight: 700, fontSize: 12 }}>PASS</Box>
-            );
-          if (v === false || v === 0)
-            return (
-              <Box sx={{ color: 'error.main', fontWeight: 700, fontSize: 12 }}>FAIL</Box>
-            );
-          return <Box sx={{ color: 'text.disabled', fontSize: 11 }}>—</Box>;
+        field: 'mstInspectionDate',
+        headerName: 'Inspection Date',
+        flex: 0.9,
+        minWidth: 100,
+        valueFormatter: ({ value }) => {
+          if (!value) return '';
+          try {
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return value;
+            return date.toLocaleDateString('en-GB');
+          } catch {
+            return value;
+          }
         },
+      },
+      {
+        field: 'inspNo',
+        headerName: 'Insp No.',
+        flex: 1.4,
+        minWidth: 150,
+      },
+      {
+        field: 'aqlRange',
+        headerName: 'AQL Range',
+        flex: 1.2,
+        minWidth: 130,
       },
       {
         field: 'pdf',
         headerName: 'PDF',
-        width: 64,
+        width: 80,
         sortable: false,
         filterable: false,
         align: 'center',
@@ -229,7 +198,7 @@ export default function QAInspectionView() {
       {
         field: 'edit',
         headerName: 'Edit',
-        width: 64,
+        width: 80,
         sortable: false,
         filterable: false,
         align: 'center',
