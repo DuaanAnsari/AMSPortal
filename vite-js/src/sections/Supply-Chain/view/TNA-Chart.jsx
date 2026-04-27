@@ -1456,28 +1456,39 @@ export default function TNAChartPage() {
     // _select is UI-only state — never send to API
     if (fieldKey?.endsWith('_select')) return;
 
-    // --- Quantity Completed validation (only when unit contains %) ---
+    // --- Quantity Completed validation based on unit (pcs or %) ---
     if (fieldKey?.endsWith('_qtycompleted')) {
       const procName = fieldKey.slice(0, -'_qtycompleted'.length);
-      const unitVal = String(data[`${procName}_units`] || '').trim();
+      const unitVal = String(data[`${procName}_units`] || '').toLowerCase().trim();
+      const numNew = parseFloat(newValue);
 
-      if (unitVal.includes('%')) {
-        const numericMatch = unitVal.match(/(\d+(\.\d+)?)/);
-        const numericPart = numericMatch ? parseFloat(numericMatch[1]) : 0;
-        const numNew = parseFloat(newValue);
-        const numOld = parseFloat(oldValue) || 0;
+      if (!isNaN(numNew) && newValue !== '' && newValue !== null) {
+        // ✅ PCS validation: max = pcPerCarton (Total Qty) + 5%
+        if (unitVal === 'pcs') {
+          const totalQty = parseFloat(data.pcPerCarton) || 0;
+          const maxAllowed = totalQty * 1.05;
+          if (numNew > maxAllowed) {
+            params.node.setDataValue(fieldKey, oldValue);
+            setSnackbar({
+              open: true,
+              message: `Quantity Completed cannot exceed ${maxAllowed.toFixed(0)} pcs (Total Qty ${totalQty} + 5%)`,
+              severity: 'error',
+            });
+            return;
+          }
+        }
 
-        // If unit is "5%" → max = oldValue + 5; if unit is just "%" → max = 100
-        const maxAllowed = numericPart > 0 ? numOld + numericPart : 100;
-
-        if (!isNaN(numNew) && numNew > maxAllowed) {
-          params.node.setDataValue(fieldKey, oldValue);
-          setSnackbar({
-            open: true,
-            message: `Quantity Completed cannot exceed ${maxAllowed} when unit is "${unitVal}"`,
-            severity: 'error',
-          });
-          return;
+        // ✅ Percent validation: max = 100
+        if (unitVal === '%' || unitVal === 'percent') {
+          if (numNew > 100) {
+            params.node.setDataValue(fieldKey, oldValue);
+            setSnackbar({
+              open: true,
+              message: `Quantity Completed cannot exceed 100 when unit is "${data[`${procName}_units`]}"`,
+              severity: 'error',
+            });
+            return;
+          }
         }
       }
     }

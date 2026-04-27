@@ -69,6 +69,7 @@ export default function MilestoneView() {
   const [shippingList, setShippingList] = useState([]);
   const [productionList, setProductionList] = useState([]);
   const [rows, setRows] = useState([]);
+  const [rowErrors, setRowErrors] = useState({}); // { [rowId]: errorMessage }
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -275,6 +276,42 @@ export default function MilestoneView() {
   };
 
   const handleChange = (id, field, value) => {
+    // ✅ Validate quantityCompleted based on unit
+    if (field === 'quantityCompleted') {
+      const row = rows.find((r) => r.id === id);
+      if (row) {
+        const unit = (row.unit || '').toLowerCase().trim();
+        const numVal = parseFloat(value);
+
+        if (value !== '' && !isNaN(numVal)) {
+          if (unit === 'pcs') {
+            const totalQty = parseFloat(form.totalQty) || 0;
+            const maxAllowed = totalQty * 1.05; // totalQty + 5%
+            if (numVal > maxAllowed) {
+              setRowErrors((prev) => ({
+                ...prev,
+                [id]: `Max allowed: ${maxAllowed.toFixed(0)} pcs (Total Qty + 5%)`,
+              }));
+              return; // Block the update
+            }
+          } else if (unit === '%' || unit === 'percent') {
+            if (numVal > 100) {
+              setRowErrors((prev) => ({
+                ...prev,
+                [id]: 'Max allowed: 100%',
+              }));
+              return; // Block the update
+            }
+          }
+        }
+        // Clear error if valid
+        setRowErrors((prev) => {
+          const updated = { ...prev };
+          delete updated[id];
+          return updated;
+        });
+      }
+    }
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   };
 
@@ -829,14 +866,21 @@ export default function MilestoneView() {
                           />
                         </TableCell>
 
-                        <TableCell sx={{ textAlign: 'center' }}>
+                        <TableCell sx={{ textAlign: 'center', minWidth: '120px' }}>
                           <TextField
                             value={row.quantityCompleted}
                             size="small"
+                            type="number"
+                            inputProps={{ min: 0 }}
                             onChange={(e) =>
                               handleChange(row.id, 'quantityCompleted', e.target.value)
                             }
-                            sx={{ width: '80px' }}
+                            error={!!rowErrors[row.id]}
+                            helperText={rowErrors[row.id] || ''}
+                            sx={{ width: '110px' }}
+                            FormHelperTextProps={{
+                              sx: { fontSize: '10px', mx: 0 },
+                            }}
                           />
                         </TableCell>
                         <TableCell sx={{ textAlign: 'center' }}>{row.unit}</TableCell>
