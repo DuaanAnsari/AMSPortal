@@ -102,13 +102,13 @@ export default function useChart(options) {
       },
     },
 
-    // Xaxis
+
     xaxis: {
       axisBorder: { show: false },
       axisTicks: { show: false },
     },
 
-    // Markers
+
     markers: {
       size: 0,
       strokeColors: theme.palette.background.paper,

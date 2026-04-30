@@ -2,9 +2,9 @@ import PropTypes from 'prop-types';
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 
 const BLACK = '#000000';
-const GRAY = '#e8e8e8';
-const ORANGE = '#fcd4a8';
-const ORANGE_DEEP = '#f5a96c';
+const GRAY = '#F4F6F8';
+const ORANGE = '#F4F6F8';
+const ORANGE_DEEP = '#DFE3E8';
 
 const styles = StyleSheet.create({
   page: {
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 4,
   },
-  bannerText: { fontSize: 8, fontFamily: 'Helvetica-Bold' },
+  bannerText: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: BLACK },
   headRow: { flexDirection: 'row', backgroundColor: GRAY, borderBottomWidth: 0.75, borderBottomColor: BLACK },
   headCell: {
     borderRightWidth: 0.75,
@@ -127,21 +127,25 @@ export function mergeSizeSpecsPdfData(raw, logoDataUrl) {
   const unitLabel = r.measurementUnit === '1' ? 'INCH' : 'CM';
   const banner =
     r.sheetBanner || (r.sheetTitle ? String(r.sheetTitle) : `T-shirt - (${unitLabel})`);
+    
+  const vendor = r.venderName || r.vendorName || '—';
+  
   return {
     logoDataUrl: logoDataUrl ?? r.logoDataUrl,
-    qaName: r.qaName ?? 'QD1',
+    qaName: r.qaName ?? r.QAName ?? 'QD1',
     reportDate:
-      r.reportDate ??
+      r.creationDate ?? r.CreationDate ?? r.reportDate ??
       new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-    reportNo: r.reportNo ?? r.autoNo ?? '—',
-    orderQty: r.orderQty ?? '24.00',
-    customerName: r.customerName ?? '—',
-    pono: r.pono ?? '—',
-    styleNo: r.styleNo ?? '—',
-    vendorName: r.vendorName ?? '—',
-    color: r.color ?? 'REDWOOD',
-    remarks: r.remarks ?? '',
+    reportNo: r.autoNo ?? r.AutoNo ?? r.reportNo ?? '—',
+    orderQty: r.orderQty ?? r.OrderQty ?? '24.00',
+    customerName: r.customerName ?? r.CustomerName ?? '—',
+    pono: r.pono ?? r.PONO ?? '—',
+    styleNo: r.styleNo ?? r.StyleNo ?? '—',
+    vendorName: vendor,
+    color: r.color ?? r.Color ?? 'REDWOOD',
+    remarks: r.remarks ?? r.Remarks ?? '',
     sheetBanner: banner,
+    headers: r.headers,
     measurementSheet: Array.isArray(r.measurementSheet) ? r.measurementSheet : DEFAULT_MEASUREMENT_SHEET_ROWS,
   };
 }
@@ -258,28 +262,28 @@ export default function SelfSizeSpecsPDF({ data }) {
             </View>
             <View style={[styles.headCell, { width: wS2, flexDirection: 'row', padding: 0 }]}>
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={styles.headText}>S</Text>
+                <Text style={styles.headText}>{d.headers ? d.headers[0] : 'S'}</Text>
               </View>
               <View style={{ flex: 1 }} />
             </View>
             <View style={[styles.headCell, { width: wM2, flexDirection: 'row', padding: 0 }]}>
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={styles.headText}>M</Text>
+                <Text style={styles.headText}>{d.headers ? d.headers[1] : 'M'}</Text>
               </View>
               <View style={{ flex: 1 }} />
             </View>
             <View style={[styles.headCell, { width: wSingle }]}>
-              <Text style={styles.headText}>L</Text>
+              <Text style={styles.headText}>{d.headers ? d.headers[2] : 'L'}</Text>
             </View>
             <View style={[styles.headCell, { width: wSingle }]}>
-              <Text style={styles.headText}>XL</Text>
+              <Text style={styles.headText}>{d.headers ? d.headers[3] : 'XL'}</Text>
             </View>
             {[0, 1, 2, 3, 4, 5].map((i) => (
               <View
                 key={i}
                 style={[styles.headCell, { width: wEx }, i === 5 ? { borderRightWidth: 0 } : null]}
               >
-                <Text style={styles.headText}>{''}</Text>
+                <Text style={styles.headText}>{d.headers ? d.headers[i + 4] : ''}</Text>
               </View>
             ))}
           </View>

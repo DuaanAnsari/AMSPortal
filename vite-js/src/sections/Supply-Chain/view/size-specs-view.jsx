@@ -30,16 +30,9 @@ import SelfSizeSpecsPDF, { mergeSizeSpecsPdfData } from './Self-size-specs-PDF';
 
 function normalizeRow(raw) {
   return {
-    id: String(raw.poDetailId || raw.id || Math.random()),
-    poDetailId: raw.poDetailId,
-    poid: raw.poid,
-    creationDate: raw.creationDate,
-    autoNo: raw.autoNo,
-    customerName: raw.customerName,
-    vendorName: raw.vendorName || raw.venderName,
-    userName: raw.userName,
-    pono: raw.pono,
     ...raw,
+    id: `${raw.poid}-${raw.poDetailID}-${raw.autoNo || ''}-${raw.creationDate || Math.random()}`,
+    vendorName: raw.venderName || raw.vendorName,
   };
 }
 
@@ -92,12 +85,12 @@ export default function SizeSpecsViewList() {
     setLoading(true);
     try {
       const token = localStorage.getItem('accessToken');
-      const roleId = localStorage.getItem('roleId') || 0;
-      const userId = localStorage.getItem('userId') || 0;
+      const roleId = 26;
+      const userId = 26;
       const pono = debouncedQuery || '';
 
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-      const url = `${API_BASE_URL}/api/SelfSizeSpecs/GetViewData?RoleId=${roleId}&UserId=${userId}&Pono=${encodeURIComponent(pono)}`;
+      const url = `/api/SelfSizeSpecs/GetViewData?roleId=${roleId}&userId=${userId}&pono=${encodeURIComponent(pono)}`;
+      console.log('Fetching Size Specs from:', url);
 
       const response = await fetch(url, {
         headers: {
@@ -109,7 +102,7 @@ export default function SizeSpecsViewList() {
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
-      
+
       const data = await response.json();
       setTableData(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -134,18 +127,76 @@ export default function SizeSpecsViewList() {
     async (poDetailId) => {
       setPdfLoadingId(poDetailId);
       try {
-        const raw = tableData.find((r) => r.poDetailId === poDetailId);
+        const raw = tableData.find((r) => r.PODetailID === poDetailId || r.poDetailID === poDetailId || r.poDetailId === poDetailId);
         if (!raw) {
           enqueueSnackbar('No row for PDF', { variant: 'warning' });
           return;
         }
+
+        // Fetch actual PDF data
+        const token = localStorage.getItem('accessToken');
+        const poid = raw.POID || raw.poid;
+        const pdfResponse = await fetch(`/api/SelfSizeSpecs/GetPDFData?poid=${poid}&poDetailId=${poDetailId}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+        });
+        
+        let measurementSheet;
+        let sheetBanner = '';
+        let headers = [];
+        
+        if (pdfResponse.ok) {
+           const pdfData = await pdfResponse.json();
+           if (pdfData && pdfData.length > 0) {
+              const firstRow = pdfData[0];
+              const measurementType = firstRow.measurementType || '';
+              const measurementsUnit = firstRow.measurements || '';
+              sheetBanner = `${measurementType} ${measurementType && measurementsUnit ? '-' : ''} ${measurementsUnit ? `(${measurementsUnit})` : ''}`;
+              
+              // Extract best headers
+              let bestHeaderRow = firstRow;
+              let maxHeaders = 0;
+              pdfData.forEach(row => {
+                  let count = 0;
+                  for (let i = 1; i <= 12; i++) if (row[`header${i}`]) count++;
+                  if (count > maxHeaders) {
+                      maxHeaders = count;
+                      bestHeaderRow = row;
+                  }
+              });
+              for (let i = 1; i <= 12; i++) headers.push(bestHeaderRow[`header${i}`] || '');
+              
+              measurementSheet = pdfData.map((row, idx) => ({
+                 no: String(idx + 1),
+                 point: row.measurementPoints || '',
+                 tol: row.tolerance || '',
+                 sQ: row.col1 || '',
+                 sS: row.qCol1 || '',
+                 mQ: row.col2 || '',
+                 mS: row.qCol2 || '',
+                 l: row.col3 || '',
+                 xl: row.col4 || '',
+                 extra: [row.col5 || '', row.col6 || '', row.col7 || '', row.col8 || '', row.col9 || '', row.col10 || '']
+              }));
+           }
+        }
+
         let logoDataUrl;
         try {
           logoDataUrl = await fetchAmsLogoDataUrl();
         } catch (e) {
           console.warn(e);
         }
-        const merged = mergeSizeSpecsPdfData(raw, logoDataUrl);
+
+        const merged = mergeSizeSpecsPdfData({
+            ...raw,
+            measurementSheet: measurementSheet || undefined,
+            sheetBanner: sheetBanner || undefined,
+            headers: headers.length > 0 ? headers : undefined
+        }, logoDataUrl);
+        
         const blob = await pdf(<SelfSizeSpecsPDF data={merged} />).toBlob();
         const url = URL.createObjectURL(blob);
         window.open(url, '_blank', 'noopener,noreferrer');
@@ -162,23 +213,15 @@ export default function SizeSpecsViewList() {
 
   const columns = useMemo(
     () => [
-      { 
-        field: 'creationDate', 
-        headerName: 'Creation Date', 
-        flex: 1, 
+      {
+        field: 'creationDate',
+        headerName: 'Creation Date',
+        flex: 1,
         minWidth: 110,
-        valueFormatter: (params) => {
-          if (!params.value) return '';
-          try {
-            return new Date(params.value).toLocaleDateString();
-          } catch(e) {
-            return params.value;
-          }
-        }
       },
       { field: 'autoNo', headerName: 'Spec #', flex: 1, minWidth: 130 },
       { field: 'customerName', headerName: 'Customer', flex: 1, minWidth: 120 },
-      { field: 'vendorName', headerName: 'Vendor', flex: 1, minWidth: 120 },
+      { field: 'venderName', headerName: 'Vendor', flex: 1, minWidth: 120 },
       { field: 'userName', headerName: 'Entered By', flex: 0.8, minWidth: 100 },
       {
         field: 'pdf',
@@ -189,14 +232,15 @@ export default function SizeSpecsViewList() {
         align: 'center',
         headerAlign: 'center',
         renderCell: (params) => {
-          const busy = pdfLoadingId === params.row.poDetailId;
+          const currentRowId = params.row.PODetailID || params.row.poDetailID;
+          const busy = pdfLoadingId === currentRowId;
           return (
             <Tooltip title="Open size specs PDF (preview)">
               <span>
                 <IconButton
                   size="small"
                   disabled={busy}
-                  onClick={() => handleViewPdf(params.row.poDetailId)}
+                  onClick={() => handleViewPdf(currentRowId)}
                   sx={{
                     p: 0.45,
                     minWidth: 0,
@@ -234,15 +278,15 @@ export default function SizeSpecsViewList() {
                 const currentUserId = localStorage.getItem('userId') || localStorage.getItem('roleId') || '';
                 navigate(
                   paths.dashboard.supplyChain.sizeSpecsEditWithQuery(
-                    params.row.poDetailId,
-                    params.row.poid,
-                    params.row.measurementTypeId || params.row.measurementType
+                    params.row.PODetailID || params.row.poDetailID || '',
+                    params.row.POID || params.row.poid || '',
+                    params.row.measurementTypeID || params.row.measurementType || ''
                   ),
                   {
                     state: {
-                      poDetailId: params.row.poDetailId,
-                      poid: params.row.poid,
-                      measurementTypeId: params.row.measurementTypeId || params.row.measurementType || '',
+                      poDetailId: params.row.PODetailID || params.row.poDetailID || '',
+                      poid: params.row.POID || params.row.poid || '',
+                      measurementTypeId: params.row.measurementTypeID || params.row.measurementType || '',
                       userId: currentUserId
                     }
                   }
