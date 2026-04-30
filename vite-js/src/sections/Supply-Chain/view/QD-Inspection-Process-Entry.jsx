@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, Fragment } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams, Link as RouterLink } from 'react-router-dom';
 import PropTypes from 'prop-types';
 
@@ -30,20 +30,13 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import AddIcon from '@mui/icons-material/Add';
 import SaveIcon from '@mui/icons-material/Save';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ToggleButton from '@mui/material/ToggleButton';
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
-import Autocomplete from '@mui/material/Autocomplete';
-import { alpha, useTheme } from '@mui/material/styles';
-
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 import { paths } from 'src/routes/paths';
 import { qdApi } from 'src/sections/Supply-Chain/utils/qd-api';
 
 // ─── Constants (legacy InspectionProcessEntry.aspx InspType + short labels) ─
-
-const INSP_TYPE_ORDER = ['Proto Fit', 'Dyelot', 'Strikeoff', 'PP Sample', 'Size Set'];
 
 const INSP_TYPE_SHORT = {
   'Proto Fit': 'PF',
@@ -53,15 +46,9 @@ const INSP_TYPE_SHORT = {
   'Size Set': 'SS',
 };
 
-const INSP_TYPE_COLORS = {
-  'Proto Fit': 'primary',
-  Dyelot: 'secondary',
-  Strikeoff: 'warning',
-  'PP Sample': 'info',
-  'Size Set': 'success',
-};
-
-/** Legacy InspectionProcessEntry.aspx — three columns, top-to-bottom per column */
+/** Legacy InspectionProcessEntry.aspx — three columns, top-to-bottom per column.
+ *  UI state: `teMeasureToSpec` … — bind with `checked={toBoolean(formData[key])}`.
+ *  API / .NET: `tE_MeasureToSpec` … — mapped in `boolSaved` / `mergeApiRowForFormMapping`. */
 const TE_COLUMNS = [
   [
     { key: 'teMeasureToSpec', label: 'Measure to Spec' },
@@ -82,101 +69,106 @@ const TE_COLUMNS = [
   ],
 ];
 
-const FABRIC_GRID_ROW_COUNT = 8;
-
-const MEASUREMENT_GRID_HEADER = '#f58f62';
-
-const SIZE_COUNT = 12;
-
-function emptyHeaderCells() {
-  return Array.from({ length: SIZE_COUNT }, () => '');
+function createEmptyDetailRow() {
+  return { fabricTests: '', isApprove: null, fabricComments: '' };
 }
 
-/** API row → editable grid row (template Col* = quote, QCol* = actual / saved to INSP). */
-function mapMeasRowFromApi(r) {
-  const src = r || {};
-  const g = (camel, pascal) => src[camel] ?? src[pascal] ?? '';
-  const tpl = [];
-  const spec = [];
-  for (let i = 1; i <= SIZE_COUNT; i += 1) {
-    tpl.push(String(g(`col${i}`, `Col${i}`) ?? ''));
-    spec.push(String(g(`qCol${i}`, `QCol${i}`) ?? ''));
-  }
-  return {
-    sizeSpecsNewId: Number(g('sizeSpecsNewId', 'SizeSpecsNewId')) || 0,
-    sizeSpecsHeaderNewId: Number(g('sizeSpecsHeaderNewId', 'SizeSpecsHeaderNewId')) || 0,
-    measurementPointId: Number(g('measurementPointId', 'MeasurementPointId')) || 0,
-    measurementPoints: String(g('measurementPoints', 'MeasurementPoints') ?? ''),
-    measurements: String(g('measurements', 'Measurements') ?? ''),
-    tolerance: String(g('tolerance', 'Tolerance') ?? ''),
-    tpl,
-    spec,
-  };
-}
-
-function headersFromFirstRow(rows) {
-  const first = rows?.[0];
-  if (!first) return emptyHeaderCells();
-  const g = (i) =>
-    first[`header${i}`] ??
-    first[`Header${i}`] ??
-    first[`h${i}`] ??
-    '';
-  return Array.from({ length: SIZE_COUNT }, (_, idx) => String(g(idx + 1) ?? ''));
-}
-
-function createEmptyFabricRows() {
-  return Array.from({ length: FABRIC_GRID_ROW_COUNT }, () => ({
-    fabricTest: '',
-    verdict: '', // '' | 'A' | 'R' — maps to API isApprove 2 / 1 / 0
-    comments: '',
-  }));
-}
-
-/** API GET: FabricTestLines → grid rows (legacy isApprove 1/0/2). */
-function mapFabricFromApi(lines) {
-  const rows = createEmptyFabricRows();
-  if (!lines?.length) return rows;
-  const src = lines.slice(0, FABRIC_GRID_ROW_COUNT);
-  src.forEach((line, idx) => {
+/**
+ * API / legacy fabric lines → detail rows.
+ * `isApprove`: `true` = approved, `false` = rejected, `null` = pending / not set (API 2).
+ */
+function normalizeDetailsFromApi(rawList) {
+  const lines = Array.isArray(rawList) ? rawList : [];
+  if (lines.length === 0) return [createEmptyDetailRow()];
+  return lines.map((line) => {
     const ia = line.isApprove ?? line.IsApprove;
-    let verdict = '';
-    if (ia === 1 || ia === true) verdict = 'A';
-    else if (ia === 0 || ia === false) verdict = 'R';
-    rows[idx] = {
-      fabricTest: line.fabricTests ?? line.FabricTests ?? '',
-      verdict,
-      comments: line.fabricComments ?? line.FabricComments ?? '',
+    let isApprove = null;
+    if (ia === true || ia === 1 || ia === '1') isApprove = true;
+    else if (ia === false || ia === 0 || ia === '0') isApprove = false;
+    else isApprove = null;
+    return {
+      ...line,
+      fabricTests: line.fabricTests ?? line.FabricTests ?? line.fabricTest ?? '',
+      fabricComments: line.fabricComments ?? line.FabricComments ?? line.comments ?? '',
+      isApprove,
     };
   });
-  return rows;
 }
 
-function buildFabricTestLinesPayload(fabricRows) {
-  return fabricRows
-    .map((r) => {
-      const fabricTests = String(r.fabricTest ?? '').trim();
-      let isApprove = 2;
-      if (r.verdict === 'A') isApprove = 1;
-      else if (r.verdict === 'R') isApprove = 0;
-      const fabricComments = r.comments != null ? String(r.comments) : '';
-      return { fabricTests, isApprove, fabricComments };
-    })
-    .filter((x) => x.fabricTests !== '');
+/** Calendar `yyyy-MM-dd` for `<TextField type="date" />` — avoids UTC shift from `toISOString()`. */
+function calendarDateToInputString(v) {
+  if (v == null || v === '') return '';
+  const s = typeof v === 'string' ? v.trim() : String(v);
+  const prefix = /^(\d{4}-\d{2}-\d{2})/.exec(s);
+  if (prefix) return prefix[1];
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${day}`;
+}
+
+/** For `<TextField type="date" />` — supports `yyyy-MM-dd` and ISO / .NET date strings. */
+function dateFieldValue(v) {
+  return calendarDateToInputString(v);
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function toDateInputValue(v) {
-  if (!v) return '';
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toISOString().slice(0, 10);
+  return calendarDateToInputString(v);
 }
 
+/** .NET / legacy JSON: `tE_MeasureToSpec` from UI key `teMeasureToSpec`. */
+function teApiPropertyName(uiKey) {
+  if (typeof uiKey !== 'string' || !uiKey.startsWith('te') || uiKey.length <= 2) return null;
+  return `tE_${uiKey.slice(2)}`;
+}
+
+/** .NET JSON: `asI_GarmentRejected` from UI key `asiGarmentRejected`. */
+function asiApiPropertyName(uiKey) {
+  if (typeof uiKey !== 'string' || !uiKey.startsWith('asi') || uiKey.length <= 3) return null;
+  return `asI_${uiKey.slice(3)}`;
+}
+
+/** MUI `checked`: strict boolean; null/undefined → false. */
+function toBoolean(value) {
+  if (value === true || value === 1 || value === '1') return true;
+  if (value === false || value === 0 || value === '0') return false;
+  if (value == null || value === '') return false;
+  if (typeof value === 'string') {
+    const t = value.trim().toLowerCase();
+    if (t === 'true' || t === 'yes' || t === 'y' || t === 'on') return true;
+    if (t === 'false' || t === 'no' || t === 'n' || t === 'off') return false;
+  }
+  return false;
+}
+
+/**
+ * Map API / saved row → checkbox boolean. Prefer `tE_*` / `asI_*` first so .NET defaults
+ * on `te*` / `asi*` never hide the real flags from the backend.
+ */
 function boolSaved(row, camel, pascal) {
-  const v = row?.[camel] ?? row?.[pascal];
-  return v === true || v === 1 || v === '1';
+  if (!row || typeof row !== 'object') return false;
+  const teKey = teApiPropertyName(camel);
+  const asiKey = asiApiPropertyName(camel);
+  const raw =
+    (teKey ? row[teKey] : undefined) ??
+    (asiKey ? row[asiKey] : undefined) ??
+    row[camel] ??
+    row[pascal];
+  return toBoolean(raw);
+}
+
+/** Merge root-level `tE_*` / `asI_*` (flat JSON) onto master for form hydration. */
+function mergeApiRowForFormMapping(outerResponse, innerMaster) {
+  const base = innerMaster && typeof innerMaster === 'object' ? { ...innerMaster } : {};
+  const root = outerResponse && typeof outerResponse === 'object' ? outerResponse : {};
+  Object.keys(root).forEach((k) => {
+    if (k.startsWith('tE_') || k.startsWith('asI_')) base[k] = root[k];
+  });
+  return base;
 }
 
 function buildEmptyForm(masterStyleNo = '') {
@@ -245,15 +237,41 @@ function buildFormFromSaved(saved, masterStyleNo) {
     teLabeling: boolSaved(saved, 'teLabeling', 'TeLabeling'),
     teFabricWashTest: boolSaved(saved, 'teFabricWashTest', 'TeFabricWashTest'),
     teSewingQuality: boolSaved(saved, 'teSewingQuality', 'TeSewingQuality'),
-    teComments: saved.teComments ?? saved.TeComments ?? '',
-    fdmrComments: saved.fdmrComments ?? saved.FdmrComments ?? '',
+    teComments:
+      saved.teComments ??
+      saved.TeComments ??
+      saved.tE_Comments ??
+      saved.TE_Comments ??
+      '',
+    fdmrComments:
+      saved.fdmrComments ??
+      saved.FdmrComments ??
+      saved.fdmR_Comments ??
+      saved.FdmR_Comments ??
+      '',
     fabricStandardGsm:
-      (saved.fabricStandardGsm ?? saved.FabricStandardGsm) != null
-        ? String(saved.fabricStandardGsm ?? saved.FabricStandardGsm)
+      (saved.fabricStandardGsm ??
+        saved.FabricStandardGsm ??
+        saved.fabricStandardGSM ??
+        saved.FabricStandardGSM) != null
+        ? String(
+            saved.fabricStandardGsm ??
+              saved.FabricStandardGsm ??
+              saved.fabricStandardGSM ??
+              saved.FabricStandardGSM
+          )
         : '',
     actualWeightGsm:
-      (saved.actualWeightGsm ?? saved.ActualWeightGsm) != null
-        ? String(saved.actualWeightGsm ?? saved.ActualWeightGsm)
+      (saved.actualWeightGsm ??
+        saved.ActualWeightGsm ??
+        saved.actualWeightGSM ??
+        saved.ActualWeightGSM) != null
+        ? String(
+            saved.actualWeightGsm ??
+              saved.ActualWeightGsm ??
+              saved.actualWeightGSM ??
+              saved.ActualWeightGSM
+          )
         : '',
     fabricApproved,
     constructionFitComments: saved.constructionFitComments ?? saved.ConstructionFitComments ?? '',
@@ -267,10 +285,117 @@ function buildFormFromSaved(saved, masterStyleNo) {
   };
 }
 
-function parseDec(s) {
-  if (s == null || String(s).trim() === '') return null;
-  const n = Number(String(s).replace(',', '.'));
-  return Number.isFinite(n) ? n : null;
+/** Strict booleans for Save: tick → true, blank → false; plus `tE_*` / `asI_*` for .NET model. */
+function applyTeAsiBooleansForSave(fd) {
+  const out = { ...(fd && typeof fd === 'object' ? fd : {}) };
+  TE_COLUMNS.flat().forEach(({ key }) => {
+    const v = toBoolean(out[key]);
+    out[key] = v;
+    const apiK = teApiPropertyName(key);
+    if (apiK) out[apiK] = v;
+  });
+  const asiKeys = [
+    'asiGarmentRejected',
+    'asiProceedToSales',
+    'asiProceedWithSales',
+    'asiProceedWithProd',
+    'asiGarmentApproved',
+  ];
+  asiKeys.forEach((key) => {
+    const v = toBoolean(out[key]);
+    out[key] = v;
+    const apiK = asiApiPropertyName(key);
+    if (apiK) out[apiK] = v;
+  });
+  out.tE_Comments = String(out.teComments ?? out.tE_Comments ?? '');
+  out.fdmR_Comments = String(out.fdmrComments ?? out.fdmR_Comments ?? '');
+  return out;
+}
+
+/** POST `/api/InspectionProcess/Save` — master spread + ISO dates + fabric detail rows. */
+function buildInspectionProcessSavePayload(formData, detailsList, mstIdFallback) {
+  const fd = applyTeAsiBooleansForSave(formData);
+  const mstRaw =
+    fd.inspectionTNAProcMstID ??
+    fd.inspectionTNAProcMstId ??
+    fd.InspectionTNAProcMstID ??
+    mstIdFallback ??
+    0;
+  const mstNum = Number(mstRaw);
+  const inspectionTNAProcMstID = Number.isFinite(mstNum) ? mstNum : 0;
+  const list = Array.isArray(detailsList) ? detailsList : [];
+  const details = list.map((item) => ({
+    inspectionTNAProcDtlID:
+      item?.inspectionTNAProcDtlID ??
+      item?.inspectionTNAProcDtlId ??
+      item?.InspectionTNAProcDtlID ??
+      0,
+    inspectionTNAProcMstID,
+    fabricTests: item?.fabricTests ?? '',
+    isApprove: item?.isApprove === true,
+    fabricComments: item?.fabricComments ?? '',
+  }));
+  return {
+    ...fd,
+    receivedDate: fd.receivedDate ? new Date(fd.receivedDate).toISOString() : null,
+    reviewDate: fd.reviewDate ? new Date(fd.reviewDate).toISOString() : null,
+    details,
+  };
+}
+
+// ─── Mock entry (no API) — set false when backend is wired ───────────────────
+
+/** Set true only for local UI demo without backend. */
+const USE_INSPECTION_PROCESS_ENTRY_MOCK = false;
+
+function buildMockInspectionProcessEntry(poid, inspType) {
+  const short = INSP_TYPE_SHORT[inspType] || 'PF';
+  return {
+    inspectionTNAProcMstId: 99901,
+    master: {
+      poid: Number(poid),
+      POID: Number(poid),
+      pono: `DEMO-${poid}`,
+      PONO: `DEMO-${poid}`,
+      styleNo: 'STYLE-DEMO-01',
+      StyleNo: 'STYLE-DEMO-01',
+    },
+    savedRecord: {
+      inspAutoNo: `${short}-DEMO-2024-0001`,
+      receivedDate: '2024-09-15',
+      supplierContact: 'Demo supplier contact',
+      styleName: 'Demo garment',
+      COO: 'Pakistan',
+      savedInSession: 'SS25',
+      sampleType: 'SMS',
+      reviewDate: '2024-09-20',
+      generalComments: 'Structure-only demo (API disabled).',
+      fabricStandardGsm: '180',
+      actualWeightGsm: '182',
+      fabricApproved: 2,
+      teMeasureToSpec: true,
+      teGarmentFit: false,
+    },
+    suggestedInspAutoNo: `${short}-DEMO-2024-NEW`,
+    measurementTypes: [
+      {
+        measurementTypeID: 101,
+        MeasurementTypeID: 101,
+        measurementType: 'Measurement set A (demo)',
+        MeasurementType: 'Measurement set A (demo)',
+      },
+      {
+        measurementTypeID: 102,
+        MeasurementTypeID: 102,
+        measurementType: 'Measurement set B (demo)',
+        MeasurementType: 'Measurement set B (demo)',
+      },
+    ],
+    fabricTestLines: [
+      { fabricTests: 'Colour fastness to washing', isApprove: 2, fabricComments: '' },
+      { fabricTests: 'Dimensional stability', isApprove: 2, fabricComments: 'Mock row' },
+    ],
+  };
 }
 
 /** Bootstrap `form-control-label` / legacy card header look */
@@ -354,41 +479,26 @@ LegacySectionCard.propTypes = {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 /**
- * Legacy InspectionProcessEntry.aspx — Proto Fit, Dyelot, Strikeoff, PP Sample, Size Set
+ * Legacy AMS InspectionProcessEntry.aspx (sample inspection entry).
+ * `inspType` comes from URL query (?inspType=Proto Fit). `USE_INSPECTION_PROCESS_ENTRY_MOCK` skips API (demo only).
  */
 export default function QDInspectionProcessEntryView() {
-  const theme = useTheme();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('id');
   const poid = searchParams.get('poid');
   const inspType = searchParams.get('inspType') ?? 'Proto Fit';
-
-  const handleInspTypeChange = (_e, newType) => {
-    if (!newType) return;
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set('inspType', newType);
-      return next;
-    });
-  };
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [form, setForm] = useState(() => buildEmptyForm());
+  const [formData, setFormData] = useState(() => buildEmptyForm());
+  const [detailsList, setDetailsList] = useState(() => [createEmptyDetailRow()]);
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState(null);
   const [snackOpen, setSnackOpen] = useState(false);
   const [snackMsg, setSnackMsg] = useState('');
   /** Index into measurementTypesList; -1 = Select (legacy ddl first item). */
   const [measTypeIdx, setMeasTypeIdx] = useState(-1);
-  const [measRows, setMeasRows] = useState([]);
-  const [measHeaders, setMeasHeaders] = useState(() => emptyHeaderCells());
-  const [measLoading, setMeasLoading] = useState(false);
-  const [measSaving, setMeasSaving] = useState(false);
-  const [measErr, setMeasErr] = useState(null);
-  const [fabricFeedbackOpts, setFabricFeedbackOpts] = useState([]);
-  const fabricFbTimerRef = useRef(null);
-  const [fabricRows, setFabricRows] = useState(() => createEmptyFabricRows());
 
   const master = data?.master ?? data?.Master;
   const existingId = data?.inspectionTNAProcMstId ?? data?.InspectionTNAProcMstId ?? null;
@@ -396,30 +506,82 @@ export default function QDInspectionProcessEntryView() {
   const masterStyleNo = master?.styleNo ?? master?.StyleNo ?? '';
   const measurementTypesList = data?.measurementTypes ?? data?.MeasurementTypes ?? [];
 
+  const poidForGrid = useMemo(() => {
+    const m = data?.master ?? data?.Master ?? {};
+    return (
+      poid ||
+      (m?.poid != null ? String(m.poid) : '') ||
+      (m?.POID != null ? String(m.POID) : '') ||
+      (formData?.poid != null ? String(formData.poid) : '') ||
+      (formData?.POID != null ? String(formData.POID) : '') ||
+      ''
+    );
+  }, [poid, data, formData?.poid, formData?.POID]);
+
   const loadData = useCallback(async () => {
-    if (!poid || !inspType) {
-      setLoading(false);
-      setError('Missing poid or inspType in URL.');
-      return;
-    }
     setLoading(true);
     setError(null);
     try {
+      if (editId) {
+        const { data: res } = await qdApi.get(`/InspectionProcess/GetEditData/${encodeURIComponent(editId)}`);
+        const masterRes = res?.master ?? res?.Master ?? {};
+        const rowForForm = mergeApiRowForFormMapping(res, masterRes);
+        const details = res?.details ?? res?.Details ?? [];
+        const mstId =
+          masterRes.inspectionTNAProcMstId ??
+          masterRes.InspectionTNAProcMstID ??
+          masterRes.InspectionTNAProcMstId ??
+          Number(editId);
+        setData({
+          master: masterRes,
+          Master: masterRes,
+          measurementTypes:
+            res?.measurementTypes ??
+            res?.MeasurementTypes ??
+            masterRes.measurementTypes ??
+            masterRes.MeasurementTypes ??
+            [],
+          inspectionTNAProcMstId: mstId,
+          InspectionTNAProcMstId: mstId,
+          savedRecord: null,
+          suggestedInspAutoNo: res?.suggestedInspAutoNo ?? res?.SuggestedInspAutoNo,
+        });
+        const sn = rowForForm.styleNo ?? rowForForm.StyleNo ?? masterRes.styleNo ?? masterRes.StyleNo ?? '';
+        const mergedMaster = { ...masterRes, ...buildFormFromSaved(rowForForm, sn) };
+        setFormData(mergedMaster);
+        setDetailsList(normalizeDetailsFromApi(details));
+        return;
+      }
+
+      if (!poid || !inspType) {
+        setError('Missing id or (poid and inspType) in URL.');
+        setData(null);
+        return;
+      }
+
+      if (USE_INSPECTION_PROCESS_ENTRY_MOCK) {
+        setData(buildMockInspectionProcessEntry(poid, inspType));
+        return;
+      }
       const { data: res } = await qdApi.get(
         `/MasterOrderForQDSheet/inspection-process-entry/${encodeURIComponent(poid)}`,
         { params: { inspType } }
       );
       setData(res);
     } catch (e) {
+      setData(null);
       setError(
         typeof e?.response?.data === 'string'
           ? e.response.data
-          : e?.message || 'Failed to load inspection process entry'
+          : e?.response?.data?.message ||
+              e?.response?.data?.title ||
+              e?.message ||
+              'Failed to load inspection process entry'
       );
     } finally {
       setLoading(false);
     }
-  }, [poid, inspType]);
+  }, [editId, poid, inspType]);
 
   useEffect(() => {
     loadData();
@@ -427,220 +589,95 @@ export default function QDInspectionProcessEntryView() {
 
   useEffect(() => {
     if (!data) return;
+    if (editId) return;
     const m = data?.master ?? data?.Master;
     const s = data?.savedRecord ?? data?.SavedRecord;
-    const sn = m?.styleNo ?? m?.StyleNo ?? '';
-    const next = buildFormFromSaved(s, sn);
+    const record = mergeApiRowForFormMapping(data, s || m);
+    const sn = record?.styleNo ?? record?.StyleNo ?? '';
+    const next = buildFormFromSaved(record, sn);
     const suggested = data?.suggestedInspAutoNo ?? data?.SuggestedInspAutoNo;
     if (!s && suggested) next.inspAutoNo = suggested;
-    setForm(next);
+    setFormData(next);
     const lines = data.fabricTestLines ?? data.FabricTestLines ?? [];
-    setFabricRows(mapFabricFromApi(lines));
-    const types = data.measurementTypes ?? data.MeasurementTypes ?? [];
-    if (types.length > 0) setMeasTypeIdx((prev) => (prev < 0 ? 0 : prev));
-  }, [data]);
+    setDetailsList(normalizeDetailsFromApi(lines));
+  }, [data, editId]);
 
   useEffect(() => {
     setMeasTypeIdx(-1);
-    setMeasRows([]);
-    setMeasHeaders(emptyHeaderCells());
-    setMeasErr(null);
-  }, [poid, inspType]);
+  }, [poid, inspType, editId]);
 
-  const loadMeasurementGrid = useCallback(async () => {
-    if (!poid || measTypeIdx < 0) {
-      setMeasRows([]);
-      setMeasHeaders(emptyHeaderCells());
-      return;
-    }
-    const list = data?.measurementTypes ?? data?.MeasurementTypes ?? [];
-    const mt = list[measTypeIdx];
-    const mtId = mt?.measurementTypeID ?? mt?.MeasurementTypeID;
-    if (!mtId) {
-      setMeasRows([]);
-      return;
-    }
-    setMeasLoading(true);
-    setMeasErr(null);
-    try {
-      const params = { measurementTypeId: mtId };
-      const eid = data?.inspectionTNAProcMstId ?? data?.InspectionTNAProcMstId;
-      if (eid) params.inspectionTNAProcMstId = eid;
-      const { data: res } = await qdApi.get(
-        `/MasterOrderForQDSheet/inspection-process-entry/${encodeURIComponent(poid)}/measurement-grid`,
-        { params }
-      );
-      const apiRows = res?.rows ?? res?.Rows ?? [];
-      setMeasHeaders(headersFromFirstRow(apiRows));
-      setMeasRows(apiRows.map(mapMeasRowFromApi));
-    } catch (e) {
-      setMeasErr(
-        typeof e?.response?.data === 'string'
-          ? e.response.data
-          : e?.message || 'Failed to load measurement grid'
-      );
-      setMeasRows([]);
-      setMeasHeaders(emptyHeaderCells());
-    } finally {
-      setMeasLoading(false);
-    }
-  }, [poid, measTypeIdx, data]);
-
+  /** Inspection entry payload often omits `measurementTypes`; same list as QD inspection sheet. */
   useEffect(() => {
-    if (!poid || !data) return;
-    loadMeasurementGrid();
-  }, [poid, measTypeIdx, data, loadMeasurementGrid]);
-
-  const fetchFabricFeedback = useCallback(async (prefix) => {
-    try {
-      const { data: list } = await qdApi.get(
-        '/MasterOrderForQDSheet/inspection-process-entry/fabric-feedback',
-        { params: { prefix: prefix || '' } }
-      );
-      setFabricFeedbackOpts(Array.isArray(list) ? list : []);
-    } catch {
-      setFabricFeedbackOpts([]);
+    let cancelled = false;
+    if (USE_INSPECTION_PROCESS_ENTRY_MOCK) {
+      return () => {};
     }
+    if (!data || !poidForGrid) {
+      return () => {};
+    }
+    const existing = data.measurementTypes ?? data.MeasurementTypes ?? [];
+    if (existing.length > 0) {
+      return () => {};
+    }
+    (async () => {
+      try {
+        const { data: mt } = await qdApi.get(
+          `/MasterOrderForQDSheet/quality-department-inspection/${encodeURIComponent(poidForGrid)}/measurement-types`
+        );
+        const list = Array.isArray(mt) ? mt : [];
+        if (cancelled || list.length === 0) return;
+        setData((prev) =>
+          prev ? { ...prev, measurementTypes: list, MeasurementTypes: list } : prev
+        );
+      } catch {
+        /* leave empty if endpoint fails */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data, poidForGrid]);
+
+  const updateDetailRow = useCallback((index, patch) => {
+    setDetailsList((list) => {
+      const next = [...list];
+      next[index] = { ...next[index], ...patch };
+      return next;
+    });
   }, []);
 
-  const handleSaveSpecs = async () => {
-    if (measTypeIdx < 0 || !poid) return;
-    const mt = measurementTypesList[measTypeIdx];
-    const mtId = mt?.measurementTypeID ?? mt?.MeasurementTypeID;
-    if (!mtId) return;
-    setMeasSaving(true);
-    setMeasErr(null);
-    try {
-      const headers = {};
-      for (let i = 1; i <= SIZE_COUNT; i += 1) {
-        headers[`header${i}`] = measHeaders[i - 1] ?? '';
-      }
-      const rows = measRows.map((r) => {
-        const o = {
-          sizeSpecsNewId: r.sizeSpecsNewId,
-          sizeSpecsHeaderNewId: r.sizeSpecsHeaderNewId,
-          measurementPointId: r.measurementPointId,
-          measurementPoints: r.measurementPoints,
-          measurements: r.measurements,
-          tolerance: r.tolerance,
-        };
-        for (let i = 1; i <= SIZE_COUNT; i += 1) {
-          o[`col${i}`] = r.spec[i - 1] ?? '';
-        }
-        return o;
-      });
-      await qdApi.post(
-        `/MasterOrderForQDSheet/inspection-process-entry/${encodeURIComponent(poid)}/measurement-grid`,
-        {
-          measurementTypeId: mtId,
-          inspectionTNAProcMstId: existingId ?? null,
-          headers,
-          rows,
-        }
-      );
-      setSnackMsg('Size specs saved.');
-      setSnackOpen(true);
-      await loadData();
-    } catch (e) {
-      setMeasErr(
-        typeof e?.response?.data === 'string'
-          ? e.response.data
-          : e?.response?.data?.message || e?.message || 'Save specs failed'
-      );
-    } finally {
-      setMeasSaving(false);
-    }
+  const handleAddFabricRow = () => {
+    setDetailsList((rows) => [...rows, createEmptyDetailRow()]);
   };
 
-  const setFabricCell = (idx, field, value) => {
-    setFabricRows((rows) => {
-      const next = [...rows];
-      next[idx] = { ...next[idx], [field]: value };
-      return next;
-    });
-  };
-
-  const setMeasHeaderCell = (colIdx, value) => {
-    setMeasHeaders((h) => {
-      const next = [...h];
-      next[colIdx] = value;
-      return next;
-    });
-  };
-
-  const setMeasRowField = (rowIdx, field, value) => {
-    setMeasRows((rows) => {
-      const next = [...rows];
-      next[rowIdx] = { ...next[rowIdx], [field]: value };
-      return next;
-    });
-  };
-
-  const setMeasSpecCell = (rowIdx, colIdx, value) => {
-    setMeasRows((rows) => {
-      const next = [...rows];
-      const r = { ...next[rowIdx] };
-      const spec = [...r.spec];
-      spec[colIdx] = value;
-      r.spec = spec;
-      next[rowIdx] = r;
-      return next;
-    });
-  };
-
-  const setF = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
-  const setB = (key) => (_e, checked) => setForm((prev) => ({ ...prev, [key]: checked }));
+  const setF = (key) => (e) => setFormData((prev) => ({ ...prev, [key]: e.target.value }));
+  const setB = (key) => (_e, checked) =>
+    setFormData((prev) => ({ ...prev, [key]: Boolean(checked) }));
 
   const handleSave = async () => {
     setSaving(true);
     setSaveErr(null);
     try {
-      const body = {
-        inspectionTNAProcMstId: existingId ?? null,
-        inspAutoNo: form.inspAutoNo || null,
-        receivedDate: form.receivedDate ? new Date(form.receivedDate).toISOString() : null,
-        supplierContact: form.supplierContact || null,
-        styleNo: form.styleNo || null,
-        styleName: form.styleName || null,
-        coo: form.coo || null,
-        savedInSession: form.savedInSeason || null,
-        sampleType: form.sampleType || null,
-        reviewDate: form.reviewDate ? new Date(form.reviewDate).toISOString() : null,
-        generalComments: form.generalComments || null,
-        teMeasureToSpec: form.teMeasureToSpec,
-        teFabricWeight: form.teFabricWeight,
-        teComponents: form.teComponents,
-        teGarmentFit: form.teGarmentFit,
-        teFabricColorMatch: form.teFabricColorMatch,
-        teEmbellishment: form.teEmbellishment,
-        teFabricQuality: form.teFabricQuality,
-        teConstruction: form.teConstruction,
-        teLabeling: form.teLabeling,
-        teFabricWashTest: form.teFabricWashTest,
-        teSewingQuality: form.teSewingQuality,
-        teComments: form.teComments || null,
-        fdmrComments: form.fdmrComments || null,
-        fabricStandardGsm: parseDec(form.fabricStandardGsm),
-        actualWeightGsm: parseDec(form.actualWeightGsm),
-        fabricApproved: Number(form.fabricApproved),
-        constructionFitComments: form.constructionFitComments || null,
-        embellishmentComments: form.embellishmentComments || null,
-        asiGarmentRejected: form.asiGarmentRejected,
-        asiProceedToSales: form.asiProceedToSales,
-        asiProceedWithSales: form.asiProceedWithSales,
-        asiProceedWithProd: form.asiProceedWithProd,
-        asiGarmentApproved: form.asiGarmentApproved,
-        fabricTestLines: buildFabricTestLinesPayload(fabricRows),
-      };
+      if (USE_INSPECTION_PROCESS_ENTRY_MOCK) {
+        setSnackMsg('Save (demo — API off). Form values not sent to server.');
+        setSnackOpen(true);
+        return;
+      }
 
-      await qdApi.post(
-        `/MasterOrderForQDSheet/inspection-process-entry/${encodeURIComponent(poid)}`,
-        body,
-        { params: { inspType } }
-      );
+      const mstFallback =
+        existingId ??
+        data?.inspectionTNAProcMstId ??
+        data?.InspectionTNAProcMstId ??
+        data?.InspectionTNAProcMstID ??
+        null;
+      const payload = buildInspectionProcessSavePayload(formData, detailsList, mstFallback);
+      // eslint-disable-next-line no-console -- debug: full Save body
+      console.log('[InspectionProcess/Save] payload', payload);
+
+      await qdApi.post('/InspectionProcess/Save', payload);
 
       await loadData();
-      setSnackMsg(existingId ? 'Record updated successfully.' : 'Record saved successfully.');
+      setSnackMsg('Record saved successfully.');
       setSnackOpen(true);
     } catch (e) {
       const msg =
@@ -656,10 +693,10 @@ export default function QDInspectionProcessEntryView() {
   const ponoDisplay = master?.pono ?? master?.PONO ?? '';
   const pageTitleLeft = `${inspType} -`;
 
-  if (!poid) {
+  if (!editId && !poid) {
     return (
       <Container maxWidth="xl" sx={{ py: 3 }}>
-        <Alert severity="warning">Missing poid in URL.</Alert>
+        <Alert severity="warning">Missing id or poid in URL. Open this page from Sample Inspection Report (with id) or Master Order.</Alert>
       </Container>
     );
   }
@@ -680,60 +717,22 @@ export default function QDInspectionProcessEntryView() {
         sx={{ mb: { xs: 2, md: 3 } }}
       />
 
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'flex-start', sm: 'center' }}
-        flexWrap="wrap"
-        gap={2}
-        sx={{ mb: 3 }}
-      >
-        <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
-          <Button
-            component={RouterLink}
-            to={paths.dashboard.masterOrderForQDSheet}
-            startIcon={<ArrowBackIcon />}
-            variant="outlined"
-            size="small"
-          >
-            Back
-          </Button>
-          <Chip label={`POID: ${poid}`} variant="outlined" size="small" sx={{ fontWeight: 600 }} />
-        </Stack>
-
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-          <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ mr: 0.5 }}>
-            Process Type:
-          </Typography>
-          <ToggleButtonGroup
-            value={inspType}
-            exclusive
-            onChange={handleInspTypeChange}
-            size="small"
-            sx={{ flexWrap: 'wrap' }}
-          >
-            {INSP_TYPE_ORDER.map((t) => (
-              <ToggleButton
-                key={t}
-                value={t}
-                sx={{
-                  px: 1.5,
-                  fontWeight: 700,
-                  fontSize: 12,
-                  '&.Mui-selected': {
-                    bgcolor: alpha(theme.palette[INSP_TYPE_COLORS[t] || 'primary'].main, 0.12),
-                    color: `${INSP_TYPE_COLORS[t] || 'primary'}.dark`,
-                    borderColor: `${INSP_TYPE_COLORS[t] || 'primary'}.main`,
-                  },
-                }}
-              >
-                {INSP_TYPE_SHORT[t]}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-
-          {/* Record Status chips removed per request */}
-        </Stack>
+      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" sx={{ mb: 3 }}>
+        <Button
+          component={RouterLink}
+          to={paths.dashboard.masterOrderForQDSheet}
+          startIcon={<ArrowBackIcon />}
+          variant="outlined"
+          size="small"
+        >
+          Back
+        </Button>
+        <Chip
+          label={`POID: ${poidForGrid || '—'}`}
+          variant="outlined"
+          size="small"
+          sx={{ fontWeight: 600 }}
+        />
       </Stack>
 
       {loading && (
@@ -754,7 +753,7 @@ export default function QDInspectionProcessEntryView() {
         </Alert>
       )}
 
-      {!loading && !error && master && (
+      {!loading && !error && data && (
         <Stack spacing={2.5}>
           <LegacySectionCard
             title={
@@ -775,7 +774,7 @@ export default function QDInspectionProcessEntryView() {
                   component="span"
                   sx={{ fontSize: { xs: '1.05rem', sm: '1.35rem' }, fontWeight: 800, color: 'primary.main' }}
                 >
-                  {ponoDisplay || `POID ${poid}`}
+                  {ponoDisplay || `POID ${poidForGrid || poid || '—'}`}
                 </Typography>
               </Stack>
             }
@@ -786,9 +785,9 @@ export default function QDInspectionProcessEntryView() {
                 <TextField
                   fullWidth
                   size="small"
-                  value={form.inspAutoNo}
+                  value={formData.inspAutoNo}
                   onChange={setF('inspAutoNo')}
-                  InputProps={{ readOnly: Boolean(String(form.inspAutoNo || '').trim()) }}
+                  InputProps={{ readOnly: Boolean(String(formData.inspAutoNo || '').trim()) }}
                   placeholder="Assigned from server / first save"
                   sx={inputSx}
                 />
@@ -802,7 +801,7 @@ export default function QDInspectionProcessEntryView() {
                   type="date"
                   fullWidth
                   size="small"
-                  value={form.receivedDate}
+                  value={dateFieldValue(formData?.receivedDate)}
                   onChange={setF('receivedDate')}
                   sx={inputSx}
                 />
@@ -812,7 +811,7 @@ export default function QDInspectionProcessEntryView() {
                 <TextField
                   fullWidth
                   size="small"
-                  value={form.supplierContact}
+                  value={formData.supplierContact}
                   onChange={setF('supplierContact')}
                   sx={inputSx}
                 />
@@ -822,7 +821,7 @@ export default function QDInspectionProcessEntryView() {
                 <TextField
                   fullWidth
                   size="small"
-                  value={form.styleNo}
+                  value={formData.styleNo}
                   onChange={setF('styleNo')}
                   placeholder={masterStyleNo || ''}
                   sx={inputSx}
@@ -830,28 +829,28 @@ export default function QDInspectionProcessEntryView() {
               </Grid>
               <Grid xs={12} sm={6} md={3}>
                 <FieldLabel>COO</FieldLabel>
-                <TextField fullWidth size="small" value={form.coo} onChange={setF('coo')} sx={inputSx} />
+                <TextField fullWidth size="small" value={formData.coo} onChange={setF('coo')} sx={inputSx} />
               </Grid>
             </Grid>
 
             <Grid container spacing={2} sx={{ mt: 0 }}>
               <Grid xs={12} sm={6} md={3}>
                 <FieldLabel>Style Name</FieldLabel>
-                <TextField fullWidth size="small" value={form.styleName} onChange={setF('styleName')} sx={inputSx} />
+                <TextField fullWidth size="small" value={formData.styleName} onChange={setF('styleName')} sx={inputSx} />
               </Grid>
               <Grid xs={12} sm={6} md={3}>
                 <FieldLabel>Saved in Season</FieldLabel>
                 <TextField
                   fullWidth
                   size="small"
-                  value={form.savedInSeason}
+                  value={formData.savedInSeason}
                   onChange={setF('savedInSeason')}
                   sx={inputSx}
                 />
               </Grid>
               <Grid xs={12} sm={6} md={3}>
                 <FieldLabel>Sample Type</FieldLabel>
-                <TextField fullWidth size="small" value={form.sampleType} onChange={setF('sampleType')} sx={inputSx} />
+                <TextField fullWidth size="small" value={formData.sampleType} onChange={setF('sampleType')} sx={inputSx} />
               </Grid>
               <Grid xs={12} sm={6} md={3}>
                 <FieldLabel>Review Date</FieldLabel>
@@ -859,7 +858,7 @@ export default function QDInspectionProcessEntryView() {
                   type="date"
                   fullWidth
                   size="small"
-                  value={form.reviewDate}
+                  value={dateFieldValue(formData?.reviewDate)}
                   onChange={setF('reviewDate')}
                   sx={inputSx}
                 />
@@ -876,7 +875,15 @@ export default function QDInspectionProcessEntryView() {
                       <FormControlLabel
                         key={key}
                         sx={{ alignItems: 'flex-start', ml: 0, mr: 0 }}
-                        control={<Checkbox checked={!!form[key]} onChange={setB(key)} size="small" sx={{ pt: 0.3 }} />}
+                        control={
+                          <Checkbox
+                            name={key}
+                            checked={toBoolean(formData?.[key])}
+                            onChange={setB(key)}
+                            size="small"
+                            sx={{ pt: 0.3 }}
+                          />
+                        }
                         label={
                           <Typography variant="body2" sx={{ fontSize: 12, fontWeight: 600, lineHeight: 1.35 }}>
                             {label}
@@ -895,7 +902,7 @@ export default function QDInspectionProcessEntryView() {
                 size="small"
                 multiline
                 minRows={2}
-                value={form.teComments}
+                value={formData?.teComments ?? ''}
                 onChange={setF('teComments')}
                 sx={inputSx}
               />
@@ -910,7 +917,7 @@ export default function QDInspectionProcessEntryView() {
                 size="small"
                 multiline
                 minRows={2}
-                value={form.fdmrComments}
+                value={formData?.fdmrComments ?? ''}
                 onChange={setF('fdmrComments')}
                 sx={inputSx}
               />
@@ -933,207 +940,100 @@ export default function QDInspectionProcessEntryView() {
                       <em>Select</em>
                     </MenuItem>
                     {measurementTypesList.map((mt, idx) => (
-                      <MenuItem key={idx} value={String(idx)}>
+                      <MenuItem
+                        key={mt.measurementTypeID ?? mt.MeasurementTypeID ?? idx}
+                        value={String(idx)}
+                      >
                         {mt.measurementType ?? mt.MeasurementType ?? ''}
                       </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid xs={12} sm={4} md={3}>
-                <Button
-                  variant="contained"
-                  size="medium"
-                  disabled={measSaving || measTypeIdx < 0 || measRows.length === 0}
-                  onClick={handleSaveSpecs}
-                  sx={{ fontWeight: 700 }}
-                >
-                  {measSaving ? 'Saving…' : 'Save Specs'}
-                </Button>
-              </Grid>
             </Grid>
-
-            {measErr && (
-              <Alert severity="error" sx={{ mb: 1 }} onClose={() => setMeasErr(null)}>
-                {measErr}
-              </Alert>
-            )}
-
-            {measLoading && (
-              <Box sx={{ py: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CircularProgress size={20} />
-                <Typography variant="caption">Loading measurement grid…</Typography>
-              </Box>
-            )}
-
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              Spec = PO quote (read-only); Act = inspection measurement (saved to INSPSizeSpecs). Headers match legacy
-              txtSpecSizeH1–H12.
-            </Typography>
-
-            <Box sx={{ overflow: 'auto', border: 1, borderColor: 'divider', borderRadius: 0.5, maxWidth: '100%' }}>
-              <Table size="small" sx={{ minWidth: 1100, '& thead th': { color: '#fff', fontWeight: 700, fontSize: 10 } }}>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: MEASUREMENT_GRID_HEADER }}>
-                    <TableCell rowSpan={2} align="center" sx={{ verticalAlign: 'middle' }}>
-                      #
-                    </TableCell>
-                    <TableCell rowSpan={2} sx={{ minWidth: 120 }}>
-                      Point
-                    </TableCell>
-                    <TableCell rowSpan={2} align="center" sx={{ minWidth: 48 }}>
-                      Tol
-                    </TableCell>
-                    <TableCell rowSpan={2} align="center" sx={{ minWidth: 36 }}>
-                      U
-                    </TableCell>
-                    {Array.from({ length: SIZE_COUNT }, (_, i) => (
-                      <TableCell key={`hdr-${i}`} colSpan={2} align="center" sx={{ p: 0.5 }}>
-                        <TextField
-                          size="small"
-                          fullWidth
-                          value={measHeaders[i] ?? ''}
-                          onChange={(e) => setMeasHeaderCell(i, e.target.value)}
-                          placeholder={`H${i + 1}`}
-                          sx={{
-                            ...inputSx,
-                            '& .MuiInputBase-input': { py: 0.5, fontSize: 10, color: 'common.white' },
-                            '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.4)' },
-                          }}
-                        />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                  <TableRow sx={{ bgcolor: MEASUREMENT_GRID_HEADER }}>
-                    {Array.from({ length: SIZE_COUNT }, (_, i) => (
-                      <Fragment key={`sub-${i}`}>
-                        <TableCell align="center" sx={{ fontSize: 9, py: 0.35 }}>
-                          Spec
-                        </TableCell>
-                        <TableCell align="center" sx={{ fontSize: 9, py: 0.35 }}>
-                          Act
-                        </TableCell>
-                      </Fragment>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {measRows.map((row, ri) => (
-                    <TableRow key={`${row.measurementPointId}-${ri}`}>
-                      <TableCell align="center" sx={{ fontSize: 11, fontWeight: 700 }}>
-                        {ri + 1}
-                      </TableCell>
-                      <TableCell sx={{ p: 0.25 }}>
-                        <TextField
-                          size="small"
-                          fullWidth
-                          value={row.measurementPoints}
-                          onChange={(e) => setMeasRowField(ri, 'measurementPoints', e.target.value)}
-                          sx={inputSx}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ p: 0.25, maxWidth: 64 }}>
-                        <TextField
-                          size="small"
-                          fullWidth
-                          value={row.tolerance}
-                          onChange={(e) => setMeasRowField(ri, 'tolerance', e.target.value)}
-                          sx={inputSx}
-                        />
-                      </TableCell>
-                      <TableCell align="center" sx={{ fontSize: 10, p: 0.25 }}>
-                        {row.measurements}
-                      </TableCell>
-                      {Array.from({ length: SIZE_COUNT }, (_, ci) => (
-                        <Fragment key={`c-${ri}-${ci}`}>
-                          <TableCell sx={{ bgcolor: '#ffff99', p: 0.25, minWidth: 48 }}>
-                            <TextField
-                              size="small"
-                              fullWidth
-                              value={row.tpl[ci] ?? ''}
-                              InputProps={{ readOnly: true }}
-                              sx={{ ...inputSx, '& input': { py: 0.4, fontSize: 10 } }}
-                            />
-                          </TableCell>
-                          <TableCell sx={{ p: 0.25, minWidth: 48 }}>
-                            <TextField
-                              size="small"
-                              fullWidth
-                              value={row.spec[ci] ?? ''}
-                              onChange={(e) => setMeasSpecCell(ri, ci, e.target.value)}
-                              sx={{ ...inputSx, '& input': { py: 0.4, fontSize: 10 } }}
-                            />
-                          </TableCell>
-                        </Fragment>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Box>
           </LegacySectionCard>
 
           <LegacySectionCard title="FABRIC TESTING AND GARMENT FEEDBACK">
+            <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1.5 }}>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<AddIcon />}
+                onClick={handleAddFabricRow}
+                sx={{ textTransform: 'none', fontWeight: 600 }}
+              >
+                Add row
+              </Button>
+            </Stack>
             <TableContainer component={Paper} variant="outlined" sx={{ mb: 2, borderRadius: 0.5 }}>
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'grey.200' }}>
                     <TableCell sx={{ fontWeight: 700, fontSize: 12 }}>Fabric Tests</TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 700, fontSize: 12, width: 120 }}>
+                    <TableCell align="center" sx={{ fontWeight: 700, fontSize: 12, width: 100 }}>
                       Approved
                     </TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 700, fontSize: 12, width: 120 }}>
+                    <TableCell align="center" sx={{ fontWeight: 700, fontSize: 12, width: 100 }}>
                       Rejected
                     </TableCell>
                     <TableCell sx={{ fontWeight: 700, fontSize: 12 }}>Comments</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {fabricRows.map((row, idx) => (
-                    <TableRow key={idx}>
+                  {(detailsList ?? []).map((item, index) => (
+                    <TableRow key={item?.fabricTestLineId ?? item?.FabricTestLineId ?? item?.id ?? index}>
                       <TableCell sx={{ py: 0.5, verticalAlign: 'middle' }}>
-                        <Autocomplete
-                          freeSolo
+                        <TextField
                           size="small"
-                          options={fabricFeedbackOpts}
-                          value={row.fabricTest}
-                          onChange={(_e, v) => setFabricCell(idx, 'fabricTest', v ?? '')}
-                          onInputChange={(e, v) => {
-                            setFabricCell(idx, 'fabricTest', v);
-                            if (fabricFbTimerRef.current) clearTimeout(fabricFbTimerRef.current);
-                            fabricFbTimerRef.current = setTimeout(() => fetchFabricFeedback(v), 280);
+                          fullWidth
+                          value={item?.fabricTests ?? ''}
+                          onChange={(e) => updateDetailRow(index, { fabricTests: e.target.value })}
+                          placeholder="Fabric test"
+                          sx={inputSx}
+                        />
+                      </TableCell>
+                      <TableCell align="center" sx={{ verticalAlign: 'middle' }}>
+                        <Checkbox
+                          size="small"
+                          checked={item?.isApprove === true}
+                          onChange={(e) => {
+                            const on = e.target.checked;
+                            setDetailsList((list) => {
+                              const updated = [...list];
+                              updated[index] = {
+                                ...updated[index],
+                                isApprove: on ? true : null,
+                              };
+                              return updated;
+                            });
                           }}
-                          renderInput={(params) => (
-                            <TextField {...params} placeholder="Fabric test" sx={inputSx} />
-                          )}
+                          inputProps={{ 'aria-label': 'Approved', name: `fabric-approve-${index}` }}
                         />
                       </TableCell>
                       <TableCell align="center" sx={{ verticalAlign: 'middle' }}>
-                        <Radio
+                        <Checkbox
                           size="small"
-                          checked={row.verdict === 'A'}
-                          onChange={() =>
-                            setFabricCell(idx, 'verdict', row.verdict === 'A' ? '' : 'A')
-                          }
-                          inputProps={{ 'aria-label': 'Approved', name: `fabric-row-${idx}` }}
-                        />
-                      </TableCell>
-                      <TableCell align="center" sx={{ verticalAlign: 'middle' }}>
-                        <Radio
-                          size="small"
-                          checked={row.verdict === 'R'}
-                          onChange={() =>
-                            setFabricCell(idx, 'verdict', row.verdict === 'R' ? '' : 'R')
-                          }
-                          inputProps={{ 'aria-label': 'Rejected', name: `fabric-row-${idx}` }}
+                          checked={item?.isApprove === false}
+                          onChange={(e) => {
+                            const on = e.target.checked;
+                            setDetailsList((list) => {
+                              const updated = [...list];
+                              updated[index] = {
+                                ...updated[index],
+                                isApprove: on ? false : null,
+                              };
+                              return updated;
+                            });
+                          }}
+                          inputProps={{ 'aria-label': 'Rejected', name: `fabric-reject-${index}` }}
                         />
                       </TableCell>
                       <TableCell sx={{ py: 0.5, verticalAlign: 'middle' }}>
                         <TextField
                           size="small"
                           fullWidth
-                          value={row.comments}
-                          onChange={(e) => setFabricCell(idx, 'comments', e.target.value)}
+                          value={item?.fabricComments ?? ''}
+                          onChange={(e) => updateDetailRow(index, { fabricComments: e.target.value })}
                           sx={inputSx}
                         />
                       </TableCell>
@@ -1163,7 +1063,7 @@ export default function QDInspectionProcessEntryView() {
                 <TextField
                   fullWidth
                   size="small"
-                  value={form.fabricStandardGsm}
+                  value={formData?.fabricStandardGsm ?? ''}
                   onChange={setF('fabricStandardGsm')}
                   sx={inputSx}
                 />
@@ -1173,7 +1073,7 @@ export default function QDInspectionProcessEntryView() {
                 <TextField
                   fullWidth
                   size="small"
-                  value={form.actualWeightGsm}
+                  value={formData?.actualWeightGsm ?? ''}
                   onChange={setF('actualWeightGsm')}
                   sx={inputSx}
                 />
@@ -1182,8 +1082,8 @@ export default function QDInspectionProcessEntryView() {
                 <FieldLabel>Fabric Approved?</FieldLabel>
                 <RadioGroup
                   row
-                  value={form.fabricApproved}
-                  onChange={(e) => setForm((p) => ({ ...p, fabricApproved: e.target.value }))}
+                  value={String(formData?.fabricApproved ?? '2')}
+                  onChange={(e) => setFormData((p) => ({ ...p, fabricApproved: e.target.value }))}
                 >
                   <FormControlLabel value="1" control={<Radio size="small" />} label="YES" />
                   <FormControlLabel value="0" control={<Radio size="small" />} label="NO" />
@@ -1199,7 +1099,7 @@ export default function QDInspectionProcessEntryView() {
                 size="small"
                 multiline
                 minRows={2}
-                value={form.constructionFitComments}
+                value={formData.constructionFitComments}
                 onChange={setF('constructionFitComments')}
                 sx={inputSx}
               />
@@ -1211,7 +1111,7 @@ export default function QDInspectionProcessEntryView() {
                 size="small"
                 multiline
                 minRows={2}
-                value={form.embellishmentComments}
+                value={formData.embellishmentComments}
                 onChange={setF('embellishmentComments')}
                 sx={inputSx}
               />
@@ -1223,7 +1123,7 @@ export default function QDInspectionProcessEntryView() {
                 size="small"
                 multiline
                 minRows={3}
-                value={form.generalComments}
+                value={formData.generalComments}
                 onChange={setF('generalComments')}
                 sx={inputSx}
               />
@@ -1236,7 +1136,7 @@ export default function QDInspectionProcessEntryView() {
                 <FormControlLabel
                   control={
                     <Checkbox
-                      checked={form.asiGarmentRejected}
+                      checked={toBoolean(formData?.asiGarmentRejected)}
                       onChange={setB('asiGarmentRejected')}
                       size="small"
                     />
@@ -1251,7 +1151,11 @@ export default function QDInspectionProcessEntryView() {
               <Grid xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox checked={form.asiProceedToSales} onChange={setB('asiProceedToSales')} size="small" />
+                    <Checkbox
+                      checked={toBoolean(formData?.asiProceedToSales)}
+                      onChange={setB('asiProceedToSales')}
+                      size="small"
+                    />
                   }
                   label={
                     <Typography variant="body2" sx={{ fontSize: 12, fontWeight: 600 }}>
@@ -1263,7 +1167,11 @@ export default function QDInspectionProcessEntryView() {
               <Grid xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox checked={form.asiProceedWithSales} onChange={setB('asiProceedWithSales')} size="small" />
+                    <Checkbox
+                      checked={toBoolean(formData?.asiProceedWithSales)}
+                      onChange={setB('asiProceedWithSales')}
+                      size="small"
+                    />
                   }
                   label={
                     <Typography variant="body2" sx={{ fontSize: 12, fontWeight: 600 }}>
@@ -1275,7 +1183,11 @@ export default function QDInspectionProcessEntryView() {
               <Grid xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox checked={form.asiProceedWithProd} onChange={setB('asiProceedWithProd')} size="small" />
+                    <Checkbox
+                      checked={toBoolean(formData?.asiProceedWithProd)}
+                      onChange={setB('asiProceedWithProd')}
+                      size="small"
+                    />
                   }
                   label={
                     <Typography variant="body2" sx={{ fontSize: 12, fontWeight: 600 }}>
@@ -1287,7 +1199,11 @@ export default function QDInspectionProcessEntryView() {
               <Grid xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox checked={form.asiGarmentApproved} onChange={setB('asiGarmentApproved')} size="small" />
+                    <Checkbox
+                      checked={toBoolean(formData?.asiGarmentApproved)}
+                      onChange={setB('asiGarmentApproved')}
+                      size="small"
+                    />
                   }
                   label={
                     <Typography variant="body2" sx={{ fontSize: 12, fontWeight: 600 }}>
@@ -1330,8 +1246,8 @@ export default function QDInspectionProcessEntryView() {
         </Stack>
       )}
 
-      {!loading && !error && !master && (
-        <Alert severity="info">No inspection data found for POID: {poid}, Type: {inspType}</Alert>
+      {!loading && !error && !data && (
+        <Alert severity="info">No inspection data found for POID: {poidForGrid || poid || '—'}, Type: {inspType}</Alert>
       )}
 
       <Snackbar

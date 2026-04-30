@@ -23,6 +23,33 @@ import FormProvider, { RHFTextField } from 'src/components/hook-form';
 
 // ----------------------------------------------------------------------
 
+/** Axios interceptor rejects `response.data` (object/string), not AxiosError */
+function getLoginErrorMessage(payload) {
+  if (payload == null) return 'Something went wrong. Please try again.';
+  if (typeof payload === 'string') {
+    if (payload === 'Network Error or Server Unreachable') {
+      return 'Server se connect nahi ho pa raha. API URL / network check karein.';
+    }
+    return payload;
+  }
+  if (typeof payload === 'object') {
+    const fromErrors = () => {
+      const { errors } = payload;
+      if (!errors || typeof errors !== 'object') return '';
+      const first = Object.values(errors).flat().find((v) => v != null && String(v).trim());
+      return first ? String(first) : '';
+    };
+    const msg =
+      (typeof payload.message === 'string' && payload.message) ||
+      (typeof payload.Message === 'string' && payload.Message) ||
+      (typeof payload.detail === 'string' && payload.detail) ||
+      (typeof payload.title === 'string' && payload.title) ||
+      fromErrors();
+    if (msg.trim()) return msg.trim();
+  }
+  return 'Invalid username or password';
+}
+
 export default function JwtLoginView() {
   const router = useRouter();
   const [errorMsg, setErrorMsg] = useState('');
@@ -59,20 +86,36 @@ export default function JwtLoginView() {
         password: data.password,
       });
 
-      // ✅ Agar token mila to store karke redirect karo
-      if (response.data && response.data.token) {
-        localStorage.setItem('accessToken', response.data.token);
-        sessionStorage.setItem('accessToken', response.data.token);
+      const token = response.data?.token || response.data?.accessToken;
+      if (token) {
+        localStorage.setItem('accessToken', token);
+        sessionStorage.setItem('accessToken', token);
+
+        const userInfo = response.data?.userInfo;
+        if (userInfo) {
+          if (userInfo.roleId !== undefined) localStorage.setItem('roleId', String(userInfo.roleId));
+          if (userInfo.designation != null)
+            localStorage.setItem('designation', String(userInfo.designation));
+          if (userInfo.userCode != null && String(userInfo.userCode).trim() !== '') {
+            localStorage.setItem('userCode', String(userInfo.userCode).trim());
+          }
+        }
+        if (!localStorage.getItem('userCode')?.trim() && data.username?.trim()) {
+          localStorage.setItem('userCode', data.username.trim());
+        }
 
         const target = returnTo ? decodeURIComponent(returnTo) : PATH_AFTER_LOGIN;
         router.push(target);
       } else {
-        throw new Error('Invalid response: Token not found');
+        setErrorMsg(
+          'Login successful but token missing in response. Backend se `token` ya `accessToken` field confirm karein.'
+        );
+        return;
       }
     } catch (error) {
       console.error('Login error:', error);
       reset();
-      setErrorMsg('Invalid username or password');
+      setErrorMsg(getLoginErrorMessage(error));
     }
   });
 
@@ -295,14 +338,17 @@ export default function JwtLoginView() {
                 endAdornment: (
                   <InputAdornment position="end">
                     <IconButton
+                      type="button"
+                      aria-label={password.value ? 'Hide password' : 'Show password'}
                       onClick={password.onToggle}
+                      onMouseDown={(e) => e.preventDefault()}
                       edge="end"
                       sx={{ color: 'rgba(255, 255, 255, 0.7)' }}
                     >
                       <Iconify
-                        icon={password.value ? 'mdi:eye' : 'mdi:eye-off'}
-                        width={20}
-                        height={20}
+                        icon={password.value ? 'solar:eye-bold' : 'solar:eye-closed-bold'}
+                        width={22}
+                        height={22}
                       />
                     </IconButton>
                   </InputAdornment>

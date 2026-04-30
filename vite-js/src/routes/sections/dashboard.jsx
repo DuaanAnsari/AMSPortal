@@ -56,11 +56,16 @@ const OrderTrackingPage = lazy(() => import('src/sections/Supply-Chain/view/Orde
 const MerchantInquiryPage = lazy(() => import('src/sections/Supply-Chain/view/Merchant-inquiry'));
 const OrderDetailPage = lazy(() => import('src/sections/Supply-Chain/view/Order-detail'));
 const SamplingProgramPage = lazy(() => import('src/sections/Supply-Chain/view/Sampling-program'));
+const SampleInspectionReportPage = lazy(
+  () => import('src/sections/Supply-Chain/view/Sample-inspection-report-view')
+);
 const AddSamplingProgramPage = lazy(
   () => import('src/sections/Supply-Chain/view/Add-sampling-program')
 );
 const AddInquiryPage = lazy(() => import('src/sections/Supply-Chain/view/Add-inquiry'));
 const AddOrderDetailPage = lazy(() => import('src/sections/Supply-Chain/view/Add-order-detail'));
+const SizeSpecsViewListPage = lazy(() => import('src/sections/Supply-Chain/view/size-specs-view'));
+const SizeSpecsEntryPage = lazy(() => import('src/sections/Supply-Chain/view/size-specs-entry'));
 const SizeSpecsPage = lazy(() => import('src/sections/Supply-Chain/view/Size-Specs'));
 const PurchaseOrderPDF = lazy(() => import('src/sections/Supply-Chain/PurchaseOrderPDF'));
 const PurchaseOrderSSPDF = lazy(() => import('src/sections/Supply-Chain/PurchaseOrderSSPDF'));
@@ -222,9 +227,13 @@ export const dashboardRoutes = [
           { path: 'merchant-inquiry', element: <MerchantInquiryPage /> },
           { path: 'order-detail', element: <OrderDetailPage /> },
           { path: 'sampling-program', element: <SamplingProgramPage /> },
+          { path: 'sample-inspection-report', element: <SampleInspectionReportPage /> },
           { path: 'add-sampling-program', element: <AddSamplingProgramPage /> },
           { path: 'add-inquiry', element: <AddInquiryPage /> },
           { path: 'add-order-detail', element: <AddOrderDetailPage /> },
+          { path: 'size-specs-view', element: <SizeSpecsViewListPage /> },
+          { path: 'size-specs/add', element: <SizeSpecsEntryPage /> },
+          { path: 'size-specs/edit', element: <SizeSpecsEntryPage /> },
           { path: 'size-specs/:id', element: <SizeSpecsPage /> },
           { path: 'milestone/:id', element: <Milestone /> },
           { path: 'tna-chart', element: <TNAChartPage /> },

@@ -5,6 +5,10 @@ import react from '@vitejs/plugin-react-swc';
 // ----------------------------------------------------------------------
 
 export default defineConfig({
+  // `.env` is under `src/` — Vite default is repo root; without this, live build misses VITE_* vars
+  envDir: path.join(process.cwd(), 'src'),
+  /** Expose `REACT_APP_API_BASE_URL` and `VITE_API_BASE_URL` to the client bundle. */
+  envPrefix: ['VITE_', 'REACT_APP_'],
   plugins: [react()],
   resolve: {
     alias: [

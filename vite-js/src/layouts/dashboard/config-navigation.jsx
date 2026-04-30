@@ -50,34 +50,48 @@ const ICONS = {
 
 const QA_MANAGER_DESIGNATION = 'QA Manager';
 
-/** Sidebar for users with designation "QA Manager" (from login `userInfo.designation`). */
-function getQaManagerNav(t) {
+/** `userCode` from login (e.g. username QD1) — same inspection-focused sidebar as QA Manager. */
+const QD1_USER_CODE = 'QD1';
+
+function isQd1UserCode() {
+  if (typeof window === 'undefined') return false;
+  const code = localStorage.getItem('userCode')?.trim().toUpperCase() ?? '';
+  return code === QD1_USER_CODE;
+}
+
+/** Shared items: QA Manager + QD1 user. */
+function getQualityInspectionNavItems(t) {
   return [
+    { title: 'Home', path: paths.dashboard.root, icon: ICONS.dashboard },
     {
-      subheader: t(''),
-      items: [
-        { title: 'Home', path: paths.dashboard.root, icon: ICONS.dashboard },
-        {
-          title: 'Container Loading',
-          path: paths.dashboard.containerLoading,
-          icon: ICONS.order,
-        },
-        { title: 'SOPs', path: paths.dashboard.general.file, icon: ICONS.folder },
-        { title: 'Inspection', path: paths.dashboard.masterOrderForQDSheet, icon: ICONS.analytics },
-        {
-          title: 'Inspection Report',
-          path: paths.dashboard.qaInspectionView,
-          icon: ICONS.invoice,
-        },
-        {
-          title: 'Sample Inspection Report',
-          path: paths.dashboard.supplyChain.samplingProgram,
-          icon: ICONS.label,
-        },
-        { title: 'Size Specs', path: paths.dashboard.supplyChain.cards, icon: ICONS.file },
-      ],
+      title: 'Container Loading',
+      path: paths.dashboard.containerLoading,
+      icon: ICONS.order,
     },
+    { title: 'SOPs', path: paths.dashboard.general.file, icon: ICONS.folder },
+    { title: 'Inspection', path: paths.dashboard.masterOrderForQDSheet, icon: ICONS.analytics },
+    {
+      title: 'Inspection Report',
+      path: paths.dashboard.qaInspectionView,
+      icon: ICONS.invoice,
+    },
+    {
+      title: 'Sample Inspection Report',
+      path: paths.dashboard.supplyChain.sampleInspectionReport,
+      icon: ICONS.label,
+    },
+    { title: 'Size Specs', path: paths.dashboard.supplyChain.sizeSpecsView, icon: ICONS.file },
   ];
+}
+
+/** Sidebar for `userCode` QD1 (from login). */
+function getQd1Nav(t) {
+  return [{ subheader: t(''), items: getQualityInspectionNavItems(t) }];
+}
+
+/** Sidebar for designation "QA Manager" (from login `userInfo.designation`). */
+function getQaManagerNav(t) {
+  return [{ subheader: t(''), items: getQualityInspectionNavItems(t) }];
 }
 
 // ----------------------------------------------------------------------
@@ -88,6 +102,9 @@ export function useNavData() {
   const data = useMemo(() => {
     const designation =
       typeof window !== 'undefined' ? localStorage.getItem('designation')?.trim() ?? '' : '';
+    if (isQd1UserCode()) {
+      return getQd1Nav(t);
+    }
     if (designation === QA_MANAGER_DESIGNATION) {
       return getQaManagerNav(t);
     }
@@ -151,6 +168,7 @@ export function useNavData() {
               { title: t('Merchant Inquiry'), path: paths.dashboard.supplyChain.merchantInquiry },
               { title: t('Order Detail'), path: paths.dashboard.supplyChain.orderDetail },
               { title: t('Sampling Program'), path: paths.dashboard.supplyChain.samplingProgram },
+              { title: t('Sample Inspection Report'), path: paths.dashboard.supplyChain.sampleInspectionReport },
               { title: t('Inspection Report'), path: paths.dashboard.qaInspectionView },
               // { title: t('Edit Order'), path: paths.dashboard.supplyChain.editOrder },
 

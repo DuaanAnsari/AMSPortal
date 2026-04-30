@@ -33,6 +33,7 @@ import DialogActions from '@mui/material/DialogActions';
 import { useSnackbar } from 'src/components/snackbar';
 import { useSettingsContext } from 'src/components/settings';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
+import { paths } from 'src/routes/paths';
 import {
   useTable,
   emptyRows,
@@ -738,7 +739,8 @@ export default function PurchaseOrderView() {
   const handleSizeSpecsClick = useCallback(
     (row) => {
       if (!row) return;
-      navigate(`/dashboard/supply-chain/size-specs/${row.id}`, {
+      const pid = row.id;
+      navigate(paths.dashboard.supplyChain.sizeSpecsEditWithQuery(pid, pid), {
         state: {
           poNo: row.poNo,
           styleNo: row.styleNo,

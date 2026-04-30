@@ -30,6 +30,7 @@ import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import BuildIcon from '@mui/icons-material/Build';
 import { format } from 'date-fns';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs'; // ✅ make sure this import path matches your project
+import { paths } from 'src/routes/paths';
 
 export default function POSearchEngine({ settings, isDialog, onClose }) {
   const [buyer, setBuyer] = useState('');
@@ -656,7 +657,13 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
                                   e.target.style.backgroundColor = '#FDECEA';
                                   e.target.style.boxShadow = 'none';
                                 }}
-                                onClick={() => handleViewOrder(row.id)}
+                                onClick={() => {
+                                  if (onClose) onClose();
+                                  const q = row.poNo
+                                    ? `?poNo=${encodeURIComponent(row.poNo)}`
+                                    : '';
+                                  navigate(`${paths.dashboard.supplyChain.sizeSpecsView}${q}`);
+                                }}
                               >
                                 Size Specs
                               </span>

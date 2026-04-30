@@ -133,6 +133,23 @@ export const paths = {
       merchantInquiry: `${ROOTS.DASHBOARD}/supply-chain/merchant-inquiry`,
       orderDetail: `${ROOTS.DASHBOARD}/supply-chain/order-detail`,
       samplingProgram: `${ROOTS.DASHBOARD}/supply-chain/sampling-program`,
+      sampleInspectionReport: `${ROOTS.DASHBOARD}/supply-chain/sample-inspection-report`,
+      /** Legacy `SelfSizeSpecsView.aspx` — list + PO filter + PDF (API later). */
+      sizeSpecsView: `${ROOTS.DASHBOARD}/supply-chain/size-specs-view`,
+      /** Legacy `SelfSizeSpecsEntry.aspx` (new). */
+      sizeSpecsAdd: `${ROOTS.DASHBOARD}/supply-chain/size-specs/add`,
+      sizeSpecsEdit: `${ROOTS.DASHBOARD}/supply-chain/size-specs/edit`,
+      sizeSpecsEditWithQuery: (lPODetailID, lPOID, measurementTypeId) => {
+        const params = {
+          lPODetailID: String(lPODetailID ?? ''),
+          lPOID: String(lPOID ?? ''),
+        };
+        if (measurementTypeId != null) {
+          params.measurementTypeId = String(measurementTypeId);
+        }
+        const q = new URLSearchParams(params);
+        return `${ROOTS.DASHBOARD}/supply-chain/size-specs/edit?${q.toString()}`;
+      },
       addInquiry: '/dashboard/supply-chain/add-inquiry',
       addOrderDetail: '/dashboard/supply-chain/add-order-detail',
       milestone: `${ROOTS.DASHBOARD}/supply-chain/milestone`,
