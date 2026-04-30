@@ -8,25 +8,28 @@ import {
   InputAdornment,
   Alert,
   CircularProgress,
+  IconButton,
 } from '@mui/material';
 import EmailIcon from '@mui/icons-material/Email';
 import LockIcon from '@mui/icons-material/Lock';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import axios from 'axios';
 
 
 export default function AMSLogin() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
   const handleLogin = async () => {
     setLoading(true);
     setErrorMsg('');
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/Auth/login`, {
+      const response = await axios.post(`/api/Auth/login`, {
         username,
         password,
       });
@@ -43,6 +46,9 @@ export default function AMSLogin() {
           if (userInfo.roleId !== undefined) localStorage.setItem('roleId', userInfo.roleId);
           if (userInfo.userCode) localStorage.setItem('userCode', userInfo.userCode);
           if (userInfo.designation) localStorage.setItem('designation', userInfo.designation);
+        }
+        if (!localStorage.getItem('userCode')?.trim() && username?.trim()) {
+          localStorage.setItem('userCode', username.trim());
         }
 
         // redirect
@@ -140,7 +146,7 @@ export default function AMSLogin() {
         {/* Password */}
         <TextField
           fullWidth
-          type="password"
+          type={showPassword ? 'text' : 'password'}
           variant="outlined"
           size="medium"
           placeholder="Enter your password"
@@ -157,6 +163,20 @@ export default function AMSLogin() {
             startAdornment: (
               <InputAdornment position="start">
                 <LockIcon color="action" />
+              </InputAdornment>
+            ),
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  onClick={() => setShowPassword((v) => !v)}
+                  onMouseDown={(e) => e.preventDefault()}
+                  edge="end"
+                  type="button"
+                  size="small"
+                >
+                  {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                </IconButton>
               </InputAdornment>
             ),
           }}

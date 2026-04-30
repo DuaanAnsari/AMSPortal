@@ -386,9 +386,9 @@ const ACCESSORY_UI_ROWS = [
   { accKey: 'foldMethod', label: 'Fold Method', options: FOLD_METHOD, dropKey: 'foldMethodDdl' },
   { accKey: 'button', label: 'Buttons', options: YES_NO },
   { accKey: 'interlining', label: 'Inner Lining', textMode: true, textKey: 'interlining' },
-  { accKey: 'other1', label: '', textMode: true, textKey: 'other1', noCheckbox: true },
-  { accKey: 'other2', label: '', textMode: true, textKey: 'other2', noCheckbox: true },
   { accKey: 'additionalLabel', label: 'Additional Label', options: YES_NO },
+  { accKey: 'other1', label: '', textMode: true, textKey: 'other1' },
+  { accKey: 'other2', label: '', textMode: true, textKey: 'other2' },
 ];
 
 const DEFAULT_ACC_DROP = {
@@ -3115,29 +3115,12 @@ export default function QualityDepartmentInspectionView() {
               </Grid>
             </SectionCard>
 
-            <Alert severity="info" variant="outlined">
-              Master, discrepancy, line inspections, size specs, and image APIs are wired to the new backend.
-            </Alert>
-
             <Stack direction="row" spacing={2} flexWrap="wrap">
-              <Button
-                variant="outlined"
-                color="info"
-                startIcon={pdfLoading ? <CircularProgress size={20} color="inherit" /> : <PictureAsPdfIcon />}
-                disabled={pdfLoading || !mstId}
-                onClick={handleViewPdf}
-              >
-                Print PDF
-              </Button>
-
               <Button variant="contained" disabled={saving} onClick={() => handleSave(true)}>
                 {saving ? 'Saving…' : 'Save'}
               </Button>
               <Button variant="outlined" disabled={saving} onClick={() => handleSave(false)}>
                 {saving ? 'Saving…' : 'Draft'}
-              </Button>
-              <Button component={RouterLink} to={paths.dashboard.masterOrderForQDSheet} variant="outlined">
-                Back to Master Order For QD Sheet
               </Button>
             </Stack>
           </Stack>

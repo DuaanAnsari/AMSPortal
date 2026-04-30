@@ -36,36 +36,44 @@ const PurchaseOrderSSPDF = ({ poData: propPoData, onClose }) => {
     const [zoomLevel, setZoomLevel] = useState(1.2);
     const { id } = useParams();
     const [fetchedData, setFetchedData] = useState(null);
+    const [pdfData, setPdfData] = useState([]);
     const [loading, setLoading] = useState(!!id && !propPoData);
 
     useEffect(() => {
-        const fetchPurchaseOrderData = async () => {
-            if (!id || propPoData) return;
+        const fetchData = async () => {
+            if (!id) return;
 
             try {
                 setLoading(true);
                 const token = localStorage.getItem('accessToken');
-                console.log('Fetching PO Size Specs Data for ID:', id);
+                
+                if (!propPoData) {
+                    const response = await axios.get(`${HOST_API}/api/Report/GeneratePOReport?poid=${id}`, {
+                        headers: { Authorization: token ? `Bearer ${token}` : '' },
+                    });
+                    if (response.data) {
+                        const dataToSet = Array.isArray(response.data) ? response.data[0] : response.data;
+                        setFetchedData(dataToSet);
+                    }
+                }
 
-                const response = await axios.get(`${HOST_API}/api/Report/GeneratePOReport?poid=${id}`, {
-                    headers: {
-                        Authorization: token ? `Bearer ${token}` : '',
-                    },
+                // Fetch Size Specs PDF data
+                // TODO: poDetailId is hardcoded to 1 as per current requirements
+                const pdfResponse = await axios.get(`${HOST_API}/api/SelfSizeSpecs/GetPDFData?poid=${id}&poDetailId=1`, {
+                    headers: { Authorization: token ? `Bearer ${token}` : '' },
                 });
-
-                if (response.data) {
-                    const dataToSet = Array.isArray(response.data) ? response.data[0] : response.data;
-                    console.log('Setting fetched data:', dataToSet);
-                    setFetchedData(dataToSet);
+                
+                if (pdfResponse.data) {
+                    setPdfData(pdfResponse.data);
                 }
             } catch (error) {
-                console.error('Failed to fetch purchase order data:', error);
+                console.error('Failed to fetch data:', error);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchPurchaseOrderData();
+        fetchData();
     }, [id, propPoData]);
 
     const poData = propPoData || fetchedData || {};
@@ -80,6 +88,36 @@ const PurchaseOrderSSPDF = ({ poData: propPoData, onClose }) => {
         date: poData.creationDate ? new Date(poData.creationDate).toLocaleDateString('en-US') : '',
         ref: poData.amsRefNo || '',
     };
+
+    const sizeSpecs = pdfData || [];
+    const firstRow = sizeSpecs.length > 0 ? sizeSpecs[0] : null;
+    const measurementType = firstRow?.measurementType || '';
+    const measurementsUnit = firstRow?.measurements || '';
+
+    // Find the best header row (the one with the most headers defined)
+    let bestHeaderRow = firstRow;
+    let maxHeaders = 0;
+    sizeSpecs.forEach(row => {
+        let count = 0;
+        for (let i = 1; i <= 12; i++) {
+            if (row[`header${i}`]) count++;
+        }
+        if (count > maxHeaders) {
+            maxHeaders = count;
+            bestHeaderRow = row;
+        }
+    });
+
+    // Determine how many size columns to render
+    let maxCol = 0;
+    for (let i = 1; i <= 12; i++) {
+        if (sizeSpecs.some(row => row[`header${i}`] || row[`col${i}`])) {
+            maxCol = i;
+        }
+    }
+    const numCols = Math.max(maxCol, 7);
+    const sizeCols = Array.from({ length: numCols }, (_, i) => i + 1);
+    const sizeColWidth = `${66 / numCols}%`;
 
     // Zoom functionality
     const handleZoomIn = () => {
@@ -376,7 +414,7 @@ const PurchaseOrderSSPDF = ({ poData: propPoData, onClose }) => {
                                     alignItems: 'center',
                                     justifyContent: 'center'
                                 }}>
-                                    - ()
+                                    {measurementType} {measurementType && measurementsUnit ? '-' : ''} {measurementsUnit ? `(${measurementsUnit})` : ''}
                                 </Box>
                             </Box>
 
@@ -420,27 +458,30 @@ const PurchaseOrderSSPDF = ({ poData: propPoData, onClose }) => {
                                     TOL+/-
                                 </Box>
                                 {/* Size columns */}
-                                {[1, 2, 3, 4, 5, 6, 7].map((num, idx) => (
+                                {sizeCols.map((num, idx) => (
                                     <Box
                                         key={num}
                                         sx={{
-                                            width: '9.43%',
-                                            borderRight: idx < 6 ? '1px solid #000' : 'none',
+                                            width: sizeColWidth,
+                                            borderRight: idx < numCols - 1 ? '1px solid #000' : 'none',
                                             p: 0.5,
                                             fontSize: '9px',
+                                            fontWeight: 'bold',
                                             textAlign: 'center'
                                         }}
-                                    />
+                                    >
+                                        {bestHeaderRow ? bestHeaderRow[`header${num}`] : ''}
+                                    </Box>
                                 ))}
                             </Box>
 
                             {/* Data rows */}
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((rowNum, rowIdx) => (
+                            {sizeSpecs.length > 0 ? sizeSpecs.map((row, rowIdx) => (
                                 <Box
-                                    key={rowNum}
+                                    key={rowIdx}
                                     sx={{
                                         display: 'flex',
-                                        borderBottom: rowIdx < 14 ? '1px solid #000' : 'none'
+                                        borderBottom: rowIdx < sizeSpecs.length - 1 ? '1px solid #000' : 'none'
                                     }}
                                 >
                                     <Box sx={{
@@ -450,34 +491,69 @@ const PurchaseOrderSSPDF = ({ poData: propPoData, onClose }) => {
                                         fontSize: '9px',
                                         textAlign: 'center',
                                         minHeight: '18px'
-                                    }} />
+                                    }}>
+                                        {rowIdx + 1}
+                                    </Box>
                                     <Box sx={{
                                         width: '18%',
                                         borderRight: '1px solid #000',
                                         p: 0.5,
                                         fontSize: '9px'
-                                    }} />
+                                    }}>
+                                        {row.measurementPoints}
+                                    </Box>
                                     <Box sx={{
                                         width: '10%',
                                         borderRight: '1px solid #000',
                                         p: 0.5,
                                         fontSize: '9px',
                                         textAlign: 'center'
-                                    }} />
-                                    {[1, 2, 3, 4, 5, 6, 7].map((num, idx) => (
+                                    }}>
+                                        {row.tolerance}
+                                    </Box>
+                                    {sizeCols.map((num, idx) => (
                                         <Box
                                             key={num}
                                             sx={{
-                                                width: '9.43%',
-                                                borderRight: idx < 6 ? '1px solid #000' : 'none',
+                                                width: sizeColWidth,
+                                                borderRight: idx < numCols - 1 ? '1px solid #000' : 'none',
                                                 p: 0.5,
                                                 fontSize: '9px',
                                                 textAlign: 'center'
                                             }}
-                                        />
+                                        >
+                                            {row[`col${num}`]}
+                                        </Box>
                                     ))}
                                 </Box>
-                            ))}
+                            )) : (
+                                /* Empty Rows Fallback */
+                                [...Array(15)].map((_, rowIdx) => (
+                                    <Box
+                                        key={rowIdx}
+                                        sx={{
+                                            display: 'flex',
+                                            borderBottom: rowIdx < 14 ? '1px solid #000' : 'none'
+                                        }}
+                                    >
+                                        <Box sx={{ width: '6%', borderRight: '1px solid #000', p: 0.5, fontSize: '9px', textAlign: 'center', minHeight: '18px' }} />
+                                        <Box sx={{ width: '18%', borderRight: '1px solid #000', p: 0.5, fontSize: '9px' }} />
+                                        <Box sx={{ width: '10%', borderRight: '1px solid #000', p: 0.5, fontSize: '9px', textAlign: 'center' }} />
+                                        {sizeCols.map((num, idx) => (
+                                            <Box
+                                                key={num}
+                                                sx={{
+                                                    width: sizeColWidth,
+                                                    borderRight: idx < numCols - 1 ? '1px solid #000' : 'none',
+                                                    p: 0.5,
+                                                    fontSize: '9px',
+                                                    textAlign: 'center'
+                                                }}
+                                            />
+                                        ))}
+                                    </Box>
+                                ))
+                            )}
                         </Box>
 
                         {/* Footer */}

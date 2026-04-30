@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
@@ -17,6 +17,11 @@ import { DataGrid } from '@mui/x-data-grid';
 import { useNavigate } from 'react-router-dom';
 import SearchIcon from '@mui/icons-material/Search';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
+import IconButton from '@mui/material/IconButton';
+import Avatar from '@mui/material/Avatar';
 
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 import { paths } from 'src/routes/paths';
@@ -56,6 +61,38 @@ export default function MasterOrderForQDSheetView() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // --- Drag to Scroll Logic ---
+  const scrollRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeftState, setScrollLeftState] = useState(0);
+
+  const handleMouseDown = (e) => {
+    // Avoid dragging when clicking on inputs or buttons
+    if (e.target.closest('button') || e.target.closest('.MuiInputBase-root')) return;
+
+    const scroller = scrollRef.current?.querySelector('.MuiDataGrid-virtualScroller');
+    if (!scroller) return;
+
+    setIsDragging(true);
+    setStartX(e.pageX - scroller.offsetLeft);
+    setScrollLeftState(scroller.scrollLeft);
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    const scroller = scrollRef.current?.querySelector('.MuiDataGrid-virtualScroller');
+    if (!scroller) return;
+
+    const x = e.pageX - scroller.offsetLeft;
+    const walk = (x - startX) * 1.5; // scrolling speed
+    scroller.scrollLeft = scrollLeftState - walk;
+  };
+
+  const stopDragging = () => setIsDragging(false);
+  // -----------------------------
 
   const fetchData = useCallback(async (searchPoNo) => {
     setLoading(true);
@@ -109,14 +146,25 @@ export default function MasterOrderForQDSheetView() {
   };
 
   const RawColumns = useMemo(
-    () => [
-      { field: 'customer', headerName: 'Customer', minWidth: 170, flex: 0.6 },
-      { field: 'supplier', headerName: 'Supplier', minWidth: 230, flex: 0.7 },
-      { field: 'ams', headerName: 'AMS', minWidth: 70 },
-      { field: 'merchant', headerName: 'Merchant', minWidth: 180, flex: 0.5 },
-      { field: 'season', headerName: 'Season', minWidth: 95 },
-      { field: 'productGroup', headerName: 'Product Group', minWidth: 130 },
-      { field: 'composition', headerName: 'Composition', minWidth: 120 },
+    () => {
+      const renderTruncatedCell = (params) => {
+        const value = params.value ? String(params.value) : '';
+        if (value.length <= 12) return value;
+        return (
+          <Tooltip title={value} arrow placement="top">
+            <span>{`${value.substring(0, 12)}...`}</span>
+          </Tooltip>
+        );
+      };
+
+      return [
+        { field: 'customer', headerName: 'Customer', minWidth: 120, flex: 0.4, renderCell: renderTruncatedCell },
+        { field: 'supplier', headerName: 'Supplier', minWidth: 120, flex: 0.4, renderCell: renderTruncatedCell },
+        { field: 'ams', headerName: 'AMS', minWidth: 70 },
+        { field: 'merchant', headerName: 'Merchant', minWidth: 120, flex: 0.4, renderCell: renderTruncatedCell },
+        { field: 'season', headerName: 'Season', minWidth: 95 },
+        { field: 'productGroup', headerName: 'Product Group', minWidth: 110, renderCell: renderTruncatedCell },
+        { field: 'composition', headerName: 'Composition', minWidth: 110, renderCell: renderTruncatedCell },
       { field: 'poNumber', headerName: 'PO NO.', minWidth: 105 },
       {
         field: 'itemQty',
@@ -155,20 +203,17 @@ export default function MasterOrderForQDSheetView() {
         filterable: false,
         renderCell: (params) => (
           <Tooltip title="Open QD Inspection (IPC / MPC / Pre-Final / Final)" arrow>
-            <Button
+            <IconButton
               size="small"
-              variant="contained"
-              color="primary"
-              startIcon={<FactCheckIcon fontSize="small" />}
               onClick={() =>
                 navigate(
                   `${paths.dashboard.qdInspection}?poid=${params.row.poid}&inspType=IPC&isMPCCreated=${params.row.isMPCCreated ?? 0}`
                 )
               }
-              sx={{ fontSize: 12, px: 1.5, py: 0.5, textTransform: 'none', whiteSpace: 'nowrap' }}
+              sx={{ color: '#22c55e' }}
             >
-              Inspection
-            </Button>
+              <AssignmentTurnedInIcon />
+            </IconButton>
           </Tooltip>
         ),
       },
@@ -182,20 +227,21 @@ export default function MasterOrderForQDSheetView() {
         sortable: false,
         filterable: false,
         renderCell: (params) => (
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={() => navigate(`${paths.dashboard.qdPoPreview}?poid=${params.row.poid}`)}
-            sx={{ fontSize: 12, px: 1, py: 0.5, textTransform: 'none' }}
-          >
-            PO View
-          </Button>
+          <Tooltip title="PO View" arrow>
+            <IconButton
+              size="small"
+              onClick={() => navigate(`${paths.dashboard.qdPoPreview}?poid=${params.row.poid}`)}
+              sx={{ color: 'text.primary' }}
+            >
+              <VisibilityIcon />
+            </IconButton>
+          </Tooltip>
         ),
       },
       // ── Single Process Entry button (replaces PF / DL / SO / PPS / SS columns) ──
       {
         field: 'processEntry',
-        headerName: 'Process Entry',
+        headerName: 'Sample',
         minWidth: 145,
         align: 'center',
         headerAlign: 'center',
@@ -203,23 +249,31 @@ export default function MasterOrderForQDSheetView() {
         filterable: false,
         renderCell: (params) => (
           <Tooltip title="Open Process Entry (PF / DL / SO / PPS / SS)" arrow>
-            <Button
+            <IconButton
               size="small"
-              variant="contained"
-              color="secondary"
               onClick={() =>
                 navigate(
                   `${paths.dashboard.qdProcessEntry}?poid=${params.row.poid}&inspType=${encodeURIComponent('Proto Fit')}`
                 )
               }
-              sx={{ fontSize: 12, px: 1.5, py: 0.5, textTransform: 'none', whiteSpace: 'nowrap' }}
             >
-              Process Entry
-            </Button>
+              <Avatar
+                sx={{
+                  width: 28,
+                  height: 28,
+                  bgcolor: '#212b36',
+                  cursor: 'pointer',
+                  '&:hover': { opacity: 0.8 },
+                }}
+              >
+                <AssignmentIcon sx={{ fontSize: 16, color: '#fff' }} />
+              </Avatar>
+            </IconButton>
           </Tooltip>
         ),
-      },
-    ],
+        },
+      ];
+    },
     [navigate]
   );
 
@@ -364,7 +418,18 @@ export default function MasterOrderForQDSheetView() {
             Drag a column header and drop it here to group by that column
           </Box>
 
-          <Box sx={{ height: 500 }}>
+          <Box 
+            ref={scrollRef}
+            sx={{ 
+              height: 500,
+              cursor: isDragging ? 'grabbing' : 'grab',
+              userSelect: isDragging ? 'none' : 'auto'
+            }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={stopDragging}
+            onMouseLeave={stopDragging}
+          >
             <DataGrid
               rows={filteredRows}
               columns={columns}

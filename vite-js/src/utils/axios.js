@@ -8,6 +8,16 @@ const axiosInstance = axios.create({
   baseURL: HOST_API,
 });
 
+const isPublicAuthRequest = (config) => {
+  const path = `${config?.baseURL || ''}${config?.url || ''}`.toLowerCase();
+  return (
+    path.includes('/auth/login') ||
+    path.includes('/auth/register') ||
+    path.includes('/auth/forgot') ||
+    path.includes('/auth/reset')
+  );
+};
+
 // 🔹 Automatically attach token to every request
 axiosInstance.interceptors.request.use(
   (config) => {
@@ -27,8 +37,9 @@ axiosInstance.interceptors.response.use(
     // ✅ CASE 1: Server responded but unauthorized
     if (error.response) {
       const { status } = error.response;
+      const cfg = error.config || error.response.config;
 
-      if (status === 401 || status === 403) {
+      if ((status === 401 || status === 403) && !isPublicAuthRequest(cfg)) {
         console.warn('⛔ Unauthorized or token expired. Logging out...');
         handleForceLogout();
       }
@@ -42,8 +53,13 @@ axiosInstance.interceptors.response.use(
       error.message === 'Network Error' ||
       (error.message && error.message.includes('Failed to fetch'))
     ) {
-      console.error('❌ API unreachable or network error. Logging out...');
-      handleForceLogout(true); // pass true to force reload
+      const cfg = error.config || {};
+      if (!isPublicAuthRequest(cfg)) {
+        console.error('❌ API unreachable or network error. Logging out...');
+        handleForceLogout(true);
+      } else {
+        console.error('❌ API unreachable (login request).');
+      }
       return Promise.reject('Network Error or Server Unreachable');
     }
 
