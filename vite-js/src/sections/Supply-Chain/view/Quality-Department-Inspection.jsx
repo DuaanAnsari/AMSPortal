@@ -753,6 +753,11 @@ export default function QualityDepartmentInspectionView() {
   const poid = searchParams.get('poid');
   // Default to IPC if not specified
   const inspType = searchParams.get('inspType') ?? 'IPC';
+  const qdInspectionMstIdRaw = searchParams.get('qdInspectionMstId');
+  const qdInspectionMstIdNum = qdInspectionMstIdRaw ? Number(qdInspectionMstIdRaw) : 0;
+  const qdInspectionMstIdForApi =
+    Number.isFinite(qdInspectionMstIdNum) && qdInspectionMstIdNum > 0 ? qdInspectionMstIdNum : null;
+  const isExplicitEditMode = !!qdInspectionMstIdForApi;
   // isMPCCreated passed from the grid row so Final can be guarded
   const isMPCCreated = Number(searchParams.get('isMPCCreated') ?? 0);
 
@@ -763,6 +768,8 @@ export default function QualityDepartmentInspectionView() {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set('inspType', newType);
+      // Different inspType => different QDInspectionMst record. Clear to let GET pick latest for that type.
+      next.delete('qdInspectionMstId');
       return next;
     });
   };
@@ -842,9 +849,11 @@ export default function QualityDepartmentInspectionView() {
   useEffect(() => {
     if (!data) return;
     const bd = data.sizeQtyBreakdown ?? data.SizeQtyBreakdown ?? [];
-    let rows = (data.inspectionDtlRows ?? data.InspectionDtlRows ?? []).map((r) =>
-      padInspectionDtlRowToSlots({ ...r })
-    );
+    let rows = isExplicitEditMode
+      ? (data.inspectionDtlRows ?? data.InspectionDtlRows ?? []).map((r) =>
+          padInspectionDtlRowToSlots({ ...r })
+        )
+      : [];
 
     // Normalize existing rows to ensure they have sizeType
     rows = rows.map(r => ({ ...r, sizeType: (r.sizeType ?? r.SizeType ?? '').trim() }));
@@ -874,8 +883,12 @@ export default function QualityDepartmentInspectionView() {
           let sum = 0;
           let matched = false;
           // default form color or snap color
-          const snapColors = (data?.savedInspection?.colorway ?? data?.SavedInspection?.Colorway ?? '')
-            .split(',').map(c => c.trim()).filter(Boolean);
+          const snapColors = isExplicitEditMode
+            ? (data?.savedInspection?.colorway ?? data?.SavedInspection?.Colorway ?? '')
+                .split(',')
+                .map(c => c.trim())
+                .filter(Boolean)
+            : [];
           const initialColors = snapColors.length > 0 ? snapColors : [];
 
           const poLines = data.poLines ?? data.PoLines ?? [];
@@ -924,7 +937,7 @@ export default function QualityDepartmentInspectionView() {
         balanceR.sizeTotal = sumDtlRowSlots(balanceR, INSPECTION_DTL_SIZE_SLOTS);
       }
     }
-  }, [data]);
+  }, [data, isExplicitEditMode]);
 
   // Recalculate ORDER QTY dynamically when colors change
   useEffect(() => {
@@ -1013,7 +1026,7 @@ export default function QualityDepartmentInspectionView() {
       try {
         const { data: res } = await qdApi.get(
           `/MasterOrderForQDSheet/quality-department-inspection/${encodeURIComponent(poid)}`,
-          { params: { inspType } }
+          { params: { inspType, qdInspectionMstId: qdInspectionMstIdForApi, _t: Date.now() } }
         );
         if (!cancelled) setData(res);
       } catch (e) {
@@ -1031,14 +1044,14 @@ export default function QualityDepartmentInspectionView() {
     return () => {
       cancelled = true;
     };
-  }, [poid, inspType]);
+  }, [poid, inspType, qdInspectionMstIdForApi]);
 
   const h = data?.header ?? data?.Header;
   const aqlSystems = data?.aqlSystems ?? data?.AqlSystems ?? [];
   const aqlRanges = useMemo(() => data?.aqlRanges ?? data?.AqlRanges ?? [], [data]);
   const bindDef = data?.bindGridDefaults ?? data?.BindGridDefaults;
-  const mstId = data?.qdInspectionMstId ?? data?.QdInspectionMstId;
-  const snap = data?.savedInspection ?? data?.SavedInspection;
+  const mstId = isExplicitEditMode ? (data?.qdInspectionMstId ?? data?.QdInspectionMstId) : null;
+  const snap = isExplicitEditMode ? (data?.savedInspection ?? data?.SavedInspection) : null;
   const colorOptions = useMemo(() => {
     const poLines = data?.poLines ?? data?.PoLines ?? [];
     const raw = [];
@@ -1121,7 +1134,7 @@ export default function QualityDepartmentInspectionView() {
         .map((c) => c.trim())
         .filter(Boolean),
       design: field(h, 'design', 'Design'),
-      shipmentMode: shipIdx === 1 ? '1' : '0',
+      shipmentMode: snap?.shipmentMode != null ? String(snap.shipmentMode) : (shipIdx === 1 ? '1' : '0'),
       qtyD: field(snap, 'quantity_D', 'Quantity_D') || OK_NOT_OK[0],
       confD: field(snap, 'conformity_D', 'Conformity_D') || OK_NOT_OK[0],
       workD: field(snap, 'workmanship_D', 'Workmanship_D') || OK_NOT_OK[0],
@@ -1228,7 +1241,7 @@ export default function QualityDepartmentInspectionView() {
 
   useEffect(() => {
     if (!data) return;
-    const discApi = data.discrepancies ?? data.Discrepancies ?? [];
+    const discApi = isExplicitEditMode ? (data.discrepancies ?? data.Discrepancies ?? []) : [];
     setDiscRows(
       Array.from({ length: DISCREPANCY_ROWS }, (_, i) => {
         const row = discApi[i];
@@ -1242,7 +1255,7 @@ export default function QualityDepartmentInspectionView() {
         };
       })
     );
-  }, [data]);
+  }, [data, isExplicitEditMode]);
 
   useEffect(() => {
     if (!data) return;
@@ -1364,10 +1377,11 @@ export default function QualityDepartmentInspectionView() {
     });
   };
 
-  const reloadInspection = async () => {
+  const reloadInspection = async (overrideMstId) => {
+    const qdMstId = overrideMstId != null ? overrideMstId : qdInspectionMstIdForApi;
     const { data: res } = await qdApi.get(
       `/MasterOrderForQDSheet/quality-department-inspection/${encodeURIComponent(poid)}`,
-      { params: { inspType } }
+      { params: { inspType, qdInspectionMstId: qdMstId, _t: Date.now() } }
     );
     setData(res);
   };
@@ -1419,12 +1433,27 @@ export default function QualityDepartmentInspectionView() {
     setSaving(true);
     try {
       const body = buildQdSavePayload(form, discRows, mstId, isMainSave, dtlRows);
-      await qdApi.post(
+      console.log('--- SAVING QD INSPECTION PAYLOAD ---');
+      console.log(JSON.stringify(body, null, 2));
+      console.log('------------------------------------');
+      
+      const saveRes = await qdApi.post(
         `/MasterOrderForQDSheet/quality-department-inspection/${encodeURIComponent(poid)}`,
         body,
         { params: { inspType } }
       );
-      await reloadInspection();
+
+      const returnedIdRaw = saveRes?.data?.qdInspectionMstId ?? saveRes?.data?.QdInspectionMstId;
+      const returnedId = returnedIdRaw != null ? Number(returnedIdRaw) : 0;
+      if (returnedId > 0 && (!qdInspectionMstIdForApi || qdInspectionMstIdForApi <= 0)) {
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('qdInspectionMstId', String(returnedId));
+          return next;
+        });
+      }
+
+      await reloadInspection(returnedId > 0 ? returnedId : null);
       enqueueSnackbar(isMainSave ? 'Saved.' : 'Saved as draft.', { variant: 'success' });
     } catch (e) {
       console.error('Save error response:', e?.response?.data);
@@ -1566,6 +1595,52 @@ export default function QualityDepartmentInspectionView() {
     setMeasurementTypes(mt || []);
   };
 
+  // Load measurement types for Size Specs dropdown.
+  useEffect(() => {
+    if (!poid) return;
+    loadMeasurementTypes().catch((err) => console.error('Failed to load measurement types', err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [poid]);
+
+  // Auto-select measurement type that already has saved rows (so edit loads Size Specs grid populated).
+  useEffect(() => {
+    if (!mstId) return;
+    if (measurementTypeId) return;
+    if (!Array.isArray(measurementTypes) || measurementTypes.length === 0) return;
+    let cancelled = false;
+
+    (async () => {
+      const maxChecks = Math.min(measurementTypes.length, 6);
+      for (const t of measurementTypes.slice(0, maxChecks)) {
+        const id = t?.measurementTypeID ?? t?.MeasurementTypeID;
+        if (!id) continue;
+        try {
+          const { data: rows } = await qdApi.get(
+            `/MasterOrderForQDSheet/quality-department-inspection/${encodeURIComponent(poid)}/size-specs`,
+            { params: { qdInspectionMstId: mstId, measurementTypeId: id } }
+          );
+          if (cancelled) return;
+          if (Array.isArray(rows) && rows.length > 0) {
+            setMeasurementTypeId(String(id));
+            return;
+          }
+        } catch {
+          // Ignore errors for individual checks; fallback handled below.
+        }
+      }
+
+      // Fallback: choose first measurement type (grid might still be empty).
+      if (cancelled) return;
+      const first = measurementTypes[0];
+      const firstId = first?.measurementTypeID ?? first?.MeasurementTypeID;
+      if (firstId) setMeasurementTypeId(String(firstId));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mstId, measurementTypes, measurementTypeId, poid]);
+
   const loadSpecs = async (currentMstId, typeId) => {
     if (!currentMstId || !typeId) return;
     setLoadingSpecs(true);
@@ -1674,10 +1749,19 @@ export default function QualityDepartmentInspectionView() {
           body,
           { params: { inspType } }
         );
-        currentMstId = res.qdInspectionMstId || res.QdInspectionMstId;
+        const returnedIdRaw = res?.qdInspectionMstId ?? res?.QdInspectionMstId;
+        currentMstId = returnedIdRaw != null ? Number(returnedIdRaw) : 0;
+
+        if (currentMstId > 0 && (!qdInspectionMstIdForApi || qdInspectionMstIdForApi <= 0)) {
+          setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set('qdInspectionMstId', String(currentMstId));
+            return next;
+          });
+        }
 
         // Trigger a background reload to sync the state without blocking
-        reloadInspection();
+        reloadInspection(currentMstId || null);
       } catch (e) {
         enqueueSnackbar('Failed to auto-save master to attach image.', { variant: 'error' });
         return;
