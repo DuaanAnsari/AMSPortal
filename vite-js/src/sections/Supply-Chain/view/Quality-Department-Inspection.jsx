@@ -744,6 +744,33 @@ ImageUploadBox.defaultProps = {
 };
 
 /**
+ * A wrapper for TextField that maintains local state while typing and only calls onChange on blur.
+ * This prevents the massive parent component from re-rendering on every keystroke.
+ */
+const BlurTextField = ({ value, onChange, ...props }) => {
+  const [localValue, setLocalValue] = useState(value || '');
+
+  useEffect(() => {
+    setLocalValue(value || '');
+  }, [value]);
+
+  const handleChange = (e) => {
+    setLocalValue(e.target.value);
+  };
+
+  const handleBlur = (e) => {
+    if (onChange && localValue !== (value || '')) {
+      onChange({ target: { value: localValue } });
+    }
+    if (props.onBlur) {
+      props.onBlur(e);
+    }
+  };
+
+  return <TextField {...props} value={localValue} onChange={handleChange} onBlur={handleBlur} />;
+};
+
+/**
  * Mirrors AMS2 BusinessProcess/QualityDepartmentPopup.aspx (IPC / MPC / Pre-Final / Final).
  * Master + discrepancy lines persist via POST; uploads / measurement specs grid remain pending.
  */
@@ -1524,6 +1551,12 @@ export default function QualityDepartmentInspectionView() {
   const handleOpenSignature = async (signType, label) => {
     const currentMstId = mstId || 0;
     setSigPopup({ open: true, type: signType, title: label });
+    
+    if (!currentMstId) {
+      setExistingSignUrl(null);
+      return;
+    }
+
     setLoadingSign(true);
     setExistingSignUrl(null);
 
@@ -2153,7 +2186,7 @@ export default function QualityDepartmentInspectionView() {
                   ['packDR', 'Packing remarks'],
                 ].map(([k, ph]) => (
                   <Grid key={k} xs={12} sm={6} md={3}>
-                    <TextField
+                    <BlurTextField
                       placeholder={ph}
                       fullWidth
                       size="small"
@@ -2180,7 +2213,7 @@ export default function QualityDepartmentInspectionView() {
                   </TextField>
                 </Grid>
                 <Grid xs={12} sm={6} md={3}>
-                  <TextField
+                  <BlurTextField
                     placeholder="Marking remarks"
                     fullWidth
                     size="small"
@@ -2205,7 +2238,7 @@ export default function QualityDepartmentInspectionView() {
                   </TextField>
                 </Grid>
                 <Grid xs={12} sm={6} md={3}>
-                  <TextField
+                  <BlurTextField
                     placeholder="Measurement remarks"
                     fullWidth
                     size="small"
@@ -2445,7 +2478,7 @@ export default function QualityDepartmentInspectionView() {
                           <Box sx={{ height: 38 }} /> // Spacer to maintain vertical alignment
                         )}
                         {row.textMode ? (
-                          <TextField
+                          <BlurTextField
                             size="small"
                             fullWidth
                             label="Remarks"
@@ -2535,7 +2568,7 @@ export default function QualityDepartmentInspectionView() {
                       )}
 
                       {row.type === 'text' && (
-                        <TextField
+                        <BlurTextField
                           size="small"
                           fullWidth
                           label="Remarks"
@@ -2566,14 +2599,14 @@ export default function QualityDepartmentInspectionView() {
                       )}
                       {row.type === 'double-text' && (
                         <Stack direction="row" spacing={1} sx={{ width: '100%' }}>
-                          <TextField
+                          <BlurTextField
                             size="small"
                             fullWidth
                             value={form.packText?.[row.textKey1] ?? ''}
                             onChange={(e) => setPackText(row.textKey1, e.target.value)}
                             sx={{ '& .MuiInputBase-root': { height: 40 } }}
                           />
-                          <TextField
+                          <BlurTextField
                             size="small"
                             fullWidth
                             value={form.packText?.[row.textKey2] ?? ''}
@@ -2689,35 +2722,35 @@ export default function QualityDepartmentInspectionView() {
                                 />
                               </TableCell>
                               <TableCell>
-                                <TextField
+                                <BlurTextField
                                   size="small"
                                   value={r.tolerance}
                                   onChange={(e) => setSpec(idx, 'tolerance', e.target.value)}
                                 />
                               </TableCell>
-                              <TableCell>
-                                <TextField size="small" value={r.header1} onChange={(e) => setSpec(idx, 'header1', e.target.value)} />
+                              <TableCell align="center">
+                                <BlurTextField size="small" value={r.header1} onChange={(e) => setSpec(idx, 'header1', e.target.value)} />
                               </TableCell>
-                              <TableCell>
-                                <TextField size="small" value={r.header2} onChange={(e) => setSpec(idx, 'header2', e.target.value)} />
+                              <TableCell align="center">
+                                <BlurTextField size="small" value={r.header2} onChange={(e) => setSpec(idx, 'header2', e.target.value)} />
                               </TableCell>
-                              <TableCell>
-                                <TextField size="small" value={r.header3} onChange={(e) => setSpec(idx, 'header3', e.target.value)} />
+                              <TableCell align="center">
+                                <BlurTextField size="small" value={r.header3} onChange={(e) => setSpec(idx, 'header3', e.target.value)} />
                               </TableCell>
-                              <TableCell>
-                                <TextField size="small" value={r.header4} onChange={(e) => setSpec(idx, 'header4', e.target.value)} />
+                              <TableCell align="center">
+                                <BlurTextField size="small" value={r.header4} onChange={(e) => setSpec(idx, 'header4', e.target.value)} />
                               </TableCell>
-                              <TableCell>
-                                <TextField size="small" value={r.q1} onChange={(e) => setSpec(idx, 'q1', e.target.value)} />
+                              <TableCell align="center">
+                                <BlurTextField size="small" value={r.q1} onChange={(e) => setSpec(idx, 'q1', e.target.value)} />
                               </TableCell>
-                              <TableCell>
-                                <TextField size="small" value={r.q2} onChange={(e) => setSpec(idx, 'q2', e.target.value)} />
+                              <TableCell align="center">
+                                <BlurTextField size="small" value={r.q2} onChange={(e) => setSpec(idx, 'q2', e.target.value)} />
                               </TableCell>
-                              <TableCell>
-                                <TextField size="small" value={r.q3} onChange={(e) => setSpec(idx, 'q3', e.target.value)} />
+                              <TableCell align="center">
+                                <BlurTextField size="small" value={r.q3} onChange={(e) => setSpec(idx, 'q3', e.target.value)} />
                               </TableCell>
-                              <TableCell>
-                                <TextField size="small" value={r.q4} onChange={(e) => setSpec(idx, 'q4', e.target.value)} />
+                              <TableCell align="center">
+                                <BlurTextField size="small" value={r.q4} onChange={(e) => setSpec(idx, 'q4', e.target.value)} />
                               </TableCell>
                               <TableCell>
                                 <IconButton size="small" onClick={() => setSpecRows((prev) => prev.filter((_, i) => i !== idx))}>
@@ -2792,7 +2825,7 @@ export default function QualityDepartmentInspectionView() {
                             />
                           </TableCell>
                           <TableCell>
-                            <TextField
+                            <BlurTextField
                               size="small"
                               fullWidth
                               value={r.remarks}
@@ -2801,7 +2834,7 @@ export default function QualityDepartmentInspectionView() {
                             />
                           </TableCell>
                           <TableCell>
-                            <TextField
+                            <BlurTextField
                               size="small"
                               fullWidth
                               value={r.critical}
@@ -2810,7 +2843,7 @@ export default function QualityDepartmentInspectionView() {
                             />
                           </TableCell>
                           <TableCell>
-                            <TextField
+                            <BlurTextField
                               size="small"
                               fullWidth
                               value={r.major}
@@ -2819,7 +2852,7 @@ export default function QualityDepartmentInspectionView() {
                             />
                           </TableCell>
                           <TableCell>
-                            <TextField
+                            <BlurTextField
                               size="small"
                               fullWidth
                               value={r.minor}
@@ -2986,7 +3019,7 @@ export default function QualityDepartmentInspectionView() {
                       <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, color: 'text.secondary' }}>
                         Remarks
                       </Typography>
-                      <TextField
+                      <BlurTextField
                         fullWidth
                         multiline
                         minRows={3}

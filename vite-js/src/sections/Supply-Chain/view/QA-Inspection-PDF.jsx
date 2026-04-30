@@ -6,9 +6,17 @@ import {
   View,
   StyleSheet,
   Image,
-  Svg,
-  Path
+  Font
 } from '@react-pdf/renderer';
+
+// ─── fonts ──────────────────────────────────────────────────────────────────
+Font.register({
+  family: 'Roboto',
+  fonts: [
+    { src: '/fonts/Roboto-Regular.ttf' },
+    { src: '/fonts/Roboto-Bold.ttf', fontWeight: 'bold' },
+  ],
+});
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const fld = (obj, ...keys) => {
@@ -19,7 +27,24 @@ const fld = (obj, ...keys) => {
   return '';
 };
 
-const bool2 = (v) => (v === true || v === 1 || v === '1');
+const bool2 = (v) => {
+  if (v == null || v === false || v === 0 || v === '0' || v === 'false') return false;
+  if (v === true || v === 1 || v === '1' || v === 'true') return true;
+  if (typeof v === 'string') {
+    const s = v.toLowerCase().trim();
+    if (s === '' || s === 'no' || s === 'not checked' || s === 'not conform' || s === 'not ok' || s === '-' || s === 'none' || s === 'unchecked') return false;
+    // Any other text like "Checked", "Conform", "Yes" counts as checked
+    return true; 
+  }
+  return !!v;
+};
+
+const getVal = (obj, key) => {
+  if (!obj) return null;
+  if (obj[key] !== undefined) return obj[key];
+  const pascal = key.charAt(0).toUpperCase() + key.slice(1);
+  return obj[pascal];
+};
 
 const fmt = (v) => {
   if (v == null || v === '' || v === '0' || v === '0.0000') return '';
@@ -52,7 +77,7 @@ const C = {
 
 const styles = StyleSheet.create({
   page: {
-    fontFamily: 'Helvetica',
+    fontFamily: 'Roboto',
     fontSize: 7.5,
     paddingHorizontal: 28,
     paddingTop: 28,
@@ -109,17 +134,12 @@ const styles = StyleSheet.create({
 // ─── Sub-Components ────────────────────────────────────────────────────────
 const CheckBoxLabel = ({ label, checked }) => (
   <View style={styles.checkboxItem}>
-    <View style={styles.box}>
-      {checked && (
-        <Svg viewBox="0 0 24 24" style={{ width: 7, height: 7, marginTop: 0.5 }}>
-          <Path
-            d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"
-            fill="black"
-          />
-        </Svg>
-      )}
+    <View style={[styles.box, checked ? { backgroundColor: '#F0F0F0' } : null]}>
+      {checked ? (
+        <Text style={{ fontSize: 10, fontWeight: 'bold', textAlign: 'center', width: '100%', marginTop: -2, color: '#000' }}>✓</Text>
+      ) : null}
     </View>
-    <Text style={{ fontSize: 7 }}>{label}</Text>
+    <Text style={styles.checkboxLabel}>{label}</Text>
   </View>
 );
 
@@ -134,20 +154,21 @@ const Field = ({ label, value, width, flex }) => (
 
 const Footer = ({ qaName, qaSig, vendorSig, managerSig }) => (
   <View style={styles.footer} fixed>
-    <View style={styles.signBlock}>
-      {qaSig && <Image src={qaSig} style={styles.signImg} />}
-      <View style={styles.signLine} />
-      <Text style={styles.signLabel}>QA SIGN</Text>
+    <View style={styles.sigBox}>
+      {qaSig ? <Image src={qaSig} style={styles.signatureImg} /> : null}
+      <View style={styles.sigLine} />
+      <Text>QA INSPECTOR SIGNATURE</Text>
+      <Text style={{ fontSize: 6, marginTop: 2 }}>{qaName}</Text>
     </View>
-    <View style={styles.signBlock}>
-      {vendorSig && <Image src={vendorSig} style={styles.signImg} />}
-      <View style={styles.signLine} />
+    <View style={styles.sigBox}>
+      {vendorSig ? <Image src={vendorSig} style={styles.signatureImg} /> : null}
+      <View style={styles.sigLine} />
       <Text style={styles.signLabel}>VENDOR SIGN</Text>
     </View>
-    <View style={styles.signBlock}>
-      {managerSig && <Image src={managerSig} style={styles.signImg} />}
-      <View style={styles.signLine} />
-      <Text style={styles.signLabel}>MANAGER QA</Text>
+    <View style={styles.sigBox}>
+      {managerSig ? <Image src={managerSig} style={styles.signatureImg} /> : null}
+      <View style={styles.sigLine} />
+      <Text>QA MANAGER SIGNATURE</Text>
     </View>
   </View>
 );
@@ -156,8 +177,8 @@ const Footer = ({ qaName, qaSig, vendorSig, managerSig }) => (
 export default function QAInspectionPDF({ data }) {
   if (!data) return null;
 
-  const mst  = data.savedInspection ?? {};
-  const hdr  = data.header          ?? {};
+  const mst = data.savedInspection || data.SavedInspection || {};
+  const hdr = data.header || data.Header || {};
 
   const customerName  = data.customerName  || fld(hdr, 'CustomerName',  'customerName');
   const venderName    = data.venderName    || fld(hdr, 'VenderName',     'venderName');
@@ -171,9 +192,10 @@ export default function QAInspectionPDF({ data }) {
   const qaName        = data.qaName        || '';
 
   const inspType   = mst.inspectionType ?? '';
-  const inspDate   = fmtDate(mst.mstInspectionDate);
-  const inspNo     = mst.inspNo ?? '';
-  const passFail   = mst.passFail;
+  const inspDate   = fmtDate(getVal(mst, 'mstInspectionDate'));
+  const inspNo     = getVal(mst, 'inspNo') ?? '';
+  const passFail   = getVal(mst, 'passFail');
+  const draftBit   = getVal(mst, 'draftBit');
   const colorway   = mst.colorway   || fld(hdr, 'Colorway', 'colorway');
   const ratio      = mst.ratio      || '';
   const sampleSize = fmt(mst.sampleSize);
@@ -186,7 +208,7 @@ export default function QAInspectionPDF({ data }) {
   const sigs = data.signatures ?? [];
   const qaSig      = sigs.find(s => s.signType === 'QA')?.base64Data      ?? sigs.find(s => s.signType === 'QA')?.Base64Data;
   const vendorSig  = sigs.find(s => s.signType === 'VENDOR')?.base64Data  ?? sigs.find(s => s.signType === 'VENDOR')?.Base64Data;
-  const managerSig = sigs.find(s => s.signType === 'CONTROL')?.base64Data ?? sigs.find(s => s.signType === 'CONTROL')?.Base64Data;
+  const managerSig = sigs.find(s => s.signType === 'MANAGER')?.base64Data ?? sigs.find(s => s.signType === 'MANAGER')?.Base64Data;
 
   const images = data.images ?? [];
 
@@ -224,41 +246,41 @@ export default function QAInspectionPDF({ data }) {
   const totalMin  = discs.reduce((s, d) => s + (Number(d.minor)    || 0), 0);
 
   const accLeft = [
-    { label: 'DYE LOTS', checked: mst.dyeLot, c: mst.dyeLotCom ? 'Conform' : 'Checked' },
-    { label: 'PATTERN', checked: mst.pattern, c: mst.patternCom ? 'Conform' : 'Checked' },
-    { label: 'GENERAL APPEARANCE', checked: mst.generalAppearance, c: mst.generalAppCom || 'Conform' },
-    { label: 'MAIN LABEL', checked: mst.mainLabel, c: mst.mainLblCom },
-    { label: 'MAIN LABEL PLACEMENT', checked: mst.mainLabelPlacement, c: mst.mainLblPlacementCom || 'Side Seam' },
-    { label: 'CARE LABEL PLACEMENT', checked: mst.careLabelPlacement, c: mst.careLblPlacementCom || 'Side Seam' },
-    { label: 'CONTENT LABEL PLACEMENT', checked: mst.contentLabelPlacement, c: mst.contentLblPlacementCom || 'Side Seam' },
-    { label: 'BUTTONS', checked: mst.buttonAccessory, c: mst.buttonsCom || 'Yes' },
+    { label: 'DYE LOTS', checked: !!getVal(mst, 'dyeLotCom'), c: getVal(mst, 'dyeLotCom') },
+    { label: 'PATTERN', checked: !!getVal(mst, 'patternCom'), c: getVal(mst, 'patternCom') },
+    { label: 'GENERAL APPEARANCE', checked: !!getVal(mst, 'generalAppCom'), c: getVal(mst, 'generalAppCom') },
+    { label: 'MAIN LABEL', checked: !!getVal(mst, 'mainLblCom'), c: getVal(mst, 'mainLblCom') },
+    { label: 'MAIN LABEL PLACEMENT', checked: !!getVal(mst, 'mainLblPlacementCom'), c: getVal(mst, 'mainLblPlacementCom') },
+    { label: 'CARE LABEL PLACEMENT', checked: !!getVal(mst, 'careLblPlacementCom'), c: getVal(mst, 'careLblPlacementCom') },
+    { label: 'CONTENT LABEL PLACEMENT', checked: !!getVal(mst, 'contentLblPlacementCom'), c: getVal(mst, 'contentLblPlacementCom') },
+    { label: 'BUTTONS', checked: !!getVal(mst, 'buttonsCom'), c: getVal(mst, 'buttonsCom') },
     { label: '', checked: false, c: '' }
   ];
   const accRight = [
-    { label: 'ZIPPER', checked: mst.zipper, c: mst.zipperCom || 'Yes' },
-    { label: 'DRAWSTRING', checked: mst.drawingString, c: mst.drawingStrCom || 'Yes' },
-    { label: 'HANGTAG', checked: mst.hangTag, c: mst.hangtagCom || 'Yes' },
-    { label: 'PRICE TICKET', checked: mst.priceTicket, c: mst.priceTicketCom || 'Yes' },
-    { label: 'HANGER', checked: mst.hanger, c: mst.hangerCom || 'Yes' },
-    { label: 'CONTENT LABEL', checked: mst.contentLabel, c: mst.contentLblCom },
-    { label: 'FOLD METHOD', checked: mst.foldMethod, c: mst.foldMethodCom || 'B-Fold' },
-    { label: 'INTERLINING', checked: mst.interlining, c: mst.interLiningCom },
-    { label: 'ADDITIONAL LABEL', checked: mst.additionalLbl, c: mst.additionalLblComm || 'Yes' }
+    { label: 'ZIPPER', checked: !!getVal(mst, 'zipperCom'), c: getVal(mst, 'zipperCom') },
+    { label: 'DRAWSTRING', checked: !!getVal(mst, 'drawingStrCom'), c: getVal(mst, 'drawingStrCom') },
+    { label: 'HANGTAG', checked: !!getVal(mst, 'hangtagCom'), c: getVal(mst, 'hangtagCom') },
+    { label: 'PRICE TICKET', checked: !!getVal(mst, 'priceTicketCom'), c: getVal(mst, 'priceTicketCom') },
+    { label: 'HANGER', checked: !!getVal(mst, 'hangerCom'), c: getVal(mst, 'hangerCom') },
+    { label: 'CONTENT LABEL', checked: !!getVal(mst, 'contentLblCom'), c: getVal(mst, 'contentLblCom') },
+    { label: 'FOLD METHOD', checked: !!getVal(mst, 'foldMethodCom'), c: getVal(mst, 'foldMethodCom') },
+    { label: 'INTERLINING', checked: !!getVal(mst, 'interLiningCom'), c: getVal(mst, 'interLiningCom') },
+    { label: 'ADDITIONAL LABEL', checked: !!getVal(mst, 'additionalLblComm'), c: getVal(mst, 'additionalLblComm') }
   ];
 
   const packLeft = [
-    { label: 'CARTON DIMENSION', checked: mst.cartonDimen, c: mst.cartonDimmCom },
-    { label: 'CARTON THICKNESS', checked: mst.cartonThickness, c: mst.crtnThicknessCom || '03 ply' },
-    { label: 'GROSS WT', checked: mst.grossWT, c: mst.grossWTCom },
-    { label: 'NO. OF PCS/INNER PACK', checked: mst.noOfPcsInnerPack, c: mst.noOfPcsInnerPackCom },
+    { label: 'CARTON DIMENSION', checked: !!getVal(mst, 'cartonDimmCom'), c: getVal(mst, 'cartonDimmCom') },
+    { label: 'CARTON THICKNESS', checked: !!getVal(mst, 'crtnThicknessCom'), c: getVal(mst, 'crtnThicknessCom') },
+    { label: 'GROSS WT', checked: !!getVal(mst, 'grossWTCom'), c: getVal(mst, 'grossWTCom') },
+    { label: 'NO. OF PCS/INNER PACK', checked: !!getVal(mst, 'noOfPcsInnerPackCom'), c: getVal(mst, 'noOfPcsInnerPackCom') },
     { label: '', checked: false, c: '' }
   ];
   const packRight = [
-    { label: 'CARTON MARKING', checked: mst.cartonMarking, c: mst.cartonMarkingCom || '1 Side' },
-    { label: 'NET WT', checked: mst.netWT, c: mst.netWTCom },
-    { label: 'NO. OF PCS/CARTON', checked: mst.noOfPcsCarton, c: mst.noOfPcsCrtnCom },
-    { label: 'POLYBAG/BLISTER BAG', checked: mst.polyBag, c: mst.polyBagBlisterBagCom },
-    { label: 'U.P.C.', checked: mst.uPS ?? mst.ups, c: mst.uPCCom }
+    { label: 'CARTON MARKING', checked: !!getVal(mst, 'cartonMarkingCom'), c: getVal(mst, 'cartonMarkingCom') },
+    { label: 'NET WT', checked: !!getVal(mst, 'netWTCom'), c: getVal(mst, 'netWTCom') },
+    { label: 'NO. OF PCS/CARTON', checked: !!getVal(mst, 'noOfPcsCrtnCom'), c: getVal(mst, 'noOfPcsCrtnCom') },
+    { label: 'POLYBAG/BLISTER BAG', checked: !!getVal(mst, 'polyBagBlisterBagCom'), c: getVal(mst, 'polyBagBlisterBagCom') },
+    { label: 'U.P.C.', checked: !!getVal(mst, 'uPCCom'), c: getVal(mst, 'uPCCom') }
   ];
 
   return (
@@ -384,15 +406,15 @@ export default function QAInspectionPDF({ data }) {
               <View key={i} style={styles.tr}>
                 {/* Left Side */}
                 <View style={[styles.td, { flex: 2, flexDirection: 'row', alignItems: 'center' }]}>
-                  {L.label && <CheckBoxLabel label={L.label} checked={bool2(L.checked)} />}
+                  {L.label ? <CheckBoxLabel label={L.label} checked={L.checked} /> : null}
                 </View>
-                <View style={[styles.td, { flex: 1, paddingLeft: 6 }]}><Text>{L.c}</Text></View>
+                <View style={[styles.td, { flex: 1, paddingLeft: 6 }]}><Text>{L.c || ''}</Text></View>
                 
                 {/* Right Side */}
                 <View style={[styles.td, { flex: 2, flexDirection: 'row', alignItems: 'center' }]}>
-                  {R.label && <CheckBoxLabel label={R.label} checked={bool2(R.checked)} />}
+                  {R.label ? <CheckBoxLabel label={R.label} checked={R.checked} /> : null}
                 </View>
-                <View style={[styles.td, { flex: 1, paddingLeft: 6 }]}><Text>{R.c}</Text></View>
+                <View style={[styles.td, { flex: 1, paddingLeft: 6 }]}><Text>{R.c || ''}</Text></View>
               </View>
             );
           })}
@@ -408,15 +430,15 @@ export default function QAInspectionPDF({ data }) {
               <View key={i} style={styles.tr}>
                 {/* Left Side */}
                 <View style={[styles.td, { flex: 2, flexDirection: 'row', alignItems: 'center' }]}>
-                  {L.label && <CheckBoxLabel label={L.label} checked={bool2(L.checked)} />}
+                  {L.label ? <CheckBoxLabel label={L.label} checked={L.checked} /> : null}
                 </View>
-                <View style={[styles.td, { flex: 1, paddingLeft: 6 }]}><Text>{L.c}</Text></View>
+                <View style={[styles.td, { flex: 1, paddingLeft: 6 }]}><Text>{L.c || ''}</Text></View>
                 
                 {/* Right Side */}
                 <View style={[styles.td, { flex: 2, flexDirection: 'row', alignItems: 'center' }]}>
-                  {R.label && <CheckBoxLabel label={R.label} checked={bool2(R.checked)} />}
+                  {R.label ? <CheckBoxLabel label={R.label} checked={R.checked} /> : null}
                 </View>
-                <View style={[styles.td, { flex: 1, paddingLeft: 6 }]}><Text>{R.c}</Text></View>
+                <View style={[styles.td, { flex: 1, paddingLeft: 6 }]}><Text>{R.c || ''}</Text></View>
               </View>
             );
           })}
@@ -465,57 +487,44 @@ export default function QAInspectionPDF({ data }) {
         <Footer qaName={qaName} qaSig={qaSig} vendorSig={vendorSig} managerSig={managerSig} />
       </Page>
 
-      {/* ════════════════ PAGE 3 — SPECS SHEET (conditional or always present for Pre-Final/Final) ════════════════ */}
-      <Page size="A4" style={styles.page}>
-        <View style={{ alignItems: 'center', marginBottom: 4 }}>
-          <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9 }}>Specs Sheet</Text>
-        </View>
-
-        <View style={styles.table}>
-          <View style={styles.tr}>
-            <View style={[styles.tdBold, { flex: 1, padding: '2 0', textAlign: 'center' }]}>
-              <Text>- ()</Text>
-            </View>
+      {/* ════════════════ PAGE 3 — SPECS SHEET (only rendered when measurement spec data exists) ════════════════ */}
+      {data.sizeSpecs && data.sizeSpecs.length > 0 && data.sizeSpecs.some(s => s.measurementPoint || s.MeasurementPoint) ? (
+        <Page size="A4" style={styles.page}>
+          <View style={{ alignItems: 'center', marginBottom: 4 }}>
+            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9 }}>Specs Sheet</Text>
           </View>
-          <View style={styles.tr}>
-            <View style={[styles.tdBold, { width: 30, alignItems: 'center' }]}><Text>No.</Text></View>
-            <View style={[styles.tdBold, { flex: 2 }]}><Text>Measurement Points</Text></View>
-            <View style={[styles.tdBold, { width: 35, alignItems: 'center' }]}><Text>TOL+/-</Text></View>
-            {/* Draw ~10 empty columns for sizes just like the screenshot */}
-            {Array.from({ length: 11 }).map((_, i) => (
-              <View key={i} style={[styles.td, { flex: 1 }]} />
+
+          <View style={styles.table}>
+            <View style={styles.tr}>
+              <View style={[styles.tdBold, { flex: 1, padding: '2 0', textAlign: 'center' }]}>
+                <Text>- ()</Text>
+              </View>
+            </View>
+            <View style={styles.tr}>
+              <View style={[styles.tdBold, { width: 30, alignItems: 'center' }]}><Text>No.</Text></View>
+              <View style={[styles.tdBold, { flex: 2 }]}><Text>Measurement Points</Text></View>
+              <View style={[styles.tdBold, { width: 35, alignItems: 'center' }]}><Text>TOL+/-</Text></View>
+              {Array.from({ length: 11 }).map((_, i) => (
+                <View key={i} style={[styles.td, { flex: 1 }]} />
+              ))}
+            </View>
+
+            {data.sizeSpecs.map((spec, r) => (
+              <View key={r} style={styles.tr}>
+                <View style={[styles.td, { width: 30, alignItems: 'center' }]}><Text>{r + 1}</Text></View>
+                <View style={[styles.td, { flex: 2 }]}><Text>{spec.measurementPoint ?? spec.MeasurementPoint ?? ''}</Text></View>
+                <View style={[styles.td, { width: 35, alignItems: 'center' }]}><Text>{spec.tolerance ?? spec.Tolerance ?? ''}</Text></View>
+                {Array.from({ length: 11 }).map((_, i) => {
+                  const val = spec[`size${i + 1}`] ?? spec[`Size${i + 1}`] ?? '';
+                  return <View key={i} style={[styles.td, { flex: 1, alignItems: 'center' }]}><Text>{String(val)}</Text></View>;
+                })}
+              </View>
             ))}
           </View>
 
-          {/* Render actual size specs if they exist, otherwise render empty grid to match visual */}
-          {(!data.sizeSpecs || data.sizeSpecs.length === 0) ? (
-            Array.from({ length: 25 }).map((_, r) => (
-              <View key={r} style={[styles.tr, { height: 12 }]}>
-                <View style={[styles.td, { width: 30 }]} />
-                <View style={[styles.td, { flex: 2 }]} />
-                <View style={[styles.td, { width: 35 }]} />
-                {Array.from({ length: 11 }).map((_, i) => (
-                  <View key={i} style={[styles.td, { flex: 1 }]} />
-                ))}
-              </View>
-            ))
-          ) : (
-            data.sizeSpecs.map((spec, r) => (
-              <View key={r} style={styles.tr}>
-                <View style={[styles.td, { width: 30, alignItems: 'center' }]}><Text>{r + 1}</Text></View>
-                <View style={[styles.td, { flex: 2 }]}><Text>{spec.measurementPoint ?? ''}</Text></View>
-                <View style={[styles.td, { width: 35, alignItems: 'center' }]}><Text>{spec.tolerance ?? ''}</Text></View>
-                {Array.from({ length: 11 }).map((_, i) => {
-                  const val = spec[`size${i + 1}`] ?? spec[`Size${i + 1}`] ?? '';
-                  return <View key={i} style={[styles.td, { flex: 1, alignItems: 'center' }]}><Text>{val}</Text></View>;
-                })}
-              </View>
-            ))
-          )}
-        </View>
-
-        <Footer qaName={qaName} qaSig={qaSig} vendorSig={vendorSig} managerSig={managerSig} />
-      </Page>
+          <Footer qaName={qaName} qaSig={qaSig} vendorSig={vendorSig} managerSig={managerSig} />
+        </Page>
+      ) : null}
 
       {/* ════════════════ PAGE 4 ════════════════ */}
       <Page size="A4" style={styles.page}>
@@ -533,9 +542,9 @@ export default function QAInspectionPDF({ data }) {
             </View>
           ))}
           {/* If no images, draw an empty box like the sample */}
-          {images.length === 0 && (
+          {images.length === 0 ? (
             <View style={{ width: '45%', border: '1px solid black', height: 180, marginBottom: 10 }} />
-          )}
+          ) : null}
         </View>
 
         <Footer qaName={qaName} qaSig={qaSig} vendorSig={vendorSig} managerSig={managerSig} />

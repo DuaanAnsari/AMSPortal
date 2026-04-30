@@ -8,7 +8,10 @@ import { fDate } from 'src/utils/format-time';
 
 Font.register({
   family: 'Roboto',
-  fonts: [{ src: '/fonts/Roboto-Regular.ttf' }, { src: '/fonts/Roboto-Bold.ttf' }],
+  fonts: [
+    { src: 'https://cdnjs.cloudflare.com/ajax/libs/roboto/2.1.3/fonts/Roboto/roboto-regular-webfont.ttf' },
+    { src: 'https://cdnjs.cloudflare.com/ajax/libs/roboto/2.1.3/fonts/Roboto/roboto-bold-webfont.ttf', fontWeight: 'bold' },
+  ],
 });
 
 const useStyles = () =>
@@ -142,7 +145,25 @@ export default function QAProcessEntryPDF({ data }) {
 
   if (!data) return null;
 
-  const { header, savedRecord, fabricTestLines = [], sizeSpecs = [], qaName } = data;
+  const savedRecord = getVal(data, 'savedRecord') || {};
+  const header = getVal(data, 'header') || {};
+  const fabricTestLines = getVal(data, 'fabricTestLines') || [];
+  const sizeSpecs = getVal(data, 'sizeSpecs') || [];
+  const qaName = getVal(data, 'qaName') || '';
+
+  const isTruthy = (v) => {
+    if (v == null) return false;
+    if (typeof v === 'boolean') return v;
+    const s = String(v).toLowerCase().trim();
+    return s === 'true' || s === '1' || v === 1 || s === 'checked' || s === 'yes' || s === 'conform' || s === 'ok';
+  };
+
+  const getVal = (obj, key) => {
+    if (!obj) return null;
+    if (obj[key] !== undefined) return obj[key];
+    const pascal = key.charAt(0).toUpperCase() + key.slice(1);
+    return obj[pascal];
+  };
 
   const teChecks = [
     { key: 'teMeasureToSpec', label: 'Measure to Spec' },
@@ -173,7 +194,7 @@ export default function QAProcessEntryPDF({ data }) {
         </View>
 
         <Text style={styles.reportTitle}>
-          {savedRecord?.insp_Type || 'SAMPLE'} REPORT: {savedRecord?.inspAutoNo || 'N/A'}
+          {getVal(savedRecord, 'insp_Type') || 'SAMPLE'} REPORT: {getVal(savedRecord, 'inspAutoNo') || 'N/A'}
         </Text>
 
         {/* Metadata */}
@@ -214,7 +235,7 @@ export default function QAProcessEntryPDF({ data }) {
           {teChecks.map((check) => (
             <View key={check.key} style={styles.teItem}>
               <View style={styles.box}>
-                {savedRecord?.[check.key] && <Text style={styles.boxCheck}>✓</Text>}
+                {isTruthy(getVal(savedRecord, check.key)) && <Text style={styles.boxCheck}>✓</Text>}
               </View>
               <Text>{check.label}</Text>
             </View>
@@ -256,8 +277,8 @@ export default function QAProcessEntryPDF({ data }) {
             <View style={{ width: '45%' }}>
               <Text style={{ fontWeight: 700 }}>Decision:</Text>
               <Text>
-                {savedRecord?.asiGarmentApproved ? 'Proceed to Sales' : 
-                 savedRecord?.asiGarmentRejected ? 'Garment Rejected' : 'Under Review'}
+                {getVal(savedRecord, 'asiGarmentApproved') ? 'Proceed to Sales' : 
+                 getVal(savedRecord, 'asiGarmentRejected') ? 'Garment Rejected' : 'Under Review'}
               </Text>
             </View>
           </View>
