@@ -68,3 +68,42 @@ qdApi.getMerchandisingPdfData = async (merchandisingId) => {
   return res.data;
 };
 
+/**
+ * Consignee grid list. Full URL: `{API_ROOT}/Consignee/view` → typically `…/api/Consignee/view`
+ * when `VITE_API_BASE_URL` is host-only (API_ROOT adds `/api`).
+ */
+qdApi.getConsigneeView = async ({ packageName = '', consigneeName = '' } = {}) => {
+  const res = await qdApi.get('/Consignee/view', {
+    params: {
+      packageName: String(packageName ?? '').trim(),
+      consigneeName: String(consigneeName ?? '').trim(),
+    },
+    timeout: 45_000,
+  });
+  return res.data;
+};
+
+/** Adjust path if backend differs (e.g. POST delete). */
+qdApi.deleteConsignee = async (id) => {
+  const key = String(id ?? '').trim();
+  const res = await qdApi.delete(`/Consignee/${encodeURIComponent(key)}`);
+  return res.data;
+};
+
+/** Edit screen payload: `GET /Consignee/edit/{consigneeId}` → `{API_ROOT}/Consignee/edit/…` */
+qdApi.getConsigneeForEdit = async (consigneeId) => {
+  const id = String(consigneeId ?? '').trim();
+  const res = await qdApi.get(`/Consignee/edit/${encodeURIComponent(id)}`, {
+    timeout: 45_000,
+  });
+  return res.data;
+};
+
+/** Create or update: include `consigneeID` in body when updating. `POST /Consignee/save` */
+qdApi.saveConsignee = async (payload) => {
+  const res = await qdApi.post('/Consignee/save', payload, {
+    timeout: 45_000,
+  });
+  return res.data;
+};
+

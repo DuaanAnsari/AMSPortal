@@ -11,7 +11,6 @@ import {
   Tooltip,
   Container,
   Alert,
-  Stack,
   CircularProgress,
 } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
@@ -352,19 +351,11 @@ export default function CourierPackagingViewPage() {
       {
         field: 'pdf',
         headerName: 'PDF',
-        width: 80,
+        width: 88,
         sortable: false,
         filterable: false,
         align: 'center',
         headerAlign: 'center',
-        renderHeader: () => (
-          <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5}>
-            <PictureAsPdfIcon sx={{ fontSize: 18, color: 'error.main' }} />
-            <Typography variant="body2" fontWeight={700}>
-              PDF
-            </Typography>
-          </Stack>
-        ),
         renderCell: (params) => {
           const busy = pdfRowId === params.row.id;
           return (
@@ -375,9 +366,26 @@ export default function CourierPackagingViewPage() {
                   disabled={busy}
                   aria-label="View PDF"
                   onClick={() => handlePdfView(params.row)}
-                  sx={{ color: 'error.main' }}
+                  sx={{
+                    p: 0.75,
+                    borderRadius: 1,
+                    color: 'error.main',
+                    bgcolor: (t) => (t.palette.mode === 'dark' ? 'error.dark' : 'error.lighter'),
+                    border: (t) => `1px solid ${t.palette.error.light}`,
+                    '&:hover': {
+                      bgcolor: (t) => (t.palette.mode === 'dark' ? 'error.main' : 'error.light'),
+                      color: (t) => t.palette.error.contrastText,
+                      borderColor: 'error.main',
+                      '& .MuiSvgIcon-root': { color: 'inherit' },
+                    },
+                    '&.Mui-disabled': { opacity: 0.85 },
+                  }}
                 >
-                  {busy ? <CircularProgress color="inherit" size={18} /> : <PictureAsPdfIcon fontSize="small" />}
+                  {busy ? (
+                    <CircularProgress color="inherit" size={22} thickness={4} />
+                  ) : (
+                    <PictureAsPdfIcon sx={{ fontSize: 22 }} />
+                  )}
                 </IconButton>
               </span>
             </Tooltip>
