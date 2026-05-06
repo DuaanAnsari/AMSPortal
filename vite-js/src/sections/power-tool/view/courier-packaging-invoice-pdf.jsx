@@ -65,7 +65,7 @@ const BORDER_PT = 1;
 
 const styles = StyleSheet.create({
   page: {
-    fontSize: 8.5,
+    fontSize: 10,
     fontFamily: 'Helvetica',
     paddingTop: 30,
     paddingBottom: 38,
@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   logoWrap: { width: '34%', justifyContent: 'flex-start' },
-  logoImg: { width: 128, height: 48, objectFit: 'contain' },
+  logoImg: { width: 140, height: 52, objectFit: 'contain' },
   companyHead: {
     flex: 1,
     minWidth: 0,
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   companyName: {
-    fontSize: 11.5,
+    fontSize: 14,
     fontFamily: 'Helvetica',
     fontWeight: 700,
     color: ORANGE,
@@ -100,14 +100,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   companyAddr: {
-    fontSize: 7.5,
+    fontSize: 9,
     lineHeight: 1.45,
     textAlign: 'center',
     color: BLACK,
   },
   title: {
     textAlign: 'center',
-    fontSize: 12.5,
+    fontSize: 15,
     fontFamily: 'Helvetica',
     fontWeight: 700,
     color: BLACK,
@@ -120,8 +120,8 @@ const styles = StyleSheet.create({
   },
   colLeft: { width: '50%', paddingRight: 16 },
   colRight: { width: '50%', paddingLeft: 16 },
-  bodyLine: { fontSize: 8, lineHeight: 1.5, marginBottom: 3, color: BLACK },
-  plainSmall: { fontSize: 8, lineHeight: 1.45, marginBottom: 2, color: BLACK },
+  bodyLine: { fontSize: 10, lineHeight: 1.5, marginBottom: 3, color: BLACK },
+  plainSmall: { fontSize: 10, lineHeight: 1.45, marginBottom: 2, color: BLACK },
   originBar: {
     backgroundColor: '#FFFFFF',
     paddingVertical: 7,
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: 'Helvetica',
     fontWeight: 700,
-    fontSize: 8.5,
+    fontSize: 11,
     color: BLACK,
     borderBottomWidth: 1.5,
     borderBottomColor: BLACK,
@@ -150,12 +150,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: BORDER_PT,
     borderBottomColor: BLACK,
-    minHeight: 22,
+    minHeight: 26,
   },
   thCell: {
     fontFamily: 'Helvetica',
     fontWeight: 700,
-    fontSize: 7,
+    fontSize: 8.5,
     paddingVertical: 6,
     paddingHorizontal: 4,
     borderRightWidth: BORDER_PT,
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
     color: BLACK,
   },
   tdCell: {
-    fontSize: 7,
+    fontSize: 8.5,
     paddingVertical: 5,
     paddingHorizontal: 4,
     borderRightWidth: BORDER_PT,
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
   totalTextBold: {
     fontFamily: 'Helvetica',
     fontWeight: 700,
-    fontSize: 8,
+    fontSize: 10,
     color: BLACK,
     textAlign: 'center',
   },
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: 'Helvetica',
     fontWeight: 700,
-    fontSize: 8.5,
+    fontSize: 11,
     paddingVertical: 9,
     paddingHorizontal: 4,
     borderTopWidth: BORDER_PT,
@@ -243,15 +243,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    fontSize: 7,
+    fontSize: 8,
     color: BLACK,
     borderTopWidth: BORDER_PT,
     borderTopColor: BLACK,
     paddingTop: 8,
   },
   footerCenter: { textAlign: 'center', flexGrow: 1, paddingHorizontal: 8 },
-  footerPowered: { fontFamily: 'Helvetica', fontWeight: 700, color: BLACK, fontSize: 7 },
-  footerDev: { fontSize: 6, color: BLACK, marginTop: 2 },
+  footerPowered: { fontFamily: 'Helvetica', fontWeight: 700, color: BLACK, fontSize: 8 },
+  footerDev: { fontSize: 7, color: BLACK, marginTop: 2 },
 });
 
 function mapDetailLine(d, index) {

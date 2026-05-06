@@ -131,11 +131,12 @@ function parseQueryIntOrNull(value) {
 
 /** Query params for GET GetShippers — numeric `userId` / `roleId` from session. */
 function getShipperListQueryParams() {
-  if (typeof localStorage === 'undefined') return { userId: null, roleId: null };
+  if (typeof localStorage === 'undefined') return { userId: 1, roleId: 1 };
   const userId =
     parseQueryIntOrNull(localStorage.getItem('userId')) ??
-    parseQueryIntOrNull(localStorage.getItem('userCode'));
-  const roleId = parseQueryIntOrNull(localStorage.getItem('roleId'));
+    parseQueryIntOrNull(localStorage.getItem('userCode')) ??
+    1; // Default to 1 if not found
+  const roleId = parseQueryIntOrNull(localStorage.getItem('roleId')) ?? 1; // Default to 1 if not found
   return { userId, roleId };
 }
 
@@ -172,7 +173,9 @@ function pickDropdownListId(row) {
     row.serviceId ??
     row.ServiceId ??
     row.courierId ??
-    row.CourierId;
+    row.CourierId ??
+    row.UserId ??
+    row.userId;
   if (v === undefined || v === null) return '';
   const s = String(v).trim();
   return s;
@@ -185,6 +188,10 @@ function pickDropdownListText(row) {
     row.Text ??
     row.name ??
     row.Name ??
+    row.userName ??
+    row.UserName ??
+    row.shipperName ??
+    row.ShipperName ??
     row.description ??
     row.Description ??
     row.label ??
@@ -211,9 +218,9 @@ function normalizeShippersResponse(data) {
     .map((row) => {
       const id = pickDropdownListId(row);
       const textPick = pickDropdownListText(row);
-      if (!id) return null;
+      if (id === '' || id == null) return null;
       const text = textPick || id;
-      return { id, text: String(text || id) };
+      return { id, text: String(text) };
     })
     .filter(Boolean)
     .filter((row) => {

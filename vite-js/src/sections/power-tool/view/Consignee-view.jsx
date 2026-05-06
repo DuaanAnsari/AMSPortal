@@ -51,8 +51,8 @@ function mapConsigneeRow(raw, index) {
   return {
     id,
     _raw: r,
-    packageName: String(pick(r, 'packageName', 'PackageName') || '—'),
-    consigneeName: String(pick(r, 'consigneeName', 'ConsigneeName') || '—'),
+    packageName: String(pick(r, 'consigneeName', 'ConsigneeName') || '—'),
+    consigneeName: String(pick(r, 'packageName', 'PackageName') || '—'),
     address: String(pick(r, 'address', 'Address') || '—'),
     phone: String(pick(r, 'phone', 'Phone', 'phon', 'Phon') || '—'),
   };
@@ -128,8 +128,8 @@ export default function ConsigneeViewPage() {
       setError(null);
       try {
         const data = await qdApi.getConsigneeView({
-          packageName: filterPackage,
-          consigneeName: filterConsignee,
+          packageName: filterConsignee,
+          consigneeName: filterPackage,
         });
         if (aborted || gen !== fetchGenRef.current) return;
         const list = normalizeListResponse(data);

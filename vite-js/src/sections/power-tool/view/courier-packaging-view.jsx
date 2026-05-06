@@ -40,6 +40,24 @@ function monthRangeDefaults() {
   return { fromDate: toInputDate(start), toDate: toInputDate(end) };
 }
 
+/** Parse DD/MM/YYYY or ISO string safely */
+function parseSafeDate(val) {
+  if (!val) return null;
+  const s = String(val).trim();
+  // Handle DD/MM/YYYY
+  const parts = s.split('/');
+  if (parts.length === 3) {
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const year = parseInt(parts[2], 10);
+    const d = new Date(year, month, day);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  // Handle YYYY-MM-DD or other ISO formats
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 /** Readable date for grid (API: ISO / .NET string) */
 function formatMerchandisingDate(value) {
   if (value == null || value === '') return '—';
@@ -165,12 +183,16 @@ export default function CourierPackagingViewPage() {
 
   const [draftFilters, setDraftFilters] = useState({
     orderNo: '',
+    shipperName: '',
+    consigneeName: '',
     fromDate: defaults.fromDate,
     toDate: defaults.toDate,
   });
 
   const [appliedFilters, setAppliedFilters] = useState({
     orderNo: '',
+    shipperName: '',
+    consigneeName: '',
     fromDate: defaults.fromDate,
     toDate: defaults.toDate,
   });
@@ -184,7 +206,50 @@ export default function CourierPackagingViewPage() {
     setAppliedFilters({ ...draftFilters });
   }, [draftFilters]);
 
-  const { orderNo, fromDate, toDate } = appliedFilters;
+  const { orderNo, fromDate, toDate, shipperName, consigneeName } = appliedFilters;
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((row) => {
+      // 1. Order Number Filter (Case-insensitive)
+      const matchesOrder = orderNo
+        ? row.invoiceNo.toLowerCase().includes(orderNo.toLowerCase().trim())
+        : true;
+
+      // 2. Shipper Name Filter (Case-insensitive)
+      const matchesShipper = shipperName
+        ? row.shipperName.toLowerCase().includes(shipperName.toLowerCase().trim())
+        : true;
+
+      // 3. Consignee Name Filter (Case-insensitive)
+      const matchesConsignee = consigneeName
+        ? row.consigneeName.toLowerCase().includes(consigneeName.toLowerCase().trim())
+        : true;
+
+      // 4. Date Range Filter
+      let matchesDate = true;
+      if (fromDate && toDate) {
+        const rawDateValue = row._raw?.creationDate || row._raw?.CreationDate;
+        const rowDate = parseSafeDate(rawDateValue);
+
+        if (rowDate) {
+          rowDate.setHours(0, 0, 0, 0);
+
+          const start = new Date(fromDate);
+          start.setHours(0, 0, 0, 0);
+
+          const end = new Date(toDate);
+          end.setHours(0, 0, 0, 0);
+
+          matchesDate = rowDate >= start && rowDate <= end;
+        } else {
+          // If date is invalid but filters are active, exclude the row
+          matchesDate = false;
+        }
+      }
+
+      return matchesOrder && matchesShipper && matchesConsignee && matchesDate;
+    });
+  }, [rows, orderNo, fromDate, toDate, shipperName, consigneeName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -414,8 +479,20 @@ export default function CourierPackagingViewPage() {
         </Alert>
       )}
 
-      <Grid container spacing={2} alignItems="flex-end" sx={{ mb: 3 }}>
-        <Grid item xs={12} md={4}>
+      <Box
+        sx={{
+          mb: 3,
+          display: 'grid',
+          gap: 1.5,
+          alignItems: 'flex-end',
+          gridTemplateColumns: {
+            xs: 'repeat(1, 1fr)',
+            sm: 'repeat(2, 1fr)',
+            md: '1.2fr 1.5fr 1.5fr 1.2fr 1.2fr 0.8fr 1.2fr',
+          },
+        }}
+      >
+        <Box>
           <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
             Order No
           </Typography>
@@ -427,9 +504,37 @@ export default function CourierPackagingViewPage() {
             value={draftFilters.orderNo}
             onChange={handleDraftChange}
           />
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} sm={6} md={2}>
+        <Box>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+            Consignee Name
+          </Typography>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Consignee…"
+            name="consigneeName"
+            value={draftFilters.consigneeName}
+            onChange={handleDraftChange}
+          />
+        </Box>
+
+        <Box>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+            Shipper Name
+          </Typography>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Shipper…"
+            name="shipperName"
+            value={draftFilters.shipperName}
+            onChange={handleDraftChange}
+          />
+        </Box>
+
+        <Box>
           <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
             From
           </Typography>
@@ -442,9 +547,9 @@ export default function CourierPackagingViewPage() {
             onChange={handleDraftChange}
             InputLabelProps={{ shrink: true }}
           />
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} sm={6} md={2}>
+        <Box>
           <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
             To
           </Typography>
@@ -457,30 +562,33 @@ export default function CourierPackagingViewPage() {
             onChange={handleDraftChange}
             InputLabelProps={{ shrink: true }}
           />
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} md={2}>
-          <Button variant="contained" color="primary" sx={{ textTransform: 'none', px: 3 }} onClick={handleSearch}>
-            Search
-          </Button>
-        </Grid>
+        <Button
+          fullWidth
+          variant="contained"
+          color="primary"
+          sx={{ textTransform: 'none', height: 40 }}
+          onClick={handleSearch}
+        >
+          Search
+        </Button>
 
-        <Grid item xs={12} md={2} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() =>
-              navigate({
-                pathname: paths.dashboard.powerTool.courierPackagingEntry,
-                search: '',
-              })
-            }
-            sx={{ textTransform: 'none', px: 3 }}
-          >
-            Add Courier
-          </Button>
-        </Grid>
-      </Grid>
+        <Button
+          fullWidth
+          variant="contained"
+          color="primary"
+          onClick={() =>
+            navigate({
+              pathname: paths.dashboard.powerTool.courierPackagingEntry,
+              search: '',
+            })
+          }
+          sx={{ textTransform: 'none', height: 40, whiteSpace: 'nowrap' }}
+        >
+          Add Courier
+        </Button>
+      </Box>
 
       <Card variant="outlined" sx={{ borderRadius: 1, position: 'relative' }}>
         {loading && (
@@ -510,7 +618,7 @@ export default function CourierPackagingViewPage() {
           }}
         >
           <DataGrid
-            rows={rows}
+            rows={filteredRows}
             columns={columns}
             getRowId={(row) => row.id}
             initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
