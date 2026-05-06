@@ -154,21 +154,21 @@ const Field = ({ label, value, width, flex }) => (
 
 const Footer = ({ qaName, qaSig, vendorSig, managerSig }) => (
   <View style={styles.footer} fixed>
-    <View style={styles.sigBox}>
-      {qaSig ? <Image src={qaSig} style={styles.signatureImg} /> : null}
-      <View style={styles.sigLine} />
-      <Text>QA INSPECTOR SIGNATURE</Text>
+    <View style={styles.signBlock}>
+      {qaSig ? <Image src={qaSig} style={styles.signImg} /> : null}
+      <View style={styles.signLine} />
+      <Text style={styles.signLabel}>QA INSPECTOR SIGNATURE</Text>
       <Text style={{ fontSize: 6, marginTop: 2 }}>{qaName}</Text>
     </View>
-    <View style={styles.sigBox}>
-      {vendorSig ? <Image src={vendorSig} style={styles.signatureImg} /> : null}
-      <View style={styles.sigLine} />
+    <View style={styles.signBlock}>
+      {vendorSig ? <Image src={vendorSig} style={styles.signImg} /> : null}
+      <View style={styles.signLine} />
       <Text style={styles.signLabel}>VENDOR SIGN</Text>
     </View>
-    <View style={styles.sigBox}>
-      {managerSig ? <Image src={managerSig} style={styles.signatureImg} /> : null}
-      <View style={styles.sigLine} />
-      <Text>QA MANAGER SIGNATURE</Text>
+    <View style={styles.signBlock}>
+      {managerSig ? <Image src={managerSig} style={styles.signImg} /> : null}
+      <View style={styles.signLine} />
+      <Text style={styles.signLabel}>QA MANAGER SIGNATURE</Text>
     </View>
   </View>
 );
@@ -205,10 +205,18 @@ export default function QAInspectionPDF({ data }) {
   const critAllowed = fmt(mst.criticalAllowed); const majAllowed = fmt(mst.majorAllowed); const minAllowed = fmt(mst.minorAllowed);
 
   // Signatures
-  const sigs = data.signatures ?? [];
-  const qaSig      = sigs.find(s => s.signType === 'QA')?.base64Data      ?? sigs.find(s => s.signType === 'QA')?.Base64Data;
-  const vendorSig  = sigs.find(s => s.signType === 'VENDOR')?.base64Data  ?? sigs.find(s => s.signType === 'VENDOR')?.Base64Data;
-  const managerSig = sigs.find(s => s.signType === 'MANAGER')?.base64Data ?? sigs.find(s => s.signType === 'MANAGER')?.Base64Data;
+  const sigs = data.signatures ?? data.Signatures ?? [];
+  const getSig = (type) => {
+    const s = sigs.find(x => {
+      const st = x.signType ?? x.SignType ?? '';
+      return st.toUpperCase() === type.toUpperCase();
+    });
+    return s?.base64Data ?? s?.Base64Data;
+  };
+
+  const qaSig      = getSig('QA');
+  const vendorSig  = getSig('VENDOR');
+  const managerSig = getSig('CONTROL');
 
   const images = data.images ?? [];
 
@@ -245,42 +253,49 @@ export default function QAInspectionPDF({ data }) {
   const totalMaj  = discs.reduce((s, d) => s + (Number(d.major)    || 0), 0);
   const totalMin  = discs.reduce((s, d) => s + (Number(d.minor)    || 0), 0);
 
+  const isChecked = (key1, key2, comKey) => {
+    const bit = !!(mst[key1] ?? mst[key2] ?? false);
+    if (bit) return true;
+    const com = String(getVal(mst, comKey) || '').trim().toUpperCase();
+    return ['CHECKED', 'YES', 'OK', 'CONFORM', 'CONFORMITY'].includes(com);
+  };
+
   const accLeft = [
-    { label: 'DYE LOTS', checked: !!getVal(mst, 'dyeLotCom'), c: getVal(mst, 'dyeLotCom') },
-    { label: 'PATTERN', checked: !!getVal(mst, 'patternCom'), c: getVal(mst, 'patternCom') },
-    { label: 'GENERAL APPEARANCE', checked: !!getVal(mst, 'generalAppCom'), c: getVal(mst, 'generalAppCom') },
-    { label: 'MAIN LABEL', checked: !!getVal(mst, 'mainLblCom'), c: getVal(mst, 'mainLblCom') },
-    { label: 'MAIN LABEL PLACEMENT', checked: !!getVal(mst, 'mainLblPlacementCom'), c: getVal(mst, 'mainLblPlacementCom') },
-    { label: 'CARE LABEL PLACEMENT', checked: !!getVal(mst, 'careLblPlacementCom'), c: getVal(mst, 'careLblPlacementCom') },
-    { label: 'CONTENT LABEL PLACEMENT', checked: !!getVal(mst, 'contentLblPlacementCom'), c: getVal(mst, 'contentLblPlacementCom') },
-    { label: 'BUTTONS', checked: !!getVal(mst, 'buttonsCom'), c: getVal(mst, 'buttonsCom') },
+    { label: 'DYE LOTS', checked: isChecked('dyeLot', 'DyeLot', 'dyeLotCom'), c: getVal(mst, 'dyeLotCom') },
+    { label: 'PATTERN', checked: isChecked('pattern', 'Pattern', 'patternCom'), c: getVal(mst, 'patternCom') },
+    { label: 'GENERAL APPEARANCE', checked: isChecked('generalAppearance', 'GeneralAppearance', 'generalAppCom'), c: getVal(mst, 'generalAppCom') },
+    { label: 'MAIN LABEL', checked: isChecked('mainLabel', 'MainLabel', 'mainLblCom'), c: getVal(mst, 'mainLblCom') },
+    { label: 'MAIN LABEL PLACEMENT', checked: isChecked('mainLabelPlacement', 'MainLabelPlacement', 'mainLblPlacementCom'), c: getVal(mst, 'mainLblPlacementCom') },
+    { label: 'CARE LABEL PLACEMENT', checked: isChecked('careLabelPlacement', 'CareLabelPlacement', 'careLblPlacementCom'), c: getVal(mst, 'careLblPlacementCom') },
+    { label: 'CONTENT LABEL PLACEMENT', checked: isChecked('contentLabelPlacement', 'ContentLabelPlacement', 'contentLblPlacementCom'), c: getVal(mst, 'contentLblPlacementCom') },
+    { label: 'BUTTONS', checked: isChecked('buttonAccessory', 'ButtonAccessory', 'buttonsCom') || isChecked('button', 'Button', 'buttonsCom'), c: getVal(mst, 'buttonsCom') },
     { label: '', checked: false, c: '' }
   ];
   const accRight = [
-    { label: 'ZIPPER', checked: !!getVal(mst, 'zipperCom'), c: getVal(mst, 'zipperCom') },
-    { label: 'DRAWSTRING', checked: !!getVal(mst, 'drawingStrCom'), c: getVal(mst, 'drawingStrCom') },
-    { label: 'HANGTAG', checked: !!getVal(mst, 'hangtagCom'), c: getVal(mst, 'hangtagCom') },
-    { label: 'PRICE TICKET', checked: !!getVal(mst, 'priceTicketCom'), c: getVal(mst, 'priceTicketCom') },
-    { label: 'HANGER', checked: !!getVal(mst, 'hangerCom'), c: getVal(mst, 'hangerCom') },
-    { label: 'CONTENT LABEL', checked: !!getVal(mst, 'contentLblCom'), c: getVal(mst, 'contentLblCom') },
-    { label: 'FOLD METHOD', checked: !!getVal(mst, 'foldMethodCom'), c: getVal(mst, 'foldMethodCom') },
-    { label: 'INTERLINING', checked: !!getVal(mst, 'interLiningCom'), c: getVal(mst, 'interLiningCom') },
-    { label: 'ADDITIONAL LABEL', checked: !!getVal(mst, 'additionalLblComm'), c: getVal(mst, 'additionalLblComm') }
+    { label: 'ZIPPER', checked: isChecked('zipper', 'Zipper', 'zipperCom'), c: getVal(mst, 'zipperCom') },
+    { label: 'DRAWSTRING', checked: isChecked('drawingString', 'DrawingString', 'drawingStrCom'), c: getVal(mst, 'drawingStrCom') },
+    { label: 'HANGTAG', checked: isChecked('hangTag', 'HangTag', 'hangtagCom'), c: getVal(mst, 'hangtagCom') },
+    { label: 'PRICE TICKET', checked: isChecked('priceTicket', 'PriceTicket', 'priceTicketCom'), c: getVal(mst, 'priceTicketCom') },
+    { label: 'HANGER', checked: isChecked('hanger', 'Hanger', 'hangerCom'), c: getVal(mst, 'hangerCom') },
+    { label: 'CONTENT LABEL', checked: isChecked('contentLabel', 'ContentLabel', 'contentLblCom'), c: getVal(mst, 'contentLblCom') },
+    { label: 'FOLD METHOD', checked: isChecked('foldMethod', 'FoldMethod', 'foldMethodCom'), c: getVal(mst, 'foldMethodCom') },
+    { label: 'INTERLINING', checked: isChecked('interlining', 'Interlining', 'interLiningCom'), c: getVal(mst, 'interLiningCom') },
+    { label: 'ADDITIONAL LABEL', checked: isChecked('additionalLbl', 'AdditionalLbl', 'additionalLblComm'), c: getVal(mst, 'additionalLblComm') }
   ];
 
   const packLeft = [
-    { label: 'CARTON DIMENSION', checked: !!getVal(mst, 'cartonDimmCom'), c: getVal(mst, 'cartonDimmCom') },
-    { label: 'CARTON THICKNESS', checked: !!getVal(mst, 'crtnThicknessCom'), c: getVal(mst, 'crtnThicknessCom') },
-    { label: 'GROSS WT', checked: !!getVal(mst, 'grossWTCom'), c: getVal(mst, 'grossWTCom') },
-    { label: 'NO. OF PCS/INNER PACK', checked: !!getVal(mst, 'noOfPcsInnerPackCom'), c: getVal(mst, 'noOfPcsInnerPackCom') },
+    { label: 'CARTON DIMENSION', checked: isChecked('cartonDimen', 'CartonDimen', 'cartonDimmCom'), c: getVal(mst, 'cartonDimmCom') },
+    { label: 'CARTON THICKNESS', checked: isChecked('cartonThickness', 'CartonThickness', 'crtnThicknessCom'), c: getVal(mst, 'crtnThicknessCom') },
+    { label: 'GROSS WT', checked: isChecked('grossWT', 'GrossWT', 'grossWTCom'), c: getVal(mst, 'grossWTCom') },
+    { label: 'NO. OF PCS/INNER PACK', checked: isChecked('noOfPcsInnerPack', 'NoOfPcsInnerPack', 'noOfPcsInnerPackCom'), c: getVal(mst, 'noOfPcsInnerPackCom') },
     { label: '', checked: false, c: '' }
   ];
   const packRight = [
-    { label: 'CARTON MARKING', checked: !!getVal(mst, 'cartonMarkingCom'), c: getVal(mst, 'cartonMarkingCom') },
-    { label: 'NET WT', checked: !!getVal(mst, 'netWTCom'), c: getVal(mst, 'netWTCom') },
-    { label: 'NO. OF PCS/CARTON', checked: !!getVal(mst, 'noOfPcsCrtnCom'), c: getVal(mst, 'noOfPcsCrtnCom') },
-    { label: 'POLYBAG/BLISTER BAG', checked: !!getVal(mst, 'polyBagBlisterBagCom'), c: getVal(mst, 'polyBagBlisterBagCom') },
-    { label: 'U.P.C.', checked: !!getVal(mst, 'uPCCom'), c: getVal(mst, 'uPCCom') }
+    { label: 'CARTON MARKING', checked: isChecked('cartonMarking', 'CartonMarking', 'cartonMarkingCom'), c: getVal(mst, 'cartonMarkingCom') },
+    { label: 'NET WT', checked: isChecked('netWT', 'NetWT', 'netWTCom'), c: getVal(mst, 'netWTCom') },
+    { label: 'NO. OF PCS/CARTON', checked: isChecked('noOfPcsCarton', 'NoOfPcsCarton', 'noOfPcsCrtnCom'), c: getVal(mst, 'noOfPcsCrtnCom') },
+    { label: 'POLYBAG/BLISTER BAG', checked: isChecked('polyBag', 'PolyBag', 'polyBagBlisterBagCom'), c: getVal(mst, 'polyBagBlisterBagCom') },
+    { label: 'U.P.C.', checked: isChecked('ups', 'UPS', 'uPCCom'), c: getVal(mst, 'uPCCom') }
   ];
 
   return (
@@ -455,16 +470,19 @@ export default function QAInspectionPDF({ data }) {
             <View style={[styles.tdBold, { width: 40, alignItems: 'center' }]}><Text>MINOR</Text></View>
           </View>
           
-          {filledDiscs.map((d, i) => (
-            <View key={i} style={styles.tr}>
-              <View style={[styles.td, { width: 35, alignItems: 'center' }]}><Text>{d.discrepancy ? i + 1 : ''}</Text></View>
-              <View style={[styles.td, { flex: 1 }]}><Text>{d.discrepancy ?? ''}</Text></View>
-              <View style={[styles.td, { width: 100 }]}><Text>{d.remarks ?? ''}</Text></View>
-              <View style={[styles.td, { width: 50, alignItems: 'center' }]}><Text>{d.critical ? fmt(d.critical) : ''}</Text></View>
-              <View style={[styles.td, { width: 40, alignItems: 'center' }]}><Text>{d.major ? fmt(d.major) : ''}</Text></View>
-              <View style={[styles.td, { width: 40, alignItems: 'center' }]}><Text>{d.minor ? fmt(d.minor) : ''}</Text></View>
-            </View>
-          ))}
+          {filledDiscs.map((d, i) => {
+            const discText = d.discrepanices ?? d.Discrepanices ?? d.discrepancy ?? '';
+            return (
+              <View key={i} style={styles.tr}>
+                <View style={[styles.td, { width: 35, alignItems: 'center' }]}><Text>{discText ? i + 1 : ''}</Text></View>
+                <View style={[styles.td, { flex: 1 }]}><Text>{discText}</Text></View>
+                <View style={[styles.td, { width: 100 }]}><Text>{d.remarks ?? d.Remarks ?? ''}</Text></View>
+                <View style={[styles.td, { width: 50, alignItems: 'center' }]}><Text>{d.critical ? fmt(d.critical) : ''}</Text></View>
+                <View style={[styles.td, { width: 40, alignItems: 'center' }]}><Text>{d.major ? fmt(d.major) : ''}</Text></View>
+                <View style={[styles.td, { width: 40, alignItems: 'center' }]}><Text>{d.minor ? fmt(d.minor) : ''}</Text></View>
+              </View>
+            );
+          })}
 
           {/* Totals */}
           <View style={styles.tr}>
@@ -482,7 +500,7 @@ export default function QAInspectionPDF({ data }) {
         </View>
 
         <Text style={{ fontSize: 7 }}>REMARKS:</Text>
-        <Text style={styles.remarksText}>{mst.qaRemarks || ''}</Text>
+        <Text style={styles.remarksText}>{mst.qaRemarks ?? mst.QARemarks ?? mst.qARemarks ?? ''}</Text>
 
         <Footer qaName={qaName} qaSig={qaSig} vendorSig={vendorSig} managerSig={managerSig} />
       </Page>

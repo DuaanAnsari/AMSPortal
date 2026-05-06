@@ -408,7 +408,7 @@ const DEFAULT_ACC_DROP = {
   additionalLabel: 'Yes',
 };
 
-function buildQdSavePayload(form, discRows, mstId, isMainSave, inspectionDtlRows) {
+function buildQdSavePayload(form, discRows, mstId, isMainSave, dtlRows) {
   const acc = form.acc || {};
   const accDrop = form.accDrop || {};
   const accText = form.accText || {};
@@ -435,24 +435,24 @@ function buildQdSavePayload(form, discRows, mstId, isMainSave, inspectionDtlRows
     minor: parseOptionalDecimal(form.minQty),
     major: parseOptionalDecimal(form.majQty),
     reliability: form.reliability || 'II',
-    criticalAql: parseAqlDecimal(form.critAql),
-    majorAql: parseAqlDecimal(form.majAql),
-    minorAql: parseAqlDecimal(form.minAql),
+    criticalAQL: parseAqlDecimal(form.critAql),
+    majorAQL: parseAqlDecimal(form.majAql),
+    minorAQL: parseAqlDecimal(form.minAql),
     criticalAllowed: parseOptionalDecimal(form.allowCrit),
     minorAllowed: parseOptionalDecimal(form.allowMin),
     majorAllowed: parseOptionalDecimal(form.allowMaj),
-    quantity_D: form.qtyD || null,
-    conformity_D: form.confD || null,
-    workmanship_D: form.workD || null,
-    packing_D: form.packD || null,
-    marking_D: form.markD || null,
-    measurement_D: form.measD || null,
-    quantity_D_Remarks: form.qtyDR || null,
-    conformity_D_Remarks: form.confDR || null,
-    workmanship_D_Remarks: form.workDR || null,
-    packing_D_Remarks: form.packDR || null,
-    marking_D_Remarks: form.markDR || null,
-    measurement_D_Remarks: form.measDR || null,
+    quantityD: form.qtyD || null,
+    conformityD: form.confD || null,
+    workmanshipD: form.workD || null,
+    packingD: form.packD || null,
+    markingD: form.markD || null,
+    measurementD: form.measD || null,
+    quantityDRemarks: form.qtyDR || null,
+    conformityDRemarks: form.confDR || null,
+    workmanshipDRemarks: form.workDR || null,
+    packingDRemarks: form.packDR || null,
+    markingDRemarks: form.markDR || null,
+    measurementDRemarks: form.measDR || null,
     passFail: form.passFail === '1',
     colorway: Array.isArray(form.color) ? form.color.join(',') : (form.color || null),
     ratio: form.ratio || null,
@@ -514,21 +514,21 @@ function buildQdSavePayload(form, discRows, mstId, isMainSave, inspectionDtlRows
     foldMethodCom: accDrop.foldMethodDdl || null,
     buttonsCom: accDrop.button || null,
     polyBagBlisterBagCom: packDrop.polyBag || null,
-    uPCCom: packText.ups || null,
+    upcCom: packText.ups || null,
     otherBitM: !!pack.otherM,
     otherCom1M: packText.other1M || null,
     otherCom2M: packText.other2M || null,
     interLiningCom: accText.interlining || null,
     cartonMarkingCom: packDrop.cartonMarking || null,
-    discrepancies: discRows.map((r) => ({
-      qdInsDiscrepanicesDtlId: null,
+    discrepancies: (discRows || []).map((r) => ({
+      qdInsDiscrepanicesDtlId: r.qdInsDiscrepanicesDtlId || r.qdInspectionDtlId || 0,
       discrepancy: r.discrepancy || '',
       remarks: r.remarks || '',
-      critical: parseOptionalDecimal(r.critical),
-      major: parseOptionalDecimal(r.major),
-      minor: parseOptionalDecimal(r.minor),
+      critical: Number(r.critical) || 0,
+      major: Number(r.major) || 0,
+      minor: Number(r.minor) || 0,
     })),
-    inspectionDtl: buildInspectionDtlPayload(inspectionDtlRows),
+    inspectionDtl: buildInspectionDtlPayload(dtlRows),
   };
 }
 
@@ -1460,9 +1460,6 @@ export default function QualityDepartmentInspectionView() {
     setSaving(true);
     try {
       const body = buildQdSavePayload(form, discRows, mstId, isMainSave, dtlRows);
-      console.log('--- SAVING QD INSPECTION PAYLOAD ---');
-      console.log(JSON.stringify(body, null, 2));
-      console.log('------------------------------------');
       
       const saveRes = await qdApi.post(
         `/MasterOrderForQDSheet/quality-department-inspection/${encodeURIComponent(poid)}`,
@@ -1483,10 +1480,11 @@ export default function QualityDepartmentInspectionView() {
       await reloadInspection(returnedId > 0 ? returnedId : null);
       enqueueSnackbar(isMainSave ? 'Saved.' : 'Saved as draft.', { variant: 'success' });
     } catch (e) {
+      console.error('Save error details:', e);
       console.error('Save error response:', e?.response?.data);
       const data = e?.response?.data;
       let msg = e?.message || 'Save failed';
-      if (typeof data === 'string') {
+      if (typeof data === 'string' && data) {
         msg = data;
       } else if (data?.errors) {
         msg = Object.entries(data.errors).map(([k, v]) => `${k}: ${v.join(', ')}`).join(' | ');

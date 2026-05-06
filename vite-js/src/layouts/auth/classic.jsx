@@ -15,7 +15,7 @@ import LockIcon from '@mui/icons-material/Lock';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import axios from 'axios';
-
+import { HOST_API } from 'src/config-global';
 
 export default function AMSLogin() {
   const [username, setUsername] = useState('');
@@ -29,7 +29,7 @@ export default function AMSLogin() {
     setErrorMsg('');
 
     try {
-      const response = await axios.post(`/api/Auth/login`, {
+      const response = await axios.post(`${HOST_API}/api/Auth/login`, {
         username,
         password,
       });

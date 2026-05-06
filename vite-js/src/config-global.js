@@ -3,8 +3,10 @@ import { paths } from 'src/routes/paths';
 // API
 // ----------------------------------------------------------------------
 
-export const HOST_API = import.meta.env.VITE_API_BASE_URL;
-export const ASSETS_API = import.meta.env.VITE_ASSETS_API;
+export const HOST_API = import.meta.env.VITE_API_BASE_URL || '';
+export const ASSETS_API = import.meta.env.VITE_ASSETS_API || '';
+
+console.log('🌐 API Base URL:', HOST_API);
 
 export const FIREBASE_API = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,

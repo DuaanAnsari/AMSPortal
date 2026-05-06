@@ -22,6 +22,7 @@ import { alpha, useTheme } from '@mui/material/styles';
 import { paths } from 'src/routes/paths';
 import SvgColor from 'src/components/svg-color';
 import { useSnackbar } from 'src/components/snackbar';
+import { HOST_API } from 'src/config-global';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 
 import SelfSizeSpecsPDF, { mergeSizeSpecsPdfData } from './Self-size-specs-PDF';
@@ -89,8 +90,8 @@ export default function SizeSpecsViewList() {
       const userId = 26;
       const pono = debouncedQuery || '';
 
-      const url = `/api/SelfSizeSpecs/GetViewData?roleId=${roleId}&userId=${userId}&pono=${encodeURIComponent(pono)}`;
-      console.log('Fetching Size Specs from:', url);
+      const url = `${HOST_API}/api/SelfSizeSpecs/GetViewData?roleId=${roleId}&userId=${userId}&pono=${encodeURIComponent(pono)}`;
+      console.log('📡 Fetching Size Specs from:', url);
 
       const response = await fetch(url, {
         headers: {
@@ -136,51 +137,54 @@ export default function SizeSpecsViewList() {
         // Fetch actual PDF data
         const token = localStorage.getItem('accessToken');
         const poid = raw.POID || raw.poid;
-        const pdfResponse = await fetch(`/api/SelfSizeSpecs/GetPDFData?poid=${poid}&poDetailId=${poDetailId}`, {
+        const pdfUrl = `${HOST_API}/api/SelfSizeSpecs/GetPDFData?poid=${poid}&poDetailId=${poDetailId}`;
+        console.log('📡 Fetching PDF Data from:', pdfUrl);
+        
+        const pdfResponse = await fetch(pdfUrl, {
           headers: {
             'Content-Type': 'application/json',
             ...(token && { Authorization: `Bearer ${token}` }),
           },
         });
-        
+
         let measurementSheet;
         let sheetBanner = '';
         let headers = [];
-        
+
         if (pdfResponse.ok) {
-           const pdfData = await pdfResponse.json();
-           if (pdfData && pdfData.length > 0) {
-              const firstRow = pdfData[0];
-              const measurementType = firstRow.measurementType || '';
-              const measurementsUnit = firstRow.measurements || '';
-              sheetBanner = `${measurementType} ${measurementType && measurementsUnit ? '-' : ''} ${measurementsUnit ? `(${measurementsUnit})` : ''}`;
-              
-              // Extract best headers
-              let bestHeaderRow = firstRow;
-              let maxHeaders = 0;
-              pdfData.forEach(row => {
-                  let count = 0;
-                  for (let i = 1; i <= 12; i++) if (row[`header${i}`]) count++;
-                  if (count > maxHeaders) {
-                      maxHeaders = count;
-                      bestHeaderRow = row;
-                  }
-              });
-              for (let i = 1; i <= 12; i++) headers.push(bestHeaderRow[`header${i}`] || '');
-              
-              measurementSheet = pdfData.map((row, idx) => ({
-                 no: String(idx + 1),
-                 point: row.measurementPoints || '',
-                 tol: row.tolerance || '',
-                 sQ: row.col1 || '',
-                 sS: row.qCol1 || '',
-                 mQ: row.col2 || '',
-                 mS: row.qCol2 || '',
-                 l: row.col3 || '',
-                 xl: row.col4 || '',
-                 extra: [row.col5 || '', row.col6 || '', row.col7 || '', row.col8 || '', row.col9 || '', row.col10 || '']
-              }));
-           }
+          const pdfData = await pdfResponse.json();
+          if (pdfData && pdfData.length > 0) {
+            const firstRow = pdfData[0];
+            const measurementType = firstRow.measurementType || '';
+            const measurementsUnit = firstRow.measurements || '';
+            sheetBanner = `${measurementType} ${measurementType && measurementsUnit ? '-' : ''} ${measurementsUnit ? `(${measurementsUnit})` : ''}`;
+
+            // Extract best headers
+            let bestHeaderRow = firstRow;
+            let maxHeaders = 0;
+            pdfData.forEach(row => {
+              let count = 0;
+              for (let i = 1; i <= 12; i++) if (row[`header${i}`]) count++;
+              if (count > maxHeaders) {
+                maxHeaders = count;
+                bestHeaderRow = row;
+              }
+            });
+            for (let i = 1; i <= 12; i++) headers.push(bestHeaderRow[`header${i}`] || '');
+
+            measurementSheet = pdfData.map((row, idx) => ({
+              no: String(idx + 1),
+              point: row.measurementPoints || '',
+              tol: row.tolerance || '',
+              sQ: row.col1 || '',
+              sS: row.qCol1 || '',
+              mQ: row.col2 || '',
+              mS: row.qCol2 || '',
+              l: row.col3 || '',
+              xl: row.col4 || '',
+              extra: [row.col5 || '', row.col6 || '', row.col7 || '', row.col8 || '', row.col9 || '', row.col10 || '']
+            }));
+          }
         }
 
         let logoDataUrl;
@@ -191,12 +195,12 @@ export default function SizeSpecsViewList() {
         }
 
         const merged = mergeSizeSpecsPdfData({
-            ...raw,
-            measurementSheet: measurementSheet || undefined,
-            sheetBanner: sheetBanner || undefined,
-            headers: headers.length > 0 ? headers : undefined
+          ...raw,
+          measurementSheet: measurementSheet || undefined,
+          sheetBanner: sheetBanner || undefined,
+          headers: headers.length > 0 ? headers : undefined
         }, logoDataUrl);
-        
+
         const blob = await pdf(<SelfSizeSpecsPDF data={merged} />).toBlob();
         const url = URL.createObjectURL(blob);
         window.open(url, '_blank', 'noopener,noreferrer');
