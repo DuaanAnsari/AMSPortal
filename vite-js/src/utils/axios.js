@@ -8,6 +8,8 @@ const axiosInstance = axios.create({
   baseURL: HOST_API,
 });
 
+console.log('📡 Axios Instance BaseURL:', axiosInstance.defaults.baseURL);
+
 const isPublicAuthRequest = (config) => {
   const path = `${config?.baseURL || ''}${config?.url || ''}`.toLowerCase();
   return (

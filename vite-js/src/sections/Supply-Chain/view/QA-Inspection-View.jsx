@@ -257,12 +257,12 @@ export default function QAInspectionView() {
           />
 
           <TextField
-             select
-             label="Customer:"
-             size="small"
-             value={filters.customerId}
-             onChange={(e) => handleFilterChange('customerId', e.target.value)}
-             sx={{ flex: 1.5, minWidth: 200 }}
+            select
+            label="Customer:"
+            size="small"
+            value={filters.customerId}
+            onChange={(e) => handleFilterChange('customerId', e.target.value)}
+            sx={{ flex: 1.5, minWidth: 200 }}
           >
             <MenuItem value={0}>All Customer</MenuItem>
             {filterOptions.customers.map((c) => (
@@ -271,12 +271,12 @@ export default function QAInspectionView() {
           </TextField>
 
           <TextField
-             select
-             label="Supplier:"
-             size="small"
-             value={filters.supplierId}
-             onChange={(e) => handleFilterChange('supplierId', e.target.value)}
-             sx={{ flex: 1.5, minWidth: 200 }}
+            select
+            label="Supplier:"
+            size="small"
+            value={filters.supplierId}
+            onChange={(e) => handleFilterChange('supplierId', e.target.value)}
+            sx={{ flex: 1.5, minWidth: 200 }}
           >
             <MenuItem value={0}>All Supplier</MenuItem>
             {filterOptions.suppliers.map((s) => (
@@ -285,12 +285,12 @@ export default function QAInspectionView() {
           </TextField>
 
           <TextField
-             select
-             label="Insp Type:"
-             size="small"
-             value={filters.inspType}
-             onChange={(e) => handleFilterChange('inspType', e.target.value)}
-             sx={{ width: 150 }}
+            select
+            label="Insp Type:"
+            size="small"
+            value={filters.inspType}
+            onChange={(e) => handleFilterChange('inspType', e.target.value)}
+            sx={{ width: 150 }}
           >
             {INSP_TYPES.map((t) => (
               <MenuItem key={t} value={t}>{t}</MenuItem>
@@ -302,9 +302,9 @@ export default function QAInspectionView() {
             color="primary"
             disabled={loading}
             onClick={fetchData}
-            sx={{ 
-              height: 40, 
-              px: 5, 
+            sx={{
+              height: 40,
+              px: 5,
               fontWeight: 600,
               textTransform: 'none'
             }}
@@ -344,3 +344,4 @@ export default function QAInspectionView() {
     </Container>
   );
 }
+

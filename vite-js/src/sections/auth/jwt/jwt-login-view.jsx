@@ -81,7 +81,8 @@ export default function JwtLoginView() {
   const onSubmit = handleSubmit(async (data) => {
     try {
       // ✅ Global axios instance use kar rahe hain (baseURL + interceptors)
-      const response = await axios.post('/api/Auth/login', {
+      console.log('🚀 Login Request BaseURL:', axios.defaults.baseURL);
+      const response = await axios.post(`${HOST_API}/api/Auth/login`, {
         username: data.username,
         password: data.password,
       });
