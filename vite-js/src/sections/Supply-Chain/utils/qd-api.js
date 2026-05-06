@@ -1,12 +1,28 @@
 import axios from 'axios';
 
-/** Prefer CRA-style name, then Vite default (see `vite.config.js` envPrefix). */
-const API_BASE_URL =
-  import.meta.env.REACT_APP_API_BASE_URL || import.meta.env.VITE_API_BASE_URL || '';
+function trimSlash(s) {
+  if (s == null || s === '') return '';
+  return String(s).replace(/\/+$/, '');
+}
+
+/**
+ * Full API root including `/api` when set, e.g. `REACT_APP_API_URL=http://host/api`
+ * Otherwise `REACT_APP_API_BASE_URL` / `VITE_API_BASE_URL` + `/api`.
+ */
+const explicitRoot = trimSlash(import.meta.env.REACT_APP_API_URL || import.meta.env.VITE_API_URL || '');
+const hostOnly = trimSlash(
+  import.meta.env.REACT_APP_API_BASE_URL || import.meta.env.VITE_API_BASE_URL || ''
+);
+let API_ROOT = explicitRoot || (hostOnly ? `${hostOnly}/api` : '');
+/** Avoid `.../api/api` if env strings are doubled. */
+while (/\/api\/api$/i.test(API_ROOT)) {
+  API_ROOT = API_ROOT.replace(/\/api\/api$/i, '/api');
+}
+API_ROOT = trimSlash(API_ROOT);
 
 /** Axios client for MasterOrderForQDSheet + linked QD pages (Bearer token). */
 export const qdApi = axios.create({
-  baseURL: `${API_BASE_URL}/api`,
+  baseURL: API_ROOT,
 });
 
 qdApi.interceptors.request.use(
@@ -35,6 +51,20 @@ qdApi.getSignature = async (poid, mstId, signType) => {
 
 qdApi.saveSignature = async (poid, payload) => {
   const res = await qdApi.post(`/MasterOrderForQDSheet/quality-department-inspection/${poid}/signature`, payload);
+  return res.data;
+};
+
+/** Courier / merchandising master + details (same shape as GetMerchandisingEditData). */
+qdApi.saveMerchandising = async (payload) => {
+  const res = await qdApi.post('/Merchandising/SaveMerchandising', payload);
+  return res.data;
+};
+
+/** Invoice PDF payload: `master` + `details` (envelope may nest under `data` / `pdfData`). */
+qdApi.getMerchandisingPdfData = async (merchandisingId) => {
+  const res = await qdApi.get('/Merchandising/GetMerchandisingPdfData', {
+    params: { merchandisingId: String(merchandisingId ?? '').trim() },
+  });
   return res.data;
 };
 

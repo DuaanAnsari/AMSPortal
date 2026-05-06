@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd());
 
   return {
+    envPrefix: ['VITE_', 'REACT_APP_'],
     plugins: [react()],
     resolve: {
       alias: [

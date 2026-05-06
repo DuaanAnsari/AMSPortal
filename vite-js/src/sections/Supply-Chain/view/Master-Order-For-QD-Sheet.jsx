@@ -18,8 +18,8 @@ import { useNavigate } from 'react-router-dom';
 import SearchIcon from '@mui/icons-material/Search';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import AssignmentIcon from '@mui/icons-material/Assignment';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 import IconButton from '@mui/material/IconButton';
 import Avatar from '@mui/material/Avatar';
 
@@ -238,17 +238,20 @@ export default function MasterOrderForQDSheetView() {
           </Tooltip>
         ),
       },
-      // ── Single Process Entry button (replaces PF / DL / SO / PPS / SS columns) ──
+      // ── Sample: single icon (same idea as Inspection column) ──
       {
         field: 'processEntry',
         headerName: 'Sample',
-        minWidth: 145,
+        minWidth: 95,
         align: 'center',
         headerAlign: 'center',
         sortable: false,
         filterable: false,
         renderCell: (params) => (
-          <Tooltip title="Open Process Entry (PF / DL / SO / PPS / SS)" arrow>
+          <Tooltip
+            title="Open sample process entry — PF / DL / SO / PPS / SS switch on the next page"
+            arrow
+          >
             <IconButton
               size="small"
               onClick={() =>
@@ -256,22 +259,23 @@ export default function MasterOrderForQDSheetView() {
                   `${paths.dashboard.qdProcessEntry}?poid=${params.row.poid}&inspType=${encodeURIComponent('Proto Fit')}`
                 )
               }
+              sx={{ p: 0.25 }}
             >
               <Avatar
                 sx={{
-                  width: 28,
-                  height: 28,
+                  width: 30,
+                  height: 30,
                   bgcolor: '#212b36',
                   cursor: 'pointer',
-                  '&:hover': { opacity: 0.8 },
+                  '&:hover': { opacity: 0.88 },
                 }}
               >
-                <AssignmentIcon sx={{ fontSize: 16, color: '#fff' }} />
+                <AssignmentIcon sx={{ fontSize: 17, color: '#fff' }} />
               </Avatar>
             </IconButton>
           </Tooltip>
         ),
-        },
+      },
       ];
     },
     [navigate]

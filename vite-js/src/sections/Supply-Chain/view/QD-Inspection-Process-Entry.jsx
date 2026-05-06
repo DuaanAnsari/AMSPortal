@@ -35,6 +35,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 import { paths } from 'src/routes/paths';
 import { qdApi } from 'src/sections/Supply-Chain/utils/qd-api';
+import SampleProcessTypeToggle from 'src/sections/Supply-Chain/components/sample-process-type-toggle';
 
 // ─── Constants (legacy InspectionProcessEntry.aspx InspType + short labels) ─
 
@@ -483,10 +484,21 @@ LegacySectionCard.propTypes = {
  * `inspType` comes from URL query (?inspType=Proto Fit). `USE_INSPECTION_PROCESS_ENTRY_MOCK` skips API (demo only).
  */
 export default function QDInspectionProcessEntryView() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const editId = searchParams.get('id');
   const poid = searchParams.get('poid');
   const inspType = searchParams.get('inspType') ?? 'Proto Fit';
+
+  const handleSampleInspTypeChange = useCallback(
+    (nextInspType) => {
+      const next = new URLSearchParams(searchParams);
+      next.set('inspType', nextInspType);
+      if (poid) next.set('poid', poid);
+      if (editId) next.set('id', editId);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams, poid, editId]
+  );
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -712,26 +724,44 @@ export default function QDInspectionProcessEntryView() {
         links={[
           { name: 'Dashboard', href: paths.dashboard.root },
           { name: 'Master Order QD Sheet', href: paths.dashboard.masterOrderForQDSheet },
-          { name: INSP_TYPE_SHORT[inspType] || 'Process Entry' },
+          { name: 'Sample', href: paths.dashboard.masterOrderForQDSheet },
+          { name: INSP_TYPE_SHORT[inspType] || inspType },
         ]}
         sx={{ mb: { xs: 2, md: 3 } }}
       />
 
-      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" sx={{ mb: 3 }}>
-        <Button
-          component={RouterLink}
-          to={paths.dashboard.masterOrderForQDSheet}
-          startIcon={<ArrowBackIcon />}
-          variant="outlined"
-          size="small"
-        >
-          Back
-        </Button>
-        <Chip
-          label={`POID: ${poidForGrid || '—'}`}
-          variant="outlined"
-          size="small"
-          sx={{ fontWeight: 600 }}
+      <Stack
+        direction="row"
+        spacing={1.5}
+        alignItems="center"
+        flexWrap="wrap"
+        justifyContent="space-between"
+        sx={{ mb: 3 }}
+        columnGap={2}
+        rowGap={1.5}
+      >
+        <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+          <Button
+            component={RouterLink}
+            to={paths.dashboard.masterOrderForQDSheet}
+            startIcon={<ArrowBackIcon />}
+            variant="outlined"
+            size="small"
+          >
+            Back
+          </Button>
+          <Chip
+            label={`POID: ${poidForGrid || '—'}`}
+            variant="outlined"
+            size="small"
+            sx={{ fontWeight: 600 }}
+          />
+        </Stack>
+
+        <SampleProcessTypeToggle
+          valueInspType={inspType}
+          onSelectInspType={handleSampleInspTypeChange}
+          disabled={Boolean(editId)}
         />
       </Stack>
 
