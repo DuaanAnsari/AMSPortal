@@ -277,6 +277,8 @@ function normalizeConsigneesResponse(data) {
         id: String(id),
         name: nameForDisplay,
         attentionDefault,
+        address: String(row.address ?? row.Address ?? '').trim(),
+        phone: String(row.phone ?? row.Phone ?? '').trim(),
       };
     })
     .filter(Boolean);
@@ -324,6 +326,10 @@ function mapDetailRow(detail, index) {
     price: price === '' ? '' : price,
     amount,
     remarks: String(pick(r, 'remarks', 'Remarks') || ''),
+    gender: String(pick(r, 'gender', 'Gender') || ''),
+    fabriccontent: String(pick(r, 'fabriccontent', 'Fabriccontent', 'fabricContent', 'FabricContent') || ''),
+    tendigithscode: String(pick(r, 'tendigithscode', 'Tendigithscode', 'tenDigitHsCode', 'TenDigitHsCode') || ''),
+    manufacturecode: String(pick(r, 'manufacturecode', 'Manufacturecode', 'manufactureCode', 'ManufactureCode') || ''),
     _rawDetail: r,
   };
 }
@@ -427,12 +433,17 @@ function buildMerchandisingSavePayload(formResolved, rows, merchandisingId, look
         : numForDetail(row.amount, Math.round(qty * price * 10000) / 10000);
     return {
       ...(detailPK !== '' && detailPK != null ? { detailID: detailPK } : {}),
+      merchandisingID: mid || 0,
       postyle: String(row.poStyle ?? '').trim(),
       description: String(row.description ?? '').trim(),
       qty,
       price,
       amount,
       remarks: String(row.remarks ?? '').trim(),
+      gender: String(row.gender ?? '').trim(),
+      fabriccontent: String(row.fabriccontent ?? '').trim(),
+      tendigithscode: String(row.tendigithscode ?? '').trim(),
+      manufacturecode: String(row.manufacturecode ?? '').trim(),
     };
   });
   return { master, details };
@@ -462,6 +473,10 @@ function getEmptyDetailData() {
     price: '',
     amount: '',
     remarks: '',
+    gender: '',
+    fabriccontent: '',
+    tendigithscode: '',
+    manufacturecode: '',
   };
 }
 
@@ -546,10 +561,14 @@ export default function CourierPackagingEntryPage() {
       }
       const sel = consignees.find((c) => String(c.id) === String(value));
       const att = sel && String(sel.attentionDefault ?? '').trim() !== '' ? String(sel.attentionDefault).trim() : '';
+      const addr = sel && String(sel.address ?? '').trim() !== '' ? String(sel.address).trim() : '';
+      const ph = sel && String(sel.phone ?? '').trim() !== '' ? String(sel.phone).trim() : '';
       setFormData((prev) => ({
         ...prev,
         consignee: value,
         attention: att || prev.attention,
+        address: addr || prev.address,
+        phone: ph || prev.phone,
       }));
       return;
     }
@@ -878,13 +897,17 @@ export default function CourierPackagingEntryPage() {
       const v = prev.consignee;
       if (v == null || String(v).trim() === '') return prev;
       if (consignees.some((c) => String(c.id) === String(v))) return prev;
-      const match = consignees.find((c) => String(c.name).trim() === String(v).trim());
+        const match = consignees.find((c) => String(c.name).trim() === String(v).trim());
       if (match) {
         const att = String(match.attentionDefault ?? '').trim();
+        const addr = String(match.address ?? '').trim();
+        const ph = String(match.phone ?? '').trim();
         return {
           ...prev,
           consignee: String(match.id),
           ...(att ? { attention: att } : {}),
+          ...(addr ? { address: addr } : {}),
+          ...(ph ? { phone: ph } : {}),
         };
       }
       return prev;
@@ -1109,6 +1132,42 @@ export default function CourierPackagingEntryPage() {
         field: 'remarks',
         headerName: 'Remarks',
         flex: 0.9,
+        minWidth: 120,
+        align: 'center',
+        headerAlign: 'center',
+        editable: true,
+      },
+      {
+        field: 'gender',
+        headerName: 'Gender',
+        flex: 0.5,
+        minWidth: 100,
+        align: 'center',
+        headerAlign: 'center',
+        editable: true,
+      },
+      {
+        field: 'fabriccontent',
+        headerName: 'Fabric Content',
+        flex: 1,
+        minWidth: 150,
+        align: 'left',
+        headerAlign: 'center',
+        editable: true,
+      },
+      {
+        field: 'tendigithscode',
+        headerName: 'HS Code',
+        flex: 0.8,
+        minWidth: 120,
+        align: 'center',
+        headerAlign: 'center',
+        editable: true,
+      },
+      {
+        field: 'manufacturecode',
+        headerName: 'MFG Code',
+        flex: 0.8,
         minWidth: 120,
         align: 'center',
         headerAlign: 'center',
@@ -1744,9 +1803,51 @@ export default function CourierPackagingEntryPage() {
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
                 Remarks:
               </Typography>
-                            <TextField fullWidth size="small" name="remarks" value={detailData.remarks} onChange={handleDetailChange} />
-            </Grid>
-                        </Grid>
+            <TextField fullWidth size="small" name="remarks" value={detailData.remarks} onChange={handleDetailChange} />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
+              Gender:
+            </Typography>
+            <TextField fullWidth size="small" name="gender" value={detailData.gender} onChange={handleDetailChange} />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
+              Fabric Content:
+            </Typography>
+            <TextField
+              fullWidth
+              size="small"
+              name="fabriccontent"
+              value={detailData.fabriccontent}
+              onChange={handleDetailChange}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
+              10 Digit HS Code:
+            </Typography>
+            <TextField
+              fullWidth
+              size="small"
+              name="tendigithscode"
+              value={detailData.tendigithscode}
+              onChange={handleDetailChange}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
+              Manufacture Code:
+            </Typography>
+            <TextField
+              fullWidth
+              size="small"
+              name="manufacturecode"
+              value={detailData.manufacturecode}
+              onChange={handleDetailChange}
+            />
+          </Grid>
+        </Grid>
 
           <Divider sx={{ my: 3 }} />
 

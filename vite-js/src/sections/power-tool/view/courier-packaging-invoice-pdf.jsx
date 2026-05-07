@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Image, Font } from '@react-pdf/renderer';
 
 // ----------------------------------------------------------------------
 
@@ -8,6 +8,9 @@ const AMS_LOGO_PATH = '/logo/AMSlogo.png';
 
 /** PDF `/Title` metadata + browser tab (wrapper page). */
 export const COURIER_PACKAGES_PDF_TITLE = 'Courier Packages pdf';
+
+// Register bold font for Helvetica if needed, though standard usually works.
+// We'll use FontWeight for built-in Helvetica.
 
 function pick(r, ...keys) {
   if (!r || typeof r !== 'object') return '';
@@ -23,7 +26,11 @@ function formatInvoiceDate(value) {
   const m = /^(\d{4}-\d{2}-\d{2})/.exec(s);
   const d = m ? new Date(`${m[1]}T12:00:00`) : new Date(s);
   if (Number.isNaN(d.getTime())) return s;
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  // Screenshot shows DD/MM/YYYY format
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
 }
 
 function num(v) {
@@ -49,210 +56,209 @@ function amsLogoPdfSrc() {
   return AMS_LOGO_PATH;
 }
 
-/** Split API address string into lines for stacked plain text */
-function addressLines(text) {
-  if (!text || !String(text).trim()) return [];
-  return String(text)
-    .split(/\r?\n/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-const ORANGE = '#E65100';
 const BLACK = '#000000';
-const TABLE_HEADER_GRAY = '#E0E0E0';
-const BORDER_PT = 1;
+const BORDER_COLOR = '#000000';
+const LIGHT_GRAY = '#F2F2F2';
 
 const styles = StyleSheet.create({
   page: {
-    fontSize: 10,
-    fontFamily: 'Helvetica',
-    paddingTop: 30,
-    paddingBottom: 38,
-    paddingHorizontal: 48,
-    color: BLACK,
-  },
-  valBold: { fontFamily: 'Helvetica', fontWeight: 700 },
-  dateUnderline: { textDecoration: 'underline' },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-    borderBottomWidth: 0.75,
-    borderBottomColor: '#d0d0d0',
-    paddingBottom: 10,
-  },
-  logoWrap: { width: '34%', justifyContent: 'flex-start' },
-  logoImg: { width: 140, height: 52, objectFit: 'contain' },
-  companyHead: {
-    flex: 1,
-    minWidth: 0,
-    alignItems: 'center',
-    paddingLeft: 6,
-    paddingTop: 4,
-  },
-  companyName: {
-    fontSize: 14,
-    fontFamily: 'Helvetica',
-    fontWeight: 700,
-    color: ORANGE,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  companyAddr: {
+    paddingHorizontal: 25,
+    paddingVertical: 20,
     fontSize: 9,
-    lineHeight: 1.45,
-    textAlign: 'center',
-    color: BLACK,
-  },
-  title: {
-    textAlign: 'center',
-    fontSize: 15,
     fontFamily: 'Helvetica',
-    fontWeight: 700,
+    fontWeight: 'bold',
     color: BLACK,
-    marginTop: 4,
-    marginBottom: 14,
   },
-  twoCol: {
+  bold: { fontWeight: 'bold' },
+  
+  // Header section
+  headerContainer: {
     flexDirection: 'row',
+    marginBottom: 0,
+    alignItems: 'center',
+    paddingTop: 10,
+  },
+  logoBox: {
+    width: '30%',
+  },
+  logo: {
+    width: 140,
+    height: 55,
+    objectFit: 'contain',
+  },
+  companyHeaderBox: {
+    width: '70%',
+    textAlign: 'center',
+    marginRight: 35, // Increased from 15 to 35
+  },
+  companyNameTitle: {
+    fontSize: 18,
+    color: '#FF6600',
+    fontWeight: 'bold',
+    marginBottom: 2,
+    textTransform: 'none',
+    textAlign: 'center',
+  },
+  headerSubText: {
+    fontSize: 8,
+    marginBottom: 1,
+    textAlign: 'center',
+    fontWeight: 'bold',
+  },
+
+  mainTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginTop: 0,
+    marginBottom: 10,
+    textDecoration: 'none',
+    marginRight: 35, // Increased from 15 to 35
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  // Detail boxes
+  detailsWrapper: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 12,
   },
-  colLeft: { width: '50%', paddingRight: 16 },
-  colRight: { width: '50%', paddingLeft: 16 },
-  bodyLine: { fontSize: 10, lineHeight: 1.5, marginBottom: 3, color: BLACK },
-  plainSmall: { fontSize: 10, lineHeight: 1.45, marginBottom: 2, color: BLACK },
-  originBar: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 7,
-    paddingHorizontal: 4,
-    textAlign: 'center',
-    fontFamily: 'Helvetica',
-    fontWeight: 700,
-    fontSize: 11,
-    color: BLACK,
-    borderBottomWidth: 1.5,
-    borderBottomColor: BLACK,
+  detailBox: {
+    width: '49.5%',
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
+    padding: 6,
   },
+  detailRow: {
+    flexDirection: 'row',
+    marginBottom: 5,
+    lineHeight: 1.2,
+  },
+  detailLabel: {
+    width: '35%',
+    fontWeight: 'bold',
+  },
+  detailValue: {
+    width: '65%',
+    fontWeight: 'bold',
+  },
+
+  // Table section
   table: {
-    borderWidth: BORDER_PT,
-    borderColor: BLACK,
-    marginTop: 0,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
   },
-  thRow: {
+  tableHeader: {
     flexDirection: 'row',
-    backgroundColor: TABLE_HEADER_GRAY,
-    borderBottomWidth: BORDER_PT,
-    borderBottomColor: BLACK,
+    backgroundColor: LIGHT_GRAY,
+    borderBottomWidth: 1,
+    borderColor: BORDER_COLOR,
+    alignItems: 'stretch',
+    minHeight: 25,
   },
-  trRow: {
+  tableRow: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: BORDER_PT,
-    borderBottomColor: BLACK,
-    minHeight: 26,
+    borderBottomWidth: 1,
+    borderColor: BORDER_COLOR,
+    alignItems: 'stretch',
+    minHeight: 22,
   },
-  thCell: {
-    fontFamily: 'Helvetica',
-    fontWeight: 700,
-    fontSize: 8.5,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    borderRightWidth: BORDER_PT,
-    borderRightColor: BLACK,
-    color: BLACK,
+  headerCell: {
+    borderRightWidth: 1,
+    borderColor: BORDER_COLOR,
+    padding: 2,
+    fontWeight: 'bold',
+    fontSize: 7.5,
+    textAlign: 'center',
+    justifyContent: 'center',
+    display: 'flex',
   },
-  tdCell: {
-    fontSize: 8.5,
-    paddingVertical: 5,
-    paddingHorizontal: 4,
-    borderRightWidth: BORDER_PT,
-    borderRightColor: BLACK,
-    color: BLACK,
+  cell: {
+    borderRightWidth: 1,
+    borderColor: BORDER_COLOR,
+    padding: 2,
+    fontSize: 8,
+    textAlign: 'center',
+    justifyContent: 'center',
+    display: 'flex',
+    fontWeight: 'bold',
   },
-  colSr: { width: '5%', textAlign: 'center' },
-  colPo: { width: '14%', textAlign: 'left' },
-  colDesc: { width: '34%', textAlign: 'left' },
-  colQty: { width: '8%', textAlign: 'center' },
-  colPrice: { width: '12%', textAlign: 'center' },
-  colAmt: { width: '12%', textAlign: 'center' },
-  colRm: { width: '15%', textAlign: 'left' },
+  lastCell: {
+    borderRightWidth: 0,
+  },
+
+  // Specific column widths
+  colSr: { width: '4%' },
+  colStyle: { width: '10%' },
+  colQty: { width: '5%' },
+  colGender: { width: '7%' },
+  colItem: { width: '16%' },
+  colFabric: { width: '12%' },
+  colUnitPrice: { width: '7%' },
+  colAmount: { width: '8%' },
+  colPurpose: { width: '12%' },
+  colHs: { width: '10%' },
+  colMfg: { width: '9%' },
+
+  // Totals Row
   totalRow: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'stretch',
+    borderBottomWidth: 1,
+    borderColor: BORDER_COLOR,
+    minHeight: 18,
+    alignItems: 'center',
   },
-  totalMerged: {
-    width: '53%',
-    borderRightWidth: BORDER_PT,
-    borderRightColor: BLACK,
-    paddingVertical: 7,
-    paddingHorizontal: 5,
+  totalLabelCell: {
+    width: '14%', // colSr + colStyle
+    paddingLeft: 4,
+    fontWeight: 'bold',
+    borderRightWidth: 1,
+    borderColor: BORDER_COLOR,
+    height: '100%',
     justifyContent: 'center',
   },
   totalQtyCell: {
+    width: '5%',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    borderRightWidth: 1,
+    borderColor: BORDER_COLOR,
+    height: '100%',
+    justifyContent: 'center',
+  },
+  totalEmptyMid: {
+    width: '42%', // colGender + colItem + colFabric + colUnitPrice
+    borderRightWidth: 1,
+    borderColor: BORDER_COLOR,
+    height: '100%',
+  },
+  totalAmountCell: {
     width: '8%',
-    borderRightWidth: BORDER_PT,
-    borderRightColor: BLACK,
-    paddingVertical: 7,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  totalPriceCell: {
-    width: '12%',
-    borderRightWidth: BORDER_PT,
-    borderRightColor: BLACK,
-    paddingVertical: 7,
-  },
-  totalAmtCell: {
-    width: '12%',
-    borderRightWidth: BORDER_PT,
-    borderRightColor: BLACK,
-    paddingVertical: 7,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  totalRmCell: {
-    width: '15%',
-    paddingVertical: 7,
-  },
-  totalTextBold: {
-    fontFamily: 'Helvetica',
-    fontWeight: 700,
-    fontSize: 10,
-    color: BLACK,
+    fontWeight: 'bold',
     textAlign: 'center',
+    borderRightWidth: 1,
+    borderColor: BORDER_COLOR,
+    height: '100%',
+    justifyContent: 'center',
   },
-  declaration: {
+  totalEmptyEnd: {
+    width: '31%', // colPurpose + colHs + colMfg
+    height: '100%',
+  },
+
+  // Declaration Row
+  declarationRow: {
+    padding: 4,
     textAlign: 'center',
-    fontFamily: 'Helvetica',
-    fontWeight: 700,
-    fontSize: 11,
-    paddingVertical: 9,
-    paddingHorizontal: 4,
-    borderTopWidth: BORDER_PT,
-    borderTopColor: BLACK,
-    backgroundColor: '#FFFFFF',
-    color: BLACK,
+    fontWeight: 'bold',
+    fontSize: 9,
   },
-  footer: {
-    position: 'absolute',
-    bottom: 16,
-    left: 48,
-    right: 48,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    fontSize: 8,
-    color: BLACK,
-    borderTopWidth: BORDER_PT,
-    borderTopColor: BLACK,
-    paddingTop: 8,
-  },
-  footerCenter: { textAlign: 'center', flexGrow: 1, paddingHorizontal: 8 },
-  footerPowered: { fontFamily: 'Helvetica', fontWeight: 700, color: BLACK, fontSize: 8 },
-  footerDev: { fontSize: 7, color: BLACK, marginTop: 2 },
 });
+
 
 function mapDetailLine(d, index) {
   const qty = num(pick(d, 'qty', 'Qty', 'quantity', 'Quantity'));
@@ -262,11 +268,15 @@ function mapDetailLine(d, index) {
   return {
     sr: index + 1,
     postyle: String(pick(d, 'postyle', 'poStyle', 'Postyle', 'POStyle') || '—'),
-    description: String(pick(d, 'description', 'Description') || '—'),
+    gender: String(pick(d, 'gender', 'Gender') || ''),
+    item: String(pick(d, 'description', 'Description', 'item', 'Item') || '—'),
+    fabric: String(pick(d, 'fabriccontent', 'Fabriccontent', 'fabricContent', 'FabricContent') || ''),
+    purpose: String(pick(d, 'remarks', 'Remarks', 'sendingPurpose', 'SendingPurpose') || ''),
+    hsCode: String(pick(d, 'tendigithscode', 'Tendigithscode', 'tenDigitHsCode', 'TenDigitHsCode') || ''),
+    mfgCode: String(pick(d, 'manufacturecode', 'Manufacturecode', 'manufactureCode', 'ManufactureCode') || ''),
     qty,
     price,
     amount,
-    remarks: String(pick(d, 'remarks', 'Remarks') || ''),
   };
 }
 
@@ -274,46 +284,21 @@ function mapDetailLine(d, index) {
 
 export default function CourierPackagingInvoicePdf({ master, details, logoSrc }) {
   const m = master && typeof master === 'object' ? master : {};
-  const invoiceNo = String(pick(m, 'couriesNo', 'CouriesNo', 'invoiceNo', 'InvoiceNo', 'orderNo', 'OrderNo') || '—');
+  
+  const invoiceNo = String(pick(m, 'couriesNo', 'CouriesNo', 'invoiceNo', 'InvoiceNo') || '—');
   const invDate = formatInvoiceDate(
-    pick(m, 'creationDate', 'CreationDate', 'invoiceDate', 'InvoiceDate', 'merchandisingDate', 'MerchandisingDate')
+    pick(m, 'creationDate', 'CreationDate', 'invoiceDate', 'InvoiceDate')
   );
 
   const shipperName = String(pick(m, 'shipper', 'Shipper') || '—');
-  const shipperAddr = String(pick(m, 'shipperAddress', 'ShipperAddress') || '');
-  const shipperTel = String(
-    pick(m, 'phon', 'Phon', 'phone', 'Phone', 'shipperTel', 'ShipperTel', 'shipperPhone', 'ShipperPhone') || '—'
-  );
-  const shipmentType = String(
-    pick(m, 'shipment', 'Shipment', 'shipmentType', 'ShipmentType') || '—'
-  );
-  const service = String(pick(m, 'service', 'Service', 'serviceRequired', 'ServiceRequired') || '—');
-  const courier = String(pick(m, 'couries', 'Couries', 'amsCourierAwb', 'AmsCourierAwb', 'courier', 'Courier') || '—');
-  const awbl = String(pick(m, 'awbl', 'Awbl', 'AWBL', 'awb', 'Awb') || '');
-  const account = String(pick(m, 'account', 'Account') || '');
-
-  const consignee = String(pick(m, 'consignee', 'Consignee') || '—');
+  const shipperAddr = String(pick(m, 'shipperAddress', 'ShipperAddress') || 'A M S House 84,Kokan Housing Society Alamgir Road, Karachi 74800 - Pakistan');
+  const ntnNumber = String(pick(m, 'ntnNumber', 'NtnNumber', 'NTN') || '0265236-6');
+  
+  const companyName = String(pick(m, 'consignee', 'Consignee') || '—');
   const attention = String(pick(m, 'attention', 'Attention') || '');
-  const consAddr = String(
-    pick(m, 'consigneeAddress', 'ConsigneeAddress') || pick(m, 'address', 'Address') || ''
-  );
-  const consTel = String(
-    pick(
-      m,
-      'consigneePhone',
-      'ConsigneePhone',
-      'importTel',
-      'ImportTel',
-      'consigneeTel',
-      'ConsigneeTel',
-      'courierImportTel',
-      'CourierImportTel',
-      'phon',
-      'Phon',
-      'phone',
-      'Phone'
-    ) || ''
-  );
+  const address = String(pick(m, 'address', 'Address', 'consigneeAddress', 'ConsigneeAddress') || '');
+  const phone = String(pick(m, 'phone', 'Phone', 'phon', 'Phon') || '');
+  const taxId = String(pick(m, 'taxId', 'TaxId', 'TAX') || '');
 
   const lines = useMemo(() => (Array.isArray(details) ? details.map(mapDetailLine) : []), [details]);
   const totals = useMemo(() => {
@@ -322,169 +307,138 @@ export default function CourierPackagingInvoicePdf({ master, details, logoSrc })
     return { qty: tQty, amount: tAmt };
   }, [lines]);
 
-  const printedOn = useMemo(() => {
-    const d = new Date();
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  }, []);
-
-  const shipperAddrLines = useMemo(() => addressLines(shipperAddr), [shipperAddr]);
-  const consAddrLines = useMemo(() => addressLines(consAddr), [consAddr]);
-
-  const consigneeFirstBold = attention || consignee;
-  const consigneeSecondPlain = attention ? consignee : '';
-
   const imageSrc = logoSrc || amsLogoPdfSrc();
 
   return (
     <Document title={COURIER_PACKAGES_PDF_TITLE}>
       <Page size="A4" style={styles.page}>
-        {/* Header: logo left; company name + address centered to the right of logo */}
-        <View style={styles.brandRow}>
-          <View style={styles.logoWrap}>
-            <Image src={imageSrc} style={styles.logoImg} />
+        
+        {/* Header */}
+        <View style={styles.headerContainer}>
+          <View style={styles.logoBox}>
+            <Image src={imageSrc} style={styles.logo} />
           </View>
-          <View style={styles.companyHead}>
-            <Text style={styles.companyName}>Apparel Merchandising Services</Text>
-            <Text style={styles.companyAddr}>A M S House 84, Kokan Housing Society Alamgir Road</Text>
-            <Text style={styles.companyAddr}>Karachi 74800 - Pakistan.</Text>
-            <Text style={[styles.companyAddr, { marginTop: 5 }]}>
-              Tel : 02134937216 &
-            </Text>
-            <Text style={styles.companyAddr}>02134946005</Text>
+          <View style={styles.companyHeaderBox}>
+            <Text style={styles.companyNameTitle}>Apparel Merchandising Servies</Text>
+            <Text style={styles.headerSubText}>A M S House 84,Kokan Housing Society Alamgir Road</Text>
+            <Text style={styles.headerSubText}>Karachi 74800 -Pakistan.</Text>
+            <Text style={styles.headerSubText}>Tel : 02134967216 & 02134946005 Fax# (92213) 493-1944</Text>
           </View>
         </View>
 
-        <Text style={styles.title}>Invoice Of No Commercial Value</Text>
-
-        {/* Two columns: Invoice # / shipper (left); Date / consignee (right) — label normal, value bold; date underlined */}
-        <View style={styles.twoCol}>
-          <View style={styles.colLeft}>
-            <Text style={styles.bodyLine}>
-              <Text>Invoice #: </Text>
-              <Text style={styles.valBold}>{invoiceNo}</Text>
-            </Text>
-            <Text style={styles.bodyLine}>
-              <Text>Shipper : </Text>
-              <Text style={styles.valBold}>{shipperName}</Text>
-            </Text>
-            {shipperAddrLines.map((line, i) => (
-              <Text key={`s-${i}-${line}`} style={styles.plainSmall}>
-                {line}
-              </Text>
-            ))}
-            <Text style={styles.plainSmall}>Tel : {shipperTel}</Text>
-            <Text style={[styles.bodyLine, { marginTop: 4 }]}>
-              <Text>Shipment Type : </Text>
-              <Text style={styles.valBold}>{shipmentType}</Text>
-            </Text>
-            <Text style={styles.bodyLine}>
-              <Text>Service Required: </Text>
-              <Text style={styles.valBold}>{service}</Text>
-            </Text>
-            <Text style={styles.bodyLine}>
-              <Text>Courier & AWB# : </Text>
-              <Text style={styles.valBold}>{courier}</Text>
-            </Text>
-            <Text style={styles.bodyLine}>
-              <Text>AWBL# : </Text>
-              <Text style={styles.valBold}>{awbl || ' '}</Text>
-            </Text>
-          </View>
-
-          <View style={styles.colRight}>
-            <Text style={styles.bodyLine}>
-              <Text>Date : </Text>
-              <Text style={[styles.valBold, styles.dateUnderline]}>{invDate}</Text>
-            </Text>
-            <Text style={styles.bodyLine}>
-              <Text>Consignee : </Text>
-              <Text style={styles.valBold}>{consigneeFirstBold}</Text>
-            </Text>
-            {consigneeSecondPlain ? (
-              <Text style={styles.plainSmall}>{consigneeSecondPlain}</Text>
-            ) : null}
-            {consAddrLines.map((line, i) => (
-              <Text key={`c-${i}-${line}`} style={styles.plainSmall}>
-                {line}
-              </Text>
-            ))}
-            <Text style={[styles.bodyLine, { marginTop: 4 }]}>
-              <Text>Courier & Import Tel #: </Text>
-              <Text style={styles.valBold}>{consTel || ' '}</Text>
-            </Text>
-            <Text style={styles.bodyLine}>
-              <Text>Account #: </Text>
-              <Text style={styles.valBold}>{account || ' '}</Text>
-            </Text>
+        <View style={styles.titleRow}>
+          <View style={{ width: '30%' }} />
+          <View style={{ width: '70%' }}>
+            <Text style={styles.mainTitle}>Invoice Of No Commercial Value</Text>
           </View>
         </View>
 
+        {/* Details Boxes */}
+        <View style={styles.detailsWrapper}>
+          {/* Left Box */}
+          <View style={styles.detailBox}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Invoice No</Text>
+              <Text style={styles.detailValue}>{invoiceNo}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Shipper</Text>
+              <Text style={styles.detailValue}>{shipperName}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Company Name</Text>
+              <Text style={styles.detailValue}>Apparel Merchandising Services</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Address</Text>
+              <Text style={styles.detailValue}>{shipperAddr}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>NTN Number</Text>
+              <Text style={styles.detailValue}>{ntnNumber}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Date</Text>
+              <Text style={styles.detailValue}>{invDate}</Text>
+            </View>
+          </View>
+
+          {/* Right Box */}
+          <View style={styles.detailBox}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Company Name</Text>
+              <Text style={styles.detailValue}>{companyName}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Attention</Text>
+              <Text style={styles.detailValue}>{attention}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Address</Text>
+              <Text style={styles.detailValue}>{address}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Phone #</Text>
+              <Text style={styles.detailValue}>{phone}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Tax ID</Text>
+              <Text style={styles.detailValue}>{taxId}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Table */}
         <View style={styles.table}>
-          <View style={styles.originBar}>
-            <Text style={{ textAlign: 'center' }}>Country Of Origin : PAKISTAN</Text>
+          {/* Header Row */}
+          <View style={styles.tableHeader}>
+            <View style={[styles.headerCell, styles.colSr]}><Text>Sr#</Text></View>
+            <View style={[styles.headerCell, styles.colStyle]}><Text>Style / Po</Text></View>
+            <View style={[styles.headerCell, styles.colQty]}><Text>Qty</Text></View>
+            <View style={[styles.headerCell, styles.colGender]}><Text>Gender</Text></View>
+            <View style={[styles.headerCell, styles.colItem]}><Text>Item</Text></View>
+            <View style={[styles.headerCell, styles.colFabric]}><Text>Fabric Content</Text></View>
+            <View style={[styles.headerCell, styles.colUnitPrice]}><Text>Unit Price</Text></View>
+            <View style={[styles.headerCell, styles.colAmount]}><Text>Total Amount</Text></View>
+            <View style={[styles.headerCell, styles.colPurpose]}><Text>Sending Purpose</Text></View>
+            <View style={[styles.headerCell, styles.colHs]}><Text>10 Digit HS Code</Text></View>
+            <View style={[styles.headerCell, styles.colMfg, styles.lastCell]}><Text>Manufacture Code</Text></View>
           </View>
-          <View style={styles.thRow}>
-            <Text style={[styles.thCell, styles.colSr]}>Sr#</Text>
-            <Text style={[styles.thCell, styles.colPo]}>Style / PO</Text>
-            <Text style={[styles.thCell, styles.colDesc]}>
-              Description Of Goods (Including Harmonized Tariff Number)
-            </Text>
-            <Text style={[styles.thCell, styles.colQty]}>Qty Pcs</Text>
-            <Text style={[styles.thCell, styles.colPrice]}>Unit Price US $</Text>
-            <Text style={[styles.thCell, styles.colAmt]}>Amount</Text>
-            <Text style={[styles.thCell, styles.colRm, { borderRightWidth: 0 }]}>Remarks</Text>
-          </View>
+
+          {/* Data Rows */}
           {lines.map((row) => (
-            <View key={row.sr} style={styles.trRow} wrap={false}>
-              <Text style={[styles.tdCell, styles.colSr]}>{row.sr}</Text>
-              <Text style={[styles.tdCell, styles.colPo]}>{String(row.postyle).toUpperCase()}</Text>
-              <Text style={[styles.tdCell, styles.colDesc]}>{row.description}</Text>
-              <Text style={[styles.tdCell, styles.colQty]}>{fmtQtyCell(row.qty)}</Text>
-              <Text style={[styles.tdCell, styles.colPrice]}>{fmtMoney(row.price)}</Text>
-              <Text style={[styles.tdCell, styles.colAmt]}>{fmtMoney(row.amount)}</Text>
-              <Text style={[styles.tdCell, styles.colRm, { borderRightWidth: 0 }]}>{row.remarks}</Text>
+            <View key={row.sr} style={styles.tableRow} wrap={false}>
+              <View style={[styles.cell, styles.colSr]}><Text>{row.sr}</Text></View>
+              <View style={[styles.cell, styles.colStyle]}><Text>{row.postyle}</Text></View>
+              <View style={[styles.cell, styles.colQty]}><Text>{fmtQtyCell(row.qty)}</Text></View>
+              <View style={[styles.cell, styles.colGender]}><Text>{row.gender}</Text></View>
+              <View style={[styles.cell, styles.colItem]}><Text>{row.item}</Text></View>
+              <View style={[styles.cell, styles.colFabric]}><Text>{row.fabric}</Text></View>
+              <View style={[styles.cell, styles.colUnitPrice]}><Text>{fmtMoney(row.price)}</Text></View>
+              <View style={[styles.cell, styles.colAmount]}><Text>{fmtMoney(row.amount)}</Text></View>
+              <View style={[styles.cell, styles.colPurpose]}><Text>{row.purpose}</Text></View>
+              <View style={[styles.cell, styles.colHs]}><Text>{row.hsCode}</Text></View>
+              <View style={[styles.cell, styles.colMfg, styles.lastCell]}><Text>{row.mfgCode}</Text></View>
             </View>
           ))}
 
+          {/* Totals Row */}
           <View style={styles.totalRow}>
-            <View style={styles.totalMerged}>
-              <Text
-                style={{
-                  width: '100%',
-                  fontFamily: 'Helvetica',
-                  fontWeight: 700,
-                  fontSize: 8,
-                  color: BLACK,
-                  textAlign: 'right',
-                }}
-              >
-                Total Pcs & Value :
-              </Text>
-            </View>
-            <View style={styles.totalQtyCell}>
-              <Text style={[styles.totalTextBold, { width: '100%' }]}>{fmtQtyCell(totals.qty)}</Text>
-            </View>
-            <View style={styles.totalPriceCell} />
-            <View style={styles.totalAmtCell}>
-              <Text style={[styles.totalTextBold, { width: '100%' }]}>{fmtMoney(totals.amount)}</Text>
-            </View>
-            <View style={styles.totalRmCell} />
+            <View style={styles.totalLabelCell}><Text>Total Pcs & Value</Text></View>
+            <View style={styles.totalQtyCell}><Text>{fmtQtyCell(totals.qty)}</Text></View>
+            <View style={styles.totalEmptyMid} />
+            <View style={styles.totalAmountCell}><Text>{fmtMoney(totals.amount)}</Text></View>
+            <View style={styles.totalEmptyEnd} />
           </View>
 
-          <View style={styles.declaration}>
-            <Text>Declaration : All Samples are of NO COMMERCIAL VALUE.</Text>
+          {/* Declaration Row */}
+          <View style={styles.declarationRow}>
+            <Text>Declaration : All Samples are of NO COMMERCIAL VALUE</Text>
           </View>
         </View>
 
-        <View style={styles.footer} fixed>
-          <Text>Printed on: {printedOn}</Text>
-          <View style={styles.footerCenter}>
-            <Text style={styles.footerPowered}>Powered by : INTEGRA ERP SYSTEM</Text>
-            <Text style={styles.footerDev}>Developed by: ITG (Pvt) Ltd. - Website: www.itg.net.pk</Text>
-          </View>
-          <Text>Page 1 of 1</Text>
-        </View>
       </Page>
     </Document>
   );
 }
+
