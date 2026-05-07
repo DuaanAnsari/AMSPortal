@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { AgGridReact } from "ag-grid-react";
 import { ModuleRegistry, AllCommunityModule, themeBalham, colorSchemeDarkBlue } from 'ag-grid-community';
@@ -480,12 +480,14 @@ const EditOrderPage = () => {
                 responses.forEach((response, index) => {
                     if (response.data && response.data.length > 0) {
                         const orderData = response.data[0];
-                        const gridRow = transformPODataToGridRow(orderData);
 
-                        // Ensure poid is set using the ID we used to fetch
-                        if (!gridRow.poid) {
-                            gridRow.poid = selectedPOIds[index];
+                        // CRITICAL: Ensure orderData has the poid before transformation
+                        // This ensures it's stored in originalData and survives re-transformations
+                        if (!orderData.poid && !orderData.POID && !orderData.id && !orderData.purchaseOrderId) {
+                            orderData.poid = selectedPOIds[index];
                         }
+
+                        const gridRow = transformPODataToGridRow(orderData);
 
                         // Collect IDs for dependent fetches
                         if (orderData.productPortfolioID) portfoliosToFetch.add(orderData.productPortfolioID);
@@ -558,8 +560,13 @@ const EditOrderPage = () => {
             // Note: rawData currently holds the INITIAL transformed rows (with IDs) because we used transformPODataToGridRow in fetch
             // But we preserved originalData in it. So we can re-transform.
             const updatedTableData = rawData.map(row => {
-                // Ensure we pass the *original* data to the transformer, not the already transformed row
-                return transformPODataToGridRow(row.originalData || row, allOptions);
+                // Ensure we pass the *original* data to the transformer
+                const transformed = transformPODataToGridRow(row.originalData || row, allOptions);
+                // Robustness: ensure poid is never lost
+                if (!transformed.poid && row.poid) {
+                    transformed.poid = row.poid;
+                }
+                return transformed;
             });
             setTableData(updatedTableData);
         }
