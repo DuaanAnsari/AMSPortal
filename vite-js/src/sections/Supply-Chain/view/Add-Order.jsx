@@ -1347,6 +1347,14 @@ export default function CompletePurchaseOrderForm() {
     trigger,
   } = methods;
 
+  const assortmentValue = watch('assortment');
+
+  useEffect(() => {
+    if (assortmentValue === 'Solid') {
+      setValue('ratio', '');
+    }
+  }, [assortmentValue, setValue]);
+
   
   const [files, setFiles] = useState({});
   const [openItemDialog, setOpenItemDialog] = useState(false);
@@ -3383,7 +3391,17 @@ export default function CompletePurchaseOrderForm() {
                 />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Controller name="ratio" render={({ field }) => <TextField {...field} fullWidth label="Ratio" />} />
+                <Controller
+                  name="ratio"
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Ratio"
+                      disabled={assortmentValue === 'Solid'}
+                    />
+                  )}
+                />
               </Grid>
               <Grid item xs={12} sm={4}>
                 <Controller name="cartonMarking" render={({ field }) => <TextField {...field} fullWidth label="Carton Marking" />} />
