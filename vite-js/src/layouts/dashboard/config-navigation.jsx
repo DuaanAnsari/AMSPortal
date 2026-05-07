@@ -211,6 +211,16 @@ export function useNavData() {
             ],
           },
 
+          {
+            title: 'Reports',
+            path: paths.dashboard.reports.root,
+            icon: ICONS.analytics,
+            children: [
+              { title: 'FOB LDP PRICE LIST', path: paths.dashboard.reports.fobLdpPriceList },
+              { title: 'WIP', path: paths.dashboard.reports.wip },
+            ],
+          },
+
           // // PRODUCT
           // {
           //   title: t('product'),

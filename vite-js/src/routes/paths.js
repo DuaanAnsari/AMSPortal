@@ -196,6 +196,12 @@ export const paths = {
       measurementPoints: `${ROOTS.DASHBOARD}/power-tool/measurement-points`,
     },
 
+    reports: {
+      root: `${ROOTS.DASHBOARD}/reports`,
+      fobLdpPriceList: `${ROOTS.DASHBOARD}/reports/fob-ldp-price-list`,
+      wip: `${ROOTS.DASHBOARD}/reports/wip`,
+    },
+
     product: {
       root: `${ROOTS.DASHBOARD}/product`,
       new: `${ROOTS.DASHBOARD}/product/new`,

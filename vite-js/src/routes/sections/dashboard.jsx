@@ -1,5 +1,7 @@
 import { lazy, Suspense } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Navigate, Outlet } from 'react-router-dom';
+
+import { paths } from 'src/routes/paths';
 
 import { AuthGuard } from 'src/auth/guard';
 import DashboardLayout from 'src/layouts/dashboard';
@@ -157,6 +159,12 @@ const AddUserPage = lazy(
   () => import('src/sections/power-tool/view/add-user')
 );
 
+const FobLdpPriceListPage = lazy(
+  () => import('src/sections/reports/view/fob-ldp-price-list-view')
+);
+
+const WipHubPage = lazy(() => import('src/sections/reports/view/wip-hub-view'));
+
 // BLOG
 const BlogPostsPage = lazy(() => import('src/pages/dashboard/post/list'));
 const BlogPostPage = lazy(() => import('src/pages/dashboard/post/details'));
@@ -286,6 +294,19 @@ export const dashboardRoutes = [
           { path: 'mix-carton-entry', element: <MixCartonEntryPage /> },
           { path: 'add-user', element: <AddUserPage /> },
         ],
+      },
+
+      {
+        path: 'reports',
+        element: <Navigate to={paths.dashboard.reports.fobLdpPriceList} replace />,
+      },
+      {
+        path: 'reports/fob-ldp-price-list',
+        element: <FobLdpPriceListPage />,
+      },
+      {
+        path: 'reports/wip',
+        element: <WipHubPage />,
       },
 
       // {

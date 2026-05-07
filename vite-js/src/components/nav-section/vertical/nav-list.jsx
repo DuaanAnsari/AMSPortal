@@ -62,7 +62,16 @@ export default function NavList({ data, depth, slotProps }) {
       />
 
       {!!data.children && (
-        <Collapse in={openMenu} unmountOnExit>
+        <Collapse
+          in={openMenu}
+          unmountOnExit
+          timeout={{ enter: 280, exit: 220 }}
+          sx={{
+            '& .MuiCollapse-wrapperInner': {
+              transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
+            },
+          }}
+        >
           <NavSubList data={data.children} depth={depth} slotProps={slotProps} />
         </Collapse>
       )}
