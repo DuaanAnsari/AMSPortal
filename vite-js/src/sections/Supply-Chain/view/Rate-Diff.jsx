@@ -186,35 +186,35 @@ export default function RateDiffPage() {
           buyerOther: first.customerName || '',
           countryOrigin: first.countryName || '',
           countryFinal: first.customerCountry || '',
-    beneficiary: {
-      name: 'A M S House',
-      address:
-        '84,Kokan Housing Society Alamgir Road - Postal Code: 74800 Karachi - Pakistan.',
-      tel: 'Tel : (+92213) 485-3935 & 36  Toll Free:',
-    },
-    consignee: {
+          beneficiary: {
+            name: 'A M S House',
+            address:
+              '84,Kokan Housing Society Alamgir Road - Postal Code: 74800 Karachi - Pakistan.',
+            tel: 'Tel : 02134937216 & 02134946005 Toll Free:',
+          },
+          consignee: {
             name: first.cargoConsigneeName || '',
             address: first.cargoConsigneeAddress1 || '',
             city: first.cargoConsigneeCity || '',
             country: first.cargoConsigneeCountry || '',
-    },
-    exporter: {
+          },
+          exporter: {
             name: first.venderName || '',
             country: first.countryName || '',
-    },
+          },
           vesselFlight: first.voyageFlight || '',
-    placeOfReceipt: 'N/A',
+          placeOfReceipt: 'N/A',
           portOfLoading: first.portOfLoading || '',
           terms: first.terms || '',
           portOfDischarge: first.portOfDischarge || '',
           finalDestination: first.destination || '',
           rows,
           amountInWords: amountToWordsUSD(totalAmountNum),
-    remarks: '',
+          remarks: '',
           bankNote: bankName
             ? `Please make deposit the invoiced amount in the favour "${bankName} ACCOUNT"`
             : '',
-    bankDetails: [
+          bankDetails: [
             accountNo ? `No. "${accountNo}", ${bankAddressHardcoded}` : (bankBranch || bankAddressHardcoded),
             iban ? `IFSC / Routing No. "${iban}" and please intimate the same to us.` : '',
           ].filter(Boolean),
@@ -606,16 +606,16 @@ export default function RateDiffPage() {
                     <Typography sx={{ fontSize: 8, fontWeight: 700 }}>{invoiceData.amountInWords}</Typography>
                   </Box>
 
-            <Box sx={{ mt: 1 }}>
+                  <Box sx={{ mt: 1 }}>
                     <Typography sx={{ fontSize: 8, fontWeight: 700 }}>Remarks:</Typography>
                     <Typography sx={{ fontSize: 8 }}>{invoiceData.remarks}</Typography>
                   </Box>
                   <Box sx={{ mt: 0.4 }}>
                     <Typography sx={{ fontSize: 8, fontWeight: 700 }}>CIN NO.</Typography>
-            </Box>
+                  </Box>
                   <Box sx={{ mt: 0.4 }}>
                     <Typography sx={{ fontSize: 8, fontWeight: 700 }}>SERVICE TAX NO. :</Typography>
-            </Box>
+                  </Box>
 
                   <Box sx={{ mt: 0.8 }}>
                     {invoiceData.bankNote ? (
@@ -624,22 +624,22 @@ export default function RateDiffPage() {
                     {(invoiceData.bankDetails || []).map((t, idx) => (
                       <Typography key={idx} sx={{ fontSize: 8 }}>
                         {t}
-              </Typography>
+                      </Typography>
                     ))}
-            </Box>
-            </Box>
+                  </Box>
+                </Box>
 
                 <Box sx={{ p: 0.8, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <Box sx={{ pt: 2 }}>
                     <Typography sx={{ fontSize: 8, fontWeight: 700, textAlign: 'center' }}>
                       for Apparel Merchandising Services,,
-              </Typography>
-            </Box>
+                    </Typography>
+                  </Box>
                   <Box>
                     <Box sx={{ borderTop: '1px solid #000', pt: 0.4 }}>
                       <Typography sx={{ fontSize: 8, fontWeight: 700, textAlign: 'center' }}>
-                Authorized Signatory
-              </Typography>
+                        Authorized Signatory
+                      </Typography>
                     </Box>
                   </Box>
                 </Box>
