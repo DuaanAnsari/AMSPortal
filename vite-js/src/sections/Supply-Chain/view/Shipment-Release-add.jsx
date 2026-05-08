@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Container from '@mui/material/Container';
 import Card from '@mui/material/Card';
 import Box from '@mui/material/Box';
@@ -154,6 +155,7 @@ const extractSupplierIdDeep = (input) => {
 };
 
 export default function ShipmentReleaseAddPage() {
+  const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const [form, setForm] = useState(defaultFormValues);
   const [poDialogOpen, setPoDialogOpen] = useState(false);
@@ -559,6 +561,7 @@ export default function ShipmentReleaseAddPage() {
       await response.text();
 
       enqueueSnackbar('Shipment saved successfully!', { variant: 'success' });
+      navigate('/dashboard/supply-chain/list');
       // After successful save, clear article grid and hide master grids
       handleClearArticle();
       setForm(defaultFormValues);
@@ -589,9 +592,28 @@ export default function ShipmentReleaseAddPage() {
       />
 
       <Card sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Shipment Release Details
+          </Typography>
+
+          <Button
+            variant="outlined"
+            color="inherit"
+            onClick={() => navigate('/dashboard/supply-chain/list')}
+            sx={{
+              borderColor: '#171616',
+              color: '#171616',
+              '&:hover': { borderColor: '#000000', backgroundColor: '#F3F4F6' },
+            }}
+          >
+            Back
+          </Button>
+        </Box>
+
         <Grid container spacing={3}>
           {/* Row 1: IC # / Invoice / Date */}
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="IC #"
@@ -600,7 +622,7 @@ export default function ShipmentReleaseAddPage() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="Invoice"
@@ -609,7 +631,7 @@ export default function ShipmentReleaseAddPage() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               type="date"
@@ -622,7 +644,7 @@ export default function ShipmentReleaseAddPage() {
           </Grid>
 
           {/* Row 2: Invoice Value + Currency / Exchange Rate / Vendor Invoice No */}
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <TextField
                 fullWidth
@@ -645,7 +667,7 @@ export default function ShipmentReleaseAddPage() {
               </TextField>
             </Box>
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="Exchange Rate"
@@ -654,7 +676,7 @@ export default function ShipmentReleaseAddPage() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="Vendor Invoice No"
@@ -664,8 +686,10 @@ export default function ShipmentReleaseAddPage() {
             />
           </Grid>
 
-          {/* Row: Terms / Mode */}
-          <Grid item xs={12} sm={6}>
+
+          {/* Row 3: Placeholder / Terms / Placeholder */}
+          <Grid item xs={12} sm={4} />
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="Terms"
@@ -674,7 +698,11 @@ export default function ShipmentReleaseAddPage() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4} />
+
+          {/* Row 4: Placeholder / Mode / Placeholder */}
+          <Grid item xs={12} sm={4} />
+          <Grid item xs={12} sm={4}>
             <TextField
               select
               fullWidth
@@ -689,9 +717,10 @@ export default function ShipmentReleaseAddPage() {
               <MenuItem value="BY COURIER">BY COURIER</MenuItem>
             </TextField>
           </Grid>
+          <Grid item xs={12} sm={4} />
 
-          {/* Row: Carrier / Title Of Account / Voyage Flight */}
-          <Grid item xs={12} sm={6}>
+          {/* Row 5: Carrier / Title Of Account / Voyage Flight */}
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="Carrier Name"
@@ -700,7 +729,7 @@ export default function ShipmentReleaseAddPage() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="Title Of Account"
@@ -709,7 +738,7 @@ export default function ShipmentReleaseAddPage() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="Voyage Flight"
@@ -719,8 +748,8 @@ export default function ShipmentReleaseAddPage() {
             />
           </Grid>
 
-          {/* Row: Bank Name / BL-AWB / Bank Branch */}
-          <Grid item xs={12} sm={6}>
+          {/* Row 6: Bank Name / BL-AWB / Bank Branch */}
+          <Grid item xs={12} sm={4}>
             <TextField
 
               fullWidth
@@ -730,7 +759,7 @@ export default function ShipmentReleaseAddPage() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="BL / AWB No"
@@ -739,7 +768,7 @@ export default function ShipmentReleaseAddPage() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="Bank Branch"
@@ -749,8 +778,8 @@ export default function ShipmentReleaseAddPage() {
             />
           </Grid>
 
-          {/* Row: Shipment Date / Account No / Container No */}
-          <Grid item xs={12} sm={6}>
+          {/* Row 7: Shipment Date / Account No / Container No */}
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               type="date"
@@ -761,7 +790,7 @@ export default function ShipmentReleaseAddPage() {
               InputLabelProps={{ shrink: true }}
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="Account No."
@@ -770,7 +799,7 @@ export default function ShipmentReleaseAddPage() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="Container No."
@@ -780,8 +809,8 @@ export default function ShipmentReleaseAddPage() {
             />
           </Grid>
 
-          {/* Row: IBAN / Destination / Port Of Loading */}
-          <Grid item xs={12} sm={6}>
+          {/* Row 8: IBAN / Destination / Port Of Loading */}
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="IBAN No"
@@ -790,7 +819,7 @@ export default function ShipmentReleaseAddPage() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="Destination"
@@ -799,7 +828,7 @@ export default function ShipmentReleaseAddPage() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="Port Of Loading"
@@ -809,8 +838,8 @@ export default function ShipmentReleaseAddPage() {
             />
           </Grid>
 
-          {/* Row: Port Of Discharge / Remarks */}
-          <Grid item xs={12} sm={6}>
+          {/* Row 9: Port Of Discharge / Remarks / Bank */}
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="Port Of Discharge"
@@ -819,7 +848,7 @@ export default function ShipmentReleaseAddPage() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
               label="Remarks"

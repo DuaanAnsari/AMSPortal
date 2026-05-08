@@ -606,6 +606,7 @@ export default function ShipmentEditView() {
       setSuccessMessage('Shipment updated successfully.');
       setError('');
       enqueueSnackbar('Shipment updated successfully.', { variant: 'success' });
+      navigate('/dashboard/supply-chain/list');
     } catch (err) {
       setSuccessMessage('');
       setError(err.message || 'Unable to update shipment');
@@ -1324,8 +1325,23 @@ export default function ShipmentEditView() {
                               onChange={(e) => handleGridChange(index, 'remainQTY', e.target.value)}
                             />
                           </TableCell>
-                          <TableCell>{row.cartons ?? '-'}</TableCell>
-                          <TableCell>{row.cartonNo ?? ''}</TableCell>
+                          <TableCell sx={{ p: 0.5 }}>
+                            <TextField
+                              size="small"
+                              fullWidth
+                              type="number"
+                              value={row.cartons ?? ''}
+                              disabled
+                            />
+                          </TableCell>
+                          <TableCell sx={{ p: 0.5 }}>
+                            <TextField
+                              size="small"
+                              fullWidth
+                              value={row.cartonNo ?? ''}
+                              disabled
+                            />
+                          </TableCell>
                           <TableCell sx={{ p: 0.5 }}>
                             <TextField
                               size="small"

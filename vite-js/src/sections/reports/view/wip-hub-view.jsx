@@ -32,6 +32,11 @@ import {
   openMilestoneSummaryPdf,
 } from 'src/sections/reports/utils/milestone-summary-pdf-export';
 import {
+  buildMilestoneSummaryXlsxBlob,
+  buildMilestoneSummaryXlsxFilename,
+  downloadMilestoneSummaryXlsx,
+} from 'src/sections/reports/utils/milestone-summary-excel-export';
+import {
   fetchMilestoneSummaryDropdowns,
   getMilestoneSummaryDropdownApiBase,
   milestoneCustomerKey,
@@ -61,6 +66,9 @@ const REPORT_QUERY_KEY = 'report';
 const ALL = 'all';
 
 const WIP_LDP_FOB_ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Set to `false` when Milestone Summary “Download Excel” / “Download Excel New” should work again. */
+const DISABLE_MILESTONE_SUMMARY_EXCEL_DOWNLOAD = true;
 
 function wipLdpFobAuthHeaders() {
   const token = localStorage.getItem('accessToken');
@@ -239,21 +247,116 @@ async function runMilestoneSummaryPdfFromFilters(enqueueSnackbar, filters, mode,
   }
 }
 
-function MilestoneSummaryReportActions({ filters, dropdowns = {} }) {
+/** Milestone Summary Excel — same GET as PDF; columns match PDF grid. */
+async function runMilestoneSummaryExcelFromFilters(enqueueSnackbar, filters, dropdowns = {}) {
+  const fromDate = filters.fromDate;
+  const toDate = filters.toDate;
+  if (!fromDate || !toDate) {
+    enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+    return;
+  }
+  if (!WIP_LDP_FOB_ISO_DATE.test(fromDate) || !WIP_LDP_FOB_ISO_DATE.test(toDate)) {
+    enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+    return;
+  }
+
+  const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+  if (!base) {
+    enqueueSnackbar('API URL missing: set VITE_API_BASE_URL', { variant: 'error' });
+    return;
+  }
+
+  try {
+    const raw = await fetchMilestoneReportRows(
+      {
+        reportType: filters.reportType,
+        productPortfolio: filters.productPortfolio,
+        reportSubType: filters.reportVariant,
+        fromDate,
+        toDate,
+        portfolios: dropdowns.portfolios || [],
+      },
+      wipLdpFobAuthHeaders()
+    );
+    const blob = buildMilestoneSummaryXlsxBlob(raw, filters.reportType);
+    const filename = buildMilestoneSummaryXlsxFilename(filters.reportType, fromDate, toDate);
+    downloadMilestoneSummaryXlsx(blob, filename);
+    enqueueSnackbar(
+      raw.length ? 'Milestone Summary Excel downloaded' : 'Downloaded Excel (no rows)',
+      { variant: 'success' }
+    );
+  } catch (err) {
+    console.error('[WIP] Milestone Summary Excel', err);
+    const msg =
+      err?.response?.data?.message ||
+      err?.response?.data?.Message ||
+      (typeof err?.response?.data === 'string' ? err.response.data : null) ||
+      err?.message ||
+      'Milestone Summary report failed';
+    enqueueSnackbar(msg, { variant: 'error' });
+  }
+}
+
+function MilestoneSummaryExcelDownloadButton({ filters, dropdowns = {} }) {
   const { enqueueSnackbar } = useSnackbar();
   const [busy, setBusy] = useState(false);
 
+  const handleClick = useCallback(async () => {
+    setBusy(true);
+    try {
+      await runMilestoneSummaryExcelFromFilters(enqueueSnackbar, filters, dropdowns);
+    } finally {
+      setBusy(false);
+    }
+  }, [enqueueSnackbar, filters, dropdowns]);
+
+  return (
+    <Button
+      variant="contained"
+      color="primary"
+      size="medium"
+      disabled={DISABLE_MILESTONE_SUMMARY_EXCEL_DOWNLOAD || busy}
+      title={
+        DISABLE_MILESTONE_SUMMARY_EXCEL_DOWNLOAD
+          ? 'Excel download is disabled for now'
+          : undefined
+      }
+      onClick={handleClick}
+      sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
+    >
+      {busy ? <CircularProgress size={22} color="inherit" /> : 'Download Excel'}
+    </Button>
+  );
+}
+
+MilestoneSummaryExcelDownloadButton.propTypes = {
+  filters: PropTypes.object.isRequired,
+  dropdowns: PropTypes.shape({
+    customers: PropTypes.array,
+    suppliers: PropTypes.array,
+    merchants: PropTypes.array,
+    portfolios: PropTypes.array,
+  }),
+};
+
+function MilestoneSummaryReportActions({ filters, dropdowns = {} }) {
+  const { enqueueSnackbar } = useSnackbar();
+  /** `null` = idle; only the matching button shows a spinner. */
+  const [busyMode, setBusyMode] = useState(null);
+
   const run = useCallback(
     async (mode) => {
-      setBusy(true);
+      setBusyMode(mode);
       try {
         await runMilestoneSummaryPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns);
       } finally {
-        setBusy(false);
+        setBusyMode(null);
       }
     },
     [enqueueSnackbar, filters, dropdowns]
   );
+
+  const busy = busyMode !== null;
 
   return (
     <>
@@ -265,7 +368,7 @@ function MilestoneSummaryReportActions({ filters, dropdowns = {} }) {
         onClick={() => run('view')}
         sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
       >
-        {busy ? <CircularProgress size={22} color="inherit" /> : 'View Report'}
+        {busyMode === 'view' ? <CircularProgress size={22} color="inherit" /> : 'View Report'}
       </Button>
       <Button
         variant="contained"
@@ -275,7 +378,7 @@ function MilestoneSummaryReportActions({ filters, dropdowns = {} }) {
         onClick={() => run('pdf')}
         sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
       >
-        {busy ? <CircularProgress size={22} color="inherit" /> : 'Download PDF'}
+        {busyMode === 'pdf' ? <CircularProgress size={22} color="inherit" /> : 'Download PDF'}
       </Button>
     </>
   );
@@ -1626,19 +1729,17 @@ function WipReportForm({ pageTitle }) {
         <Grid item xs={12}>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1 }}>
             <MilestoneSummaryReportActions filters={filters} dropdowns={dropdowns} />
+            <MilestoneSummaryExcelDownloadButton filters={filters} dropdowns={dropdowns} />
             <Button
               variant="contained"
               color="primary"
               size="medium"
-              onClick={() => toast('Download Excel: connect API when backend is ready.')}
-              sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
-            >
-              Download Excel
-            </Button>
-            <Button
-              variant="contained"
-              color="primary"
-              size="medium"
+              disabled={DISABLE_MILESTONE_SUMMARY_EXCEL_DOWNLOAD}
+              title={
+                DISABLE_MILESTONE_SUMMARY_EXCEL_DOWNLOAD
+                  ? 'Excel download is disabled for now'
+                  : undefined
+              }
               onClick={() => toast('Download Excel New: connect API when backend is ready.')}
               sx={{ minWidth: 170, textTransform: 'none', fontWeight: 600 }}
             >
