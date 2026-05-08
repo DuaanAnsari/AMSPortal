@@ -94,6 +94,25 @@ function pickColTemplate(reportType) {
   return reportType === 'supplierWise' ? COL_TEMPLATE_SUPPLIER_WISE : COL_TEMPLATE_MERCHANDISER_WISE;
 }
 
+/**
+ * Column specs for Excel — same headers & field mapping as the PDF grid (`\n` → space in header text).
+ * @param {'supplierWise'|'merchandiserWise'} reportType
+ */
+export function getMilestoneGridColumnSpecs(reportType) {
+  const template = pickColTemplate(reportType);
+  return template.map(({ header, keys, kind, k1, k2, statusKeys }) => ({
+    header: String(header || '')
+      .replace(/\n/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+    keys: keys || [],
+    kind,
+    k1: k1 || [],
+    k2: k2 || [],
+    statusKeys: statusKeys || [],
+  }));
+}
+
 /** @type {{ pageW: number; colDef: Array<{ w: number } & Record<string, unknown>>; gridLeft: number; reportType: string } | null} */
 let layoutSnapshot = null;
 
@@ -128,7 +147,7 @@ function colXs() {
   return xs;
 }
 
-function pickField(obj, ...keys) {
+export function pickField(obj, ...keys) {
   if (!obj || typeof obj !== 'object') return '';
   for (let i = 0; i < keys.length; i += 1) {
     const k = keys[i];
@@ -393,6 +412,24 @@ function milestoneBottomDate(raw, spec) {
   if (d) return d;
   if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
   return '—';
+}
+
+/** Same two lines as PDF `drawStackedTwoDates` (shipment / FRI). */
+export function milestoneSummaryStack2ExcelText(raw, spec, reportType) {
+  const v1 = pickField(raw, ...(spec.k1 || []));
+  const v2 = pickField(raw, ...(spec.k2 || []));
+  const useUs = reportType === 'supplierWise';
+  const fmt = useUs ? formatShipmentUsMdY : formatShipmentFriDate;
+  const d1 = fmt(v1) || fmt(v2) || '—';
+  const d2 = fmt(v2) || d1;
+  const line1 = d1 || '—';
+  const line2 = d2 || line1;
+  return `${line1}\n${line2}`;
+}
+
+/** Same two lines as PDF milestone cell (status + date). */
+export function milestoneSummaryMilestoneExcelText(raw, spec) {
+  return `${milestoneTopStatus(raw, spec)}\n${milestoneBottomDate(raw, spec)}`;
 }
 
 function drawMilestoneCell(doc, x, y, w, h, raw, spec) {

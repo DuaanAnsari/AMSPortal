@@ -44,6 +44,9 @@ const REPORT_SUPPLIERS_PATH =
 const REPORT_MERCHANTS_PATH =
   import.meta.env.VITE_REPORT_FOB_LDP_MERCHANTS_PATH || '/api/MyOrders/GetMerchants';
 
+/** Set to `false` when Excel (CSV) download should work again on this page. */
+const DISABLE_LDP_FOB_EXCEL_DOWNLOAD = true;
+
 function joinApiUrl(base, path) {
   const p = path.startsWith('/') ? path : `/${path}`;
   return `${base}${p}`;
@@ -536,7 +539,12 @@ export default function FobLdpPriceListView() {
                 variant="contained"
                 color="primary"
                 size="medium"
-                disabled={!!exporting}
+                disabled={DISABLE_LDP_FOB_EXCEL_DOWNLOAD || !!exporting}
+                title={
+                  DISABLE_LDP_FOB_EXCEL_DOWNLOAD
+                    ? 'Excel download is disabled for now'
+                    : undefined
+                }
                 onClick={handleDownloadExcel}
                 sx={{ minWidth: 160, textTransform: 'none', fontWeight: 600 }}
               >
