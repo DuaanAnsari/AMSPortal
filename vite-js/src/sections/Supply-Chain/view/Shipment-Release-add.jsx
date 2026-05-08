@@ -722,6 +722,7 @@ export default function ShipmentReleaseAddPage() {
           {/* Row: Bank Name / BL-AWB / Bank Branch */}
           <Grid item xs={12} sm={6}>
             <TextField
+
               fullWidth
               label="Bank Name"
               value={form.bankName || ''}
@@ -831,6 +832,7 @@ export default function ShipmentReleaseAddPage() {
           {/* Row: Bank / Discount / Expected ETD */}
           <Grid item xs={12} sm={4}>
             <TextField
+              required
               select
               fullWidth
               label="Bank"
