@@ -39,22 +39,34 @@ apiClient.interceptors.request.use(
 
 // Normalize dropdown data helpers
 const normalizePaymentModes = (list = []) =>
-    list.map((p) => ({
-        id: String(p.paymentModeID ?? p.PaymentModeID ?? p.id ?? p.code ?? p.value ?? ''),
-        name: p.paymentMode ?? p.PaymentMode ?? p.name ?? p.description ?? '',
-    })).filter((p) => p.id && p.name);
+    list.map((p) => {
+        const id = String(p.paymentModeID ?? p.PaymentModeID ?? p.paymentModeId ?? p.PaymentModeId ?? p.id ?? p.paymentID ?? p.PaymentID ?? p.code ?? p.value ?? '');
+        const name = p.paymentMode ?? p.paymentModeName ?? p.PaymentMode ?? p.PaymentModeName ?? p.name ?? p.description ?? '';
+        return {
+            id: id || name,
+            name: name || id,
+        };
+    }).filter((p) => p.id || p.name);
 
 const normalizeShipmentTerms = (list = []) =>
-    list.map((s) => ({
-        id: String(s.deliveryTypeID ?? s.shipmentTermID ?? s.id ?? s.code ?? s.value ?? ''),
-        name: s.deliveryType ?? s.shipmentTerm ?? s.name ?? s.description ?? '',
-    })).filter((s) => s.id && s.name);
+    list.map((s) => {
+        const id = String(s.deliveryTypeID ?? s.shipmentTermID ?? s.id ?? s.code ?? s.value ?? '');
+        const name = s.deliveryType ?? s.deliveryTypeName ?? s.shipmentTerm ?? s.name ?? s.description ?? '';
+        return {
+            id: id || name,
+            name: name || id,
+        };
+    }).filter((s) => s.id || s.name);
 
 const normalizeShipmentModes = (list = []) =>
-    list.map((d) => ({
-        id: String(d.shipmentModeID ?? d.DeliveryModeID ?? d.id ?? d.code ?? d.value ?? ''),
-        name: d.shipmentMode ?? d.shipmentModeName ?? d.name ?? d.description ?? '',
-    })).filter((d) => d.id && d.name);
+    list.map((d) => {
+        const id = String(d.shipmentModeID ?? d.DeliveryModeID ?? d.deliveryModeID ?? d.deliveryTypeID ?? d.id ?? d.code ?? d.value ?? '');
+        const name = d.shipmentMode ?? d.shipmentModeName ?? d.ShipmentMode ?? d.ShipmentModeName ?? d.deliveryType ?? d.deliveryTypeName ?? d.name ?? d.description ?? '';
+        return {
+            id: id || name,
+            name: name || id,
+        };
+    }).filter((d) => d.id || d.name);
 
 // Helper function to transform API data to grid format
 const transformPODataToGridRow = (orderData, options = {}) => {
@@ -67,8 +79,11 @@ const transformPODataToGridRow = (orderData, options = {}) => {
 
     const findNameSimple = (list, id) => {
         if (!id && id !== 0) return '';
-        const item = list.find(x => String(x.id) === String(id));
-        return item ? item.name : String(id);
+        const sId = String(id).trim();
+        const item = list.find(x => String(x.id).trim().toLowerCase() === sId.toLowerCase() || String(x.name).trim().toLowerCase() === sId.toLowerCase());
+        if (item) return item.name;
+        // If not found, only return the ID if it's a number. If it's already a string name, return it.
+        return /^\d+$/.test(sId) ? sId : id;
     };
 
     return {
@@ -157,10 +172,11 @@ const transformPODataToGridRow = (orderData, options = {}) => {
         exchangeRate: orderData.exchangeRate ?? '',
         style: orderData.styleNo || orderData.design || '',
         // Shipping and Payment Terms
-        paymentMode: findNameSimple(options.paymentOptions || [], orderData.paymentMode) || orderData.paymentMode || '',
-        shipmentTerm: findNameSimple(options.shipmentOptions || [], orderData.deliveryType) || orderData.deliveryType || '',
+        paymentMode: findNameSimple(options.paymentOptions || [], orderData.paymentModeName || orderData.PaymentModeName || orderData.paymentModeText || orderData.paymentMode || orderData.paymentModeID || orderData.paymentType || orderData.paymentTerms) || '',
+        // API Swapped Logic: shipmentOptions (Terms) comes from shipmentMode field, deliveryOptions (Modes) comes from deliveryType field
+        shipmentTerm: findNameSimple(options.shipmentOptions || [], orderData.shipmentModeName || orderData.ShipmentModeName || orderData.shipmentModeText || orderData.terms || orderData.shipmentMode || orderData.shipmentModeID || orderData.shipmentTermID || orderData.deliveryModeID) || findNameSimple(options.deliveryOptions || [], orderData.shipmentModeName || orderData.shipmentMode || orderData.shipmentModeID) || '',
         destination: orderData.destination || '',
-        shipmentMode: findNameSimple(options.deliveryOptions || [], orderData.shipmentMode) || orderData.shipmentMode || '',
+        shipmentMode: findNameSimple(options.deliveryOptions || [], orderData.deliveryTypeName || orderData.DeliveryTypeName || orderData.modeName || orderData.shipmentModeName || orderData.deliveryType || orderData.deliveryTypeID || orderData.deliveryModeID || orderData.shipmentModeID || orderData.shipmentType || orderData.mode) || findNameSimple(options.shipmentOptions || [], orderData.deliveryTypeName || orderData.deliveryType || orderData.deliveryTypeID) || '',
     };
 };
 
@@ -286,8 +302,8 @@ const transformGridRowToAPIPayload = (row, options = {}) => {
 
         // Shipping and Payment Terms
         paymentMode: paymentModeID || '',
-        shipmentMode: shipmentModeID || '',
-        deliveryType: shipmentTermID || '',
+        shipmentMode: shipmentTermID || '',
+        deliveryType: shipmentModeID || '',
         shipmentModeText: shipmentModeID || '',
         destination: row.destination || '',
 
@@ -487,7 +503,7 @@ const EditOrderPage = () => {
                             orderData.poid = selectedPOIds[index];
                         }
 
-                        const gridRow = transformPODataToGridRow(orderData);
+                        const gridRow = transformPODataToGridRow(orderData, allOptions);
 
                         // Collect IDs for dependent fetches
                         if (orderData.productPortfolioID) portfoliosToFetch.add(orderData.productPortfolioID);

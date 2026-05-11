@@ -1355,7 +1355,7 @@ export default function CourierPackagingEntryPage() {
       });
       mergedMerchKeyRef.current = null;
       navigate(
-        { pathname: paths.dashboard.powerTool.courierPackagingEntry, search: '' },
+        { pathname: paths.dashboard.powerTool.courierPackagingView, search: '' },
         { replace: true, state: {} }
       );
     } catch (e) {
@@ -1534,6 +1534,7 @@ export default function CourierPackagingEntryPage() {
                 name="address"
                 value={formData.address}
                 onChange={handleChange}
+                disabled
               />
                         </Grid>
 
@@ -1547,6 +1548,7 @@ export default function CourierPackagingEntryPage() {
                 name="phone"
                 value={formData.phone}
                 onChange={handleChange}
+                disabled
               />
                         </Grid>
                         <Grid item xs={12} md={6}>

@@ -187,9 +187,13 @@ export default function ShipmentReleaseAddPage() {
           data?.AmsRefNo ||
           data?.amsRefNo ||
           data?.amsrefno ||
-          data?.AMSICNo ||
-          data?.AmsIcNo ||
-          data?.amsicNo ||
+          data.amsicNo ||
+          data.amsicno ||
+          data.amsICNo ||
+          data.AMSICNo ||
+          data.icNo ||
+          data.IcNo ||
+          data.ICNo ||
           '';
         if (isMounted && nextNo) {
           setForm((prev) => (prev.icNo ? prev : { ...prev, icNo: nextNo }));
@@ -377,6 +381,11 @@ export default function ShipmentReleaseAddPage() {
   const handleSave = async () => {
     if (articleRows.length === 0) {
       enqueueSnackbar('No items to save. Please add items to the grid.', { variant: 'warning' });
+      return;
+    }
+
+    if (!form.bank) {
+      enqueueSnackbar('Please select a bank.', { variant: 'warning' });
       return;
     }
 

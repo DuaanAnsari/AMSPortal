@@ -301,6 +301,9 @@ export default function ShipmentEditView() {
             data.amsicno ||
             data.amsICNo ||
             data.AMSICNo ||
+            data.icNo ||
+            data.IcNo ||
+            data.ICNo ||
             '', // Note: Payload maps amsicNo <-> icNo
           invoice: data.invoiceNo || '',
           date: fmtDate(data.invoiceDate),
@@ -428,6 +431,11 @@ export default function ShipmentEditView() {
   };
 
   const handleSave = async () => {
+    if (!form.bank) {
+      enqueueSnackbar('Please select a bank.', { variant: 'warning' });
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -958,6 +966,7 @@ export default function ShipmentEditView() {
               {/* Row: Bank / Discount / Expected ETD */}
               <Grid item xs={12} sm={4}>
                 <TextField
+                  required
                   select
                   fullWidth
                   label="Bank"
