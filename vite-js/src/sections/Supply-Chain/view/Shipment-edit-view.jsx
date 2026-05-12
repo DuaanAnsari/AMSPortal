@@ -19,7 +19,11 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Autocomplete,
+  CircularProgress,
 } from '@mui/material';
+
+import { fetchPoNumbers } from 'src/sections/reports/utils/pono-dropdown-api';
 
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 import { useSnackbar } from 'src/components/snackbar';
@@ -98,6 +102,41 @@ const defaultFormValues = {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const SHIPMENT_DETAIL_API = `${API_BASE_URL}/api/ShipmentRelease/GetShipment`;
 const SHIPMENT_UPDATE_API = `${API_BASE_URL}/api/ShipmentRelease/UpdateShipment`;
+const ARTICLE_API = `${API_BASE_URL}/api/ShipmentRelease/GetArticleNo`;
+
+const extractSupplierId = (row) => {
+  if (!row || typeof row !== 'object') return 0;
+
+  const direct =
+    row.supplierID ??
+    row.supplierId ??
+    row.SupplierID ??
+    row.supplierid ??
+    row.SupplierId ??
+    row.supplier_ID ??
+    row.Supplier_ID ??
+    row.supplieridFk ??
+    row.supplierFk;
+
+  const directNumber = Number(direct);
+  if (!Number.isNaN(directNumber) && directNumber > 0) return directNumber;
+
+  // Fallback: detect any key that looks like supplier+id (e.g. supplier_id, SupplierMasterID)
+  const dynamicEntry = Object.entries(row).find(([key, value]) => {
+    const lower = String(key || '').toLowerCase();
+    if (!lower.includes('supplier')) return false;
+    if (!lower.includes('id')) return false;
+    const num = Number(value);
+    return !Number.isNaN(num) && num > 0;
+  });
+
+  if (dynamicEntry) {
+    const num = Number(dynamicEntry[1]);
+    if (!Number.isNaN(num) && num > 0) return num;
+  }
+
+  return 0;
+};
 
 export default function ShipmentEditView() {
   const { enqueueSnackbar } = useSnackbar();
@@ -113,7 +152,14 @@ export default function ShipmentEditView() {
   const [poDialogOpen, setPoDialogOpen] = useState(false);
   const [poSearch, setPoSearch] = useState('');
   const [articleRows, setArticleRows] = useState([]);
+  const [articleLoading, setArticleLoading] = useState(false);
+  const [articleError, setArticleError] = useState('');
   const [selectedArticle, setSelectedArticle] = useState(null);
+  const [dialogRows, setDialogRows] = useState([]);
+  const [dialogSelectedRow, setDialogSelectedRow] = useState(null);
+  const [ldpInvoice, setLdpInvoice] = useState('');
+  const [poOptions, setPoOptions] = useState([]);
+  const [loadingPoOptions, setLoadingPoOptions] = useState(false);
   const [subTotalsByLdp, setSubTotalsByLdp] = useState({});
   const [subTotalSeed, setSubTotalSeed] = useState({});
   const ldpInvoiceNumbers = articleRows
@@ -206,10 +252,112 @@ export default function ShipmentEditView() {
     }));
   }, [articleRows]);
 
+  useEffect(() => {
+    if (poDialogOpen) {
+      const loadPoOptions = async () => {
+        setLoadingPoOptions(true);
+        try {
+          const token = localStorage.getItem('accessToken');
+          const headers = token ? { Authorization: `Bearer ${token}` } : {};
+          const list = await fetchPoNumbers({}, headers);
+          setPoOptions(list);
+        } catch (err) {
+          console.error('Failed to load PO options', err);
+        } finally {
+          setLoadingPoOptions(false);
+        }
+      };
+      loadPoOptions();
+    }
+  }, [poDialogOpen]);
+
   const handleGridChange = (index, field, value) => {
     const updatedRows = [...articleRows];
     updatedRows[index] = { ...updatedRows[index], [field]: value };
     setArticleRows(updatedRows);
+  };
+
+  const getRowKey = (row) => `${row?.poid ?? ''}-${row?.styleNo ?? ''}-${row?.pono ?? ''}`;
+
+  const fetchArticleRows = async () => {
+    if (!poSearch.trim()) {
+      setArticleError('Please enter a PO number.');
+      return;
+    }
+
+    setArticleLoading(true);
+    setArticleError('');
+    try {
+      const response = await fetch(`${ARTICLE_API}/${encodeURIComponent(poSearch.trim())}`);
+      if (!response.ok) {
+        throw new Error('Unable to load article data');
+      }
+      const data = await response.json();
+      const rowsRaw = Array.isArray(data) ? data : data ? [data] : [];
+      const rows = rowsRaw.map((row) => ({
+        ...row,
+        supplierID: extractSupplierId(row),
+      }));
+      setDialogRows(rows);
+      setDialogSelectedRow(rows[0] ?? null);
+    } catch (error) {
+      setArticleError(error.message || 'Failed to fetch articles');
+      setDialogRows([]);
+      setDialogSelectedRow(null);
+    } finally {
+      setArticleLoading(false);
+    }
+  };
+
+  const handleSelectClose = () => {
+    const trimmedInvoice = ldpInvoice.trim();
+    if (dialogRows.length > 0) {
+      const dialogKeys = new Set(dialogRows.map((row) => getRowKey(row)));
+      setArticleRows((prev) => {
+        const merged = [...prev];
+        const existingKeys = new Set(prev.map((item) => getRowKey(item)));
+        const addedKeys = [];
+        dialogRows.forEach((row) => {
+          const rowKey = getRowKey(row);
+          if (!existingKeys.has(rowKey)) {
+            merged.push(row);
+            addedKeys.push(rowKey);
+          }
+        });
+        if (trimmedInvoice && addedKeys.length > 0) {
+          const keysToUpdate = new Set(addedKeys);
+          return merged.map((row) =>
+            keysToUpdate.has(getRowKey(row)) ? { ...row, ldpInvoiceNo: trimmedInvoice } : row
+          );
+        }
+        if (trimmedInvoice && dialogKeys.size > 0 && addedKeys.length === 0) {
+          return merged.map((row) =>
+            dialogKeys.has(getRowKey(row)) ? { ...row, ldpInvoiceNo: trimmedInvoice } : row
+          );
+        }
+        return merged;
+      });
+    }
+    setPoDialogOpen(false);
+  };
+
+  const handleDialogGridChange = (index, field, value) => {
+    setDialogRows((prev) => {
+      const updatedRows = [...prev];
+      updatedRows[index] = { ...updatedRows[index], [field]: value };
+      return updatedRows;
+    });
+  };
+
+  const updateDialogSelectedField = (field, value) => {
+    if (!dialogSelectedRow) {
+      return;
+    }
+    const selectedKey = getRowKey(dialogSelectedRow);
+    setDialogRows((prev) =>
+      prev.map((row) => (getRowKey(row) === selectedKey ? { ...row, [field]: value } : row))
+    );
+    setDialogSelectedRow((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
   const handleSubTotalChange = (rowKey, field) => (event) => {
@@ -1226,7 +1374,14 @@ export default function ShipmentEditView() {
                     <Typography
                       variant="body2"
                       sx={{ color: 'primary.main', cursor: 'pointer' }}
-                      onClick={() => setPoDialogOpen(true)}
+                      onClick={() => {
+                        setPoDialogOpen(true);
+                        setPoSearch('');
+                        setArticleError('');
+                        setDialogRows([]);
+                        setDialogSelectedRow(null);
+                        setLdpInvoice('');
+                      }}
                     >
                       Select POs
                     </Typography>
@@ -1588,7 +1743,7 @@ export default function ShipmentEditView() {
             <Dialog
               open={poDialogOpen}
               onClose={() => setPoDialogOpen(false)}
-              maxWidth="sm"
+              maxWidth="lg"
               fullWidth
             >
               <DialogTitle>Select POs</DialogTitle>
@@ -1600,10 +1755,50 @@ export default function ShipmentEditView() {
                     </Typography>
                   </Grid>
                   <Grid item xs>
-                    <TextField
+                    <Autocomplete
+                      freeSolo
                       size="small"
-                      value={poSearch}
-                      onChange={(e) => setPoSearch(e.target.value)}
+                      options={poOptions}
+                      loading={loadingPoOptions}
+                      value={poSearch || ''}
+                      onChange={(_e, val) => setPoSearch(val || '')}
+                      onInputChange={(_e, val) => setPoSearch(val || '')}
+                      filterOptions={(opts, state) => {
+                        const q = String(state.inputValue || '').trim().toLowerCase();
+                        if (!q) return [];
+                        const startsWith = [];
+                        const contains = [];
+                        opts.forEach((o) => {
+                          const lo = String(o).toLowerCase();
+                          if (lo.startsWith(q)) startsWith.push(o);
+                          else if (lo.includes(q)) contains.push(o);
+                        });
+                        return [...startsWith, ...contains].slice(0, 100);
+                      }}
+                      noOptionsText={
+                        loadingPoOptions
+                          ? 'Loading…'
+                          : poOptions.length === 0
+                          ? 'No PO Found'
+                          : 'No match'
+                      }
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          placeholder="Type to search PO #"
+                          InputProps={{
+                            ...params.InputProps,
+                            endAdornment: (
+                              <>
+                                {loadingPoOptions ? (
+                                  <CircularProgress color="inherit" size={16} sx={{ mr: 1 }} />
+                                ) : null}
+                                {params.InputProps.endAdornment}
+                              </>
+                            ),
+                          }}
+                        />
+                      )}
                       sx={{ minWidth: 220 }}
                     />
                   </Grid>
@@ -1611,6 +1806,7 @@ export default function ShipmentEditView() {
                     <Button
                       variant="contained"
                       size="small"
+                      onClick={fetchArticleRows}
                       sx={{
                         bgcolor: '#171616',
                         color: '#ffffff',
@@ -1621,12 +1817,176 @@ export default function ShipmentEditView() {
                     </Button>
                   </Grid>
                 </Grid>
+                {articleLoading && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Loading article data…
+                    </Typography>
+                  </Box>
+                )}
+                {articleError && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="body2" color="error">
+                      {articleError}
+                    </Typography>
+                  </Box>
+                )}
+                {dialogRows.length > 0 && (
+                  <>
+                    <Grid container spacing={2} sx={{ mt: 2 }}>
+                      <Grid item xs={12} md={8}>
+                        <TextField
+                          fullWidth
+                          label="Item Description"
+                          value={dialogSelectedRow?.itemDescriptionShippingInvoice || ''}
+                          multiline
+                          minRows={2}
+                          onChange={(event) =>
+                            updateDialogSelectedField('itemDescriptionShippingInvoice', event.target.value)
+                          }
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={4}>
+                        <TextField
+                          fullWidth
+                          label="LDP Invoice No"
+                          size="small"
+                          value={ldpInvoice || ''}
+                          onChange={(event) => setLdpInvoice(event.target.value)}
+                        />
+                      </Grid>
+                    </Grid>
+                    <TableContainer sx={{ mt: 2 }}>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow sx={{ bgcolor: '#eeeeee' }}>
+                            {[
+                              'PO No.',
+                              'Customer',
+                              'Style',
+                              'Size Range',
+                              'PO Quantity',
+                              'Shipped Qty',
+                              'Release Qty',
+                              'Cartons',
+                              'Carton#',
+                              'Max Allow Qty',
+                              'Cancel Qty',
+                              'Rate',
+                              'ID',
+                              'Delivery Mode',
+                              'Internal PO No.',
+                            ].map((head) => (
+                              <TableCell
+                                key={head}
+                                sx={{
+                                  color: '#000000',
+                                  fontWeight: 'bold',
+                                  borderRight: '1px solid rgba(0,0,0,0.12)',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {head}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {dialogRows.map((row, index) => (
+                            <TableRow
+                              key={`${row.pono}-${row.styleNo}`}
+                              hover
+                              onClick={() => setDialogSelectedRow(row)}
+                              selected={
+                                dialogSelectedRow?.pono === row.pono &&
+                                dialogSelectedRow?.styleNo === row.styleNo
+                              }
+                            >
+                              <TableCell>{row.pono}</TableCell>
+                              <TableCell>{row.customerName}</TableCell>
+                              <TableCell>{row.styleNo}</TableCell>
+                              <TableCell>{row.size}</TableCell>
+                              <TableCell>{row.quantity ?? '-'}</TableCell>
+                              <TableCell>{row.releaseQty ?? '-'}</TableCell>
+                              <TableCell sx={{ p: 0.5 }}>
+                                <TextField
+                                  size="small"
+                                  fullWidth
+                                  type="number"
+                                  value={row.remainQTY ?? ''}
+                                  onChange={(e) => handleDialogGridChange(index, 'remainQTY', e.target.value)}
+                                />
+                              </TableCell>
+                              <TableCell sx={{ p: 0.5 }}>
+                                <TextField
+                                  size="small"
+                                  fullWidth
+                                  type="number"
+                                  value={row.cartons ?? ''}
+                                  onChange={(e) => handleDialogGridChange(index, 'cartons', e.target.value)}
+                                />
+                              </TableCell>
+                              <TableCell sx={{ p: 0.5 }}>
+                                <TextField
+                                  size="small"
+                                  fullWidth
+                                  value={row.cartonNo || ''}
+                                  onChange={(e) => handleDialogGridChange(index, 'cartonNo', e.target.value)}
+                                />
+                              </TableCell>
+                              <TableCell>{row.qtYwithTolerance ?? '-'}</TableCell>
+                              <TableCell>{row.cancelQty ?? '-'}</TableCell>
+                              <TableCell sx={{ p: 0.5 }}>
+                                <TextField
+                                  size="small"
+                                  fullWidth
+                                  type="number"
+                                  value={row.rate ?? ''}
+                                  onChange={(e) => handleDialogGridChange(index, 'rate', e.target.value)}
+                                />
+                              </TableCell>
+                              <TableCell>{index + 1}</TableCell>
+                              <TableCell>{row.deliveryTypeName}</TableCell>
+                              <TableCell>{row.internalPONO}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                    <Grid container spacing={2} sx={{ mt: 2 }}>
+                      <Grid item xs={12} sm={4}>
+                        <TextField
+                          fullWidth
+                          label="Release Qty Sum"
+                          value={form.heading1Value?.toString() || '0'}
+                          InputProps={{ readOnly: true }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <TextField
+                          fullWidth
+                          label="Cartons Sum"
+                          value={form.heading2Value?.toString() || '0'}
+                          InputProps={{ readOnly: true }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <TextField
+                          fullWidth
+                          label="Release × Rate"
+                          value={(Number(form.heading3Value) || 0).toFixed(2)}
+                          InputProps={{ readOnly: true }}
+                        />
+                      </Grid>
+                    </Grid>
+                  </>
+                )}
               </DialogContent>
               <DialogActions sx={{ justifyContent: 'flex-end', pr: 3, pb: 2 }}>
                 <Button
                   variant="outlined"
                   size="small"
-                  onClick={() => setPoDialogOpen(false)}
+                  onClick={handleSelectClose}
                   sx={{
                     borderColor: '#171616',
                     color: '#171616',

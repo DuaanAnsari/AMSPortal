@@ -18,6 +18,9 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
+import Autocomplete from '@mui/material/Autocomplete';
+import CircularProgress from '@mui/material/CircularProgress';
+import { fetchPoNumbers } from 'src/sections/reports/utils/pono-dropdown-api';
 import InputAdornment from '@mui/material/InputAdornment';
 import Iconify from 'src/components/iconify';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
@@ -159,6 +162,8 @@ export default function ShipmentReleaseAddPage() {
   const [form, setForm] = useState(defaultFormValues);
   const [poDialogOpen, setPoDialogOpen] = useState(false);
   const [poSearch, setPoSearch] = useState('');
+  const [poOptions, setPoOptions] = useState([]);
+  const [loadingPoOptions, setLoadingPoOptions] = useState(false);
   const [articleRows, setArticleRows] = useState([]);
   const [articleLoading, setArticleLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -334,6 +339,25 @@ export default function ShipmentReleaseAddPage() {
   // Final amount only when extra is provided; otherwise keep it null so UI stays blank.
   const finalAmountWithExtra =
     extraChargeAmount === null ? null : totalReleaseRateAmount + extraChargeAmount;
+
+  useEffect(() => {
+    if (poDialogOpen) {
+      const loadPoOptions = async () => {
+        setLoadingPoOptions(true);
+        try {
+          const token = localStorage.getItem('accessToken');
+          const headers = token ? { Authorization: `Bearer ${token}` } : {};
+          const list = await fetchPoNumbers({}, headers);
+          setPoOptions(list);
+        } catch (err) {
+          console.error('Failed to load PO options', err);
+        } finally {
+          setLoadingPoOptions(false);
+        }
+      };
+      loadPoOptions();
+    }
+  }, [poDialogOpen]);
 
   const handleGridChange = (index, field, value) => {
     const updatedRows = [...articleRows];
@@ -1527,14 +1551,54 @@ export default function ShipmentReleaseAddPage() {
                 PO. No:
               </Typography>
             </Grid>
-            <Grid item xs>
-              <TextField
-                size="small"
-                value={poSearch || ''}
-                onChange={(e) => setPoSearch(e.target.value)}
-                sx={{ minWidth: 220 }}
-              />
-            </Grid>
+                  <Grid item xs>
+                    <Autocomplete
+                      freeSolo
+                      size="small"
+                      options={poOptions}
+                      loading={loadingPoOptions}
+                      value={poSearch || ''}
+                      onChange={(_e, val) => setPoSearch(val || '')}
+                      onInputChange={(_e, val) => setPoSearch(val || '')}
+                      filterOptions={(opts, state) => {
+                        const q = String(state.inputValue || '').trim().toLowerCase();
+                        if (!q) return [];
+                        const startsWith = [];
+                        const contains = [];
+                        opts.forEach((o) => {
+                          const lo = String(o).toLowerCase();
+                          if (lo.startsWith(q)) startsWith.push(o);
+                          else if (lo.includes(q)) contains.push(o);
+                        });
+                        return [...startsWith, ...contains].slice(0, 100);
+                      }}
+                      noOptionsText={
+                        loadingPoOptions
+                          ? 'Loading…'
+                          : poOptions.length === 0
+                          ? 'No PO Found'
+                          : 'No match'
+                      }
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          placeholder="Type to search PO #"
+                          InputProps={{
+                            ...params.InputProps,
+                            endAdornment: (
+                              <>
+                                {loadingPoOptions ? (
+                                  <CircularProgress color="inherit" size={16} sx={{ mr: 1 }} />
+                                ) : null}
+                                {params.InputProps.endAdornment}
+                              </>
+                            ),
+                          }}
+                        />
+                      )}
+                      sx={{ minWidth: 220 }}
+                    />
+                  </Grid>
             <Grid item>
               <Button
                 variant="contained"
