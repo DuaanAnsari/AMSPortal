@@ -513,7 +513,7 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
                     onInputChange={(_e, val) => setPoNo(val || '')}
                     filterOptions={(opts, state) => {
                       const q = String(state.inputValue || '').trim().toLowerCase();
-                      if (!q) return opts.slice(0, 100);
+                      if (!q) return [];
                       const startsWith = [];
                       const contains = [];
                       opts.forEach((o) => {
