@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-    Box,
-    Card,
-    CardContent,
-    Typography,
-    TextField,
-    Button,
-    Grid,
-    MenuItem,
-    IconButton,
-    Paper,
-    useTheme,
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  TextField,
+  Button,
+  Grid,
+  MenuItem,
+  IconButton,
+  Paper,
+  useTheme,
   Divider,
   Alert,
   CircularProgress,
@@ -515,29 +515,29 @@ function validateMerchandisingDetailRows(rows) {
 // ----------------------------------------------------------------------
 
 export default function CourierPackagingEntryPage() {
-    const navigate = useNavigate();
+  const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-    const theme = useTheme();
+  const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const mergedMerchKeyRef = useRef(null);
   const editFetchSeqRef = useRef(0);
 
-    const [manualEntry, setManualEntry] = useState({
-        shipmentType: false,
-        serviceRequired: false,
-        amsCourierAwb: false,
-    });
+  const [manualEntry, setManualEntry] = useState({
+    shipmentType: false,
+    serviceRequired: false,
+    amsCourierAwb: false,
+  });
 
-    const toggleManual = (field) => {
-        setManualEntry((prev) => ({ ...prev, [field]: !prev[field] }));
-    };
+  const toggleManual = (field) => {
+    setManualEntry((prev) => ({ ...prev, [field]: !prev[field] }));
+  };
 
   const [formData, setFormData] = useState(() => getEmptyFormData());
 
   const [detailData, setDetailData] = useState(() => getEmptyDetailData());
 
-    const [rows, setRows] = useState([]);
+  const [rows, setRows] = useState([]);
   const [editLoading, setEditLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   const [editError, setEditError] = useState(null);
@@ -552,8 +552,8 @@ export default function CourierPackagingEntryPage() {
   const [couriers, setCouriers] = useState([]);
   const [couriersLoading, setCouriersLoading] = useState(false);
 
-    const handleChange = (event) => {
-        const { name, value } = event.target;
+  const handleChange = (event) => {
+    const { name, value } = event.target;
     if (name === 'consignee') {
       if (value === '' || value == null) {
         setFormData((prev) => ({ ...prev, consignee: '', attention: '' }));
@@ -572,14 +572,14 @@ export default function CourierPackagingEntryPage() {
       }));
       return;
     }
-        setFormData((prev) => ({
-            ...prev,
-            [name]: value,
-        }));
-    };
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
 
-    const handleDetailChange = (event) => {
-        const { name, value } = event.target;
+  const handleDetailChange = (event) => {
+    const { name, value } = event.target;
     setDetailData((prev) => {
       const next = { ...prev, [name]: value };
       if (name === 'quantity' || name === 'price') {
@@ -590,25 +590,25 @@ export default function CourierPackagingEntryPage() {
       }
       return next;
     });
-    };
+  };
 
-    const handleAddGrid = () => {
+  const handleAddGrid = () => {
     if (!detailData.poStyle || detailData.quantity === '' || detailData.quantity == null) {
       enqueueSnackbar('Please fill at least PO Style and Quantity.', { variant: 'warning' });
-            return;
-        }
+      return;
+    }
     const amt = computeLineAmount(detailData.quantity, detailData.price);
-        const newRow = {
+    const newRow = {
       id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-            ...detailData,
+      ...detailData,
       amount: amt == null ? '' : amt,
-        };
-        setRows((prev) => [...prev, newRow]);
+    };
+    setRows((prev) => [...prev, newRow]);
     setDetailData(getEmptyDetailData());
   };
 
   const handleDeleteRow = useCallback((id) => {
-        setRows((prev) => prev.filter((row) => row.id !== id));
+    setRows((prev) => prev.filter((row) => row.id !== id));
   }, []);
 
   const processRowUpdate = useCallback((newRow) => {
@@ -897,7 +897,7 @@ export default function CourierPackagingEntryPage() {
       const v = prev.consignee;
       if (v == null || String(v).trim() === '') return prev;
       if (consignees.some((c) => String(c.id) === String(v))) return prev;
-        const match = consignees.find((c) => String(c.name).trim() === String(v).trim());
+      const match = consignees.find((c) => String(c.name).trim() === String(v).trim());
       if (match) {
         const att = String(match.attentionDefault ?? '').trim();
         const addr = String(match.address ?? '').trim();
@@ -1173,15 +1173,15 @@ export default function CourierPackagingEntryPage() {
         headerAlign: 'center',
         editable: true,
       },
-        {
-            field: 'action',
-            headerName: 'Action',
+      {
+        field: 'action',
+        headerName: 'Action',
         width: 88,
         sortable: false,
         filterable: false,
-            align: 'center',
-            headerAlign: 'center',
-            renderCell: (params) => (
+        align: 'center',
+        headerAlign: 'center',
+        renderCell: (params) => (
           <IconButton
             size="small"
             aria-label="Delete row"
@@ -1195,9 +1195,9 @@ export default function CourierPackagingEntryPage() {
             }}
           >
             <Iconify icon="eva:close-fill" width={16} />
-                </IconButton>
-            ),
-        },
+          </IconButton>
+        ),
+      },
     ],
     [handleDeleteRow]
   );
@@ -1387,41 +1387,41 @@ export default function CourierPackagingEntryPage() {
     }
   }, [enqueueSnackbar, formData, rows, searchParams, location.state, navigate, shippers, consignees, shipments, services, couriers]);
 
-    return (
+  return (
     <Box sx={{ width: '100%', mt: 4, px: { xs: 1, sm: 2 } }}>
-            <Box sx={{ mb: 3 }}>
-                <Typography
-                    variant="h6"
-                    fontWeight={700}
+      <Box sx={{ mb: 3 }}>
+        <Typography
+          variant="h6"
+          fontWeight={700}
           color="text.primary"
-                    sx={{ textTransform: 'uppercase', letterSpacing: 0.5, mb: 0.5 }}
-                >
-                    Courier Packages Entry
-                </Typography>
+          sx={{ textTransform: 'uppercase', letterSpacing: 0.5, mb: 0.5 }}
+        >
+          Courier Packages Entry
+        </Typography>
 
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: theme.palette.text.primary,
-                            fontWeight: 500,
-                            cursor: 'pointer',
-                            '&:hover': { textDecoration: 'underline' },
-                        }}
-                        onClick={() => navigate('/dashboard')}
-                    >
-                        Dashboard
-                    </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: theme.palette.text.primary,
+              fontWeight: 500,
+              cursor: 'pointer',
+              '&:hover': { textDecoration: 'underline' },
+            }}
+            onClick={() => navigate('/dashboard')}
+          >
+            Dashboard
+          </Typography>
           <Typography sx={{ mx: 1, color: theme.palette.text.secondary, fontWeight: 500 }}>•</Typography>
-                    <Typography variant="body2" sx={{ color: theme.palette.text.secondary, fontWeight: 500 }}>
-                        Power Tools
-                    </Typography>
+          <Typography variant="body2" sx={{ color: theme.palette.text.secondary, fontWeight: 500 }}>
+            Power Tools
+          </Typography>
           <Typography sx={{ mx: 1, color: theme.palette.text.secondary, fontWeight: 500 }}>•</Typography>
-                    <Typography variant="body2" sx={{ color: theme.palette.text.secondary, fontWeight: 500 }}>
-                        Courier Packages Entry
-                    </Typography>
-                </Box>
-            </Box>
+          <Typography variant="body2" sx={{ color: theme.palette.text.secondary, fontWeight: 500 }}>
+            Courier Packages Entry
+          </Typography>
+        </Box>
+      </Box>
 
       {editError ? (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setEditError(null)}>
@@ -1446,9 +1446,9 @@ export default function CourierPackagingEntryPage() {
             <CircularProgress />
           </Box>
         ) : null}
-                <CardContent sx={{ p: 4 }}>
-                    <Grid container spacing={3}>
-                        <Grid item xs={12}>
+        <CardContent sx={{ p: 4 }}>
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
                 Invoice No.
               </Typography>
@@ -1461,9 +1461,9 @@ export default function CourierPackagingEntryPage() {
                 inputProps={{ 'aria-readonly': true }}
                 sx={{ maxWidth: { md: 400 }, '& .MuiInputBase-input': { color: 'text.secondary', cursor: 'default' } }}
               />
-                        </Grid>
+            </Grid>
 
-                        <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={4}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
                 Shipper:
               </Typography>
@@ -1488,9 +1488,9 @@ export default function CourierPackagingEntryPage() {
                 {shipperOrphanOption ? (
                   <MenuItem value={shipperOrphanOption.value}>{shipperOrphanOption.label}</MenuItem>
                 ) : null}
-                            </TextField>
-                        </Grid>
-                        <Grid item xs={12} md={4}>
+              </TextField>
+            </Grid>
+            <Grid item xs={12} md={4}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
                 Consignee:
               </Typography>
@@ -1515,16 +1515,16 @@ export default function CourierPackagingEntryPage() {
                 {consigneeOrphanOption ? (
                   <MenuItem value={consigneeOrphanOption.value}>{consigneeOrphanOption.label}</MenuItem>
                 ) : null}
-                            </TextField>
-                        </Grid>
-                        <Grid item xs={12} md={4}>
+              </TextField>
+            </Grid>
+            <Grid item xs={12} md={4}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
                 Attention:
               </Typography>
-                            <TextField fullWidth size="small" name="attention" value={formData.attention} onChange={handleChange} />
-                        </Grid>
+              <TextField fullWidth size="small" name="attention" value={formData.attention} onChange={handleChange} />
+            </Grid>
 
-                        <Grid item xs={12}>
+            <Grid item xs={12}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
                 Address:
               </Typography>
@@ -1536,9 +1536,9 @@ export default function CourierPackagingEntryPage() {
                 onChange={handleChange}
                 disabled
               />
-                        </Grid>
+            </Grid>
 
-                        <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
                 Phone #:
               </Typography>
@@ -1550,26 +1550,26 @@ export default function CourierPackagingEntryPage() {
                 onChange={handleChange}
                 disabled
               />
-                        </Grid>
-                        <Grid item xs={12} md={6}>
+            </Grid>
+            <Grid item xs={12} md={6}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
                 AWB#:
               </Typography>
-                            <TextField fullWidth size="small" name="awb" value={formData.awb} onChange={handleChange} />
-                        </Grid>
+              <TextField fullWidth size="small" name="awb" value={formData.awb} onChange={handleChange} />
+            </Grid>
 
-                        <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={4}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
                 Shipment Type:
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
                 {manualEntry.shipmentType ? (
-                                <TextField
-                                    fullWidth
-                                    size="small"
-                                    name="shipmentType"
-                                    value={formData.shipmentType}
-                                    onChange={handleChange}
+                  <TextField
+                    fullWidth
+                    size="small"
+                    name="shipmentType"
+                    value={formData.shipmentType}
+                    onChange={handleChange}
                     sx={{ flex: '1 1 auto', minWidth: 0 }}
                   />
                 ) : (
@@ -1598,16 +1598,16 @@ export default function CourierPackagingEntryPage() {
                       )),
                       ...(shipmentOrphanOption
                         ? [
-                            <MenuItem
-                              key={`__shipment-orphan-${String(shipmentOrphanOption.value)}`}
-                              value={shipmentOrphanOption.value}
-                            >
-                              {shipmentOrphanOption.label}
-                            </MenuItem>,
-                          ]
+                          <MenuItem
+                            key={`__shipment-orphan-${String(shipmentOrphanOption.value)}`}
+                            value={shipmentOrphanOption.value}
+                          >
+                            {shipmentOrphanOption.label}
+                          </MenuItem>,
+                        ]
                         : []),
                     ]}
-                                </TextField>
+                  </TextField>
                 )}
                 <IconButton
                   type="button"
@@ -1615,22 +1615,22 @@ export default function CourierPackagingEntryPage() {
                   sx={{ flexShrink: 0, color: 'info.main', p: 0 }}
                   aria-label="Toggle manual shipment type"
                 >
-                                    <Iconify icon="eva:plus-fill" width={24} />
-                                </IconButton>
-                            </Box>
-                        </Grid>
-                        <Grid item xs={12} md={4}>
+                  <Iconify icon="eva:plus-fill" width={24} />
+                </IconButton>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
                 Service Required:
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
                 {manualEntry.serviceRequired ? (
-                                <TextField
-                                    fullWidth
-                                    size="small"
-                                    name="serviceRequired"
-                                    value={formData.serviceRequired}
-                                    onChange={handleChange}
+                  <TextField
+                    fullWidth
+                    size="small"
+                    name="serviceRequired"
+                    value={formData.serviceRequired}
+                    onChange={handleChange}
                     sx={{ flex: '1 1 auto', minWidth: 0 }}
                   />
                 ) : (
@@ -1659,16 +1659,16 @@ export default function CourierPackagingEntryPage() {
                       )),
                       ...(serviceOrphanOption
                         ? [
-                            <MenuItem
-                              key={`__service-orphan-${String(serviceOrphanOption.value)}`}
-                              value={serviceOrphanOption.value}
-                            >
-                              {serviceOrphanOption.label}
-                            </MenuItem>,
-                          ]
+                          <MenuItem
+                            key={`__service-orphan-${String(serviceOrphanOption.value)}`}
+                            value={serviceOrphanOption.value}
+                          >
+                            {serviceOrphanOption.label}
+                          </MenuItem>,
+                        ]
                         : []),
                     ]}
-                                </TextField>
+                  </TextField>
                 )}
                 <IconButton
                   type="button"
@@ -1676,22 +1676,22 @@ export default function CourierPackagingEntryPage() {
                   sx={{ flexShrink: 0, color: 'info.main', p: 0 }}
                   aria-label="Toggle manual service"
                 >
-                                    <Iconify icon="eva:plus-fill" width={24} />
-                                </IconButton>
-                            </Box>
-                        </Grid>
-                        <Grid item xs={12} md={4}>
+                  <Iconify icon="eva:plus-fill" width={24} />
+                </IconButton>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
                 AMS Courier & AWB#:
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
                 {manualEntry.amsCourierAwb ? (
-                                <TextField
-                                    fullWidth
-                                    size="small"
-                                    name="amsCourierAwb"
-                                    value={formData.amsCourierAwb}
-                                    onChange={handleChange}
+                  <TextField
+                    fullWidth
+                    size="small"
+                    name="amsCourierAwb"
+                    value={formData.amsCourierAwb}
+                    onChange={handleChange}
                     sx={{ flex: '1 1 auto', minWidth: 0 }}
                   />
                 ) : (
@@ -1720,16 +1720,16 @@ export default function CourierPackagingEntryPage() {
                       )),
                       ...(courierOrphanOption
                         ? [
-                            <MenuItem
-                              key={`__courier-orphan-${String(courierOrphanOption.value)}`}
-                              value={courierOrphanOption.value}
-                            >
-                              {courierOrphanOption.label}
-                            </MenuItem>,
-                          ]
+                          <MenuItem
+                            key={`__courier-orphan-${String(courierOrphanOption.value)}`}
+                            value={courierOrphanOption.value}
+                          >
+                            {courierOrphanOption.label}
+                          </MenuItem>,
+                        ]
                         : []),
                     ]}
-                                </TextField>
+                  </TextField>
                 )}
                 <IconButton
                   type="button"
@@ -1737,33 +1737,33 @@ export default function CourierPackagingEntryPage() {
                   sx={{ flexShrink: 0, color: 'info.main', p: 0 }}
                   aria-label="Toggle manual courier"
                 >
-                                    <Iconify icon="eva:plus-fill" width={24} />
-                                </IconButton>
-                            </Box>
-                        </Grid>
+                  <Iconify icon="eva:plus-fill" width={24} />
+                </IconButton>
+              </Box>
+            </Grid>
 
-                        <Grid item xs={12}>
+            <Grid item xs={12}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
                 Account:
               </Typography>
-                            <TextField fullWidth size="small" name="account" value={formData.account} onChange={handleChange} />
-                        </Grid>
+              <TextField fullWidth size="small" name="account" value={formData.account} onChange={handleChange} />
+            </Grid>
 
-                        <Grid item xs={12}>
+            <Grid item xs={12}>
               <Typography variant="subtitle2" sx={{ color: 'text.secondary', mt: 1, mb: 1, fontWeight: 700 }}>
-                                Detail
-                            </Typography>
-                        </Grid>
+                Detail
+              </Typography>
+            </Grid>
 
-                        <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
                 Style / PO:
               </Typography>
-                            <TextField fullWidth size="small" name="poStyle" value={detailData.poStyle} onChange={handleDetailChange} />
-                        </Grid>
-                        <Grid item xs={12} md={6}>
+              <TextField fullWidth size="small" name="poStyle" value={detailData.poStyle} onChange={handleDetailChange} />
+            </Grid>
+            <Grid item xs={12} md={6}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
-                Description:
+                item / Description:
               </Typography>
               <TextField
                 fullWidth
@@ -1772,22 +1772,22 @@ export default function CourierPackagingEntryPage() {
                 value={detailData.description}
                 onChange={handleDetailChange}
               />
-                        </Grid>
+            </Grid>
 
-                        <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
                 Quantity:
               </Typography>
-                            <TextField fullWidth size="small" name="quantity" value={detailData.quantity} onChange={handleDetailChange} />
-                        </Grid>
-                        <Grid item xs={12} md={6}>
+              <TextField fullWidth size="small" name="quantity" value={detailData.quantity} onChange={handleDetailChange} />
+            </Grid>
+            <Grid item xs={12} md={6}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
                 Price:
               </Typography>
-                            <TextField fullWidth size="small" name="price" value={detailData.price} onChange={handleDetailChange} />
-                        </Grid>
+              <TextField fullWidth size="small" name="price" value={detailData.price} onChange={handleDetailChange} />
+            </Grid>
 
-                        <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
                 Amount:
               </Typography>
@@ -1800,75 +1800,75 @@ export default function CourierPackagingEntryPage() {
                 placeholder="Qty × Price"
                 sx={{ '& .MuiInputBase-input': { color: 'text.secondary' } }}
               />
-                        </Grid>
-                        <Grid item xs={12} md={6}>
+            </Grid>
+            <Grid item xs={12} md={6}>
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
-                Remarks:
+                Remarks / sending purpose:
               </Typography>
-            <TextField fullWidth size="small" name="remarks" value={detailData.remarks} onChange={handleDetailChange} />
+              <TextField fullWidth size="small" name="remarks" value={detailData.remarks} onChange={handleDetailChange} />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
+                Gender:
+              </Typography>
+              <TextField fullWidth size="small" name="gender" value={detailData.gender} onChange={handleDetailChange} />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
+                Fabric Content:
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                name="fabriccontent"
+                value={detailData.fabriccontent}
+                onChange={handleDetailChange}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
+                10 Digit HS Code:
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                name="tendigithscode"
+                value={detailData.tendigithscode}
+                onChange={handleDetailChange}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
+                Manufacture Code:
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                name="manufacturecode"
+                value={detailData.manufacturecode}
+                onChange={handleDetailChange}
+              />
+            </Grid>
           </Grid>
-          <Grid item xs={12} md={4}>
-            <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
-              Gender:
-            </Typography>
-            <TextField fullWidth size="small" name="gender" value={detailData.gender} onChange={handleDetailChange} />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
-              Fabric Content:
-            </Typography>
-            <TextField
-              fullWidth
-              size="small"
-              name="fabriccontent"
-              value={detailData.fabriccontent}
-              onChange={handleDetailChange}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
-              10 Digit HS Code:
-            </Typography>
-            <TextField
-              fullWidth
-              size="small"
-              name="tendigithscode"
-              value={detailData.tendigithscode}
-              onChange={handleDetailChange}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500, display: 'block' }}>
-              Manufacture Code:
-            </Typography>
-            <TextField
-              fullWidth
-              size="small"
-              name="manufacturecode"
-              value={detailData.manufacturecode}
-              onChange={handleDetailChange}
-            />
-          </Grid>
-        </Grid>
 
           <Divider sx={{ my: 3 }} />
 
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-                            <Button
-                                variant="contained"
+            <Button
+              variant="contained"
               color="primary"
-                                onClick={handleAddGrid}
-                                sx={{
+              onClick={handleAddGrid}
+              sx={{
                 textTransform: 'uppercase',
                 fontWeight: 700,
                 letterSpacing: 0.5,
                 px: 4,
                 py: 1,
                 minWidth: 120,
-                                }}
-                            >
-                                ADD
-                            </Button>
+              }}
+            >
+              ADD
+            </Button>
           </Box>
 
           {rows.length > 0 ? (
@@ -1882,46 +1882,46 @@ export default function CourierPackagingEntryPage() {
                 borderColor: 'divider',
               }}
             >
-                            <DataGrid
-                                rows={rows}
-                                columns={columns}
+              <DataGrid
+                rows={rows}
+                columns={columns}
                 getRowId={(row) => row.id}
                 processRowUpdate={processRowUpdate}
-                                initialState={{ pagination: { paginationModel: { pageSize: 5, page: 0 } } }}
-                                pageSizeOptions={[5, 10, 25]}
-                                disableRowSelectionOnClick
-                                autoHeight
-                                hideFooterSelectedRowCount
+                initialState={{ pagination: { paginationModel: { pageSize: 5, page: 0 } } }}
+                pageSizeOptions={[5, 10, 25]}
+                disableRowSelectionOnClick
+                autoHeight
+                hideFooterSelectedRowCount
                 slots={{ noRowsOverlay: NoDetailRowsOverlay }}
-                                sx={{
+                sx={{
                   ...gridSx,
                   '& .MuiDataGrid-main': { minHeight: 'auto' },
-                                }}
-                            />
-                        </Paper>
+                }}
+              />
+            </Paper>
           ) : null}
-                    </CardContent>
-                </Card>
+        </CardContent>
+      </Card>
 
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mb: 4 }}>
-                <Button
-                    variant="contained"
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mb: 4 }}>
+        <Button
+          variant="contained"
           color="primary"
           onClick={handleSaveMerchandising}
           disabled={editLoading || saveLoading}
           sx={{ fontWeight: 600, textTransform: 'none', minWidth: 120 }}
         >
           {getMerchandisingId(searchParams, location.state) ? 'Update' : 'Save'}
-                </Button>
-                <Button
+        </Button>
+        <Button
           variant="outlined"
           color="primary"
           onClick={() => navigate(-1)}
           sx={{ fontWeight: 600, textTransform: 'none', minWidth: 120 }}
-                >
-                    Cancel
-                </Button>
-            </Box>
-        </Box>
-    );
+        >
+          Cancel
+        </Button>
+      </Box>
+    </Box>
+  );
 }
