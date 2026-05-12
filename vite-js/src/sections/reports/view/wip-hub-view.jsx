@@ -36,6 +36,17 @@ import {
   buildMilestoneSummaryXlsxFilename,
   downloadMilestoneSummaryXlsx,
 } from 'src/sections/reports/utils/milestone-summary-excel-export';
+import { buildFactoryWipPdfBlobFromRows, openFactoryWipPdf } from 'src/sections/reports/utils/factory-wip-pdf-export';
+import {
+  buildCustomerWipPdfBlobFromRows,
+  openCustomerWipPdf,
+} from 'src/sections/reports/utils/customer-wip-pdf-export';
+import { buildAmsWipPdfBlobFromRows, openAmsWipPdf } from 'src/sections/reports/utils/ams-wip-pdf-export';
+import { buildSaltWipPdfBlobFromRows, openSaltWipPdf } from 'src/sections/reports/utils/salt-wip-pdf-export';
+import {
+  buildCustomisedCustomerWipPdfBlobFromRows,
+  openCustomisedCustomerWipPdf,
+} from 'src/sections/reports/utils/customised-customer-wip-pdf-export';
 import {
   fetchMilestoneSummaryDropdowns,
   getMilestoneSummaryDropdownApiBase,
@@ -164,11 +175,127 @@ WipLdpFobViewReportButton.propTypes = {
   filters: PropTypes.object.isRequired,
 };
 
+function escapeHtmlMilestonePreview(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function writeMilestonePdfPreviewPlaceholder(previewWindow) {
+  try {
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Loading PDF…</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fafafa;color:#333;"><p style="padding:24px;font-size:15px;">Loading PDF…</p></body></html>`;
+    previewWindow.document.open();
+    previewWindow.document.write(html);
+    previewWindow.document.close();
+  } catch (e) {
+    console.warn('[Milestone Summary] preview placeholder', e);
+  }
+}
+
+/** Client-built PDF must be non-empty and start with %PDF so the browser can render it. */
+async function assertValidMilestonePdfBlob(blob) {
+  if (!(blob instanceof Blob)) {
+    throw new Error('Report could not be generated: invalid file data.');
+  }
+  if (blob.size < 32) {
+    throw new Error('Report could not be generated: PDF output is empty or too small.');
+  }
+  const sample = await blob.slice(0, 5).arrayBuffer();
+  const head = new TextDecoder('latin1').decode(sample);
+  if (!head.startsWith('%PDF')) {
+    throw new Error('Report could not be generated: output is not a valid PDF document.');
+  }
+}
+
+/**
+ * Apply Customer / Supplier / Merchandiser filters to API rows on the client side.
+ * Backend `/api/Report/GetMilestoneReport` does not accept those params, so we narrow here.
+ * Selected IDs are resolved to display labels (from dropdown rows) and matched against
+ * the API row's name fields, case-insensitive and whitespace-normalised.
+ */
+function filterMilestoneRowsByFilters(rows, filters, dropdowns = {}) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) return list;
+
+  const norm = (v) => String(v ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const pickRowField = (row, ...keys) => {
+    if (!row || typeof row !== 'object') return '';
+    for (const k of keys) {
+      if (k in row && row[k] != null && row[k] !== '') return row[k];
+    }
+    const lower = {};
+    for (const k of Object.keys(row)) lower[k.toLowerCase()] = row[k];
+    for (const k of keys) {
+      const v = lower[String(k).toLowerCase()];
+      if (v != null && v !== '') return v;
+    }
+    return '';
+  };
+
+  const customers = dropdowns.customers || [];
+  const suppliers = dropdowns.suppliers || [];
+  const merchants = dropdowns.merchants || [];
+
+  const customerLabel =
+    filters?.customer && filters.customer !== ALL
+      ? (() => {
+          const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+          return row ? milestoneCustomerLabel(row) : '';
+        })()
+      : '';
+  const supplierLabel =
+    filters?.supplier && filters.supplier !== ALL
+      ? (() => {
+          const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
+          return row ? milestoneSupplierLabel(row) : '';
+        })()
+      : '';
+  const merchandiserLabel =
+    filters?.merchandiser && filters.merchandiser !== ALL
+      ? (() => {
+          const row = merchants.find((r) => milestoneMerchantKey(r) === filters.merchandiser);
+          return row ? milestoneMerchantLabel(row) : '';
+        })()
+      : '';
+
+  if (!customerLabel && !supplierLabel && !merchandiserLabel) return list;
+
+  return list.filter((r) => {
+    if (customerLabel) {
+      const v = pickRowField(r, 'customername', 'CustomerName', 'customerName', 'BuyerName');
+      if (norm(v) !== norm(customerLabel)) return false;
+    }
+    if (supplierLabel) {
+      const v = pickRowField(
+        r,
+        'vendername',
+        'VenderName',
+        'venderName',
+        'SupplierName',
+        'supplierName',
+        'VendorName',
+        'vendorName',
+        'Supplier',
+        'Vendor'
+      );
+      if (norm(v) !== norm(supplierLabel)) return false;
+    }
+    if (merchandiserLabel) {
+      const v = pickRowField(r, 'username', 'UserName', 'userName', 'MerchandiserName', 'merchandiserName');
+      if (norm(v) !== norm(merchandiserLabel)) return false;
+    }
+    return true;
+  });
+}
+
 /**
  * Milestone Summary PDF — loads rows from `/api/Report/GetMilestoneReport`, binds to PDF grid.
  * Query: `reportType`, `productPortfolio`, `reportSubType`, `fromDate`, `toDate` (yyyy-mm-dd).
+ * For `mode === 'view'`, pass `opts.previewWindow` (tab opened synchronously on click) so the PDF opens reliably.
  */
-async function runMilestoneSummaryPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns = {}) {
+async function runMilestoneSummaryPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns = {}, opts = {}) {
   const fromDate = filters.fromDate;
   const toDate = filters.toDate;
   if (!fromDate || !toDate) {
@@ -223,14 +350,44 @@ async function runMilestoneSummaryPdfFromFilters(enqueueSnackbar, filters, mode,
       },
       wipLdpFobAuthHeaders()
     );
-    const pdf = await buildMilestoneSummaryPdfBlobFromRows(raw, meta);
-    openMilestoneSummaryPdf(mode, pdf);
+
+    /** Client-side narrowing — API returns the full set; empty match → empty grid (no rows). */
+    const filtered = filterMilestoneRowsByFilters(raw, filters, dropdowns);
+
+    const pdf = await buildMilestoneSummaryPdfBlobFromRows(filtered, meta);
+    await assertValidMilestonePdfBlob(pdf);
+
+    if (mode === 'view') {
+      const { previewWindow } = opts;
+      if (!previewWindow) {
+        enqueueSnackbar('Open the report using the View Report button.', { variant: 'warning' });
+        return;
+      }
+      if (previewWindow.closed) {
+        enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
+          variant: 'warning',
+        });
+        return;
+      }
+      const blobUrl = URL.createObjectURL(pdf);
+      try {
+        previewWindow.location.replace(blobUrl);
+      } catch (navErr) {
+        URL.revokeObjectURL(blobUrl);
+        throw navErr;
+      }
+      previewWindow.focus?.();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
+    } else {
+      openMilestoneSummaryPdf(mode, pdf);
+    }
+
     enqueueSnackbar(
       mode === 'view'
-        ? raw.length
+        ? filtered.length
           ? 'Milestone Summary PDF opened in a new tab'
           : 'Milestone Summary PDF opened (no rows)'
-        : raw.length
+        : filtered.length
           ? 'Milestone Summary PDF downloaded'
           : 'Downloaded PDF (no rows)',
       { variant: 'success' }
@@ -244,6 +401,19 @@ async function runMilestoneSummaryPdfFromFilters(enqueueSnackbar, filters, mode,
       err?.message ||
       'Milestone Summary report failed';
     enqueueSnackbar(msg, { variant: 'error' });
+
+    if (mode === 'view' && opts.previewWindow && !opts.previewWindow.closed) {
+      try {
+        const doc = opts.previewWindow.document;
+        doc.open();
+        doc.write(
+          `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${escapeHtmlMilestonePreview(msg)}</p></body></html>`
+        );
+        doc.close();
+      } catch (writeErr) {
+        console.warn('[Milestone Summary] preview error page', writeErr);
+      }
+    }
   }
 }
 
@@ -278,11 +448,12 @@ async function runMilestoneSummaryExcelFromFilters(enqueueSnackbar, filters, dro
       },
       wipLdpFobAuthHeaders()
     );
-    const blob = buildMilestoneSummaryXlsxBlob(raw, filters.reportType);
+    const filtered = filterMilestoneRowsByFilters(raw, filters, dropdowns);
+    const blob = buildMilestoneSummaryXlsxBlob(filtered, filters.reportType);
     const filename = buildMilestoneSummaryXlsxFilename(filters.reportType, fromDate, toDate);
     downloadMilestoneSummaryXlsx(blob, filename);
     enqueueSnackbar(
-      raw.length ? 'Milestone Summary Excel downloaded' : 'Downloaded Excel (no rows)',
+      filtered.length ? 'Milestone Summary Excel downloaded' : 'Downloaded Excel (no rows)',
       { variant: 'success' }
     );
   } catch (err) {
@@ -344,16 +515,554 @@ function MilestoneSummaryReportActions({ filters, dropdowns = {} }) {
   /** `null` = idle; only the matching button shows a spinner. */
   const [busyMode, setBusyMode] = useState(null);
 
-  const run = useCallback(
+  const runPdfDownload = useCallback(
     async (mode) => {
       setBusyMode(mode);
       try {
-        await runMilestoneSummaryPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns);
+        await runMilestoneSummaryPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns, {});
       } finally {
         setBusyMode(null);
       }
     },
     [enqueueSnackbar, filters, dropdowns]
+  );
+
+  const handleViewReport = useCallback(() => {
+    const fromDate = filters.fromDate;
+    const toDate = filters.toDate;
+    if (!fromDate || !toDate) {
+      enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+      return;
+    }
+    if (!WIP_LDP_FOB_ISO_DATE.test(fromDate) || !WIP_LDP_FOB_ISO_DATE.test(toDate)) {
+      enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+      return;
+    }
+    const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    if (!base) {
+      enqueueSnackbar('API URL missing: set VITE_API_BASE_URL', { variant: 'error' });
+      return;
+    }
+
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      enqueueSnackbar(
+        'Unable to open a new tab — your browser may have blocked the pop-up. Allow pop-ups for this site and try again.',
+        { variant: 'error' }
+      );
+      return;
+    }
+
+    writeMilestonePdfPreviewPlaceholder(previewWindow);
+    setBusyMode('view');
+    void (async () => {
+      try {
+        await runMilestoneSummaryPdfFromFilters(enqueueSnackbar, filters, 'view', dropdowns, {
+          previewWindow,
+        });
+      } finally {
+        setBusyMode(null);
+      }
+    })();
+  }, [enqueueSnackbar, filters, dropdowns]);
+
+  const busy = busyMode !== null;
+
+  return (
+    <>
+      <Button
+        variant="contained"
+        color="primary"
+        size="medium"
+        disabled={busy}
+        onClick={handleViewReport}
+        sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
+      >
+        {busyMode === 'view' ? <CircularProgress size={22} color="inherit" /> : 'View Report'}
+      </Button>
+      <Button
+        variant="contained"
+        color="primary"
+        size="medium"
+        disabled={busy}
+        onClick={() => runPdfDownload('pdf')}
+        sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
+      >
+        {busyMode === 'pdf' ? <CircularProgress size={22} color="inherit" /> : 'Download PDF'}
+      </Button>
+    </>
+  );
+}
+
+MilestoneSummaryReportActions.propTypes = {
+  filters: PropTypes.object.isRequired,
+  dropdowns: PropTypes.shape({
+    customers: PropTypes.array,
+    suppliers: PropTypes.array,
+    merchants: PropTypes.array,
+    portfolios: PropTypes.array,
+  }),
+};
+
+/** Factory WIP PDF — demo grid until API rows are wired (`buildFactoryWipPdfBlobFromRows(rows, meta)`). */
+async function runFactoryWipPdfFromFilters(enqueueSnackbar, filters, mode) {
+  const fromDate = filters.fromDate;
+  const toDate = filters.toDate;
+  if (!fromDate || !toDate) {
+    enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+    return;
+  }
+  if (!WIP_LDP_FOB_ISO_DATE.test(fromDate) || !WIP_LDP_FOB_ISO_DATE.test(toDate)) {
+    enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+    return;
+  }
+
+  const meta = {
+    customerLabel: filters.customer === ALL ? 'All' : String(filters.customer),
+    supplierLabel: filters.supplier === ALL ? 'All' : String(filters.supplier),
+    merchantLabel: filters.merchandiser === ALL ? 'MUHAMMAD SHAHZAIB' : String(filters.merchandiser),
+    fromDate,
+    toDate,
+  };
+
+  try {
+    const blob = await buildFactoryWipPdfBlobFromRows([], meta);
+    openFactoryWipPdf(mode, blob);
+    enqueueSnackbar(
+      mode === 'view' ? 'Factory WIP PDF opened in a new tab' : 'Factory WIP PDF downloaded',
+      { variant: 'success' }
+    );
+  } catch (err) {
+    console.error('[WIP] Factory WIP PDF', err);
+    const msg =
+      err?.response?.data?.message ||
+      err?.response?.data?.Message ||
+      (typeof err?.response?.data === 'string' ? err.response.data : null) ||
+      err?.message ||
+      'Factory WIP PDF failed';
+    enqueueSnackbar(msg, { variant: 'error' });
+  }
+}
+
+/** Customer WIP PDF — demo grid until API rows are wired (`buildCustomerWipPdfBlobFromRows(rows, meta)`). */
+async function runCustomerWipPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns = {}, opts = {}) {
+  const fromDate = filters.fromDate;
+  const toDate = filters.toDate;
+  if (!fromDate || !toDate) {
+    enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+    return;
+  }
+  if (!WIP_LDP_FOB_ISO_DATE.test(fromDate) || !WIP_LDP_FOB_ISO_DATE.test(toDate)) {
+    enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+    return;
+  }
+
+  if (mode === 'view' && !opts.previewWindow) {
+    enqueueSnackbar('Open the report using the View Report button.', { variant: 'warning' });
+    return;
+  }
+
+  const merchants = dropdowns.merchants || [];
+  const customers = dropdowns.customers || [];
+  const suppliers = dropdowns.suppliers || [];
+
+  const resolveMerchantLabel = () => {
+    if (filters.merchandiser === ALL) return 'MUHAMMAD SHAHZAIB';
+    const row = merchants.find((r) => milestoneMerchantKey(r) === filters.merchandiser);
+    return row ? milestoneMerchantLabel(row) : String(filters.merchandiser);
+  };
+
+  const resolveCustomerLabel = () => {
+    if (filters.customer === ALL) return 'All';
+    const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+    return row ? milestoneCustomerLabel(row) : String(filters.customer);
+  };
+
+  const resolveSupplierLabel = () => {
+    if (filters.supplier === ALL) return 'All';
+    const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
+    return row ? milestoneSupplierLabel(row) : String(filters.supplier);
+  };
+
+  const meta = {
+    customerLabel: resolveCustomerLabel(),
+    supplierLabel: resolveSupplierLabel(),
+    merchantLabel: resolveMerchantLabel(),
+    fromDate,
+    toDate,
+  };
+
+  try {
+    const blob = await buildCustomerWipPdfBlobFromRows([], meta);
+    await assertValidMilestonePdfBlob(blob);
+
+    if (mode === 'view') {
+      const { previewWindow } = opts;
+      if (previewWindow.closed) {
+        enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
+          variant: 'warning',
+        });
+        return;
+      }
+      const blobUrl = URL.createObjectURL(blob);
+      try {
+        previewWindow.location.replace(blobUrl);
+      } catch (navErr) {
+        URL.revokeObjectURL(blobUrl);
+        throw navErr;
+      }
+      previewWindow.focus?.();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
+    } else {
+      openCustomerWipPdf(mode, blob);
+    }
+
+    enqueueSnackbar(
+      mode === 'view' ? 'Customer WIP PDF opened in a new tab' : 'Customer WIP PDF downloaded',
+      { variant: 'success' }
+    );
+  } catch (err) {
+    console.error('[WIP] Customer WIP PDF', err);
+    const msg =
+      err?.response?.data?.message ||
+      err?.response?.data?.Message ||
+      (typeof err?.response?.data === 'string' ? err.response.data : null) ||
+      err?.message ||
+      'Customer WIP PDF failed';
+    enqueueSnackbar(msg, { variant: 'error' });
+
+    if (mode === 'view' && opts.previewWindow && !opts.previewWindow.closed) {
+      try {
+        const doc = opts.previewWindow.document;
+        doc.open();
+        doc.write(
+          `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${escapeHtmlMilestonePreview(msg)}</p></body></html>`
+        );
+        doc.close();
+      } catch (writeErr) {
+        console.warn('[Customer WIP] preview error page', writeErr);
+      }
+    }
+  }
+}
+
+/** AMS WIP PDF — demo grid until API rows are wired (`buildAmsWipPdfBlobFromRows(rows, meta)`). */
+async function runAmsWipPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns = {}, opts = {}) {
+  const fromDate = filters.fromDate;
+  const toDate = filters.toDate;
+  if (!fromDate || !toDate) {
+    enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+    return;
+  }
+  if (!WIP_LDP_FOB_ISO_DATE.test(fromDate) || !WIP_LDP_FOB_ISO_DATE.test(toDate)) {
+    enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+    return;
+  }
+
+  if (mode === 'view' && !opts.previewWindow) {
+    enqueueSnackbar('Open the report using the View Report button.', { variant: 'warning' });
+    return;
+  }
+
+  const merchants = dropdowns.merchants || [];
+  const customers = dropdowns.customers || [];
+  const suppliers = dropdowns.suppliers || [];
+
+  const resolveMerchantLabel = () => {
+    if (filters.merchandiser === ALL) return 'MUHAMMAD SHAHZAIB';
+    const row = merchants.find((r) => milestoneMerchantKey(r) === filters.merchandiser);
+    return row ? milestoneMerchantLabel(row) : String(filters.merchandiser);
+  };
+
+  const resolveCustomerLabel = () => {
+    if (filters.customer === ALL) return 'All';
+    const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+    return row ? milestoneCustomerLabel(row) : String(filters.customer);
+  };
+
+  const resolveSupplierLabel = () => {
+    if (filters.supplier === ALL) return 'All';
+    const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
+    return row ? milestoneSupplierLabel(row) : String(filters.supplier);
+  };
+
+  const meta = {
+    customerLabel: resolveCustomerLabel(),
+    supplierLabel: resolveSupplierLabel(),
+    merchantLabel: resolveMerchantLabel(),
+    fromDate,
+    toDate,
+  };
+
+  try {
+    const blob = await buildAmsWipPdfBlobFromRows([], meta);
+    await assertValidMilestonePdfBlob(blob);
+
+    if (mode === 'view') {
+      const { previewWindow } = opts;
+      if (previewWindow.closed) {
+        enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
+          variant: 'warning',
+        });
+        return;
+      }
+      const blobUrl = URL.createObjectURL(blob);
+      try {
+        previewWindow.location.replace(blobUrl);
+      } catch (navErr) {
+        URL.revokeObjectURL(blobUrl);
+        throw navErr;
+      }
+      previewWindow.focus?.();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
+    } else {
+      openAmsWipPdf(mode, blob);
+    }
+
+    enqueueSnackbar(
+      mode === 'view' ? 'AMS WIP PDF opened in a new tab' : 'AMS WIP PDF downloaded',
+      { variant: 'success' }
+    );
+  } catch (err) {
+    console.error('[WIP] AMS WIP PDF', err);
+    const msg =
+      err?.response?.data?.message ||
+      err?.response?.data?.Message ||
+      (typeof err?.response?.data === 'string' ? err.response.data : null) ||
+      err?.message ||
+      'AMS WIP PDF failed';
+    enqueueSnackbar(msg, { variant: 'error' });
+
+    if (mode === 'view' && opts.previewWindow && !opts.previewWindow.closed) {
+      try {
+        const doc = opts.previewWindow.document;
+        doc.open();
+        doc.write(
+          `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${escapeHtmlMilestonePreview(msg)}</p></body></html>`
+        );
+        doc.close();
+      } catch (writeErr) {
+        console.warn('[AMS WIP] preview error page', writeErr);
+      }
+    }
+  }
+}
+
+/** Salt WIP PDF — demo grid until API rows are wired (`buildSaltWipPdfBlobFromRows(rows, meta)`). */
+async function runSaltWipPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns = {}, opts = {}) {
+  const fromDate = filters.fromDate;
+  const toDate = filters.toDate;
+  if (!fromDate || !toDate) {
+    enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+    return;
+  }
+  if (!WIP_LDP_FOB_ISO_DATE.test(fromDate) || !WIP_LDP_FOB_ISO_DATE.test(toDate)) {
+    enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+    return;
+  }
+
+  if (mode === 'view' && !opts.previewWindow) {
+    enqueueSnackbar('Open the report using the View Report button.', { variant: 'warning' });
+    return;
+  }
+
+  const customers = dropdowns.customers || [];
+
+  const resolveCustomerLabel = () => {
+    if (filters.customer === ALL) return 'All';
+    const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+    return row ? milestoneCustomerLabel(row) : String(filters.customer);
+  };
+
+  const meta = {
+    customerLabel: resolveCustomerLabel(),
+    fromDate,
+    toDate,
+  };
+
+  try {
+    const blob = await buildSaltWipPdfBlobFromRows([], meta);
+    await assertValidMilestonePdfBlob(blob);
+
+    if (mode === 'view') {
+      const { previewWindow } = opts;
+      if (previewWindow.closed) {
+        enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
+          variant: 'warning',
+        });
+        return;
+      }
+      const blobUrl = URL.createObjectURL(blob);
+      try {
+        previewWindow.location.replace(blobUrl);
+      } catch (navErr) {
+        URL.revokeObjectURL(blobUrl);
+        throw navErr;
+      }
+      previewWindow.focus?.();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
+    } else {
+      openSaltWipPdf(mode, blob);
+    }
+
+    enqueueSnackbar(
+      mode === 'view' ? 'Salt WIP PDF opened in a new tab' : 'Salt WIP PDF downloaded',
+      { variant: 'success' }
+    );
+  } catch (err) {
+    console.error('[WIP] Salt WIP PDF', err);
+    const msg =
+      err?.response?.data?.message ||
+      err?.response?.data?.Message ||
+      (typeof err?.response?.data === 'string' ? err.response.data : null) ||
+      err?.message ||
+      'Salt WIP PDF failed';
+    enqueueSnackbar(msg, { variant: 'error' });
+
+    if (mode === 'view' && opts.previewWindow && !opts.previewWindow.closed) {
+      try {
+        const doc = opts.previewWindow.document;
+        doc.open();
+        doc.write(
+          `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${escapeHtmlMilestonePreview(msg)}</p></body></html>`
+        );
+        doc.close();
+      } catch (writeErr) {
+        console.warn('[Salt WIP] preview error page', writeErr);
+      }
+    }
+  }
+}
+
+/** Customised Customer WIP PDF — demo grid until API rows are wired (`buildCustomisedCustomerWipPdfBlobFromRows(rows, meta)`). */
+async function runCustomisedCustomerWipPdfFromFilters(
+  enqueueSnackbar,
+  filters,
+  mode,
+  dropdowns = {},
+  opts = {}
+) {
+  const fromDate = filters.fromDate;
+  const toDate = filters.toDate;
+  if (!fromDate || !toDate) {
+    enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+    return;
+  }
+  if (!WIP_LDP_FOB_ISO_DATE.test(fromDate) || !WIP_LDP_FOB_ISO_DATE.test(toDate)) {
+    enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+    return;
+  }
+
+  if (mode === 'view' && !opts.previewWindow) {
+    enqueueSnackbar('Open the report using the View Report button.', { variant: 'warning' });
+    return;
+  }
+
+  const customers = dropdowns.customers || [];
+  const suppliers = dropdowns.suppliers || [];
+  const merchants = dropdowns.merchants || [];
+
+  const resolveCustomerLabel = () => {
+    if (filters.customer === ALL) return 'All';
+    const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+    if (row) return milestoneCustomerLabel(row);
+    /** Fallback for the hardcoded form value (`bailey-apparel`) until dropdowns are API-wired. */
+    if (String(filters.customer) === 'bailey-apparel') return 'BAILEY APPAREL';
+    return String(filters.customer);
+  };
+
+  const resolveSupplierLabel = () => {
+    if (filters.supplier === ALL) return 'All';
+    const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
+    return row ? milestoneSupplierLabel(row) : String(filters.supplier);
+  };
+
+  const resolveMerchantLabel = () => {
+    if (filters.merchandiser === ALL) return 'MUHAMMAD SHAHZAIB';
+    const row = merchants.find((r) => milestoneMerchantKey(r) === filters.merchandiser);
+    if (row) return milestoneMerchantLabel(row);
+    if (String(filters.merchandiser) === 'muhammad-shahzaib') return 'MUHAMMAD SHAHZAIB';
+    return String(filters.merchandiser);
+  };
+
+  const meta = {
+    customerLabel: resolveCustomerLabel(),
+    supplierLabel: resolveSupplierLabel(),
+    merchantLabel: resolveMerchantLabel(),
+    fromDate,
+    toDate,
+  };
+
+  try {
+    const blob = await buildCustomisedCustomerWipPdfBlobFromRows([], meta);
+    await assertValidMilestonePdfBlob(blob);
+
+    if (mode === 'view') {
+      const { previewWindow } = opts;
+      if (previewWindow.closed) {
+        enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
+          variant: 'warning',
+        });
+        return;
+      }
+      const blobUrl = URL.createObjectURL(blob);
+      try {
+        previewWindow.location.replace(blobUrl);
+      } catch (navErr) {
+        URL.revokeObjectURL(blobUrl);
+        throw navErr;
+      }
+      previewWindow.focus?.();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
+    } else {
+      openCustomisedCustomerWipPdf(mode, blob);
+    }
+
+    enqueueSnackbar(
+      mode === 'view'
+        ? 'Customised Customer WIP PDF opened in a new tab'
+        : 'Customised Customer WIP PDF downloaded',
+      { variant: 'success' }
+    );
+  } catch (err) {
+    console.error('[WIP] Customised Customer WIP PDF', err);
+    const msg =
+      err?.response?.data?.message ||
+      err?.response?.data?.Message ||
+      (typeof err?.response?.data === 'string' ? err.response.data : null) ||
+      err?.message ||
+      'Customised Customer WIP PDF failed';
+    enqueueSnackbar(msg, { variant: 'error' });
+
+    if (mode === 'view' && opts.previewWindow && !opts.previewWindow.closed) {
+      try {
+        const doc = opts.previewWindow.document;
+        doc.open();
+        doc.write(
+          `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${escapeHtmlMilestonePreview(msg)}</p></body></html>`
+        );
+        doc.close();
+      } catch (writeErr) {
+        console.warn('[Customised Customer WIP] preview error page', writeErr);
+      }
+    }
+  }
+}
+
+function FactoryWipReportActions({ filters }) {
+  const { enqueueSnackbar } = useSnackbar();
+  const [busyMode, setBusyMode] = useState(null);
+
+  const run = useCallback(
+    async (m) => {
+      setBusyMode(m);
+      try {
+        await runFactoryWipPdfFromFilters(enqueueSnackbar, filters, m);
+      } finally {
+        setBusyMode(null);
+      }
+    },
+    [enqueueSnackbar, filters]
   );
 
   const busy = busyMode !== null;
@@ -384,7 +1093,353 @@ function MilestoneSummaryReportActions({ filters, dropdowns = {} }) {
   );
 }
 
-MilestoneSummaryReportActions.propTypes = {
+FactoryWipReportActions.propTypes = {
+  filters: PropTypes.object.isRequired,
+};
+
+function CustomerWipReportActions({ filters, dropdowns = {} }) {
+  const { enqueueSnackbar } = useSnackbar();
+  const [busyMode, setBusyMode] = useState(null);
+
+  const runPdfDownload = useCallback(
+    async (m) => {
+      setBusyMode(m);
+      try {
+        await runCustomerWipPdfFromFilters(enqueueSnackbar, filters, m, dropdowns, {});
+      } finally {
+        setBusyMode(null);
+      }
+    },
+    [enqueueSnackbar, filters, dropdowns]
+  );
+
+  const handleViewReport = useCallback(() => {
+    const fromDate = filters.fromDate;
+    const toDate = filters.toDate;
+    if (!fromDate || !toDate) {
+      enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+      return;
+    }
+    if (!WIP_LDP_FOB_ISO_DATE.test(fromDate) || !WIP_LDP_FOB_ISO_DATE.test(toDate)) {
+      enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+      return;
+    }
+
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      enqueueSnackbar(
+        'Unable to open a new tab — your browser may have blocked the pop-up. Allow pop-ups for this site and try again.',
+        { variant: 'error' }
+      );
+      return;
+    }
+
+    writeMilestonePdfPreviewPlaceholder(previewWindow);
+    setBusyMode('view');
+    void (async () => {
+      try {
+        await runCustomerWipPdfFromFilters(enqueueSnackbar, filters, 'view', dropdowns, {
+          previewWindow,
+        });
+      } finally {
+        setBusyMode(null);
+      }
+    })();
+  }, [enqueueSnackbar, filters, dropdowns]);
+
+  const busy = busyMode !== null;
+
+  return (
+    <>
+      <Button
+        variant="contained"
+        color="primary"
+        size="medium"
+        disabled={busy}
+        onClick={handleViewReport}
+        sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
+      >
+        {busyMode === 'view' ? <CircularProgress size={22} color="inherit" /> : 'View Report'}
+      </Button>
+      <Button
+        variant="contained"
+        color="primary"
+        size="medium"
+        disabled={busy}
+        onClick={() => runPdfDownload('pdf')}
+        sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
+      >
+        {busyMode === 'pdf' ? <CircularProgress size={22} color="inherit" /> : 'Download PDF'}
+      </Button>
+    </>
+  );
+}
+
+CustomerWipReportActions.propTypes = {
+  filters: PropTypes.object.isRequired,
+  dropdowns: PropTypes.shape({
+    customers: PropTypes.array,
+    suppliers: PropTypes.array,
+    merchants: PropTypes.array,
+    portfolios: PropTypes.array,
+  }),
+};
+
+function AmsWipReportActions({ filters, dropdowns = {} }) {
+  const { enqueueSnackbar } = useSnackbar();
+  const [busyMode, setBusyMode] = useState(null);
+
+  const runPdfDownload = useCallback(
+    async (m) => {
+      setBusyMode(m);
+      try {
+        await runAmsWipPdfFromFilters(enqueueSnackbar, filters, m, dropdowns, {});
+      } finally {
+        setBusyMode(null);
+      }
+    },
+    [enqueueSnackbar, filters, dropdowns]
+  );
+
+  const handleViewReport = useCallback(() => {
+    const fromDate = filters.fromDate;
+    const toDate = filters.toDate;
+    if (!fromDate || !toDate) {
+      enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+      return;
+    }
+    if (!WIP_LDP_FOB_ISO_DATE.test(fromDate) || !WIP_LDP_FOB_ISO_DATE.test(toDate)) {
+      enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+      return;
+    }
+
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      enqueueSnackbar(
+        'Unable to open a new tab — your browser may have blocked the pop-up. Allow pop-ups for this site and try again.',
+        { variant: 'error' }
+      );
+      return;
+    }
+
+    writeMilestonePdfPreviewPlaceholder(previewWindow);
+    setBusyMode('view');
+    void (async () => {
+      try {
+        await runAmsWipPdfFromFilters(enqueueSnackbar, filters, 'view', dropdowns, {
+          previewWindow,
+        });
+      } finally {
+        setBusyMode(null);
+      }
+    })();
+  }, [enqueueSnackbar, filters, dropdowns]);
+
+  const busy = busyMode !== null;
+
+  return (
+    <>
+      <Button
+        variant="contained"
+        color="primary"
+        size="medium"
+        disabled={busy}
+        onClick={handleViewReport}
+        sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
+      >
+        {busyMode === 'view' ? <CircularProgress size={22} color="inherit" /> : 'View Report'}
+      </Button>
+      <Button
+        variant="contained"
+        color="primary"
+        size="medium"
+        disabled={busy}
+        onClick={() => runPdfDownload('pdf')}
+        sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
+      >
+        {busyMode === 'pdf' ? <CircularProgress size={22} color="inherit" /> : 'Download PDF'}
+      </Button>
+    </>
+  );
+}
+
+AmsWipReportActions.propTypes = {
+  filters: PropTypes.object.isRequired,
+  dropdowns: PropTypes.shape({
+    customers: PropTypes.array,
+    suppliers: PropTypes.array,
+    merchants: PropTypes.array,
+    portfolios: PropTypes.array,
+  }),
+};
+
+function SaltWipReportActions({ filters, dropdowns = {} }) {
+  const { enqueueSnackbar } = useSnackbar();
+  const [busyMode, setBusyMode] = useState(null);
+
+  const runPdfDownload = useCallback(
+    async (m) => {
+      setBusyMode(m);
+      try {
+        await runSaltWipPdfFromFilters(enqueueSnackbar, filters, m, dropdowns, {});
+      } finally {
+        setBusyMode(null);
+      }
+    },
+    [enqueueSnackbar, filters, dropdowns]
+  );
+
+  const handleViewReport = useCallback(() => {
+    const fromDate = filters.fromDate;
+    const toDate = filters.toDate;
+    if (!fromDate || !toDate) {
+      enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+      return;
+    }
+    if (!WIP_LDP_FOB_ISO_DATE.test(fromDate) || !WIP_LDP_FOB_ISO_DATE.test(toDate)) {
+      enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+      return;
+    }
+
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      enqueueSnackbar(
+        'Unable to open a new tab — your browser may have blocked the pop-up. Allow pop-ups for this site and try again.',
+        { variant: 'error' }
+      );
+      return;
+    }
+
+    writeMilestonePdfPreviewPlaceholder(previewWindow);
+    setBusyMode('view');
+    void (async () => {
+      try {
+        await runSaltWipPdfFromFilters(enqueueSnackbar, filters, 'view', dropdowns, {
+          previewWindow,
+        });
+      } finally {
+        setBusyMode(null);
+      }
+    })();
+  }, [enqueueSnackbar, filters, dropdowns]);
+
+  const busy = busyMode !== null;
+
+  return (
+    <>
+      <Button
+        variant="contained"
+        color="primary"
+        size="medium"
+        disabled={busy}
+        onClick={handleViewReport}
+        sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
+      >
+        {busyMode === 'view' ? <CircularProgress size={22} color="inherit" /> : 'View Report'}
+      </Button>
+      <Button
+        variant="contained"
+        color="primary"
+        size="medium"
+        disabled={busy}
+        onClick={() => runPdfDownload('pdf')}
+        sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
+      >
+        {busyMode === 'pdf' ? <CircularProgress size={22} color="inherit" /> : 'Download PDF'}
+      </Button>
+    </>
+  );
+}
+
+SaltWipReportActions.propTypes = {
+  filters: PropTypes.object.isRequired,
+  dropdowns: PropTypes.shape({
+    customers: PropTypes.array,
+    suppliers: PropTypes.array,
+    merchants: PropTypes.array,
+    portfolios: PropTypes.array,
+  }),
+};
+
+function CustomisedCustomerWipReportActions({ filters, dropdowns = {} }) {
+  const { enqueueSnackbar } = useSnackbar();
+  const [busyMode, setBusyMode] = useState(null);
+
+  const runPdfDownload = useCallback(
+    async (m) => {
+      setBusyMode(m);
+      try {
+        await runCustomisedCustomerWipPdfFromFilters(enqueueSnackbar, filters, m, dropdowns, {});
+      } finally {
+        setBusyMode(null);
+      }
+    },
+    [enqueueSnackbar, filters, dropdowns]
+  );
+
+  const handleViewReport = useCallback(() => {
+    const fromDate = filters.fromDate;
+    const toDate = filters.toDate;
+    if (!fromDate || !toDate) {
+      enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+      return;
+    }
+    if (!WIP_LDP_FOB_ISO_DATE.test(fromDate) || !WIP_LDP_FOB_ISO_DATE.test(toDate)) {
+      enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+      return;
+    }
+
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      enqueueSnackbar(
+        'Unable to open a new tab — your browser may have blocked the pop-up. Allow pop-ups for this site and try again.',
+        { variant: 'error' }
+      );
+      return;
+    }
+
+    writeMilestonePdfPreviewPlaceholder(previewWindow);
+    setBusyMode('view');
+    void (async () => {
+      try {
+        await runCustomisedCustomerWipPdfFromFilters(enqueueSnackbar, filters, 'view', dropdowns, {
+          previewWindow,
+        });
+      } finally {
+        setBusyMode(null);
+      }
+    })();
+  }, [enqueueSnackbar, filters, dropdowns]);
+
+  const busy = busyMode !== null;
+
+  return (
+    <>
+      <Button
+        variant="contained"
+        color="primary"
+        size="medium"
+        disabled={busy}
+        onClick={handleViewReport}
+        sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
+      >
+        {busyMode === 'view' ? <CircularProgress size={22} color="inherit" /> : 'View Report'}
+      </Button>
+      <Button
+        variant="contained"
+        color="primary"
+        size="medium"
+        disabled={busy}
+        onClick={() => runPdfDownload('pdf')}
+        sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
+      >
+        {busyMode === 'pdf' ? <CircularProgress size={22} color="inherit" /> : 'Download PDF'}
+      </Button>
+    </>
+  );
+}
+
+CustomisedCustomerWipReportActions.propTypes = {
   filters: PropTypes.object.isRequired,
   dropdowns: PropTypes.shape({
     customers: PropTypes.array,
@@ -545,16 +1600,7 @@ function FactoryWipReportForm({ pageTitle }) {
 
         <Grid item xs={12}>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1 }}>
-            <WipLdpFobViewReportButton filters={filters} />
-            <Button
-              variant="contained"
-              color="primary"
-              size="medium"
-              onClick={() => toast('Download PDF: connect API when backend is ready.')}
-              sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
-            >
-              Download PDF
-            </Button>
+            <FactoryWipReportActions filters={filters} />
             <Button
               variant="contained"
               color="primary"
@@ -588,14 +1634,14 @@ function FactoryWipReportForm({ pageTitle }) {
 
 const CUSTOMER_WIP_PAGE_TITLE = 'Customer WIP Report / Summary of Production Status Report';
 
-/** Customer WIP Report — Production Status layout (Customer shipment footnote). */
+/** Customer WIP Report — Production Status layout (Customer shipment footnote). Dropdowns: same env-backed APIs as Milestone Summary (`VITE_API_BASE_URL`, `VITE_REPORT_MILESTONE_*` / FOB fallbacks). */
 function CustomerWipReportForm() {
   const { enqueueSnackbar } = useSnackbar();
 
   const [filters, setFilters] = useState({
     reportType: 'merchandiserWise',
     merchandiser: ALL,
-    productPortfolio: 'apparel',
+    productPortfolio: ALL,
     customer: ALL,
     supplier: ALL,
     poScope: ALL,
@@ -603,6 +1649,12 @@ function CustomerWipReportForm() {
     fromDate: '2026-01-01',
     toDate: '2026-12-31',
   });
+
+  const [customers, setCustomers] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [merchants, setMerchants] = useState([]);
+  const [portfolios, setPortfolios] = useState([]);
+  const [loadingDropdowns, setLoadingDropdowns] = useState(false);
 
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
@@ -618,6 +1670,77 @@ function CustomerWipReportForm() {
   );
 
   const selectSx = { borderRadius: 1 };
+
+  useEffect(() => {
+    const base = getMilestoneSummaryDropdownApiBase();
+    if (!base) {
+      enqueueSnackbar('API URL missing: set VITE_API_BASE_URL for Customer WIP filters', {
+        variant: 'warning',
+      });
+      return undefined;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setLoadingDropdowns(true);
+      try {
+        const res = await fetchMilestoneSummaryDropdowns(wipLdpFobAuthHeaders());
+        if (cancelled) return;
+        setCustomers(res.customers);
+        setSuppliers(res.suppliers);
+        setMerchants(res.merchants);
+        setPortfolios(res.portfolios);
+
+        if (res.rejected.customers) enqueueSnackbar('Could not load customers', { variant: 'error' });
+        if (res.rejected.suppliers) enqueueSnackbar('Could not load suppliers', { variant: 'error' });
+        if (res.rejected.merchants) enqueueSnackbar('Could not load merchandisers', { variant: 'error' });
+        if (res.rejected.portfolios) enqueueSnackbar('Could not load product portfolios', { variant: 'error' });
+      } catch (err) {
+        console.error('[Customer WIP] dropdowns', err);
+        if (!cancelled) enqueueSnackbar('Could not load filter lists', { variant: 'error' });
+      } finally {
+        if (!cancelled) setLoadingDropdowns(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enqueueSnackbar]);
+
+  useEffect(() => {
+    setFilters((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      if (prev.customer !== ALL && !customers.some((r) => milestoneCustomerKey(r) === prev.customer)) {
+        next.customer = ALL;
+        changed = true;
+      }
+      if (prev.supplier !== ALL && !suppliers.some((r) => milestoneSupplierKey(r) === prev.supplier)) {
+        next.supplier = ALL;
+        changed = true;
+      }
+      if (prev.merchandiser !== ALL && !merchants.some((r) => milestoneMerchantKey(r) === prev.merchandiser)) {
+        next.merchandiser = ALL;
+        changed = true;
+      }
+      if (
+        prev.productPortfolio !== ALL &&
+        !portfolios.some((r) => milestonePortfolioKey(r) === prev.productPortfolio)
+      ) {
+        next.productPortfolio = ALL;
+        changed = true;
+      }
+
+      return changed ? next : prev;
+    });
+  }, [customers, suppliers, merchants, portfolios]);
+
+  const dropdowns = useMemo(
+    () => ({ customers, suppliers, merchants, portfolios }),
+    [customers, suppliers, merchants, portfolios]
+  );
 
   return (
     <Card variant="outlined" sx={cardSx}>
@@ -649,8 +1772,23 @@ function CustomerWipReportForm() {
             Merchandiser :
           </Typography>
           <FormControl fullWidth size="small">
-            <Select value={filters.merchandiser} onChange={handleSelect('merchandiser')} sx={selectSx}>
+            <Select
+              value={filters.merchandiser}
+              onChange={handleSelect('merchandiser')}
+              sx={selectSx}
+              disabled={loadingDropdowns && merchants.length === 0}
+            >
               <MenuItem value={ALL}>All</MenuItem>
+              {merchants
+                .filter((row) => milestoneMerchantKey(row))
+                .map((row) => {
+                  const val = milestoneMerchantKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestoneMerchantLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -664,8 +1802,19 @@ function CustomerWipReportForm() {
               value={filters.productPortfolio}
               onChange={handleSelect('productPortfolio')}
               sx={selectSx}
+              disabled={loadingDropdowns && portfolios.length === 0}
             >
-              <MenuItem value="apparel">Apparel</MenuItem>
+              <MenuItem value={ALL}>All</MenuItem>
+              {portfolios
+                .filter((row) => milestonePortfolioKey(row))
+                .map((row) => {
+                  const val = milestonePortfolioKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestonePortfolioLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -675,8 +1824,23 @@ function CustomerWipReportForm() {
             Customer :
           </Typography>
           <FormControl fullWidth size="small">
-            <Select value={filters.customer} onChange={handleSelect('customer')} sx={selectSx}>
+            <Select
+              value={filters.customer}
+              onChange={handleSelect('customer')}
+              sx={selectSx}
+              disabled={loadingDropdowns && customers.length === 0}
+            >
               <MenuItem value={ALL}>All Customer</MenuItem>
+              {customers
+                .filter((row) => milestoneCustomerKey(row))
+                .map((row) => {
+                  const val = milestoneCustomerKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestoneCustomerLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -686,8 +1850,23 @@ function CustomerWipReportForm() {
             Supplier :
           </Typography>
           <FormControl fullWidth size="small">
-            <Select value={filters.supplier} onChange={handleSelect('supplier')} sx={selectSx}>
+            <Select
+              value={filters.supplier}
+              onChange={handleSelect('supplier')}
+              sx={selectSx}
+              disabled={loadingDropdowns && suppliers.length === 0}
+            >
               <MenuItem value={ALL}>All Supplier</MenuItem>
+              {suppliers
+                .filter((row) => milestoneSupplierKey(row))
+                .map((row) => {
+                  const val = milestoneSupplierKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestoneSupplierLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -746,16 +1925,7 @@ function CustomerWipReportForm() {
 
         <Grid item xs={12}>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1 }}>
-            <WipLdpFobViewReportButton filters={filters} />
-            <Button
-              variant="contained"
-              color="primary"
-              size="medium"
-              onClick={() => toast('Download PDF: connect API when backend is ready.')}
-              sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
-            >
-              Download PDF
-            </Button>
+            <CustomerWipReportActions filters={filters} dropdowns={dropdowns} />
             <Button
               variant="contained"
               color="primary"
@@ -789,13 +1959,13 @@ function CustomerWipReportForm() {
 
 const AMS_WIP_PAGE_TITLE = 'AMS WIP Report / Summary of Production Status Report';
 
-/** AMS WIP Report — Merchandiser / Portfolio / Customer row; Supplier / PO / Style; dates; empty 3rd cell row 3. */
+/** AMS WIP Report — Merchandiser + Portfolio / Customer / Supplier via env APIs; PDF (demo rows) matches AMS WIP layout. */
 function AmsWipReportForm() {
   const { enqueueSnackbar } = useSnackbar();
 
   const [filters, setFilters] = useState({
     merchandiser: ALL,
-    productPortfolio: 'apparel',
+    productPortfolio: ALL,
     customer: ALL,
     supplier: ALL,
     poScope: ALL,
@@ -803,6 +1973,12 @@ function AmsWipReportForm() {
     fromDate: '2026-01-01',
     toDate: '2026-12-31',
   });
+
+  const [customers, setCustomers] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [merchants, setMerchants] = useState([]);
+  const [portfolios, setPortfolios] = useState([]);
+  const [loadingDropdowns, setLoadingDropdowns] = useState(false);
 
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
@@ -819,6 +1995,77 @@ function AmsWipReportForm() {
 
   const selectSx = { borderRadius: 1 };
 
+  useEffect(() => {
+    const base = getMilestoneSummaryDropdownApiBase();
+    if (!base) {
+      enqueueSnackbar('API URL missing: set VITE_API_BASE_URL for AMS WIP filters', {
+        variant: 'warning',
+      });
+      return undefined;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setLoadingDropdowns(true);
+      try {
+        const res = await fetchMilestoneSummaryDropdowns(wipLdpFobAuthHeaders());
+        if (cancelled) return;
+        setCustomers(res.customers);
+        setSuppliers(res.suppliers);
+        setMerchants(res.merchants);
+        setPortfolios(res.portfolios);
+
+        if (res.rejected.customers) enqueueSnackbar('Could not load customers', { variant: 'error' });
+        if (res.rejected.suppliers) enqueueSnackbar('Could not load suppliers', { variant: 'error' });
+        if (res.rejected.merchants) enqueueSnackbar('Could not load merchandisers', { variant: 'error' });
+        if (res.rejected.portfolios) enqueueSnackbar('Could not load product portfolios', { variant: 'error' });
+      } catch (err) {
+        console.error('[AMS WIP] dropdowns', err);
+        if (!cancelled) enqueueSnackbar('Could not load filter lists', { variant: 'error' });
+      } finally {
+        if (!cancelled) setLoadingDropdowns(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enqueueSnackbar]);
+
+  useEffect(() => {
+    setFilters((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      if (prev.customer !== ALL && !customers.some((r) => milestoneCustomerKey(r) === prev.customer)) {
+        next.customer = ALL;
+        changed = true;
+      }
+      if (prev.supplier !== ALL && !suppliers.some((r) => milestoneSupplierKey(r) === prev.supplier)) {
+        next.supplier = ALL;
+        changed = true;
+      }
+      if (
+        prev.productPortfolio !== ALL &&
+        !portfolios.some((r) => milestonePortfolioKey(r) === prev.productPortfolio)
+      ) {
+        next.productPortfolio = ALL;
+        changed = true;
+      }
+      if (prev.merchandiser !== ALL && !merchants.some((r) => milestoneMerchantKey(r) === prev.merchandiser)) {
+        next.merchandiser = ALL;
+        changed = true;
+      }
+
+      return changed ? next : prev;
+    });
+  }, [customers, suppliers, portfolios, merchants]);
+
+  const dropdowns = useMemo(
+    () => ({ customers, suppliers, merchants, portfolios }),
+    [customers, suppliers, merchants, portfolios]
+  );
+
   return (
     <Card variant="outlined" sx={cardSx}>
       <Typography
@@ -834,8 +2081,23 @@ function AmsWipReportForm() {
             Merchandiser :
           </Typography>
           <FormControl fullWidth size="small">
-            <Select value={filters.merchandiser} onChange={handleSelect('merchandiser')} sx={selectSx}>
+            <Select
+              value={filters.merchandiser}
+              onChange={handleSelect('merchandiser')}
+              sx={selectSx}
+              disabled={loadingDropdowns && merchants.length === 0}
+            >
               <MenuItem value={ALL}>All</MenuItem>
+              {merchants
+                .filter((row) => milestoneMerchantKey(row))
+                .map((row) => {
+                  const val = milestoneMerchantKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestoneMerchantLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -849,8 +2111,19 @@ function AmsWipReportForm() {
               value={filters.productPortfolio}
               onChange={handleSelect('productPortfolio')}
               sx={selectSx}
+              disabled={loadingDropdowns && portfolios.length === 0}
             >
-              <MenuItem value="apparel">Apparel</MenuItem>
+              <MenuItem value={ALL}>All</MenuItem>
+              {portfolios
+                .filter((row) => milestonePortfolioKey(row))
+                .map((row) => {
+                  const val = milestonePortfolioKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestonePortfolioLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -860,8 +2133,23 @@ function AmsWipReportForm() {
             Customer :
           </Typography>
           <FormControl fullWidth size="small">
-            <Select value={filters.customer} onChange={handleSelect('customer')} sx={selectSx}>
+            <Select
+              value={filters.customer}
+              onChange={handleSelect('customer')}
+              sx={selectSx}
+              disabled={loadingDropdowns && customers.length === 0}
+            >
               <MenuItem value={ALL}>All Customer</MenuItem>
+              {customers
+                .filter((row) => milestoneCustomerKey(row))
+                .map((row) => {
+                  const val = milestoneCustomerKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestoneCustomerLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -871,8 +2159,23 @@ function AmsWipReportForm() {
             Supplier :
           </Typography>
           <FormControl fullWidth size="small">
-            <Select value={filters.supplier} onChange={handleSelect('supplier')} sx={selectSx}>
+            <Select
+              value={filters.supplier}
+              onChange={handleSelect('supplier')}
+              sx={selectSx}
+              disabled={loadingDropdowns && suppliers.length === 0}
+            >
               <MenuItem value={ALL}>All Supplier</MenuItem>
+              {suppliers
+                .filter((row) => milestoneSupplierKey(row))
+                .map((row) => {
+                  const val = milestoneSupplierKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestoneSupplierLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -933,16 +2236,7 @@ function AmsWipReportForm() {
 
         <Grid item xs={12}>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1 }}>
-            <WipLdpFobViewReportButton filters={filters} />
-            <Button
-              variant="contained"
-              color="primary"
-              size="medium"
-              onClick={() => toast('Download PDF: connect API when backend is ready.')}
-              sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
-            >
-              Download PDF
-            </Button>
+            <AmsWipReportActions filters={filters} dropdowns={dropdowns} />
             <Button
               variant="contained"
               color="primary"
@@ -976,14 +2270,14 @@ function AmsWipReportForm() {
 
 const SALT_WIP_PAGE_TITLE = 'Salt WIP Report / Summary of Production Status Report';
 
-/** Salt WIP Report — Report Type + full grid; From/To row 3 col 2–3; three actions; supplier shipment footnote. */
+/** Salt WIP Report — env-backed dropdowns + PDF (demo rows) per Salt WIP grid (20 cols, black data). */
 function SaltWipReportForm() {
   const { enqueueSnackbar } = useSnackbar();
 
   const [filters, setFilters] = useState({
     reportType: 'merchandiserWise',
     merchandiser: ALL,
-    productPortfolio: 'apparel',
+    productPortfolio: ALL,
     customer: ALL,
     supplier: ALL,
     poScope: ALL,
@@ -991,6 +2285,12 @@ function SaltWipReportForm() {
     fromDate: '2026-01-01',
     toDate: '2026-12-31',
   });
+
+  const [customers, setCustomers] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [merchants, setMerchants] = useState([]);
+  const [portfolios, setPortfolios] = useState([]);
+  const [loadingDropdowns, setLoadingDropdowns] = useState(false);
 
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
@@ -1006,6 +2306,77 @@ function SaltWipReportForm() {
   );
 
   const selectSx = { borderRadius: 1 };
+
+  useEffect(() => {
+    const base = getMilestoneSummaryDropdownApiBase();
+    if (!base) {
+      enqueueSnackbar('API URL missing: set VITE_API_BASE_URL for Salt WIP filters', {
+        variant: 'warning',
+      });
+      return undefined;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setLoadingDropdowns(true);
+      try {
+        const res = await fetchMilestoneSummaryDropdowns(wipLdpFobAuthHeaders());
+        if (cancelled) return;
+        setCustomers(res.customers);
+        setSuppliers(res.suppliers);
+        setMerchants(res.merchants);
+        setPortfolios(res.portfolios);
+
+        if (res.rejected.customers) enqueueSnackbar('Could not load customers', { variant: 'error' });
+        if (res.rejected.suppliers) enqueueSnackbar('Could not load suppliers', { variant: 'error' });
+        if (res.rejected.merchants) enqueueSnackbar('Could not load merchandisers', { variant: 'error' });
+        if (res.rejected.portfolios) enqueueSnackbar('Could not load product portfolios', { variant: 'error' });
+      } catch (err) {
+        console.error('[Salt WIP] dropdowns', err);
+        if (!cancelled) enqueueSnackbar('Could not load filter lists', { variant: 'error' });
+      } finally {
+        if (!cancelled) setLoadingDropdowns(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enqueueSnackbar]);
+
+  useEffect(() => {
+    setFilters((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      if (prev.customer !== ALL && !customers.some((r) => milestoneCustomerKey(r) === prev.customer)) {
+        next.customer = ALL;
+        changed = true;
+      }
+      if (prev.supplier !== ALL && !suppliers.some((r) => milestoneSupplierKey(r) === prev.supplier)) {
+        next.supplier = ALL;
+        changed = true;
+      }
+      if (prev.merchandiser !== ALL && !merchants.some((r) => milestoneMerchantKey(r) === prev.merchandiser)) {
+        next.merchandiser = ALL;
+        changed = true;
+      }
+      if (
+        prev.productPortfolio !== ALL &&
+        !portfolios.some((r) => milestonePortfolioKey(r) === prev.productPortfolio)
+      ) {
+        next.productPortfolio = ALL;
+        changed = true;
+      }
+
+      return changed ? next : prev;
+    });
+  }, [customers, suppliers, merchants, portfolios]);
+
+  const dropdowns = useMemo(
+    () => ({ customers, suppliers, merchants, portfolios }),
+    [customers, suppliers, merchants, portfolios]
+  );
 
   return (
     <Card variant="outlined" sx={cardSx}>
@@ -1033,8 +2404,23 @@ function SaltWipReportForm() {
             Merchandiser:
           </Typography>
           <FormControl fullWidth size="small">
-            <Select value={filters.merchandiser} onChange={handleSelect('merchandiser')} sx={selectSx}>
+            <Select
+              value={filters.merchandiser}
+              onChange={handleSelect('merchandiser')}
+              sx={selectSx}
+              disabled={loadingDropdowns && merchants.length === 0}
+            >
               <MenuItem value={ALL}>All</MenuItem>
+              {merchants
+                .filter((row) => milestoneMerchantKey(row))
+                .map((row) => {
+                  const val = milestoneMerchantKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestoneMerchantLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -1048,8 +2434,19 @@ function SaltWipReportForm() {
               value={filters.productPortfolio}
               onChange={handleSelect('productPortfolio')}
               sx={selectSx}
+              disabled={loadingDropdowns && portfolios.length === 0}
             >
-              <MenuItem value="apparel">Apparel</MenuItem>
+              <MenuItem value={ALL}>All</MenuItem>
+              {portfolios
+                .filter((row) => milestonePortfolioKey(row))
+                .map((row) => {
+                  const val = milestonePortfolioKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestonePortfolioLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -1059,8 +2456,23 @@ function SaltWipReportForm() {
             Customer :
           </Typography>
           <FormControl fullWidth size="small">
-            <Select value={filters.customer} onChange={handleSelect('customer')} sx={selectSx}>
+            <Select
+              value={filters.customer}
+              onChange={handleSelect('customer')}
+              sx={selectSx}
+              disabled={loadingDropdowns && customers.length === 0}
+            >
               <MenuItem value={ALL}>All Customer</MenuItem>
+              {customers
+                .filter((row) => milestoneCustomerKey(row))
+                .map((row) => {
+                  const val = milestoneCustomerKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestoneCustomerLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -1070,8 +2482,23 @@ function SaltWipReportForm() {
             Supplier:
           </Typography>
           <FormControl fullWidth size="small">
-            <Select value={filters.supplier} onChange={handleSelect('supplier')} sx={selectSx}>
+            <Select
+              value={filters.supplier}
+              onChange={handleSelect('supplier')}
+              sx={selectSx}
+              disabled={loadingDropdowns && suppliers.length === 0}
+            >
               <MenuItem value={ALL}>All Supplier</MenuItem>
+              {suppliers
+                .filter((row) => milestoneSupplierKey(row))
+                .map((row) => {
+                  const val = milestoneSupplierKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestoneSupplierLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -1130,16 +2557,7 @@ function SaltWipReportForm() {
 
         <Grid item xs={12}>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1 }}>
-            <WipLdpFobViewReportButton filters={filters} />
-            <Button
-              variant="contained"
-              color="primary"
-              size="medium"
-              onClick={() => toast('Download PDF: connect API when backend is ready.')}
-              sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
-            >
-              Download PDF
-            </Button>
+            <SaltWipReportActions filters={filters} dropdowns={dropdowns} />
             <Button
               variant="contained"
               color="primary"
@@ -1301,16 +2719,7 @@ function CustomisedCustomerWipReportForm() {
               justifyContent: 'center',
             }}
           >
-            <WipLdpFobViewReportButton filters={filters} />
-            <Button
-              variant="contained"
-              color="primary"
-              size="medium"
-              onClick={() => toast('Download PDF: connect API when backend is ready.')}
-              sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
-            >
-              Download PDF
-            </Button>
+            <CustomisedCustomerWipReportActions filters={filters} dropdowns={{}} />
             <Button
               variant="contained"
               color="primary"

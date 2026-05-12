@@ -104,22 +104,105 @@ export default function PrintInvoicePage() {
                     throw new Error('No data found in API response');
                 }
 
-                const products = Array.isArray(responseData) ? responseData : [data];
+                const allDetails = Array.isArray(responseData) 
+                    ? responseData.flatMap(item => item.details || [item]) 
+                    : (data.details || [data]);
 
-                const shipmentPcsTotal = products.reduce((acc, curr) => acc + (curr.shipQty || 0), 0);
-                const shipmentCartonsTotal = products.reduce((acc, curr) => acc + (curr.shipCartons || 0), 0);
-                const shipmentAmountTotal = products.reduce((acc, curr) => acc + (curr.shipQty || 0) * (curr.ldpRate || 0), 0);
+                const currentLdpForFilter = (invoiceNo || data.ldpInvoiceNo || '').toLowerCase().trim();
+                const products = allDetails.filter(p => {
+                    const pLdp = (p.ldpInvoiceNo || '').toLowerCase().trim();
+                    // If we have a specific invoiceNo we're looking for, filter by it.
+                    // If pLdp is empty, it might be a non-split item, so we might want to include it?
+                    // But usually in split shipments, every row has an ldpInvoiceNo.
+                    if (currentLdpForFilter) {
+                        return pLdp === currentLdpForFilter;
+                    }
+                    return true;
+                });
 
-                const truckingCharges = data.subTotalA1New || 0;
-                const deductions = data.subTotalA2New || 0;
-                const adjustments = data.subTotalA3New || 0;
-                const netFinReceivable = shipmentAmountTotal + truckingCharges - deductions + adjustments;
+                const shipmentPcsTotal = products.reduce((acc, curr) => acc + (Number(curr.quantity || curr.shipQty || 0)), 0);
+                const shipmentCartonsTotal = products.reduce((acc, curr) => acc + (Number(curr.cartons || curr.shipCartons || 0)), 0);
+                const shipmentAmountTotal = products.reduce((acc, curr) => acc + (Number(curr.quantity || curr.shipQty || 0) * Number(curr.shippedRate || curr.ldpRate || 0)), 0);
+
+                const getAnyCase = (obj, key) => {
+                    if (!obj || typeof obj !== 'object') return null;
+                    const foundKey = Object.keys(obj).find(k => k.toLowerCase() === key.toLowerCase());
+                    return foundKey ? obj[foundKey] : null;
+                };
+
+                const getValue = (key) => {
+                    const currentLdp = (invoiceNo || data.ldpInvoiceNo || '').toLowerCase().trim();
+                    
+                    // 1. First, search for a specific match in ALL subTotalDetails across ALL shipment items
+                    if (Array.isArray(responseData)) {
+                        for (const shipment of responseData) {
+                            if (shipment.subTotalDetails && Array.isArray(shipment.subTotalDetails)) {
+                                const match = shipment.subTotalDetails.find(s => (s.ldpInvoiceNo || s.invoiceno || '').toLowerCase().trim() === currentLdp);
+                                if (match) {
+                                    const val = getAnyCase(match, key);
+                                    if (val !== null && val !== undefined && val !== "" && (typeof val !== 'number' || val !== 0)) return val;
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Search in the root of the CURRENT shipment item
+                    let val = getAnyCase(data, key);
+                    if (val !== null && val !== undefined && val !== "" && (typeof val !== 'number' || val !== 0)) return val;
+
+                    // 3. Search in the root of ALL other shipment items
+                    if (Array.isArray(responseData)) {
+                        for (const item of responseData) {
+                            val = getAnyCase(item, key);
+                            if (val !== null && val !== undefined && val !== "" && (typeof val !== 'number' || val !== 0)) return val;
+                        }
+                    }
+
+                    // 4. Fallback: Search any subTotalDetail at all (ONLY if no split invoice is specified)
+                    if (!invoiceNo && Array.isArray(responseData)) {
+                        for (const shipment of responseData) {
+                            if (shipment.subTotalDetails && Array.isArray(shipment.subTotalDetails) && shipment.subTotalDetails.length > 0) {
+                                val = getAnyCase(shipment.subTotalDetails[0], key);
+                                if (val !== null && val !== undefined && val !== "" && (typeof val !== 'number' || val !== 0)) return val;
+                            }
+                        }
+                    }
+
+                    return 0;
+                };
+
+                const getNonEmptyLabel = (keys) => {
+                    for (const key of keys) {
+                        const val = getValue(key);
+                        if (val && typeof val === 'string' && val !== "") return val;
+                    }
+                    return "";
+                };
+
+                const getNonZeroValue = (keys) => {
+                    for (const key of keys) {
+                        const val = getValue(key);
+                        if (val !== null && val !== undefined && val !== "" && Number(val) !== 0) return Number(val);
+                    }
+                    return 0;
+                };
+
+                const truckingChargesLabel = getNonEmptyLabel(['subTotalH1New', 'subTotalH1', 'top1']);
+                const truckingCharges = getNonZeroValue(['subTotalA1New', 'subTotalA1', 'amt1']);
+
+                const deductionsLabel = getNonEmptyLabel(['subTotalH2New', 'subTotalH2', 'top2']);
+                const deductions = getNonZeroValue(['subTotalA2New', 'subTotalA2', 'amt2']);
+
+                const adjustmentsLabel = getNonEmptyLabel(['subTotalH3New', 'subTotalH3', 'top3']);
+                const adjustments = getNonZeroValue(['subTotalA3New', 'subTotalA3', 'amt3']);
+
+                const netFinReceivable = shipmentAmountTotal + truckingCharges + deductions + adjustments;
 
                 const transformedData = {
                     companyName: 'All Seasons Textile',
                     companyAddress: '1441 BROADWAY, SUITE # 6162 NEW YORK , NY 10018',
                     country: 'NY USA',
-                    invoiceNo: data.ldpInvoiceNo || invoiceNo,
+                    invoiceNo: invoiceNo || data.ldpInvoiceNo || '',
                     invoiceDate: data.invoiceDate ? new Date(data.invoiceDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '09-30-2025',
                     dayDate: new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
                     time: new Date().toLocaleTimeString('en-US', { hour12: false }),
@@ -155,20 +238,25 @@ export default function PrintInvoicePage() {
                         etw: (data.etwDate && !data.etwDate.startsWith('1900-01-01')) ? new Date(data.etwDate).toLocaleDateString('en-US') : '',
                     },
 
-                    products: products.map((item) => ({
-                        poNo: item.pono || '37744-LS',
-                        styleNo: item.styles || 'LR2096',
-                        prodCode: 'NA',
-                        item: item.itemDescriptionInvoice || '100% Cotton Men Jersey Garment Dye LS Tee',
-                        sizeRange: item.sizeRange || '2XL',
-                        ldpUnit: item.ldpRate || 5.6700,
-                        shippedQtyInPcs: item.shipQty || 720.00,
-                        shpdOfCartons: item.shipCartons || 15.00,
-                        ldpValue: (item.shipQty || 720.00) * (item.ldpRate || 5.6700),
-                        deductionAmount: '',
-                        adjustedAmount: '',
-                        invoiceAmount: (item.shipQty || 720.00) * (item.ldpRate || 5.6700),
-                    })),
+                    products: products.map((item) => {
+                        const qty = Number(item.quantity || item.shipQty || 0);
+                        const rate = Number(item.shippedRate || item.ldpRate || 0);
+                        const cartons = Number(item.cartons || item.shipCartons || 0);
+                        return {
+                            poNo: item.pono || '',
+                            styleNo: item.styles || '',
+                            prodCode: 'NA',
+                            item: item.itemDescriptionInvoice || item.itemDescription || '',
+                            sizeRange: item.sizeRange || '',
+                            ldpUnit: rate,
+                            shippedQtyInPcs: qty,
+                            shpdOfCartons: cartons,
+                            ldpValue: qty * rate,
+                            deductionAmount: '',
+                            adjustedAmount: '',
+                            invoiceAmount: qty * rate,
+                        };
+                    }),
 
                     shipmentTotal: {
                         pcs: shipmentPcsTotal,
@@ -177,8 +265,11 @@ export default function PrintInvoicePage() {
                         amount: shipmentAmountTotal,
                     },
 
+                    truckingChargesLabel,
                     truckingCharges,
+                    deductionsLabel,
                     deductions,
+                    adjustmentsLabel,
                     adjustments,
                     netReceivable: netFinReceivable,
                     remarks: data.remarks || 'Shipped',
@@ -345,20 +436,32 @@ export default function PrintInvoicePage() {
                             <TableCell sx={cellStyle} colSpan={3}></TableCell>
                             <TableCell sx={{ ...cellStyle, textAlign: 'right', fontWeight: 'bold' }}>{invoiceData.shipmentTotal.amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                         </TableRow>
-                        {/* Add trucking charges */}
+                        {/* Add trucking charges - Always show as requested */}
                         <TableRow>
-                            <TableCell sx={{ ...cellStyle, textAlign: 'right' }} colSpan={10}>Add trucking charges</TableCell>
-                            <TableCell sx={{ ...cellStyle, textAlign: 'right' }}>{invoiceData.truckingCharges?.toLocaleString(undefined, { minimumFractionDigits: 2 })} US$</TableCell>
+                            <TableCell sx={{ ...cellStyle, textAlign: 'right' }} colSpan={10}>{invoiceData.truckingChargesLabel || ''}</TableCell>
+                            <TableCell sx={{ ...cellStyle, textAlign: 'right' }}>
+                                {(invoiceData.truckingCharges || 0).toLocaleString(undefined, { 
+                                    minimumFractionDigits: (invoiceData.truckingCharges % 1 === 0) ? 0 : 2 
+                                })} US$
+                            </TableCell>
                         </TableRow>
-                        {/* Deductions */}
+                        {/* Deductions - Always show as requested */}
                         <TableRow>
-                            <TableCell sx={{ ...cellStyle, textAlign: 'right' }} colSpan={10}>Deductions</TableCell>
-                            <TableCell sx={{ ...cellStyle, textAlign: 'right' }}>{invoiceData.deductions?.toLocaleString(undefined, { minimumFractionDigits: 2 })} US$</TableCell>
+                            <TableCell sx={{ ...cellStyle, textAlign: 'right' }} colSpan={10}>{invoiceData.deductionsLabel || ''}</TableCell>
+                            <TableCell sx={{ ...cellStyle, textAlign: 'right' }}>
+                                {(invoiceData.deductions || 0).toLocaleString(undefined, { 
+                                    minimumFractionDigits: (invoiceData.deductions % 1 === 0) ? 0 : 2 
+                                })} US$
+                            </TableCell>
                         </TableRow>
-                        {/* Adjustments */}
+                        {/* Adjustments - Always show as requested */}
                         <TableRow>
-                            <TableCell sx={{ ...cellStyle, textAlign: 'right' }} colSpan={10}>Adjustments</TableCell>
-                            <TableCell sx={{ ...cellStyle, textAlign: 'right' }}>{invoiceData.adjustments?.toLocaleString(undefined, { minimumFractionDigits: 2 })} US$</TableCell>
+                            <TableCell sx={{ ...cellStyle, textAlign: 'right' }} colSpan={10}>{invoiceData.adjustmentsLabel || ''}</TableCell>
+                            <TableCell sx={{ ...cellStyle, textAlign: 'right' }}>
+                                {(invoiceData.adjustments || 0).toLocaleString(undefined, { 
+                                    minimumFractionDigits: (invoiceData.adjustments % 1 === 0) ? 0 : 2 
+                                })} US$
+                            </TableCell>
                         </TableRow>
                         {/* Net Receivable */}
                         <TableRow sx={{ height: '35px' }}>

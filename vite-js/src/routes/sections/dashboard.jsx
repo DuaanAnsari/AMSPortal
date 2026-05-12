@@ -164,6 +164,7 @@ const FobLdpPriceListPage = lazy(
 );
 
 const WipHubPage = lazy(() => import('src/sections/reports/view/wip-hub-view'));
+const MgtHubPage = lazy(() => import('src/sections/reports/view/mgt-hub-view'));
 
 // BLOG
 const BlogPostsPage = lazy(() => import('src/pages/dashboard/post/list'));
@@ -307,6 +308,10 @@ export const dashboardRoutes = [
       {
         path: 'reports/wip',
         element: <WipHubPage />,
+      },
+      {
+        path: 'reports/mgt',
+        element: <MgtHubPage />,
       },
 
       // {

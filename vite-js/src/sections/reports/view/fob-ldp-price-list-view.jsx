@@ -47,6 +47,41 @@ const REPORT_MERCHANTS_PATH =
 /** Set to `false` when Excel (CSV) download should work again on this page. */
 const DISABLE_LDP_FOB_EXCEL_DOWNLOAD = true;
 
+/** Show immediate feedback in the tab opened synchronously on click (avoids blank tab before blob is ready). */
+function writePdfPreviewPlaceholder(previewWindow) {
+  try {
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Loading PDF…</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fafafa;color:#333;"><p style="padding:24px;font-size:15px;">Loading PDF…</p></body></html>`;
+    previewWindow.document.open();
+    previewWindow.document.write(html);
+    previewWindow.document.close();
+  } catch (e) {
+    console.warn('[FOB/LDP] preview placeholder', e);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Ensures client-built PDF blob is non-empty and starts with %PDF (browser can render it). */
+async function assertValidPdfBlob(blob) {
+  if (!(blob instanceof Blob)) {
+    throw new Error('Report could not be generated: invalid file data.');
+  }
+  if (blob.size < 32) {
+    throw new Error('Report could not be generated: PDF output is empty or too small.');
+  }
+  const sample = await blob.slice(0, 5).arrayBuffer();
+  const head = new TextDecoder('latin1').decode(sample);
+  if (!head.startsWith('%PDF')) {
+    throw new Error('Report could not be generated: output is not a valid PDF document.');
+  }
+}
+
 function joinApiUrl(base, path) {
   const p = path.startsWith('/') ? path : `/${path}`;
   return `${base}${p}`;
@@ -122,7 +157,7 @@ export default function FobLdpPriceListView() {
     };
 
   const runExport = useCallback(
-    async (mode) => {
+    async (mode, opts = {}) => {
       if (!filters.fromDate || !filters.toDate) {
         enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
         return;
@@ -133,6 +168,11 @@ export default function FobLdpPriceListView() {
       }
       if (!API_BASE_URL) {
         enqueueSnackbar('API URL missing: set VITE_API_BASE_URL in .env', { variant: 'error' });
+        return;
+      }
+
+      if (mode === 'view' && !opts.previewWindow) {
+        enqueueSnackbar('Open the report using the View Report button.', { variant: 'warning' });
         return;
       }
 
@@ -162,13 +202,36 @@ export default function FobLdpPriceListView() {
           enqueueSnackbar(raw.length ? 'CSV download started' : 'No data — empty CSV', {
             variant: 'success',
           });
-        } else {
-          const pdf = await buildLdpFobPdfBlobFromRows(raw);
-          openLdpFobDemoDownload(mode, pdf, null);
+          return;
+        }
+
+        const pdfBlob = await buildLdpFobPdfBlobFromRows(raw);
+        await assertValidPdfBlob(pdfBlob);
+
+        if (mode === 'view') {
+          const { previewWindow } = opts;
+          if (previewWindow.closed) {
+            enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
+              variant: 'warning',
+            });
+            return;
+          }
+          const blobUrl = URL.createObjectURL(pdfBlob);
+          try {
+            previewWindow.location.replace(blobUrl);
+          } catch (navErr) {
+            URL.revokeObjectURL(blobUrl);
+            throw navErr;
+          }
+          previewWindow.focus?.();
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
           enqueueSnackbar(
-            mode === 'view' ? 'PDF opened in new tab' : 'PDF download started',
+            raw.length ? 'PDF opened in new tab' : 'PDF opened (no row data for selected filters)',
             { variant: 'success' }
           );
+        } else {
+          openLdpFobDemoDownload(mode, pdfBlob, null);
+          enqueueSnackbar('PDF download started', { variant: 'success' });
         }
       } catch (err) {
         console.error('[FOB/LDP] export', err);
@@ -179,6 +242,19 @@ export default function FobLdpPriceListView() {
           err?.message ||
           'Report failed';
         enqueueSnackbar(msg, { variant: 'error' });
+
+        if (mode === 'view' && opts.previewWindow && !opts.previewWindow.closed) {
+          try {
+            const doc = opts.previewWindow.document;
+            doc.open();
+            doc.write(
+              `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${escapeHtml(msg)}</p></body></html>`
+            );
+            doc.close();
+          } catch (writeErr) {
+            console.warn('[FOB/LDP] preview error page', writeErr);
+          }
+        }
       } finally {
         setExporting(null);
       }
@@ -186,7 +262,32 @@ export default function FobLdpPriceListView() {
     [enqueueSnackbar, filters]
   );
 
-  const handleViewReport = useCallback(() => runExport('view'), [runExport]);
+  const handleViewReport = useCallback(() => {
+    if (!filters.fromDate || !filters.toDate) {
+      enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+      return;
+    }
+    if (!ISO_DATE_RE.test(filters.fromDate) || !ISO_DATE_RE.test(filters.toDate)) {
+      enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+      return;
+    }
+    if (!API_BASE_URL) {
+      enqueueSnackbar('API URL missing: set VITE_API_BASE_URL in .env', { variant: 'error' });
+      return;
+    }
+
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      enqueueSnackbar(
+        'Unable to open a new tab — your browser may have blocked the pop-up. Allow pop-ups for this site and try again.',
+        { variant: 'error' }
+      );
+      return;
+    }
+
+    writePdfPreviewPlaceholder(previewWindow);
+    void runExport('view', { previewWindow });
+  }, [enqueueSnackbar, filters, runExport]);
 
   const handleDownloadPdf = useCallback(() => runExport('pdf'), [runExport]);
 

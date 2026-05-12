@@ -4,13 +4,13 @@ import { formatLdpFobDisplayDate } from './ldp-fob-demo-export';
 
 const LOGO_PATH = `${import.meta.env.BASE_URL}logo/AMSlogo.png`;
 
-/** Vertical padding (top/bottom). */
-const V_MARGIN = 10;
+/** Vertical padding (top/bottom). Kept tight so the table fills almost the full page. */
+const V_MARGIN = 6;
 /** Small left/right inset so the table frame does not clip at page edges when printing or zooming. */
-const H_MARGIN = 14;
-const HEADER_BLOCK_H = 108;
-const TABLE_HEADER_ROW_H = 42;
-const DATA_ROW_H = 62;
+const H_MARGIN = 4;
+const HEADER_BLOCK_H = 96;
+const TABLE_HEADER_ROW_H = 46;
+const DATA_ROW_H = 70;
 const TITLE_BLUE = [0, 51, 153];
 
 /** A4 landscape width / height (pt) — fixed size for paging + browser PDF viewer. */
@@ -46,15 +46,44 @@ const MILESTONE_API_TAIL = [
   { weight: 36, header: 'Stitching', kind: 'milestone', keys: ['Stitching', 'Stiching', 'stitching'] },
   { weight: 36, header: 'Washing', kind: 'milestone', keys: ['Washing', 'washing'] },
   { weight: 36, header: 'Packing', kind: 'milestone', keys: ['Packing', 'packing'] },
-  { weight: 46, header: 'FRI', kind: 'stack2', k1: ['FRI', 'FRI1', 'fri'], k2: ['FRI', 'FRI2', 'FRIEstemated', 'fri2'] },
+  {
+    weight: 46,
+    header: 'FRI',
+    kind: 'friCombined',
+    /**
+     * API returns FRI as a single combined string e.g. `"0% ES: 31 Jan 2026"`.
+     * Parsed into top = `0%`, bottom = `31-Jan-2026`.
+     * `k1`/`k2` kept for backward compatibility if the backend ever splits them.
+     */
+    keys: ['FRI', 'fri', 'FRI1', 'fri1'],
+    k1: ['FRI', 'FRI1', 'fri'],
+    k2: ['FRI', 'FRI2', 'FRIEstemated', 'fri2'],
+  },
 ];
 
 const SHIPMENT_SPEC_API = {
   weight: 52,
   header: 'Shipment\nDate',
   kind: 'stack2',
-  k1: ['shipmentdate', 'ShipmentDate', 'shipmentDate', 'ShipmentDate1'],
-  k2: ['shipmentdate', 'ShipmentDate', 'shipmentDate', 'ShipmentDate2'],
+  /** Bind dates as returned by API (`yyyy-mm-dd`); do not reformat to locale strings. */
+  stackDateMode: 'iso',
+  k1: [
+    'ShipmentDate1',
+    'shipmentDate1',
+    'ShipmentDate',
+    'shipmentDate',
+    'shipmentdate',
+    'CustomerShipmentDate',
+    'customerShipmentDate',
+  ],
+  k2: [
+    'ShipmentDate2',
+    'shipmentDate2',
+    'ShipmentDateE',
+    'shipmentDateE',
+    'shipmentdatee',
+    'ShipmentDateEE',
+  ],
 };
 
 const QTY_SPEC_API = {
@@ -64,11 +93,33 @@ const QTY_SPEC_API = {
   keys: ['BookedQuantity', 'bookedQuantity', 'Quantity', 'quantity', 'QTY', 'qty'],
 };
 
-/** Merchandiser-wise: Image first, then PO → … (API rows). */
+/** Merchandiser-wise: Image first, then PO → Supplier → Customer → … (API rows). */
 const COL_TEMPLATE_MERCHANDISER_WISE = [
   { weight: 42, header: 'Image', kind: 'image' },
   { weight: 64, header: 'PO No.', kind: 'left', keys: ['pono', 'PONO', 'PoNo', 'poNo'] },
-  { weight: 92, header: 'Customer', kind: 'left', keys: ['customername', 'CustomerName', 'customerName', 'BuyerName'] },
+  {
+    weight: 78,
+    header: 'Supplier',
+    kind: 'left',
+    keys: [
+      'vendername',
+      'VenderName',
+      'venderName',
+      'SupplierName',
+      'supplierName',
+      'suppliername',
+      'VendorName',
+      'vendorName',
+      'vendorname',
+      'Supplier',
+      'supplier',
+      'Vendor',
+      'vendor',
+      'Vender',
+      'vender',
+    ],
+  },
+  { weight: 78, header: 'Customer', kind: 'left', keys: ['customername', 'CustomerName', 'customerName', 'BuyerName'] },
   { ...SHIPMENT_SPEC_API },
   { ...QTY_SPEC_API },
   ...MILESTONE_API_TAIL.map((c) => ({ ...c })),
@@ -100,7 +151,7 @@ function pickColTemplate(reportType) {
  */
 export function getMilestoneGridColumnSpecs(reportType) {
   const template = pickColTemplate(reportType);
-  return template.map(({ header, keys, kind, k1, k2, statusKeys }) => ({
+  return template.map(({ header, keys, kind, k1, k2, statusKeys, stackDateMode }) => ({
     header: String(header || '')
       .replace(/\n/g, ' ')
       .replace(/\s+/g, ' ')
@@ -110,6 +161,7 @@ export function getMilestoneGridColumnSpecs(reportType) {
     k1: k1 || [],
     k2: k2 || [],
     statusKeys: statusKeys || [],
+    stackDateMode: stackDateMode || null,
   }));
 }
 
@@ -200,6 +252,21 @@ function formatShipmentUsMdY(raw) {
     return `${mm}-${dd}-${d.getFullYear()}`;
   }
   return `${iso[2]}-${iso[3]}-${iso[1]}`;
+}
+
+/**
+ * Shipment column: show API date as `yyyy-mm-dd` when the value starts with ISO date (or `yyyy/mm/dd`);
+ * otherwise return trimmed string unchanged (no locale reformat).
+ * @param {unknown} raw
+ */
+function displayMilestoneShipmentDateIso(raw) {
+  if (raw == null || raw === '' || raw === '0' || raw === 0) return '';
+  const s = String(raw).trim();
+  const iso = /^(\d{4}-\d{2}-\d{2})/.exec(s);
+  if (iso) return iso[1];
+  const ymdSlash = /^(\d{4})\/(\d{2})\/(\d{2})/.exec(s);
+  if (ymdSlash) return `${ymdSlash[1]}-${ymdSlash[2]}-${ymdSlash[3]}`;
+  return s;
 }
 
 function formatMilestoneDate(raw) {
@@ -400,6 +467,43 @@ function drawImageCell(doc, x, y, w, h, raw) {
   doc.setTextColor(0, 0, 0);
 }
 
+/**
+ * Parse FRI combined string e.g. `"0% ES: 31 Jan 2026"` → `{ top: '0%', bottom: '31-Jan-2026' }`.
+ * Tolerates variants like `"100% 15-Jan-2026"`, `"0%"` (no date), or empty.
+ */
+function parseFriCombined(raw) {
+  if (raw == null || raw === '' || raw === 0 || raw === '0') return { top: '0%', bottom: '' };
+  const s = String(raw).trim();
+  if (!s) return { top: '0%', bottom: '' };
+  const m = /^(\d+\s*%)\s*(?:ES\s*[:\-]?\s*)?(.*)$/i.exec(s);
+  let top = '';
+  let bottom = '';
+  if (m) {
+    top = m[1].replace(/\s+/g, '');
+    bottom = (m[2] || '').trim();
+  } else {
+    bottom = s;
+  }
+  if (bottom) {
+    const dm = /^(\d{1,2})[\s\-/]+([A-Za-z]+)[\s\-/]+(\d{2,4})$/.exec(bottom);
+    if (dm) {
+      const yyyy = dm[3].length === 2 ? `20${dm[3]}` : dm[3];
+      bottom = `${dm[1].padStart(2, '0')}-${dm[2].slice(0, 3)}-${yyyy}`;
+    } else {
+      const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(bottom);
+      if (iso) bottom = formatMilestoneDate(`${iso[1]}-${iso[2]}-${iso[3]}`);
+    }
+  }
+  return { top: top || '0%', bottom };
+}
+
+/** Same two lines as PDF `drawFriCombinedCell` — used by Excel exporter. */
+export function milestoneSummaryFriCombinedExcelText(raw, spec) {
+  const v = pickField(raw, ...(spec.keys || []));
+  const { top, bottom } = parseFriCombined(v);
+  return `${top}\n${bottom || '—'}`;
+}
+
 function milestoneTopStatus(raw, spec) {
   const s = pickField(raw, ...(spec.statusKeys || []));
   if (s !== '' && s != null) return String(s);
@@ -419,7 +523,12 @@ export function milestoneSummaryStack2ExcelText(raw, spec, reportType) {
   const v1 = pickField(raw, ...(spec.k1 || []));
   const v2 = pickField(raw, ...(spec.k2 || []));
   const useUs = reportType === 'supplierWise';
-  const fmt = useUs ? formatShipmentUsMdY : formatShipmentFriDate;
+  const fmt =
+    spec.stackDateMode === 'iso'
+      ? displayMilestoneShipmentDateIso
+      : useUs
+        ? formatShipmentUsMdY
+        : formatShipmentFriDate;
   const d1 = fmt(v1) || fmt(v2) || '—';
   const d2 = fmt(v2) || d1;
   const line1 = d1 || '—';
@@ -445,12 +554,30 @@ function drawMilestoneCell(doc, x, y, w, h, raw, spec) {
   doc.text(String(bottom), cx, cy + 6.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
 }
 
+function drawFriCombinedCell(doc, x, y, w, h, raw, spec) {
+  drawCellBorder(doc, x, y, w, h);
+  const v = pickField(raw, ...(spec.keys || []));
+  const { top, bottom } = parseFriCombined(v);
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(5.5);
+  doc.text(String(top || '0%'), cx, cy - 6.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
+  doc.setFontSize(5.85);
+  doc.text(String(bottom || '—'), cx, cy + 6.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
+}
+
 function drawStackedTwoDates(doc, x, y, w, h, raw, spec) {
   drawCellBorder(doc, x, y, w, h);
   const v1 = pickField(raw, ...(spec.k1 || []));
   const v2 = pickField(raw, ...(spec.k2 || []));
   const useUs = layoutSnapshot?.reportType === 'supplierWise';
-  const fmt = useUs ? formatShipmentUsMdY : formatShipmentFriDate;
+  const fmt =
+    spec.stackDateMode === 'iso'
+      ? displayMilestoneShipmentDateIso
+      : useUs
+        ? formatShipmentUsMdY
+        : formatShipmentFriDate;
   const d1 = fmt(v1) || fmt(v2) || '—';
   const d2 = fmt(v2) || d1;
   const line1 = d1 || '—';
@@ -525,6 +652,7 @@ function drawDataRow(doc, y, raw) {
       drawLeftText(doc, x, y, c.w, DATA_ROW_H, pickField(raw, ...(c.keys || [])), c.align || 'left');
     else if (c.kind === 'qty') drawQty(doc, x, y, c.w, DATA_ROW_H, raw, c);
     else if (c.kind === 'stack2') drawStackedTwoDates(doc, x, y, c.w, DATA_ROW_H, raw, c);
+    else if (c.kind === 'friCombined') drawFriCombinedCell(doc, x, y, c.w, DATA_ROW_H, raw, c);
     else if (c.kind === 'milestone') drawMilestoneCell(doc, x, y, c.w, DATA_ROW_H, raw, c);
   }
   return y + DATA_ROW_H;
@@ -588,14 +716,7 @@ export async function buildMilestoneSummaryPdfBlobFromRows(rawRows, meta = {}) {
   startSheet();
 
   if (!rows.length) {
-    drawCellBorder(doc, tableX, y, tw, DATA_ROW_H);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text('No data rows for this report.', tableX + tw / 2, y + DATA_ROW_H / 2, {
-      align: 'center',
-      baseline: 'middle',
-    });
-    y += DATA_ROW_H;
+    /** Empty result — show just the table header (no placeholder text), per UX expectation. */
     closeSegment();
     layoutSnapshot = null;
     return doc.output('blob');
@@ -617,7 +738,7 @@ export async function buildMilestoneSummaryPdfBlobFromRows(rawRows, meta = {}) {
 }
 
 /**
- * @param {'view'|'pdf'} mode view = new tab; pdf = download
+ * @param {'view'|'pdf'} mode view = new tab (prefer assigning `location` on a tab opened synchronously); pdf = download
  * @param {Blob} pdfBlob
  */
 export function openMilestoneSummaryPdf(mode, pdfBlob) {
@@ -625,6 +746,7 @@ export function openMilestoneSummaryPdf(mode, pdfBlob) {
   const blobUrl = URL.createObjectURL(pdf);
 
   if (mode === 'view') {
+    /** Opening here after async work is unreliable (pop-up block). Prefer `location.replace(blobUrl)` on a pre-opened tab from the UI layer. */
     window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
     setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000);
     return;

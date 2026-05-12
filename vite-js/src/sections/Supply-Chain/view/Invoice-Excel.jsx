@@ -115,32 +115,98 @@ export default function InvoiceExcelPage() {
         const first = items[0] || {};
         if (!items.length) throw new Error('No data found.');
 
-        const products = items.map((it) => {
-          const qty = Number(it.shipQty || 0);
-          const rate = Number(it.ldpRate || 0);
-          const amount = qty * rate;
-          return {
-            poNo: it.pono || '',
-            styleNo: it.styles || '',
-            item: it.itemDescriptionInvoice || it.itemDescription || '',
-            sizeRange: it.sizeRange || '',
-            ldpRate: rate,
-            shipQty: qty,
-            shipCartons: Number(it.shipCartons || 0),
-            amount,
-          };
+        const products = items.flatMap((it) => {
+          const details = it.details || [it];
+          return details.map(d => {
+            const qty = Number(d.quantity || d.shipQty || 0);
+            const rate = Number(d.shippedRate || d.ldpRate || 0);
+            const amount = qty * rate;
+            return {
+              poNo: d.pono || '',
+              styleNo: d.styles || '',
+              item: d.itemDescriptionInvoice || d.itemDescription || '',
+              sizeRange: d.sizeRange || '',
+              ldpRate: rate,
+              shipQty: qty,
+              shipCartons: Number(d.cartons || d.shipCartons || 0),
+              amount,
+            };
+          });
         });
 
         const shipmentPcsTotal = products.reduce((acc, p) => acc + (Number(p.shipQty) || 0), 0);
         const shipmentCartonsTotal = products.reduce((acc, p) => acc + (Number(p.shipCartons) || 0), 0);
         const shipmentAmountTotal = products.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
 
-        const truckingCharges = Number(first.subTotalA1New || 0);
-        const deductions = Number(first.subTotalA2New || 0);
-        const adjustments = Number(first.subTotalA3New || 0);
-        const netFinReceivable = shipmentAmountTotal + truckingCharges - deductions + adjustments;
+        const getAnyCase = (obj, key) => {
+          if (!obj || typeof obj !== 'object') return null;
+          const foundKey = Object.keys(obj).find(k => k.toLowerCase() === key.toLowerCase());
+          return foundKey ? obj[foundKey] : null;
+        };
 
-        // Transform similar to Print-Invoice.jsx (for full structure)
+        const getValue = (key) => {
+          const currentLdp = (first.ldpInvoiceNo || invoiceNo || '').toLowerCase();
+
+          // 1. First, search for a specific match in ALL subTotalDetails across ALL shipment items
+          for (const shipment of items) {
+            if (shipment.subTotalDetails && Array.isArray(shipment.subTotalDetails)) {
+              const match = shipment.subTotalDetails.find(s => s.ldpInvoiceNo?.toLowerCase() === currentLdp);
+              if (match) {
+                const val = getAnyCase(match, key);
+                if (val !== null && val !== undefined && val !== "" && (typeof val !== 'number' || val !== 0)) return val;
+              }
+            }
+          }
+
+          // 2. Search in the root of the CURRENT shipment item
+          let val = getAnyCase(first, key);
+          if (val !== null && val !== undefined && val !== "" && (typeof val !== 'number' || val !== 0)) return val;
+
+          // 3. Search in the root of ALL other shipment items
+          for (const item of items) {
+            val = getAnyCase(item, key);
+            if (val !== null && val !== undefined && val !== "" && (typeof val !== 'number' || val !== 0)) return val;
+          }
+
+          // 4. Fallback: Search any subTotalDetail at all
+          for (const shipment of items) {
+            if (shipment.subTotalDetails && Array.isArray(shipment.subTotalDetails) && shipment.subTotalDetails.length > 0) {
+              val = getAnyCase(shipment.subTotalDetails[0], key);
+              if (val !== null && val !== undefined && val !== "" && (typeof val !== 'number' || val !== 0)) return val;
+            }
+          }
+
+          return 0;
+        };
+
+        const getNonEmptyLabel = (keys) => {
+          for (const key of keys) {
+            const val = getValue(key);
+            if (val && typeof val === 'string' && val !== "") return val;
+          }
+          return "";
+        };
+
+        const getNonZeroValue = (keys) => {
+          for (const key of keys) {
+            const val = getValue(key);
+            if (val !== null && val !== undefined && val !== "" && Number(val) !== 0) return Number(val);
+          }
+          return 0;
+        };
+
+        const truckingChargesLabel = getNonEmptyLabel(['subTotalH1New', 'subTotalH1', 'top1']);
+        const truckingCharges = getNonZeroValue(['subTotalA1New', 'subTotalA1', 'amt1']);
+
+        const deductionsLabel = getNonEmptyLabel(['subTotalH2New', 'subTotalH2', 'top2']);
+        const deductions = getNonZeroValue(['subTotalA2New', 'subTotalA2', 'amt2']);
+
+        const adjustmentsLabel = getNonEmptyLabel(['subTotalH3New', 'subTotalH3', 'top3']);
+        const adjustments = getNonZeroValue(['subTotalA3New', 'subTotalA3', 'amt3']);
+
+        const netFinReceivable = shipmentAmountTotal + truckingCharges + deductions + adjustments;
+        
+        
         const transformed = {
           companyName: 'All Seasons textile',
           companyAddress: '1441 BROADWAY, SUITE # 4142 NEW YORK, NY 10018',
@@ -194,8 +260,11 @@ export default function InvoiceExcelPage() {
             label: 'Ctns',
             amount: shipmentAmountTotal,
           },
+          truckingChargesLabel,
           truckingCharges,
+          deductionsLabel,
           deductions,
+          adjustmentsLabel,
           adjustments,
           netReceivable: netFinReceivable,
           remarks: first.remarks || '',
@@ -284,9 +353,9 @@ export default function InvoiceExcelPage() {
 
         aoa.push(row());
         aoa.push(row('Shipment Total', '', '', '', '', transformed.shipmentTotal.pcs, transformed.shipmentTotal.cartons, '', '', '', transformed.shipmentTotal.amount));
-        aoa.push(row('Trucking Charges', transformed.truckingCharges));
-        aoa.push(row('Deductions', transformed.deductions));
-        aoa.push(row('Adjustments', transformed.adjustments));
+        aoa.push(row(transformed.truckingChargesLabel || '', (transformed.truckingCharges || 0).toLocaleString(undefined, { minimumFractionDigits: (transformed.truckingCharges % 1 === 0) ? 0 : 2 }) + ' US$'));
+        aoa.push(row(transformed.deductionsLabel || '', (transformed.deductions || 0).toLocaleString(undefined, { minimumFractionDigits: (transformed.deductions % 1 === 0) ? 0 : 2 }) + ' US$'));
+        aoa.push(row(transformed.adjustmentsLabel || '', (transformed.adjustments || 0).toLocaleString(undefined, { minimumFractionDigits: (transformed.adjustments % 1 === 0) ? 0 : 2 }) + ' US$'));
         aoa.push(row('NET RECEIVABLE', transformed.netReceivable));
         aoa.push(row());
         aoa.push(row('Amount in Words', transformed.amountInWords));

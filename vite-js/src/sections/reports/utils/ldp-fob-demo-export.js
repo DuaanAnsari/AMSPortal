@@ -154,6 +154,77 @@ export function mapLdpFobApiRowToPdfRow(raw) {
   };
 }
 
+function normLdpFobKeyPart(s) {
+  return String(s ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function getLdpFobQtyNumeric(raw) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  const qtyRaw = pickField(r, 'Quantity', 'quantity');
+  if (qtyRaw === '' || qtyRaw == null) return 0;
+  const n = Number(qtyRaw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Identity for merge: same customer band + same grid columns except QTY (sizes/dates/FOB must match).
+ * @param {object} raw
+ */
+function ldpFobRowMergeKey(raw) {
+  const cust = normLdpFobKeyPart(getLdpFobCustomerGroupLabel(raw));
+  const r = mapLdpFobApiRowToPdfRow(raw);
+  const fobKey = r.fob === '—' || r.fob === '' ? '' : normLdpFobKeyPart(String(r.fob));
+  return [
+    cust,
+    normLdpFobKeyPart(r.supplier),
+    normLdpFobKeyPart(r.po),
+    normLdpFobKeyPart(r.style),
+    normLdpFobKeyPart(r.description),
+    normLdpFobKeyPart(r.sizes),
+    normLdpFobKeyPart(r.deliveryDate),
+    normLdpFobKeyPart(r.factoryShipDate),
+    fobKey,
+  ].join('\x1e');
+}
+
+/**
+ * Merge rows that are identical on all PDF columns except QTY; quantities are summed.
+ * Preserves customer sort order and first-seen row order within each customer.
+ * @param {object[]} sortedRaw output of {@link sortLdpFobRawRowsByCustomer}
+ * @returns {object[]} shallow-cloned API rows with merged `Quantity` / `quantity`
+ */
+export function mergeLdpFobRawRowsByLineKey(sortedRaw) {
+  const list = sortedRaw || [];
+  if (!list.length) return [];
+
+  const order = [];
+  /** @type {Map<string, { firstRaw: object; totalQty: number }>} */
+  const groups = new Map();
+
+  for (const raw of list) {
+    const key = ldpFobRowMergeKey(raw);
+    const q = getLdpFobQtyNumeric(raw);
+    if (!groups.has(key)) {
+      groups.set(key, { firstRaw: raw, totalQty: q });
+      order.push(key);
+    } else {
+      groups.get(key).totalQty += q;
+    }
+  }
+
+  return order.map((key) => {
+    const g = groups.get(key);
+    const base = g.firstRaw && typeof g.firstRaw === 'object' ? { ...g.firstRaw } : {};
+    const t = g.totalQty;
+    base.Quantity = t;
+    base.quantity = t;
+    return base;
+  });
+}
+
 function colStarts() {
   const xs = [];
   let x = MARGIN;
@@ -359,8 +430,9 @@ export async function buildLdpFobPdfBlobFromRows(rawRows) {
 
   const bottomLimit = PAGE_H - 36;
   const sortedRaw = sortLdpFobRawRowsByCustomer(rawRows);
+  const mergedRaw = mergeLdpFobRawRowsByLineKey(sortedRaw);
 
-  if (!sortedRaw.length) {
+  if (!mergedRaw.length) {
     const emptyRow = {
       supplier: '—',
       po: '—',
@@ -375,8 +447,8 @@ export async function buildLdpFobPdfBlobFromRows(rawRows) {
     drawDataRow(doc, y, emptyRow);
   } else {
     let prevCustomerKey = null;
-    for (let i = 0; i < sortedRaw.length; i += 1) {
-      const raw = sortedRaw[i];
+    for (let i = 0; i < mergedRaw.length; i += 1) {
+      const raw = mergedRaw[i];
       const customerLabel = getLdpFobCustomerGroupLabel(raw);
       const row = mapLdpFobApiRowToPdfRow(raw);
 
@@ -411,8 +483,9 @@ export function buildLdpFobCsvFromRows(rawRows) {
   const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
   const lines = [TABLE_HEADERS];
   const sortedRaw = sortLdpFobRawRowsByCustomer(rawRows);
+  const mergedRaw = mergeLdpFobRawRowsByLineKey(sortedRaw);
   let prevCustomerKey = null;
-  sortedRaw.forEach((raw) => {
+  mergedRaw.forEach((raw) => {
     const customerLabel = getLdpFobCustomerGroupLabel(raw);
     if (customerLabel !== prevCustomerKey) {
       lines.push([customerLabel, '', '', '', '', '', '', '', '']);
@@ -431,7 +504,7 @@ export function buildLdpFobCsvFromRows(rawRows) {
       r.fob,
     ]);
   });
-  if (!sortedRaw.length) {
+  if (!mergedRaw.length) {
     lines.push(['—', '—', '—', 'No data for selected filters.', '—', '—', '—', '—', '—']);
   }
   const csv = lines.map((row) => row.map(esc).join(',')).join('\n');
