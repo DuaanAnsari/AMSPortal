@@ -16,6 +16,7 @@ import {
   InputLabel,
   Typography,
   FormControl,
+  Autocomplete,
   CircularProgress,
 } from '@mui/material';
 
@@ -25,6 +26,7 @@ import { useSnackbar } from 'src/components/snackbar';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 
 import { fetchLdpFobReportRows } from 'src/sections/reports/utils/ldp-fob-report-api';
+import { fetchPoNumbers } from 'src/sections/reports/utils/pono-dropdown-api';
 import { buildLdpFobPdfBlobFromRows, openLdpFobDemoDownload } from 'src/sections/reports/utils/ldp-fob-demo-export';
 import { fetchMilestoneReportRows } from 'src/sections/reports/utils/milestone-summary-report-api';
 import {
@@ -1462,7 +1464,7 @@ function FactoryWipReportForm({ pageTitle }) {
 
   const [filters, setFilters] = useState({
     merchandiser: ALL,
-    productPortfolio: 'apparel',
+    productPortfolio: ALL,
     supplier: ALL,
     customer: ALL,
     poScope: ALL,
@@ -1470,6 +1472,17 @@ function FactoryWipReportForm({ pageTitle }) {
     fromDate: '2026-01-01',
     toDate: '2026-12-31',
   });
+
+  /** Shared filter lists (Merchandiser / Product Portfolio / Supplier / Customer). */
+  const [customers, setCustomers] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [merchants, setMerchants] = useState([]);
+  const [portfolios, setPortfolios] = useState([]);
+  const [loadingDropdowns, setLoadingDropdowns] = useState(false);
+
+  /** PO# dropdown (env-driven `/api/MyOrders/Getpono`, scoped by Customer + Supplier). */
+  const [poNumbers, setPoNumbers] = useState([]);
+  const [loadingPoNumbers, setLoadingPoNumbers] = useState(false);
 
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
@@ -1485,6 +1498,128 @@ function FactoryWipReportForm({ pageTitle }) {
   );
 
   const selectSx = { borderRadius: 1 };
+
+  useEffect(() => {
+    const base = getMilestoneSummaryDropdownApiBase();
+    if (!base) {
+      enqueueSnackbar('API URL missing: set VITE_API_BASE_URL for Factory WIP filters', {
+        variant: 'warning',
+      });
+      return undefined;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setLoadingDropdowns(true);
+      try {
+        const res = await fetchMilestoneSummaryDropdowns(wipLdpFobAuthHeaders());
+        if (cancelled) return;
+        setCustomers(res.customers);
+        setSuppliers(res.suppliers);
+        setMerchants(res.merchants);
+        setPortfolios(res.portfolios);
+
+        if (res.rejected.customers) enqueueSnackbar('Could not load customers', { variant: 'error' });
+        if (res.rejected.suppliers) enqueueSnackbar('Could not load suppliers', { variant: 'error' });
+        if (res.rejected.merchants) enqueueSnackbar('Could not load merchandisers', { variant: 'error' });
+        if (res.rejected.portfolios) enqueueSnackbar('Could not load product portfolios', { variant: 'error' });
+      } catch (err) {
+        console.error('[Factory WIP] dropdowns', err);
+        if (!cancelled) enqueueSnackbar('Could not load filter lists', { variant: 'error' });
+      } finally {
+        if (!cancelled) setLoadingDropdowns(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enqueueSnackbar]);
+
+  /** If a selected key isn't in the latest API list (e.g. backend changed), reset it to "All". */
+  useEffect(() => {
+    setFilters((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      if (prev.customer !== ALL && !customers.some((r) => milestoneCustomerKey(r) === prev.customer)) {
+        next.customer = ALL;
+        changed = true;
+      }
+      if (prev.supplier !== ALL && !suppliers.some((r) => milestoneSupplierKey(r) === prev.supplier)) {
+        next.supplier = ALL;
+        changed = true;
+      }
+      if (prev.merchandiser !== ALL && !merchants.some((r) => milestoneMerchantKey(r) === prev.merchandiser)) {
+        next.merchandiser = ALL;
+        changed = true;
+      }
+      if (
+        prev.productPortfolio !== ALL &&
+        !portfolios.some((r) => milestonePortfolioKey(r) === prev.productPortfolio)
+      ) {
+        next.productPortfolio = ALL;
+        changed = true;
+      }
+
+      return changed ? next : prev;
+    });
+  }, [customers, suppliers, merchants, portfolios]);
+
+  /**
+   * Bind PO# dropdown.
+   * - Initial load                  → all POs (no filter)
+   * - Customer or Supplier changes  → POs scoped to active filters
+   * - Both back to ALL              → all POs again
+   *
+   * An `AbortController` cancels any in-flight request when filters flip again,
+   * so rapid changes don't pile up duplicate calls or settle out of order.
+   */
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
+    (async () => {
+      setLoadingPoNumbers(true);
+      try {
+        const list = await fetchPoNumbers(
+          {
+            customerId: filters.customer,
+            supplierId: filters.supplier,
+            signal: controller.signal,
+          },
+          wipLdpFobAuthHeaders()
+        );
+        if (cancelled) return;
+        setPoNumbers(list);
+      } catch (err) {
+        if (axios.isCancel?.(err) || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') {
+          return;
+        }
+        console.error('[Factory WIP] PO# dropdown', err);
+        if (!cancelled) {
+          setPoNumbers([]);
+          enqueueSnackbar('Could not load PO numbers', { variant: 'error' });
+        }
+      } finally {
+        if (!cancelled) setLoadingPoNumbers(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [filters.customer, filters.supplier, enqueueSnackbar]);
+
+  /** Reset PO selection back to "All" if the previously chosen PO is no longer in the refreshed list. */
+  useEffect(() => {
+    setFilters((prev) => {
+      if (prev.poScope === ALL) return prev;
+      if (poNumbers.includes(prev.poScope)) return prev;
+      return { ...prev, poScope: ALL };
+    });
+  }, [poNumbers]);
 
   return (
     <Card variant="outlined" sx={cardSx}>
@@ -1503,8 +1638,19 @@ function FactoryWipReportForm({ pageTitle }) {
               onChange={handleSelect('merchandiser')}
               displayEmpty
               sx={selectSx}
+              disabled={loadingDropdowns && merchants.length === 0}
             >
               <MenuItem value={ALL}>All</MenuItem>
+              {merchants
+                .filter((row) => milestoneMerchantKey(row))
+                .map((row) => {
+                  const val = milestoneMerchantKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestoneMerchantLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -1518,8 +1664,19 @@ function FactoryWipReportForm({ pageTitle }) {
               value={filters.productPortfolio}
               onChange={handleSelect('productPortfolio')}
               sx={selectSx}
+              disabled={loadingDropdowns && portfolios.length === 0}
             >
-              <MenuItem value="apparel">Apparel</MenuItem>
+              <MenuItem value={ALL}>All</MenuItem>
+              {portfolios
+                .filter((row) => milestonePortfolioKey(row))
+                .map((row) => {
+                  const val = milestonePortfolioKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestonePortfolioLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -1529,8 +1686,23 @@ function FactoryWipReportForm({ pageTitle }) {
             Supplier:
           </Typography>
           <FormControl fullWidth size="small">
-            <Select value={filters.supplier} onChange={handleSelect('supplier')} sx={selectSx}>
+            <Select
+              value={filters.supplier}
+              onChange={handleSelect('supplier')}
+              sx={selectSx}
+              disabled={loadingDropdowns && suppliers.length === 0}
+            >
               <MenuItem value={ALL}>All Supplier</MenuItem>
+              {suppliers
+                .filter((row) => milestoneSupplierKey(row))
+                .map((row) => {
+                  const val = milestoneSupplierKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestoneSupplierLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -1540,8 +1712,23 @@ function FactoryWipReportForm({ pageTitle }) {
             Customer :
           </Typography>
           <FormControl fullWidth size="small">
-            <Select value={filters.customer} onChange={handleSelect('customer')} sx={selectSx}>
+            <Select
+              value={filters.customer}
+              onChange={handleSelect('customer')}
+              sx={selectSx}
+              disabled={loadingDropdowns && customers.length === 0}
+            >
               <MenuItem value={ALL}>All Customer</MenuItem>
+              {customers
+                .filter((row) => milestoneCustomerKey(row))
+                .map((row) => {
+                  const val = milestoneCustomerKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestoneCustomerLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -1550,11 +1737,35 @@ function FactoryWipReportForm({ pageTitle }) {
           <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: 'text.secondary' }}>
             PO # :
           </Typography>
-          <FormControl fullWidth size="small">
-            <Select value={filters.poScope} onChange={handleSelect('poScope')} sx={selectSx}>
-              <MenuItem value={ALL}>All</MenuItem>
-            </Select>
-          </FormControl>
+          <Autocomplete
+            fullWidth
+            size="small"
+            disableClearable
+            clearOnEscape
+            disabled={loadingPoNumbers}
+            loading={loadingPoNumbers}
+            options={[ALL, ...poNumbers]}
+            value={filters.poScope}
+            onChange={(_, val) => setFilters((prev) => ({ ...prev, poScope: val || ALL }))}
+            getOptionLabel={(opt) => (opt === ALL ? 'All' : String(opt ?? ''))}
+            isOptionEqualToValue={(opt, val) => String(opt) === String(val)}
+            noOptionsText={loadingPoNumbers ? 'Loading…' : 'No PO Found'}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                sx={selectSx}
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {loadingPoNumbers ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+          />
         </Grid>
 
         <Grid item xs={12} md={4}>
@@ -1656,6 +1867,10 @@ function CustomerWipReportForm() {
   const [portfolios, setPortfolios] = useState([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
 
+  /** PO# dropdown (env-driven `/api/MyOrders/Getpono`, scoped by Customer + Supplier). */
+  const [poNumbers, setPoNumbers] = useState([]);
+  const [loadingPoNumbers, setLoadingPoNumbers] = useState(false);
+
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
   };
@@ -1707,6 +1922,61 @@ function CustomerWipReportForm() {
       cancelled = true;
     };
   }, [enqueueSnackbar]);
+
+  /**
+   * Bind PO# dropdown.
+   * - Initial load                  → all POs (no filter)
+   * - Customer or Supplier changes  → POs scoped to the active filters
+   * - Both back to ALL              → all POs again
+   *
+   * An `AbortController` cancels any in-flight request when filters flip again,
+   * so rapid changes don't pile up duplicate calls or settle out of order.
+   */
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
+    (async () => {
+      setLoadingPoNumbers(true);
+      try {
+        const list = await fetchPoNumbers(
+          {
+            customerId: filters.customer,
+            supplierId: filters.supplier,
+            signal: controller.signal,
+          },
+          wipLdpFobAuthHeaders()
+        );
+        if (cancelled) return;
+        setPoNumbers(list);
+      } catch (err) {
+        if (axios.isCancel?.(err) || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') {
+          return;
+        }
+        console.error('[Customer WIP] PO# dropdown', err);
+        if (!cancelled) {
+          setPoNumbers([]);
+          enqueueSnackbar('Could not load PO numbers', { variant: 'error' });
+        }
+      } finally {
+        if (!cancelled) setLoadingPoNumbers(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [filters.customer, filters.supplier, enqueueSnackbar]);
+
+  /** Reset PO selection back to "All" if the previously chosen PO is no longer in the refreshed list. */
+  useEffect(() => {
+    setFilters((prev) => {
+      if (prev.poScope === ALL) return prev;
+      if (poNumbers.includes(prev.poScope)) return prev;
+      return { ...prev, poScope: ALL };
+    });
+  }, [poNumbers]);
 
   useEffect(() => {
     setFilters((prev) => {
@@ -1875,11 +2145,35 @@ function CustomerWipReportForm() {
           <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: 'text.secondary' }}>
             PO # :
           </Typography>
-          <FormControl fullWidth size="small">
-            <Select value={filters.poScope} onChange={handleSelect('poScope')} sx={selectSx}>
-              <MenuItem value={ALL}>All</MenuItem>
-            </Select>
-          </FormControl>
+          <Autocomplete
+            fullWidth
+            size="small"
+            disableClearable
+            clearOnEscape
+            disabled={loadingPoNumbers}
+            loading={loadingPoNumbers}
+            options={[ALL, ...poNumbers]}
+            value={filters.poScope}
+            onChange={(_, val) => setFilters((prev) => ({ ...prev, poScope: val || ALL }))}
+            getOptionLabel={(opt) => (opt === ALL ? 'All' : String(opt ?? ''))}
+            isOptionEqualToValue={(opt, val) => String(opt) === String(val)}
+            noOptionsText={loadingPoNumbers ? 'Loading…' : 'No PO Found'}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                sx={selectSx}
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {loadingPoNumbers ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+          />
         </Grid>
 
         <Grid item xs={12} md={4}>
@@ -1980,6 +2274,10 @@ function AmsWipReportForm() {
   const [portfolios, setPortfolios] = useState([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
 
+  /** PO# dropdown (env-driven `/api/MyOrders/Getpono`, scoped by Customer + Supplier). */
+  const [poNumbers, setPoNumbers] = useState([]);
+  const [loadingPoNumbers, setLoadingPoNumbers] = useState(false);
+
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
   };
@@ -2031,6 +2329,61 @@ function AmsWipReportForm() {
       cancelled = true;
     };
   }, [enqueueSnackbar]);
+
+  /**
+   * Bind PO# dropdown.
+   * - Initial load                  → all POs (no filter)
+   * - Customer or Supplier changes  → POs scoped to the active filters
+   * - Both back to ALL              → all POs again
+   *
+   * An `AbortController` cancels any in-flight request when filters flip again,
+   * so rapid changes don't pile up duplicate calls or settle out of order.
+   */
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
+    (async () => {
+      setLoadingPoNumbers(true);
+      try {
+        const list = await fetchPoNumbers(
+          {
+            customerId: filters.customer,
+            supplierId: filters.supplier,
+            signal: controller.signal,
+          },
+          wipLdpFobAuthHeaders()
+        );
+        if (cancelled) return;
+        setPoNumbers(list);
+      } catch (err) {
+        if (axios.isCancel?.(err) || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') {
+          return;
+        }
+        console.error('[AMS WIP] PO# dropdown', err);
+        if (!cancelled) {
+          setPoNumbers([]);
+          enqueueSnackbar('Could not load PO numbers', { variant: 'error' });
+        }
+      } finally {
+        if (!cancelled) setLoadingPoNumbers(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [filters.customer, filters.supplier, enqueueSnackbar]);
+
+  /** Reset PO selection back to "All" if the previously chosen PO is no longer in the refreshed list. */
+  useEffect(() => {
+    setFilters((prev) => {
+      if (prev.poScope === ALL) return prev;
+      if (poNumbers.includes(prev.poScope)) return prev;
+      return { ...prev, poScope: ALL };
+    });
+  }, [poNumbers]);
 
   useEffect(() => {
     setFilters((prev) => {
@@ -2184,11 +2537,35 @@ function AmsWipReportForm() {
           <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: 'text.secondary' }}>
             PO # :
           </Typography>
-          <FormControl fullWidth size="small">
-            <Select value={filters.poScope} onChange={handleSelect('poScope')} sx={selectSx}>
-              <MenuItem value={ALL}>All</MenuItem>
-            </Select>
-          </FormControl>
+          <Autocomplete
+            fullWidth
+            size="small"
+            disableClearable
+            clearOnEscape
+            disabled={loadingPoNumbers}
+            loading={loadingPoNumbers}
+            options={[ALL, ...poNumbers]}
+            value={filters.poScope}
+            onChange={(_, val) => setFilters((prev) => ({ ...prev, poScope: val || ALL }))}
+            getOptionLabel={(opt) => (opt === ALL ? 'All' : String(opt ?? ''))}
+            isOptionEqualToValue={(opt, val) => String(opt) === String(val)}
+            noOptionsText={loadingPoNumbers ? 'Loading…' : 'No PO Found'}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                sx={selectSx}
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {loadingPoNumbers ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+          />
         </Grid>
 
         <Grid item xs={12} md={4}>
@@ -2292,6 +2669,10 @@ function SaltWipReportForm() {
   const [portfolios, setPortfolios] = useState([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
 
+  /** PO# dropdown (env-driven `/api/MyOrders/Getpono`, scoped by Customer + Supplier). */
+  const [poNumbers, setPoNumbers] = useState([]);
+  const [loadingPoNumbers, setLoadingPoNumbers] = useState(false);
+
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
   };
@@ -2343,6 +2724,61 @@ function SaltWipReportForm() {
       cancelled = true;
     };
   }, [enqueueSnackbar]);
+
+  /**
+   * Bind PO# dropdown.
+   * - Initial load                  → all POs (no filter)
+   * - Customer or Supplier changes  → POs scoped to the active filters
+   * - Both back to ALL              → all POs again
+   *
+   * An `AbortController` cancels any in-flight request when filters flip again,
+   * so rapid changes don't pile up duplicate calls or settle out of order.
+   */
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
+    (async () => {
+      setLoadingPoNumbers(true);
+      try {
+        const list = await fetchPoNumbers(
+          {
+            customerId: filters.customer,
+            supplierId: filters.supplier,
+            signal: controller.signal,
+          },
+          wipLdpFobAuthHeaders()
+        );
+        if (cancelled) return;
+        setPoNumbers(list);
+      } catch (err) {
+        if (axios.isCancel?.(err) || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') {
+          return;
+        }
+        console.error('[Salt WIP] PO# dropdown', err);
+        if (!cancelled) {
+          setPoNumbers([]);
+          enqueueSnackbar('Could not load PO numbers', { variant: 'error' });
+        }
+      } finally {
+        if (!cancelled) setLoadingPoNumbers(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [filters.customer, filters.supplier, enqueueSnackbar]);
+
+  /** Reset PO selection back to "All" if the previously chosen PO is no longer in the refreshed list. */
+  useEffect(() => {
+    setFilters((prev) => {
+      if (prev.poScope === ALL) return prev;
+      if (poNumbers.includes(prev.poScope)) return prev;
+      return { ...prev, poScope: ALL };
+    });
+  }, [poNumbers]);
 
   useEffect(() => {
     setFilters((prev) => {
@@ -2507,11 +2943,35 @@ function SaltWipReportForm() {
           <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: 'text.secondary' }}>
             PO # :
           </Typography>
-          <FormControl fullWidth size="small">
-            <Select value={filters.poScope} onChange={handleSelect('poScope')} sx={selectSx}>
-              <MenuItem value={ALL}>All</MenuItem>
-            </Select>
-          </FormControl>
+          <Autocomplete
+            fullWidth
+            size="small"
+            disableClearable
+            clearOnEscape
+            disabled={loadingPoNumbers}
+            loading={loadingPoNumbers}
+            options={[ALL, ...poNumbers]}
+            value={filters.poScope}
+            onChange={(_, val) => setFilters((prev) => ({ ...prev, poScope: val || ALL }))}
+            getOptionLabel={(opt) => (opt === ALL ? 'All' : String(opt ?? ''))}
+            isOptionEqualToValue={(opt, val) => String(opt) === String(val)}
+            noOptionsText={loadingPoNumbers ? 'Loading…' : 'No PO Found'}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                sx={selectSx}
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {loadingPoNumbers ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+          />
         </Grid>
 
         <Grid item xs={12} md={4}>
@@ -2597,6 +3057,17 @@ function CustomisedCustomerWipReportForm() {
     toDate: '2026-12-31',
   });
 
+  /** Shared filter lists (Merchandiser / Customer / Supplier). Product Portfolio isn't rendered here. */
+  const [customers, setCustomers] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [merchants, setMerchants] = useState([]);
+  const [portfolios, setPortfolios] = useState([]);
+  const [loadingDropdowns, setLoadingDropdowns] = useState(false);
+
+  /** PO# dropdown (env-driven `/api/MyOrders/Getpono`, scoped by Customer + Supplier). */
+  const [poNumbers, setPoNumbers] = useState([]);
+  const [loadingPoNumbers, setLoadingPoNumbers] = useState(false);
+
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
   };
@@ -2611,6 +3082,125 @@ function CustomisedCustomerWipReportForm() {
   );
 
   const selectSx = { borderRadius: 1 };
+
+  useEffect(() => {
+    const base = getMilestoneSummaryDropdownApiBase();
+    if (!base) {
+      enqueueSnackbar('API URL missing: set VITE_API_BASE_URL for Customised Customer WIP filters', {
+        variant: 'warning',
+      });
+      return undefined;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setLoadingDropdowns(true);
+      try {
+        const res = await fetchMilestoneSummaryDropdowns(wipLdpFobAuthHeaders());
+        if (cancelled) return;
+        setCustomers(res.customers);
+        setSuppliers(res.suppliers);
+        setMerchants(res.merchants);
+        setPortfolios(res.portfolios);
+
+        if (res.rejected.customers) enqueueSnackbar('Could not load customers', { variant: 'error' });
+        if (res.rejected.suppliers) enqueueSnackbar('Could not load suppliers', { variant: 'error' });
+        if (res.rejected.merchants) enqueueSnackbar('Could not load merchandisers', { variant: 'error' });
+      } catch (err) {
+        console.error('[Customised Customer WIP] dropdowns', err);
+        if (!cancelled) enqueueSnackbar('Could not load filter lists', { variant: 'error' });
+      } finally {
+        if (!cancelled) setLoadingDropdowns(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enqueueSnackbar]);
+
+  /** If a selected key isn't in the latest API list, reset it to "All". */
+  useEffect(() => {
+    setFilters((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      if (prev.customer !== ALL && !customers.some((r) => milestoneCustomerKey(r) === prev.customer)) {
+        next.customer = ALL;
+        changed = true;
+      }
+      if (prev.supplier !== ALL && !suppliers.some((r) => milestoneSupplierKey(r) === prev.supplier)) {
+        next.supplier = ALL;
+        changed = true;
+      }
+      if (prev.merchandiser !== ALL && !merchants.some((r) => milestoneMerchantKey(r) === prev.merchandiser)) {
+        next.merchandiser = ALL;
+        changed = true;
+      }
+
+      return changed ? next : prev;
+    });
+  }, [customers, suppliers, merchants]);
+
+  /**
+   * Bind PO# dropdown.
+   * - Initial load                  → all POs (no filter)
+   * - Customer or Supplier changes  → POs scoped to the active filters
+   * - Both back to ALL              → all POs again
+   *
+   * An `AbortController` cancels any in-flight request when filters flip again,
+   * so rapid changes don't pile up duplicate calls or settle out of order.
+   */
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
+    (async () => {
+      setLoadingPoNumbers(true);
+      try {
+        const list = await fetchPoNumbers(
+          {
+            customerId: filters.customer,
+            supplierId: filters.supplier,
+            signal: controller.signal,
+          },
+          wipLdpFobAuthHeaders()
+        );
+        if (cancelled) return;
+        setPoNumbers(list);
+      } catch (err) {
+        if (axios.isCancel?.(err) || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') {
+          return;
+        }
+        console.error('[Customised Customer WIP] PO# dropdown', err);
+        if (!cancelled) {
+          setPoNumbers([]);
+          enqueueSnackbar('Could not load PO numbers', { variant: 'error' });
+        }
+      } finally {
+        if (!cancelled) setLoadingPoNumbers(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [filters.customer, filters.supplier, enqueueSnackbar]);
+
+  /** Reset PO selection back to "All" if the previously chosen PO is no longer in the refreshed list. */
+  useEffect(() => {
+    setFilters((prev) => {
+      if (prev.poScope === ALL) return prev;
+      if (poNumbers.includes(prev.poScope)) return prev;
+      return { ...prev, poScope: ALL };
+    });
+  }, [poNumbers]);
+
+  const dropdowns = useMemo(
+    () => ({ customers, suppliers, merchants, portfolios }),
+    [customers, suppliers, merchants, portfolios]
+  );
 
   return (
     <Card variant="outlined" sx={cardSx}>
@@ -2627,9 +3217,23 @@ function CustomisedCustomerWipReportForm() {
             Merchandiser:
           </Typography>
           <FormControl fullWidth size="small">
-            <Select value={filters.merchandiser} onChange={handleSelect('merchandiser')} sx={selectSx}>
+            <Select
+              value={filters.merchandiser}
+              onChange={handleSelect('merchandiser')}
+              sx={selectSx}
+              disabled={loadingDropdowns && merchants.length === 0}
+            >
               <MenuItem value={ALL}>All</MenuItem>
-              <MenuItem value="muhammad-shahzaib">MUHAMMAD SHAHZAIB</MenuItem>
+              {merchants
+                .filter((row) => milestoneMerchantKey(row))
+                .map((row) => {
+                  const val = milestoneMerchantKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestoneMerchantLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -2639,9 +3243,23 @@ function CustomisedCustomerWipReportForm() {
             Customer:
           </Typography>
           <FormControl fullWidth size="small">
-            <Select value={filters.customer} onChange={handleSelect('customer')} sx={selectSx}>
+            <Select
+              value={filters.customer}
+              onChange={handleSelect('customer')}
+              sx={selectSx}
+              disabled={loadingDropdowns && customers.length === 0}
+            >
               <MenuItem value={ALL}>All Customer</MenuItem>
-              <MenuItem value="bailey-apparel">BAILEY APPAREL</MenuItem>
+              {customers
+                .filter((row) => milestoneCustomerKey(row))
+                .map((row) => {
+                  const val = milestoneCustomerKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestoneCustomerLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -2651,8 +3269,23 @@ function CustomisedCustomerWipReportForm() {
             Supplier:
           </Typography>
           <FormControl fullWidth size="small">
-            <Select value={filters.supplier} onChange={handleSelect('supplier')} sx={selectSx}>
+            <Select
+              value={filters.supplier}
+              onChange={handleSelect('supplier')}
+              sx={selectSx}
+              disabled={loadingDropdowns && suppliers.length === 0}
+            >
               <MenuItem value={ALL}>All Supplier</MenuItem>
+              {suppliers
+                .filter((row) => milestoneSupplierKey(row))
+                .map((row) => {
+                  const val = milestoneSupplierKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {milestoneSupplierLabel(row)}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -2661,11 +3294,35 @@ function CustomisedCustomerWipReportForm() {
           <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: 'text.secondary' }}>
             PO #:
           </Typography>
-          <FormControl fullWidth size="small">
-            <Select value={filters.poScope} onChange={handleSelect('poScope')} sx={selectSx}>
-              <MenuItem value={ALL}>All</MenuItem>
-            </Select>
-          </FormControl>
+          <Autocomplete
+            fullWidth
+            size="small"
+            disableClearable
+            clearOnEscape
+            disabled={loadingPoNumbers}
+            loading={loadingPoNumbers}
+            options={[ALL, ...poNumbers]}
+            value={filters.poScope}
+            onChange={(_, val) => setFilters((prev) => ({ ...prev, poScope: val || ALL }))}
+            getOptionLabel={(opt) => (opt === ALL ? 'All' : String(opt ?? ''))}
+            isOptionEqualToValue={(opt, val) => String(opt) === String(val)}
+            noOptionsText={loadingPoNumbers ? 'Loading…' : 'No PO Found'}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                sx={selectSx}
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {loadingPoNumbers ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+          />
         </Grid>
 
         <Grid item xs={12} md={4}>
@@ -2719,7 +3376,7 @@ function CustomisedCustomerWipReportForm() {
               justifyContent: 'center',
             }}
           >
-            <CustomisedCustomerWipReportActions filters={filters} dropdowns={{}} />
+            <CustomisedCustomerWipReportActions filters={filters} dropdowns={dropdowns} />
             <Button
               variant="contained"
               color="primary"
@@ -2777,6 +3434,10 @@ function WipReportForm({ pageTitle }) {
   const [portfolios, setPortfolios] = useState([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
 
+  /** PO# dropdown (driven by `/api/MyOrders/Getpono`, scoped by customer only). */
+  const [poNumbers, setPoNumbers] = useState([]);
+  const [loadingPoNumbers, setLoadingPoNumbers] = useState(false);
+
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
   };
@@ -2828,6 +3489,61 @@ function WipReportForm({ pageTitle }) {
       cancelled = true;
     };
   }, [enqueueSnackbar]);
+
+  /**
+   * Bind PO# dropdown.
+   * - Initial load        → all POs (no filter)
+   * - Customer changes    → POs scoped to that customer
+   * - `customer === ALL`  → all POs again
+   *
+   * Supplier filter on this page is intentionally not part of the PO query (per spec).
+   * Any in-flight request is aborted when `customer` flips again, so rapid changes
+   * don't pile up duplicate calls or settle out of order.
+   */
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
+    (async () => {
+      setLoadingPoNumbers(true);
+      try {
+        const list = await fetchPoNumbers(
+          {
+            customerId: filters.customer,
+            signal: controller.signal,
+          },
+          wipLdpFobAuthHeaders()
+        );
+        if (cancelled) return;
+        setPoNumbers(list);
+      } catch (err) {
+        if (axios.isCancel?.(err) || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') {
+          return;
+        }
+        console.error('[Milestone Summary] PO# dropdown', err);
+        if (!cancelled) {
+          setPoNumbers([]);
+          enqueueSnackbar('Could not load PO numbers', { variant: 'error' });
+        }
+      } finally {
+        if (!cancelled) setLoadingPoNumbers(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [filters.customer, enqueueSnackbar]);
+
+  /** Reset PO selection back to "All" if the previously chosen PO is no longer in the refreshed list. */
+  useEffect(() => {
+    setFilters((prev) => {
+      if (prev.poScope === ALL) return prev;
+      if (poNumbers.includes(prev.poScope)) return prev;
+      return { ...prev, poScope: ALL };
+    });
+  }, [poNumbers]);
 
   useEffect(() => {
     setFilters((prev) => {
@@ -2940,11 +3656,35 @@ function WipReportForm({ pageTitle }) {
               <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: 'text.secondary' }}>
                 PO # :
               </Typography>
-              <FormControl fullWidth size="small">
-                <Select value={filters.poScope} onChange={handleSelect('poScope')} sx={selectSx}>
-                  <MenuItem value={ALL}>All</MenuItem>
-                </Select>
-              </FormControl>
+              <Autocomplete
+                fullWidth
+                size="small"
+                disableClearable
+                clearOnEscape
+                disabled={loadingPoNumbers}
+                loading={loadingPoNumbers}
+                options={[ALL, ...poNumbers]}
+                value={filters.poScope}
+                onChange={(_, val) => setFilters((prev) => ({ ...prev, poScope: val || ALL }))}
+                getOptionLabel={(opt) => (opt === ALL ? 'All' : String(opt ?? ''))}
+                isOptionEqualToValue={(opt, val) => String(opt) === String(val)}
+                noOptionsText={loadingPoNumbers ? 'Loading…' : 'No PO Found'}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    sx={selectSx}
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {loadingPoNumbers ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
+                  />
+                )}
+              />
             </Grid>
 
             <Grid item xs={12} md={4}>
@@ -3074,18 +3814,36 @@ function WipReportForm({ pageTitle }) {
             </Grid>
 
             <Grid item xs={12} md={4}>
-              <FormControl fullWidth size="small">
-                <InputLabel id="wip-po-label">PO #</InputLabel>
-                <Select
-                  labelId="wip-po-label"
-                  label="PO #"
-                  value={filters.poScope}
-                  onChange={handleSelect('poScope')}
-                  sx={selectSx}
-                >
-                  <MenuItem value={ALL}>All</MenuItem>
-                </Select>
-              </FormControl>
+              <Autocomplete
+                fullWidth
+                size="small"
+                disableClearable
+                clearOnEscape
+                disabled={loadingPoNumbers}
+                loading={loadingPoNumbers}
+                options={[ALL, ...poNumbers]}
+                value={filters.poScope}
+                onChange={(_, val) => setFilters((prev) => ({ ...prev, poScope: val || ALL }))}
+                getOptionLabel={(opt) => (opt === ALL ? 'All' : String(opt ?? ''))}
+                isOptionEqualToValue={(opt, val) => String(opt) === String(val)}
+                noOptionsText={loadingPoNumbers ? 'Loading…' : 'No PO Found'}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="PO #"
+                    sx={selectSx}
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {loadingPoNumbers ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
+                  />
+                )}
+              />
             </Grid>
 
             <Grid item xs={12} md={4}>

@@ -14,6 +14,7 @@ import {
   InputLabel,
   Typography,
   FormControl,
+  Autocomplete,
   CircularProgress,
 } from '@mui/material';
 
@@ -22,7 +23,10 @@ import { paths } from 'src/routes/paths';
 import { useSnackbar } from 'src/components/snackbar';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 
-import { fetchLdpFobReportRows } from 'src/sections/reports/utils/ldp-fob-report-api';
+import {
+  fetchLdpFobReportRows,
+  fetchLdpFobPoNumbers,
+} from 'src/sections/reports/utils/ldp-fob-report-api';
 import {
   buildLdpFobCsvFromRows,
   buildLdpFobPdfBlobFromRows,
@@ -127,9 +131,11 @@ export default function FobLdpPriceListView() {
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [merchants, setMerchants] = useState([]);
+  const [poNumbers, setPoNumbers] = useState([]);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const [loadingMerchants, setLoadingMerchants] = useState(false);
+  const [loadingPoNumbers, setLoadingPoNumbers] = useState(false);
   const [exporting, setExporting] = useState(null);
 
   const [filters, setFilters] = useState({
@@ -184,13 +190,19 @@ export default function FobLdpPriceListView() {
 
       setExporting(mode);
       try {
+        // PO# dropdown selection takes precedence; otherwise fall back to the PO NO text input.
+        const ponoFilter =
+          filters.poScope && filters.poScope !== ALL
+            ? String(filters.poScope).trim()
+            : String(filters.poNo ?? '').trim();
+
         const raw = await fetchLdpFobReportRows(
           {
             fromDate: filters.fromDate,
             toDate: filters.toDate,
             customerId: filters.customer === ALL ? '0' : filters.customer,
             supplierId: filters.supplier === ALL ? '0' : filters.supplier,
-            pono: String(filters.poNo ?? '').trim(),
+            pono: ponoFilter,
             styleNo: String(filters.style ?? '').trim(),
           },
           headers
@@ -393,6 +405,62 @@ export default function FobLdpPriceListView() {
     });
   }, [customers, suppliers, merchants]);
 
+  /**
+   * PO# dropdown source — refetched whenever Customer / Supplier changes.
+   * Uses AbortController so a fast-changing filter cancels the previous in-flight call
+   * and only the latest response wins (prevents stale data flicker).
+   * Auth headers / API base follow the same pattern as the other dropdowns above.
+   */
+  useEffect(() => {
+    if (!API_BASE_URL) return undefined;
+
+    const controller = new AbortController();
+    const token = localStorage.getItem('accessToken');
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+
+    setLoadingPoNumbers(true);
+    fetchLdpFobPoNumbers(
+      {
+        customerId: filters.customer,
+        supplierId: filters.supplier,
+        signal: controller.signal,
+      },
+      headers
+    )
+      .then((list) => {
+        if (controller.signal.aborted) return;
+        setPoNumbers(list);
+      })
+      .catch((err) => {
+        if (controller.signal.aborted || err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') {
+          return;
+        }
+        console.error('[FOB/LDP] pono dropdown', err);
+        setPoNumbers([]);
+        enqueueSnackbar('Could not load PO numbers', { variant: 'error' });
+      })
+      .finally(() => {
+        if (controller.signal.aborted) return;
+        setLoadingPoNumbers(false);
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [filters.customer, filters.supplier, enqueueSnackbar]);
+
+  /** Reset `poScope` to ALL whenever the refreshed PO list no longer contains the selected value. */
+  useEffect(() => {
+    setFilters((prev) => {
+      if (prev.poScope === ALL) return prev;
+      if (poNumbers.includes(prev.poScope)) return prev;
+      return { ...prev, poScope: ALL };
+    });
+  }, [poNumbers]);
+
   const selectSx = { borderRadius: 1 };
 
   return (
@@ -518,18 +586,41 @@ export default function FobLdpPriceListView() {
           </Grid>
 
           <Grid item xs={12} md={6}>
-            <FormControl fullWidth size="small">
-              <InputLabel id="fob-po-scope-label">PO #</InputLabel>
-              <Select
-                labelId="fob-po-scope-label"
-                label="PO #"
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Autocomplete
+                fullWidth
+                size="small"
+                sx={{ flex: 1, minWidth: 0, ...selectSx }}
+                disabled={loadingPoNumbers && poNumbers.length === 0}
+                loading={loadingPoNumbers}
+                options={[ALL, ...poNumbers]}
                 value={filters.poScope}
-                onChange={handleSelect('poScope')}
-                sx={selectSx}
-              >
-                <MenuItem value={ALL}>All</MenuItem>
-              </Select>
-            </FormControl>
+                onChange={(_, val) =>
+                  setFilters((prev) => ({ ...prev, poScope: val ?? ALL }))
+                }
+                getOptionLabel={(option) => (option === ALL ? 'All' : String(option || ''))}
+                isOptionEqualToValue={(option, value) => String(option) === String(value)}
+                noOptionsText={loadingPoNumbers ? 'Loading…' : 'No PO Found'}
+                clearOnEscape
+                disableClearable
+                renderInput={(p) => (
+                  <TextField
+                    {...p}
+                    label="PO #"
+                    placeholder="Search PO #"
+                    InputProps={{
+                      ...p.InputProps,
+                      endAdornment: (
+                        <>
+                          {loadingPoNumbers ? <CircularProgress size={18} color="inherit" /> : null}
+                          {p.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
+                  />
+                )}
+              />
+            </Stack>
           </Grid>
 
           <Grid item xs={12} md={6}>

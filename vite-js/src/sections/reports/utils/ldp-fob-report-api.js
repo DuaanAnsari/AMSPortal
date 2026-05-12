@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+import { PONO_PATH, fetchPoNumbers } from './pono-dropdown-api';
+
 /**
  * GET path relative to `VITE_API_BASE_URL` (leading slash recommended).
  * Expected shape: `/api/Report/LDPFOBReport?...`
@@ -81,3 +83,21 @@ function unwrapListPayload(data) {
   if (data.data && typeof data.data === 'object') return [data.data];
   return [];
 }
+
+/**
+ * GET path for the PO# dropdown source on the LDP / FOB Report page.
+ * Re-exported from the shared `pono-dropdown-api` module so the LDP / FOB page
+ * keeps its existing import surface.
+ */
+export const LDP_FOB_PONO_PATH = PONO_PATH;
+
+/**
+ * Reusable PO# fetcher for the LDP / FOB Report page — thin alias around the
+ * shared `fetchPoNumbers` helper so multiple report pages share a single source
+ * of truth.
+ *
+ * @param {{ customerId?: string|number; supplierId?: string|number; signal?: AbortSignal }} [params]
+ * @param {Record<string, string>} [headers]
+ * @returns {Promise<string[]>}
+ */
+export const fetchLdpFobPoNumbers = fetchPoNumbers;

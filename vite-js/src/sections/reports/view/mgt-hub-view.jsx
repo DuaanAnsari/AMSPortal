@@ -14,6 +14,8 @@ import {
   InputLabel,
   Typography,
   FormControl,
+  Autocomplete,
+  CircularProgress,
 } from '@mui/material';
 
 import { paths } from 'src/routes/paths';
@@ -31,6 +33,7 @@ import {
   milestoneSupplierKey,
   milestoneSupplierLabel,
 } from 'src/sections/reports/utils/milestone-summary-dropdown-api';
+import { fetchPoNumbers } from 'src/sections/reports/utils/pono-dropdown-api';
 import {
   buildBusinessSummaryOrderWisePdfBlob,
   openBusinessSummaryOrderWisePdf,
@@ -55,6 +58,10 @@ import {
   buildOpenOrderReportPdfBlob,
   openOpenOrderReportPdf,
 } from 'src/sections/reports/utils/open-order-report-pdf-export';
+import {
+  buildShippedOrderReportPdfBlob,
+  openShippedOrderReportPdf,
+} from 'src/sections/reports/utils/shipped-order-report-pdf-export';
 
 // ----------------------------------------------------------------------
 
@@ -641,6 +648,15 @@ function StatusWiseOrderPanel({
     toDate: '2026-12-31',
   });
 
+  /**
+   * PO# dropdown — per-panel, completely independent between Customer and Vendor sides
+   * (each `StatusWiseOrderPanel` instance owns its own state).
+   * Driven by the shared `/api/MyOrders/Getpono` service via env, scoped by both
+   * Customer + Supplier filters of *this* panel only.
+   */
+  const [poNumbers, setPoNumbers] = useState([]);
+  const [loadingPoNumbers, setLoadingPoNumbers] = useState(false);
+
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
   };
@@ -671,6 +687,62 @@ function StatusWiseOrderPanel({
       return changed ? next : prev;
     });
   }, [customers, suppliers, merchants]);
+
+  /**
+   * Bind PO# dropdown for *this panel* only.
+   * - Initial load                  → all POs (no filter)
+   * - Customer or Supplier changes  → POs scoped to the active filters
+   * - Both back to ALL              → all POs again
+   *
+   * An `AbortController` cancels any in-flight request when filters flip again,
+   * so rapid changes don't pile up duplicate calls or settle out of order.
+   * Since each panel has its own state, the two PO dropdowns never affect each other.
+   */
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
+    (async () => {
+      setLoadingPoNumbers(true);
+      try {
+        const list = await fetchPoNumbers(
+          {
+            customerId: filters.customer,
+            supplierId: filters.supplier,
+            signal: controller.signal,
+          },
+          mgtAuthHeaders()
+        );
+        if (cancelled) return;
+        setPoNumbers(list);
+      } catch (err) {
+        if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') {
+          return;
+        }
+        console.error(`[MGT] PO# dropdown (${order})`, err);
+        if (!cancelled) {
+          setPoNumbers([]);
+          enqueueSnackbar('Could not load PO numbers', { variant: 'error' });
+        }
+      } finally {
+        if (!cancelled) setLoadingPoNumbers(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [filters.customer, filters.supplier, order, enqueueSnackbar]);
+
+  /** Reset PO selection back to "All" if the previously chosen PO is no longer in the refreshed list. */
+  useEffect(() => {
+    setFilters((prev) => {
+      if (prev.po === ALL) return prev;
+      if (poNumbers.includes(prev.po)) return prev;
+      return { ...prev, po: ALL };
+    });
+  }, [poNumbers]);
 
   const toast = useCallback(
     (msg) => enqueueSnackbar(msg, { variant: 'info' }),
@@ -889,11 +961,35 @@ function StatusWiseOrderPanel({
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             PO # :
           </Typography>
-          <FormControl fullWidth size="small">
-            <Select value={filters.po} onChange={handleSelect('po')} sx={selectSx}>
-              <MenuItem value={ALL}>All</MenuItem>
-            </Select>
-          </FormControl>
+          <Autocomplete
+            fullWidth
+            size="small"
+            disableClearable
+            clearOnEscape
+            disabled={loadingPoNumbers}
+            loading={loadingPoNumbers}
+            options={[ALL, ...poNumbers]}
+            value={filters.po}
+            onChange={(_, val) => setFilters((prev) => ({ ...prev, po: val || ALL }))}
+            getOptionLabel={(opt) => (opt === ALL ? 'All' : String(opt ?? ''))}
+            isOptionEqualToValue={(opt, val) => String(opt) === String(val)}
+            noOptionsText={loadingPoNumbers ? 'Loading…' : 'No PO Found'}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                sx={selectSx}
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {loadingPoNumbers ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+          />
         </Grid>
 
         <Grid item xs={12}>
@@ -1086,6 +1182,16 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
     toDate: '2026-12-31',
   });
 
+  /**
+   * PO# dropdown — per-panel, completely independent between Customer and Vendor sides.
+   * Each `OpenOrderReportPanel` instance owns its own state, so the left and right PO
+   * lists never affect each other.
+   * Driven by the shared `/api/MyOrders/Getpono` env service, scoped by Customer + Supplier
+   * filters of *this* panel only.
+   */
+  const [poNumbers, setPoNumbers] = useState([]);
+  const [loadingPoNumbers, setLoadingPoNumbers] = useState(false);
+
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
   };
@@ -1116,6 +1222,61 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
       return changed ? next : prev;
     });
   }, [customers, suppliers, merchants]);
+
+  /**
+   * Bind PO# dropdown for *this panel* only.
+   * - Initial load                  → all POs (no filter)
+   * - Customer or Supplier changes  → POs scoped to the active filters
+   * - Both back to ALL              → all POs again
+   *
+   * `AbortController` cancels any in-flight request when filters flip again, so rapid
+   * changes don't pile up duplicate calls or settle out of order.
+   */
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
+    (async () => {
+      setLoadingPoNumbers(true);
+      try {
+        const list = await fetchPoNumbers(
+          {
+            customerId: filters.customer,
+            supplierId: filters.supplier,
+            signal: controller.signal,
+          },
+          mgtAuthHeaders()
+        );
+        if (cancelled) return;
+        setPoNumbers(list);
+      } catch (err) {
+        if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') {
+          return;
+        }
+        console.error(`[MGT] Open Order PO# dropdown (${order})`, err);
+        if (!cancelled) {
+          setPoNumbers([]);
+          enqueueSnackbar('Could not load PO numbers', { variant: 'error' });
+        }
+      } finally {
+        if (!cancelled) setLoadingPoNumbers(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [filters.customer, filters.supplier, order, enqueueSnackbar]);
+
+  /** Reset PO selection back to "All" if the previously chosen PO is no longer in the refreshed list. */
+  useEffect(() => {
+    setFilters((prev) => {
+      if (prev.po === ALL) return prev;
+      if (poNumbers.includes(prev.po)) return prev;
+      return { ...prev, po: ALL };
+    });
+  }, [poNumbers]);
 
   const toast = useCallback(
     (msg) => enqueueSnackbar(msg, { variant: 'info' }),
@@ -1306,11 +1467,35 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             PO # :
           </Typography>
-          <FormControl fullWidth size="small">
-            <Select value={filters.po} onChange={handleSelect('po')} sx={selectSx}>
-              <MenuItem value={ALL}>All</MenuItem>
-            </Select>
-          </FormControl>
+          <Autocomplete
+            fullWidth
+            size="small"
+            disableClearable
+            clearOnEscape
+            disabled={loadingPoNumbers}
+            loading={loadingPoNumbers}
+            options={[ALL, ...poNumbers]}
+            value={filters.po}
+            onChange={(_, val) => setFilters((prev) => ({ ...prev, po: val || ALL }))}
+            getOptionLabel={(opt) => (opt === ALL ? 'All' : String(opt ?? ''))}
+            isOptionEqualToValue={(opt, val) => String(opt) === String(val)}
+            noOptionsText={loadingPoNumbers ? 'Loading…' : 'No PO Found'}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                sx={selectSx}
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {loadingPoNumbers ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+          />
         </Grid>
 
         <Grid item xs={12}>
@@ -1517,6 +1702,93 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
 
   const variant = order === 'supplier-first' ? 'Vendor' : 'Customer';
 
+  /**
+   * Both Customer (LEFT) and Vendor (RIGHT) panels open the same `SHIPPED ORDER REPORT` PDF
+   * (reuses the Status Wise Vendor builder — same layout/columns/totals). Backend will scope
+   * rows to the selected customer / supplier filter once wired.
+   */
+  const handleViewReport = useCallback(async () => {
+    const { fromDate, toDate } = filters;
+    if (!fromDate || !toDate) {
+      enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+      return;
+    }
+    if (!MGT_ISO_DATE.test(fromDate) || !MGT_ISO_DATE.test(toDate)) {
+      enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+      return;
+    }
+
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      enqueueSnackbar(
+        'Unable to open a new tab — your browser may have blocked the pop-up. Allow pop-ups for this site and try again.',
+        { variant: 'error' }
+      );
+      return;
+    }
+
+    try {
+      previewWindow.document.open();
+      previewWindow.document.write(
+        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Loading report...</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;">Generating PDF...</p></body></html>'
+      );
+      previewWindow.document.close();
+    } catch (e) {
+      console.warn('[MGT] preview placeholder', e);
+    }
+
+    try {
+      const blob = await buildShippedOrderReportPdfBlob(undefined, { fromDate, toDate });
+      if (previewWindow.closed) {
+        enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
+          variant: 'warning',
+        });
+        return;
+      }
+      const blobUrl = URL.createObjectURL(blob);
+      try {
+        previewWindow.location.replace(blobUrl);
+      } catch (navErr) {
+        URL.revokeObjectURL(blobUrl);
+        throw navErr;
+      }
+      previewWindow.focus?.();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
+      enqueueSnackbar(`Shipped Order Report (${variant}) opened in a new tab`, { variant: 'success' });
+    } catch (err) {
+      console.error('[MGT] Shipped Order Report PDF', err);
+      enqueueSnackbar(err?.message || 'Shipped Order Report PDF failed', { variant: 'error' });
+      if (!previewWindow.closed) {
+        try {
+          const doc = previewWindow.document;
+          doc.open();
+          doc.write(
+            `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${String(err?.message || '')}</p></body></html>`
+          );
+          doc.close();
+        } catch (writeErr) {
+          console.warn('[MGT] preview error page', writeErr);
+        }
+      }
+    }
+  }, [filters, variant, enqueueSnackbar]);
+
+  const handleDownloadPdf = useCallback(async () => {
+    const { fromDate, toDate } = filters;
+    if (!fromDate || !toDate) {
+      enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+      return;
+    }
+    try {
+      const blob = await buildShippedOrderReportPdfBlob(undefined, { fromDate, toDate });
+      openShippedOrderReportPdf('pdf', blob);
+      enqueueSnackbar(`Shipped Order Report (${variant}) downloaded`, { variant: 'success' });
+    } catch (err) {
+      console.error('[MGT] Shipped Order Report PDF (download)', err);
+      enqueueSnackbar(err?.message || 'Shipped Order Report PDF failed', { variant: 'error' });
+    }
+  }, [filters, variant, enqueueSnackbar]);
+
   const customerField = (
     <Grid item xs={12}>
       <Typography variant="subtitle2" sx={sectionLabelSx}>
@@ -1619,9 +1891,7 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
               variant="contained"
               color="primary"
               size="medium"
-              onClick={() =>
-                toast(`View Report (Shipped Order Report ${variant}): connect API when backend is ready.`)
-              }
+              onClick={handleViewReport}
               sx={{ minWidth: 120, textTransform: 'none', fontWeight: 600 }}
             >
               View Report
@@ -1630,9 +1900,7 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
               variant="contained"
               color="primary"
               size="medium"
-              onClick={() =>
-                toast(`Download PDF (Shipped Order Report ${variant}): connect API when backend is ready.`)
-              }
+              onClick={handleDownloadPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
               Download PDF
