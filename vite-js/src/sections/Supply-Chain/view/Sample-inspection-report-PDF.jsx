@@ -474,6 +474,7 @@ export function buildPdfDataFromGetPdfResponse(pdfResponse, extra = {}) {
     fabricRows,
     fabricStandardGsm: pickField(master, 'fabricStandardGsm', 'FabricStandardGsm', 'fabricStandardGSM'),
     actualWeightGsm: pickField(master, 'actualWeightGsm', 'ActualWeightGsm', 'actualWeightGSM'),
+    otherFabric: pickField(master, 'otherFabric', 'OtherFabric'),
     fabricApprovedYes,
     constructionFit: pickField(master, 'constructionFitComments', 'ConstructionFitComments'),
     embellishment: pickField(master, 'embellishmentComments', 'EmbellishmentComments'),
@@ -735,6 +736,10 @@ export default function SampleInspectionReportPDF({ data }) {
           <View style={styles.gsmItem}>
             <Text style={styles.gsmLab}>ACTUAL WEIGHT GSM:</Text>
             <Text style={{ fontSize: 7 }}>{d.actualWeightGsm}</Text>
+          </View>
+          <View style={styles.gsmItem}>
+            <Text style={styles.gsmLab}>OTHER FABRIC:</Text>
+            <Text style={{ fontSize: 7 }}>{d.otherFabric}</Text>
           </View>
           <View style={[styles.fabAprRow, { marginTop: 0 }]}>
             <Text style={styles.gsmLab}>FABRIC APPROVED?</Text>

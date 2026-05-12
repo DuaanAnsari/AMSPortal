@@ -207,6 +207,7 @@ function buildEmptyForm(masterStyleNo = '') {
     asiProceedWithSales: false,
     asiProceedWithProd: false,
     asiGarmentApproved: false,
+    otherFabric: '',
   };
 }
 
@@ -283,6 +284,7 @@ function buildFormFromSaved(saved, masterStyleNo) {
     asiProceedWithSales: boolSaved(saved, 'asiProceedWithSales', 'AsiProceedWithSales'),
     asiProceedWithProd: boolSaved(saved, 'asiProceedWithProd', 'AsiProceedWithProd'),
     asiGarmentApproved: boolSaved(saved, 'asiGarmentApproved', 'AsiGarmentApproved'),
+    otherFabric: saved.otherFabric ?? saved.OtherFabric ?? '',
   };
 }
 
@@ -1105,6 +1107,16 @@ export default function QDInspectionProcessEntryView() {
                   size="small"
                   value={formData?.actualWeightGsm ?? ''}
                   onChange={setF('actualWeightGsm')}
+                  sx={inputSx}
+                />
+              </Grid>
+              <Grid xs={12}>
+                <FieldLabel>Other Fabric</FieldLabel>
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={formData?.otherFabric ?? ''}
+                  onChange={setF('otherFabric')}
                   sx={inputSx}
                 />
               </Grid>

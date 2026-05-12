@@ -131,6 +131,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               consigneeAddress1: order.consigneeAddress1 || order.consignee || '',
               rnNo: order.rnNo || '',
               moreInfo: order.moreInfo || '',
+              otherFabric: order.otherFabric || '',
               gms: order.gms || '',
               bankName: order.bankName || '',
               bankBranch: order.bankBranch || '',
@@ -455,6 +456,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
     trimsAccessories: poData.trimsAccessories || '',
     specialOperation: poData.pO_Special_Operation || '',
     samplingReq: poData.samplingReq || 'N/A',
+    otherFabric: poData.otherFabric || '',
     beneficiaryBank: poData.bankNameBank || '',
     accountNo: poData.accountNoBank || '',
     routingNo: poData.ibanBank || '',
@@ -886,7 +888,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                       Other
                     </TableCell>
                     <TableCell colSpan={5} sx={{ fontSize: '10px', p: '4px 8px', verticalAlign: 'top', height: '30px' }}>
-                      &nbsp;
+                      {data.otherFabric}
                     </TableCell>
                   </TableRow>
                 </TableBody>
