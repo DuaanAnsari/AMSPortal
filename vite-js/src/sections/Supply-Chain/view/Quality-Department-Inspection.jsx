@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
-import { useSearchParams, Link as RouterLink } from 'react-router-dom';
+import { useSearchParams, Link as RouterLink, useNavigate } from 'react-router-dom';
 
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
@@ -52,6 +52,7 @@ const LEGACY_WEB_BASE = (import.meta.env.VITE_LEGACY_WEB_BASE || '').trim();
 
 const OK_NOT_OK = ['OK', 'Not OK'];
 const YES_NO = ['Yes', 'No'];
+const POLY_BAG_OPTIONS = ['Poly Bag', 'Blister Bag'];
 const CHECKED = ['Checked', 'Not Checked'];
 const CONFORM = ['Conform', 'Not Conform'];
 /** Legacy QualityDepartmentPopup: Side Seam / C/B */
@@ -116,7 +117,7 @@ function tableHeadRowSx(theme) {
   };
 }
 
-const DISCREPANCY_ROWS = 18;
+const DISCREPANCY_ROWS = 10;
 /** Legacy grid always has 12 size slots (Size1…Size12) + Total — must match API QDInspectionDtl. */
 const INSPECTION_DTL_SIZE_SLOTS = 12;
 
@@ -270,6 +271,14 @@ function field(obj, ...keys) {
   return match ? obj[match] : '';
 }
 
+/** From PO header `ration` / `ratio`: solid pack → editable "Solid" field; ratio string → read-only "Ratio". */
+function poRationPackFieldMeta(poRationRaw) {
+  const s = String(poRationRaw ?? '').trim();
+  if (!s) return { label: 'Ratio', disabled: false };
+  if (/\bsolid\b/i.test(s)) return { label: 'Solid', disabled: false };
+  return { label: 'Ratio', disabled: true };
+}
+
 function toDateInput(v) {
   if (!v) return '';
   let d = new Date(v);
@@ -309,6 +318,34 @@ function parseAqlDecimal(v) {
   return parseOptionalDecimal(v);
 }
 
+function boolFromAny(v) {
+  if (v == null) return false;
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v !== 0;
+  const s = String(v).trim().toLowerCase();
+  if (!s) return false;
+  const falseLike = new Set([
+    '0',
+    'false',
+    'no',
+    'not checked',
+    'not conform',
+    'not ok',
+    'none',
+    'unchecked',
+    '-',
+    'n/a',
+  ]);
+  if (falseLike.has(s)) return false;
+  return true;
+}
+
+function checkedFromBitOrRemark(bitValue, remarkValue) {
+  // Checkbox state must only follow the actual checkbox bit.
+  // Remarks/dropdown text should not auto-check the box.
+  return boolFromAny(bitValue);
+}
+
 function calcSampleSize(offeredQty, reliability) {
   const qty = Number(offeredQty) || 0;
   const rel = String(reliability || '').trim().toUpperCase();
@@ -345,7 +382,7 @@ const PACKING_UI_ROWS = [
   { key: 'grossWt', label: 'Gross WT', type: 'text', textKey: 'grossWt' },
   { key: 'noOfPcsCarton', label: 'No.Of PCS/Carton', type: 'text', textKey: 'noOfPcsCarton' },
   { key: 'noOfPcsInnerPack', label: 'No.Of PCS/InnerPack', type: 'text', textKey: 'noOfPcsInnerPack' },
-  { key: 'polyBag', label: 'Poly Bag/Blister Bag', type: 'select', options: YES_NO, dropKey: 'polyBag' },
+  { key: 'polyBag', label: 'Poly Bag/Blister Bag', type: 'select', options: POLY_BAG_OPTIONS, dropKey: 'polyBag' },
   { key: 'ups', label: 'U.P.C', type: 'text', textKey: 'ups' },
   { key: 'otherM', label: '', type: 'double-text', textKey1: 'other1M', textKey2: 'other2M' },
 ];
@@ -447,48 +484,48 @@ function buildQdSavePayload(form, discRows, mstId, isMainSave, dtlRows) {
     packingD: form.packD || null,
     markingD: form.markD || null,
     measurementD: form.measD || null,
-    quantityDRemarks: form.qtyDR || null,
-    conformityDRemarks: form.confDR || null,
-    workmanshipDRemarks: form.workDR || null,
-    packingDRemarks: form.packDR || null,
-    markingDRemarks: form.markDR || null,
-    measurementDRemarks: form.measDR || null,
+    quantity_D_Remarks: form.qtyDR || null,
+    conformity_D_Remarks: form.confDR || null,
+    workmanship_D_Remarks: form.workDR || null,
+    packing_D_Remarks: form.packDR || null,
+    marking_D_Remarks: form.markDR || null,
+    measurement_D_Remarks: form.measDR || null,
     passFail: form.passFail === '1',
     colorway: Array.isArray(form.color) ? form.color.join(',') : (form.color || null),
     ratio: form.ratio || null,
     qaRemarks: form.qaRemarks || null,
-    dyeLot: !!acc.dyeLot,
-    pattern: !!acc.pattern,
-    generalAppearance: !!acc.generalAppearance,
-    mainLabel: !!acc.mainLabel,
-    mainLabelPlacement: !!acc.mainLabelPlacement,
-    careLabel: !!acc.careLabel,
-    careLabelPlacement: !!acc.careLabelPlacement,
-    contentLabel: !!acc.contentLabel,
-    contentLabelPlacement: !!acc.contentLabelPlacement,
-    buttonAccessory: !!acc.button,
-    interlining: !!acc.interlining,
-    zipper: !!acc.zipper,
-    drawingString: !!acc.drawingString,
-    hangTag: !!acc.hangTag,
-    priceTicket: !!acc.priceTicket,
-    cartonDimen: !!pack.cartonDimen,
-    cartonMarking: !!pack.cartonMarking,
-    cartonThickness: !!pack.cartonThickness,
-    netWT: !!pack.netWt,
-    grossWT: !!pack.grossWt,
-    hanger: !!acc.hanger,
+    dyeLot: checkedFromBitOrRemark(acc.dyeLot, accDrop.dyeLot),
+    pattern: checkedFromBitOrRemark(acc.pattern, accDrop.pattern),
+    generalAppearance: checkedFromBitOrRemark(acc.generalAppearance, accDrop.generalAppearance),
+    mainLabel: checkedFromBitOrRemark(acc.mainLabel, accText.mainLabel),
+    mainLabelPlacement: checkedFromBitOrRemark(acc.mainLabelPlacement, accDrop.mainLabelPlacement),
+    careLabel: checkedFromBitOrRemark(acc.careLabel, accText.careLabel),
+    careLabelPlacement: checkedFromBitOrRemark(acc.careLabelPlacement, accDrop.careLabelPlacement),
+    contentLabel: checkedFromBitOrRemark(acc.contentLabel, accText.contentLabel),
+    contentLabelPlacement: checkedFromBitOrRemark(acc.contentLabelPlacement, accDrop.contentLabelPlacement),
+    buttonAccessory: checkedFromBitOrRemark(acc.button, accDrop.button),
+    interlining: checkedFromBitOrRemark(acc.interlining, accText.interlining),
+    zipper: checkedFromBitOrRemark(acc.zipper, accDrop.zipper),
+    drawingString: checkedFromBitOrRemark(acc.drawingString, accDrop.drawingString),
+    hangTag: checkedFromBitOrRemark(acc.hangTag, accDrop.hangTag),
+    priceTicket: checkedFromBitOrRemark(acc.priceTicket, accDrop.priceTicket),
+    cartonDimen: checkedFromBitOrRemark(pack.cartonDimen, packText.cartonDimen),
+    cartonMarking: checkedFromBitOrRemark(pack.cartonMarking, packDrop.cartonMarking),
+    cartonThickness: checkedFromBitOrRemark(pack.cartonThickness, packDrop.cartonThickness),
+    netWT: checkedFromBitOrRemark(pack.netWt, packText.netWt),
+    grossWT: checkedFromBitOrRemark(pack.grossWt, packText.grossWt),
+    hanger: checkedFromBitOrRemark(acc.hanger, accDrop.hanger),
     hangerSticker: false,
-    ups: !!pack.ups,
-    noOfPcsInnerPack: !!pack.noOfPcsInnerPack,
-    noOfPcsCarton: !!pack.noOfPcsCarton,
-    foldMethod: !!acc.foldMethod,
-    polyBag: !!pack.polyBag,
+    ups: checkedFromBitOrRemark(pack.ups, packText.ups),
+    noOfPcsInnerPack: checkedFromBitOrRemark(pack.noOfPcsInnerPack, packText.noOfPcsInnerPack),
+    noOfPcsCarton: checkedFromBitOrRemark(pack.noOfPcsCarton, packText.noOfPcsCarton),
+    foldMethod: checkedFromBitOrRemark(acc.foldMethod, accDrop.foldMethodDdl),
+    polyBag: checkedFromBitOrRemark(pack.polyBag, packDrop.polyBag),
     cartonSticker: false,
     otherBit: !!acc.other1,
     otherCom1: accText.other1 || null,
     otherCom2: accText.other2 || null,
-    additionalLbl: !!acc.additionalLabel,
+    additionalLbl: checkedFromBitOrRemark(acc.additionalLabel, accDrop.additionalLabel),
     additionalLblComm: accDrop.additionalLabel || null,
     dyeLotCom: accDrop.dyeLot || null,
     zipperCom: accDrop.zipper || null,
@@ -776,6 +813,7 @@ const BlurTextField = ({ value, onChange, ...props }) => {
  */
 export default function QualityDepartmentInspectionView() {
   const theme = useTheme();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const poid = searchParams.get('poid');
   // Default to IPC if not specified
@@ -1116,6 +1154,12 @@ export default function QualityDepartmentInspectionView() {
     return row?.aqlRange ?? row?.AQLRange ?? '';
   }, [bindDef, rangesForFirstSystem]);
 
+  const ratioSolidFieldMeta = useMemo(() => {
+    if (!h) return poRationPackFieldMeta('');
+    const poRation = field(h, 'ration', 'Ration', 'ratio', 'Ratio');
+    return poRationPackFieldMeta(poRation);
+  }, [h]);
+
   useEffect(() => {
     if (!data || !h) return;
     const orderQty = h.orderQty ?? h.OrderQty;
@@ -1189,26 +1233,53 @@ export default function QualityDepartmentInspectionView() {
       allowMaj: numOrEmpty(snap?.majorAllowed ?? snap?.MajorAllowed),
       allowMin: numOrEmpty(snap?.minorAllowed ?? snap?.MinorAllowed),
       acc: {
-        dyeLot: !!(snap?.dyeLot ?? snap?.DyeLot),
-        pattern: !!(snap?.pattern ?? snap?.Pattern),
-        generalAppearance: !!(snap?.generalAppearance ?? snap?.GeneralAppearance),
-        mainLabel: !!(snap?.mainLabel ?? snap?.MainLabel),
-        mainLabelPlacement: !!(snap?.mainLabelPlacement ?? snap?.MainLabelPlacement),
-        careLabel: !!(snap?.careLabel ?? snap?.CareLabel),
-        careLabelPlacement: !!(snap?.careLabelPlacement ?? snap?.CareLabelPlacement),
-        contentLabel: !!(snap?.contentLabel ?? snap?.ContentLabel),
-        contentLabelPlacement: !!(snap?.contentLabelPlacement ?? snap?.ContentLabelPlacement),
-        zipper: !!(snap?.zipper ?? snap?.Zipper),
-        drawingString: !!(snap?.drawingString ?? snap?.DrawingString),
-        hangTag: !!(snap?.hangTag ?? snap?.HangTag),
-        button: !!(snap?.buttonAccessory ?? snap?.ButtonAccessory),
-        interlining: !!(snap?.interlining ?? snap?.Interlining),
-        priceTicket: !!(snap?.priceTicket ?? snap?.PriceTicket),
-        hanger: !!(snap?.hanger ?? snap?.Hanger),
-        foldMethod: !!(snap?.foldMethod ?? snap?.FoldMethod),
-        additionalLabel: !!(snap?.additionalLbl ?? snap?.AdditionalLbl),
-        other1: !!(snap?.otherBit ?? snap?.OtherBit),
-        other2: !!(snap?.otherBitM ?? snap?.OtherBitM),
+        dyeLot: checkedFromBitOrRemark(snap?.dyeLot ?? snap?.DyeLot, field(snap, 'dyeLotCom', 'DyeLotCom')),
+        pattern: checkedFromBitOrRemark(snap?.pattern ?? snap?.Pattern, field(snap, 'patternCom', 'PatternCom')),
+        generalAppearance: checkedFromBitOrRemark(
+          snap?.generalAppearance ?? snap?.GeneralAppearance,
+          field(snap, 'generalAppCom', 'GeneralAppCom')
+        ),
+        mainLabel: checkedFromBitOrRemark(snap?.mainLabel ?? snap?.MainLabel, field(snap, 'mainLblCom', 'MainLblCom')),
+        mainLabelPlacement: checkedFromBitOrRemark(
+          snap?.mainLabelPlacement ?? snap?.MainLabelPlacement,
+          field(snap, 'mainLblPlacementCom', 'MainLblPlacementCom')
+        ),
+        careLabel: checkedFromBitOrRemark(snap?.careLabel ?? snap?.CareLabel, field(snap, 'careLblCom', 'CareLblCom')),
+        careLabelPlacement: checkedFromBitOrRemark(
+          snap?.careLabelPlacement ?? snap?.CareLabelPlacement,
+          field(snap, 'careLblPlacementCom', 'CareLblPlacementCom')
+        ),
+        contentLabel: checkedFromBitOrRemark(
+          snap?.contentLabel ?? snap?.ContentLabel,
+          field(snap, 'contentLblCom', 'ContentLblCom')
+        ),
+        contentLabelPlacement: checkedFromBitOrRemark(
+          snap?.contentLabelPlacement ?? snap?.ContentLabelPlacement,
+          field(snap, 'contentLblPlacementCom', 'ContentLblPlacementCom')
+        ),
+        zipper: checkedFromBitOrRemark(snap?.zipper ?? snap?.Zipper, field(snap, 'zipperCom', 'ZipperCom')),
+        drawingString: checkedFromBitOrRemark(
+          snap?.drawingString ?? snap?.DrawingString,
+          field(snap, 'drawingStrCom', 'DrawingStrCom')
+        ),
+        hangTag: checkedFromBitOrRemark(snap?.hangTag ?? snap?.HangTag, field(snap, 'hangtagCom', 'HangtagCom')),
+        button: checkedFromBitOrRemark(snap?.buttonAccessory ?? snap?.ButtonAccessory, field(snap, 'buttonsCom', 'ButtonsCom')),
+        interlining: checkedFromBitOrRemark(
+          snap?.interlining ?? snap?.Interlining,
+          field(snap, 'interLiningCom', 'InterLiningCom')
+        ),
+        priceTicket: checkedFromBitOrRemark(
+          snap?.priceTicket ?? snap?.PriceTicket,
+          field(snap, 'priceTicketCom', 'PriceTicketCom')
+        ),
+        hanger: checkedFromBitOrRemark(snap?.hanger ?? snap?.Hanger, field(snap, 'hangerCom', 'HangerCom')),
+        foldMethod: checkedFromBitOrRemark(snap?.foldMethod ?? snap?.FoldMethod, field(snap, 'foldMethodCom', 'FoldMethodCom')),
+        additionalLabel: checkedFromBitOrRemark(
+          snap?.additionalLbl ?? snap?.AdditionalLbl,
+          field(snap, 'additionalLblComm', 'AdditionalLblComm')
+        ),
+        other1: checkedFromBitOrRemark(snap?.otherBit ?? snap?.OtherBit, field(snap, 'otherCom1', 'OtherCom1')),
+        other2: checkedFromBitOrRemark(snap?.otherBitM ?? snap?.OtherBitM, field(snap, 'otherCom2M', 'OtherCom2M')),
       },
       accDrop: {
         ...DEFAULT_ACC_DROP,
@@ -1237,21 +1308,33 @@ export default function QualityDepartmentInspectionView() {
         other2: field(snap, 'otherCom2', 'OtherCom2'),
       },
       pack: {
-        cartonDimen: !!(snap?.cartonDimen ?? snap?.CartonDimen),
-        cartonMarking: !!(snap?.cartonMarking ?? snap?.CartonMarking),
-        cartonThickness: !!(snap?.cartonThickness ?? snap?.CartonThickness),
-        netWt: !!(snap?.netWT ?? snap?.NetWT),
-        grossWt: !!(snap?.grossWT ?? snap?.GrossWT),
-        noOfPcsCarton: !!(snap?.noOfPcsCarton ?? snap?.NoOfPcsCarton),
-        noOfPcsInnerPack: !!(snap?.noOfPcsInnerPack ?? snap?.NoOfPcsInnerPack),
-        polyBag: !!(snap?.polyBag ?? snap?.PolyBag),
-        ups: !!(snap?.ups ?? snap?.UPS),
-        otherM: !!(snap?.otherBitM ?? snap?.OtherBitM),
+        cartonDimen: checkedFromBitOrRemark(snap?.cartonDimen ?? snap?.CartonDimen, field(snap, 'cartonDimmCom', 'CartonDimmCom')),
+        cartonMarking: checkedFromBitOrRemark(
+          snap?.cartonMarking ?? snap?.CartonMarking,
+          field(snap, 'cartonMarkingCom', 'CartonMarkingCom')
+        ),
+        cartonThickness: checkedFromBitOrRemark(
+          snap?.cartonThickness ?? snap?.CartonThickness,
+          field(snap, 'crtnThicknessCom', 'CrtnThicknessCom')
+        ),
+        netWt: checkedFromBitOrRemark(snap?.netWT ?? snap?.NetWT, field(snap, 'netWTCom', 'NetWTCom')),
+        grossWt: checkedFromBitOrRemark(snap?.grossWT ?? snap?.GrossWT, field(snap, 'grossWTCom', 'GrossWTCom')),
+        noOfPcsCarton: checkedFromBitOrRemark(
+          snap?.noOfPcsCarton ?? snap?.NoOfPcsCarton,
+          field(snap, 'noOfPcsCrtnCom', 'NoOfPcsCrtnCom')
+        ),
+        noOfPcsInnerPack: checkedFromBitOrRemark(
+          snap?.noOfPcsInnerPack ?? snap?.NoOfPcsInnerPack,
+          field(snap, 'noOfPcsInnerPackCom', 'NoOfPcsInnerPackCom')
+        ),
+        polyBag: checkedFromBitOrRemark(snap?.polyBag ?? snap?.PolyBag, field(snap, 'polyBagBlisterBagCom', 'PolyBagBlisterBagCom')),
+        ups: checkedFromBitOrRemark(snap?.ups ?? snap?.UPS, field(snap, 'uPCCom', 'UPCCom')),
+        otherM: checkedFromBitOrRemark(snap?.otherBitM ?? snap?.OtherBitM, field(snap, 'otherCom1M', 'OtherCom1M')),
       },
       packDrop: {
         cartonMarking: field(snap, 'cartonMarkingCom', 'CartonMarkingCom') || CARTON_MARKING_SIDES[0],
         cartonThickness: field(snap, 'crtnThicknessCom', 'CrtnThicknessCom') || CARTON_THICKNESS_PLY[0],
-        polyBag: field(snap, 'polyBagBlisterBagCom', 'PolyBagBlisterBagCom') || YES_NO[0],
+        polyBag: field(snap, 'polyBagBlisterBagCom', 'PolyBagBlisterBagCom') || POLY_BAG_OPTIONS[0],
       },
       packText: {
         cartonDimen: field(snap, 'cartonDimmCom', 'CartonDimmCom'),
@@ -1430,7 +1513,21 @@ export default function QualityDepartmentInspectionView() {
         return;
       }
 
-      const blob = await pdf(<QAInspectionPDF data={data} />).toBlob();
+      // inspection-report-data may return empty images[] even when slot images exist.
+      // Merge already loaded slot images so PDF can render image + selected slot label.
+      const mergedImages = Object.entries(imageMap || {}).flatMap(([slot, imgs]) =>
+        (imgs || []).map((img) => ({
+          ...img,
+          photoName: img.photoName ?? img.PhotoName ?? slot,
+          imgHeader: img.imgHeader ?? img.ImgHeader ?? slot,
+        }))
+      );
+      const pdfData = {
+        ...data,
+        images: (Array.isArray(data?.images) && data.images.length > 0) ? data.images : mergedImages,
+      };
+
+      const blob = await pdf(<QAInspectionPDF data={pdfData} />).toBlob();
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
     } catch (e) {
@@ -1479,6 +1576,9 @@ export default function QualityDepartmentInspectionView() {
 
       await reloadInspection(returnedId > 0 ? returnedId : null);
       enqueueSnackbar(isMainSave ? 'Saved.' : 'Saved as draft.', { variant: 'success' });
+      if (isMainSave && !isExplicitEditMode) {
+        navigate(paths.dashboard.qaInspectionView);
+      }
     } catch (e) {
       console.error('Save error details:', e);
       console.error('Save error response:', e?.response?.data);
@@ -2077,7 +2177,14 @@ export default function QualityDepartmentInspectionView() {
                   <TextField label="Season" fullWidth size="small" value={form.season ?? ''} InputProps={{ readOnly: true }} />
                 </Grid>
                 <Grid xs={12} sm={6} md={3}>
-                  <TextField label="Ratio" fullWidth size="small" value={form.ratio ?? ''} onChange={(e) => setF('ratio', e.target.value)} />
+                  <TextField
+                    label={ratioSolidFieldMeta.label}
+                    fullWidth
+                    size="small"
+                    value={form.ratio ?? ''}
+                    onChange={(e) => setF('ratio', e.target.value)}
+                    disabled={ratioSolidFieldMeta.disabled}
+                  />
                 </Grid>
                 <Grid xs={12} sm={6} md={3}>
                   <TextField
@@ -2153,13 +2260,14 @@ export default function QualityDepartmentInspectionView() {
                     Defects (Quantity / Conformity / Workmanship / Packing)
                   </Typography>
                 </Grid>
+                
+                {/* Row 1: Quantity, Conformity, Workmanship Selectors */}
                 {[
                   ['qtyD', 'Quantity', OK_NOT_OK],
                   ['confD', 'Conformity', OK_NOT_OK],
                   ['workD', 'Workmanship', OK_NOT_OK],
-                  ['packD', 'Packing', OK_NOT_OK],
                 ].map(([k, label, opts]) => (
-                  <Grid key={k} xs={12} sm={6} md={3}>
+                  <Grid key={k} xs={12} sm={6} md={4}>
                     <TextField
                       select
                       label={label}
@@ -2177,14 +2285,14 @@ export default function QualityDepartmentInspectionView() {
                   </Grid>
                 ))}
 
+                {/* Row 2: Quantity, Conformity, Workmanship Remarks */}
                 {[
                   ['qtyDR', 'Quantity remarks'],
                   ['confDR', 'Conformity remarks'],
                   ['workDR', 'Workmanship remarks'],
-                  ['packDR', 'Packing remarks'],
                 ].map(([k, ph]) => (
-                  <Grid key={k} xs={12} sm={6} md={3}>
-                    <BlurTextField
+                  <Grid key={k} xs={12} sm={6} md={4}>
+                    <TextField
                       placeholder={ph}
                       fullWidth
                       size="small"
@@ -2194,56 +2302,46 @@ export default function QualityDepartmentInspectionView() {
                   </Grid>
                 ))}
 
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField
-                    select
-                    label="Marking"
-                    fullWidth
-                    size="small"
-                    value={form.markD ?? OK_NOT_OK[0]}
-                    onChange={(e) => setF('markD', e.target.value)}
-                  >
-                    {OK_NOT_OK.map((o) => (
-                      <MenuItem key={o} value={o}>
-                        {o}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
-                  <BlurTextField
-                    placeholder="Marking remarks"
-                    fullWidth
-                    size="small"
-                    value={form.markDR ?? ''}
-                    onChange={(e) => setF('markDR', e.target.value)}
-                  />
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField
-                    select
-                    label="Measurement"
-                    fullWidth
-                    size="small"
-                    value={form.measD ?? OK_NOT_OK[0]}
-                    onChange={(e) => setF('measD', e.target.value)}
-                  >
-                    {OK_NOT_OK.map((o) => (
-                      <MenuItem key={o} value={o}>
-                        {o}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
-                  <BlurTextField
-                    placeholder="Measurement remarks"
-                    fullWidth
-                    size="small"
-                    value={form.measDR ?? ''}
-                    onChange={(e) => setF('measDR', e.target.value)}
-                  />
-                </Grid>
+                {/* Row 3: Packing, Marking, Measurement Selectors */}
+                {[
+                  ['packD', 'Packing', OK_NOT_OK],
+                  ['markD', 'Marking', OK_NOT_OK],
+                  ['measD', 'Measurement', OK_NOT_OK],
+                ].map(([k, label, opts]) => (
+                  <Grid key={k} xs={12} sm={6} md={4}>
+                    <TextField
+                      select
+                      label={label}
+                      fullWidth
+                      size="small"
+                      value={form[k] ?? opts[0]}
+                      onChange={(e) => setF(k, e.target.value)}
+                    >
+                      {opts.map((o) => (
+                        <MenuItem key={o} value={o}>
+                          {o}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                ))}
+
+                {/* Row 4: Packing, Marking, Measurement Remarks */}
+                {[
+                  ['packDR', 'Packing remarks'],
+                  ['markDR', 'Marking remarks'],
+                  ['measDR', 'Measurement remarks'],
+                ].map(([k, ph]) => (
+                  <Grid key={k} xs={12} sm={6} md={4}>
+                    <TextField
+                      placeholder={ph}
+                      fullWidth
+                      size="small"
+                      value={form[k] ?? ''}
+                      onChange={(e) => setF(k, e.target.value)}
+                    />
+                  </Grid>
+                ))}
               </Grid>
             </SectionCard>
 
@@ -2303,6 +2401,7 @@ export default function QualityDepartmentInspectionView() {
                             sx={{
                               '&:nth-of-type(odd)': { bgcolor: 'action.hover' },
                               ...(isStaticRow && { bgcolor: alpha(theme.palette.primary.main, 0.04) }),
+                              height: 44,
                             }}
                           >
                             <TableCell sx={{ fontWeight: 600, fontSize: 11.5, whiteSpace: 'nowrap', py: 0.5, px: 1.5, borderRight: 1, borderColor: 'divider' }}>
@@ -2346,6 +2445,7 @@ export default function QualityDepartmentInspectionView() {
                                       sx: {
                                         fontSize: 11.5,
                                         bgcolor: cellBgColor,
+                                        height: 38,
                                         '& .MuiInputBase-input': {
                                           py: 0.5,
                                           px: 0.5,
@@ -2391,6 +2491,7 @@ export default function QualityDepartmentInspectionView() {
                                       sx: {
                                         fontSize: 11.5,
                                         bgcolor: totalBgColor,
+                                        height: 38,
                                         '& .MuiInputBase-input': {
                                           py: 0.5,
                                           px: 0.5,
@@ -2697,7 +2798,7 @@ export default function QualityDepartmentInspectionView() {
                         </TableHead>
                         <TableBody>
                           {specRows.map((r, idx) => (
-                            <TableRow key={`${r.measurementPointId}-${idx}`}>
+                            <TableRow key={`${r.measurementPointId}-${idx}`} sx={{ height: 44 }}>
                               <TableCell>
                                 <TextField
                                   size="small"
@@ -2780,17 +2881,19 @@ export default function QualityDepartmentInspectionView() {
                   <Table size="small" stickyHeader>
                     <TableHead>
                       <TableRow sx={tableHeadRowSx(theme)}>
-                        <TableCell sx={{ width: '33.3%' }}>During inspection found following discrepancies</TableCell>
+                        <TableCell sx={{ width: '5%', textAlign: 'center' }}>S.NO.</TableCell>
+                        <TableCell sx={{ width: '30%' }}>DURING INSPECTION FOUND FOLLOWING DISCREPANCIES</TableCell>
                         <TableCell sx={{ width: '25%' }}>Remarks</TableCell>
-                        <TableCell sx={{ width: '13.9%' }} align="center">Critical</TableCell>
-                        <TableCell sx={{ width: '13.9%' }} align="center">Major</TableCell>
-                        <TableCell sx={{ width: '13.9%' }} align="center">Minor</TableCell>
+                        <TableCell sx={{ width: '13.3%' }} align="center">CRITICAL</TableCell>
+                        <TableCell sx={{ width: '13.3%' }} align="center">MAJOR</TableCell>
+                        <TableCell sx={{ width: '13.3%' }} align="center">MINOR</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {discRows.map((r) => (
-                        <TableRow key={r.id}>
-                          <TableCell>
+                      {discRows.map((r, idx) => (
+                        <TableRow key={r.id} sx={{ height: 48 }}>
+                          <TableCell sx={{ textAlign: 'center', fontWeight: 600 }}>{idx + 1}</TableCell>
+                          <TableCell sx={{ py: 0.5, px: 1 }}>
                             <Autocomplete
                               freeSolo
                               options={descHistory}
@@ -2814,6 +2917,7 @@ export default function QualityDepartmentInspectionView() {
                                   size="small"
                                   fullWidth
                                   placeholder="—"
+                                  sx={{ '& .MuiInputBase-root': { height: 40 } }}
                                   inputProps={{
                                     ...params.inputProps,
                                     autoComplete: 'off',
@@ -2822,44 +2926,62 @@ export default function QualityDepartmentInspectionView() {
                               )}
                             />
                           </TableCell>
-                          <TableCell>
+                          <TableCell sx={{ py: 0.5, px: 1 }}>
                             <BlurTextField
                               size="small"
                               fullWidth
                               value={r.remarks}
                               onChange={(e) => setDisc(r.id, 'remarks', e.target.value)}
                               placeholder="—"
+                              sx={{ '& .MuiInputBase-root': { height: 40 } }}
                             />
                           </TableCell>
-                          <TableCell>
+                          <TableCell sx={{ py: 0.5, px: 1 }}>
                             <BlurTextField
                               size="small"
                               fullWidth
                               value={r.critical}
                               onChange={(e) => setDisc(r.id, 'critical', e.target.value)}
                               placeholder="0"
+                              sx={{ '& .MuiInputBase-root': { height: 40 } }}
                             />
                           </TableCell>
-                          <TableCell>
+                          <TableCell sx={{ py: 0.5, px: 1 }}>
                             <BlurTextField
                               size="small"
                               fullWidth
                               value={r.major}
                               onChange={(e) => setDisc(r.id, 'major', e.target.value)}
                               placeholder="0"
+                              sx={{ '& .MuiInputBase-root': { height: 40 } }}
                             />
                           </TableCell>
-                          <TableCell>
+                          <TableCell sx={{ py: 0.5, px: 1 }}>
                             <BlurTextField
                               size="small"
                               fullWidth
                               value={r.minor}
                               onChange={(e) => setDisc(r.id, 'minor', e.target.value)}
                               placeholder="0"
+                              sx={{ '& .MuiInputBase-root': { height: 40 } }}
                             />
                           </TableCell>
                         </TableRow>
                       ))}
+                      
+                      {/* Total and Allowed rows as per user screenshot */}
+                      <TableRow sx={{ height: 48, bgcolor: 'action.hover' }}>
+                        <TableCell colSpan={3} align="center" sx={{ fontWeight: 800, fontSize: 13 }}>TOTAL</TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.criticalQty || 0}</TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.majQty || 0}</TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.minQty || 0}</TableCell>
+                      </TableRow>
+                      <TableRow sx={{ height: 48, bgcolor: 'action.hover' }}>
+                        <TableCell colSpan={3} align="center" sx={{ fontWeight: 800, fontSize: 13 }}>ALLOWED</TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.allowCrit || 0}</TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.allowMaj || 0}</TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.allowMin || 0}</TableCell>
+                      </TableRow>
                     </TableBody>
                   </Table>
                 </TableContainer>
@@ -2867,7 +2989,7 @@ export default function QualityDepartmentInspectionView() {
                 <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 3 }}>
                   <Grid container spacing={2}>
                     {/* Left: Calculate + Total Labels - Roughly 33.3% (sm=4) */}
-                    <Grid xs={12} sm={2.5}>
+                    <Grid xs={12} sm={4}>
                       <Button
                         variant="contained"
                         color="success"
@@ -2877,12 +2999,6 @@ export default function QualityDepartmentInspectionView() {
                       >
                         Calculate
                       </Button>
-                    </Grid>
-
-                    <Grid xs={12} sm={1.5} sx={{ textAlign: 'center', pt: 1.5 }}>
-                      <Typography variant="subtitle2" fontWeight={700} color="text.secondary">
-                        Total
-                      </Typography>
                     </Grid>
 
                     {/* Matrix Columns: Sample Size, Critical, Major, Minor */}
