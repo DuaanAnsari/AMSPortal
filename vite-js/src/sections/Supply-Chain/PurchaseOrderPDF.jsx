@@ -784,7 +784,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               <Box sx={{ flex: 1, border: '1px solid #000', p: 0.5, display: 'flex', flexDirection: 'column' }}>
                 <Typography sx={{ fontWeight: 'bold', fontSize: '8.5px', mb: 0.3 }}>Ship To:</Typography>
                 <Typography sx={{ fontWeight: 'bold', fontSize: '10px' }}>{poData.consigneeAddress1 || 'ALL SEASONS TEXTILE'}</Typography>
-                <Typography sx={{ fontSize: '8.5px', lineHeight: 1.1 }}>{poData.consigneeAddress2 || '1441 BROADWAY, SUITE # 6162 NEW YORK , I'}</Typography>
+                <Typography sx={{ fontSize: '8.5px', lineHeight: 1.1 }}>{poData.consigneeAddress2 || ''}</Typography>
                 <Box sx={{ mt: 'auto', display: 'flex', justifyContent: 'space-between', pt: 0.2 }}>
                   <Typography sx={{ fontWeight: 'bold', fontSize: '11px' }}>NY</Typography>
                   <Typography sx={{ fontWeight: 'bold', fontSize: '11px' }}>USA</Typography>

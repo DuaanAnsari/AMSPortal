@@ -20,7 +20,6 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import InputAdornment from '@mui/material/InputAdornment';
 import Iconify from 'src/components/iconify';
-
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 import { useSnackbar } from 'src/components/snackbar';
 import { LoadingButton } from '@mui/lab';
@@ -51,7 +50,7 @@ const defaultFormValues = {
   portOfLoading: '',
   portOfDischarge: '',
   remarks: '',
-  bank: '',
+  bank: '6',
   discount: '',
   expectedEtd: '',
   actualEtd: '',
@@ -865,7 +864,7 @@ export default function ShipmentReleaseAddPage() {
               select
               fullWidth
               label="Bank"
-              value={form.bank || ''}
+              value={form.bank}
               onChange={handleChange('bank')}
               size="small"
             >
