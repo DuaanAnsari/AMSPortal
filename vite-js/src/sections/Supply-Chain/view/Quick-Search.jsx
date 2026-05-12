@@ -21,7 +21,13 @@ import {
   TablePagination,
   IconButton,
   Container,
+  Autocomplete,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
+import { fetchPoNumbers } from 'src/sections/reports/utils/pono-dropdown-api';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -43,6 +49,16 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
 
   const [customerOptions, setCustomerOptions] = useState([]);
   const [vendorOptions, setVendorOptions] = useState([]);
+
+  /** PO# typeahead state — populated lazily when "Search By = PO No" so other modes don't pay the cost. */
+  const [poOptions, setPoOptions] = useState([]);
+  const [loadingPoOptions, setLoadingPoOptions] = useState(false);
+
+  /** Inspection dialog state — mirrors My Orders' Inspection popup so users see the same screen. */
+  const [inspectionOpen, setInspectionOpen] = useState(false);
+  const [inspectionLoading, setInspectionLoading] = useState(false);
+  const [inspectionRows, setInspectionRows] = useState([]);
+  const [inspectionPoNo, setInspectionPoNo] = useState('');
 
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -100,6 +116,46 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
     };
     fetchVendors();
   }, [buyer]);
+
+  /**
+   * Fetch PO# list for the typeahead.
+   *
+   * Triggers when:
+   *   - "Search By" is set to "PO No" (don't waste calls in Date / Style modes)
+   *   - buyer / vendor change (re-scope the suggestion list)
+   *
+   * Cancels in-flight requests on dependency change to keep the dropdown in sync
+   * and avoid race conditions.
+   */
+  useEffect(() => {
+    if (searchBy !== 'PO No') return undefined;
+
+    const controller = new AbortController();
+    let cancelled = false;
+    setLoadingPoOptions(true);
+    (async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const list = await fetchPoNumbers(
+          { customerId: buyer || undefined, supplierId: vendor || undefined, signal: controller.signal },
+          headers
+        );
+        if (!cancelled) setPoOptions(list);
+      } catch (err) {
+        if (axios.isCancel?.(err) || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') return;
+        console.error('[POSearchEngine] PO# list', err);
+        if (!cancelled) setPoOptions([]);
+      } finally {
+        if (!cancelled) setLoadingPoOptions(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [searchBy, buyer, vendor]);
 
   // ✅ Sorting helpers
   const handleSort = (property) => {
@@ -215,10 +271,63 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
     : sortedResults.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
   const notFound = !loading && !error && results.length === 0;
 
-  // Icon handlers
-  const handleCopyClick = (row) => alert('Copy clicked for ' + row.poNo);
+  /**
+   * Copy → opens the Add Order form pre-filled from the selected PO, same as the
+   * "Copy" icon on My Orders page. Add-Order reads `location.state.copyFromPo`
+   * and `location.state.copyFromPoId` — id lives in `row.poid` for Quick-Search.
+   */
+  const handleCopyClick = useCallback(
+    (row) => {
+      if (!row) return;
+      if (onClose) onClose();
+      navigate('/dashboard/supply-chain/add-order', {
+        state: { copyFromPo: row, copyFromPoId: row.poid },
+      });
+      enqueueSnackbar(`Copying PO ${row.poNo} to Add Order form`, { variant: 'info' });
+    },
+    [enqueueSnackbar, navigate, onClose]
+  );
   const handleStatusClick = (row) => alert('Status clicked for ' + row.poNo);
   const handleWipClick = (row) => alert('WIP clicked for ' + row.poNo);
+
+  /**
+   * Inspection → opens the same dialog popup as My Orders. Backend hook is a
+   * placeholder for now (no API yet) so the list shows "No records to display"
+   * once the loading flicker clears — matching My Orders exactly.
+   */
+  const handleInspectionClick = useCallback((row) => {
+    if (!row) return;
+    setInspectionPoNo(row.poNo || '');
+    setInspectionOpen(true);
+    setInspectionLoading(true);
+    setInspectionRows([]);
+    setTimeout(() => setInspectionLoading(false), 300);
+  }, []);
+
+  /**
+   * Size Specs → navigate to the same Size Specs edit screen My Orders opens
+   * (`sizeSpecsEditWithQuery`). Quick-Search rows expose PO id via `row.poid`
+   * and the style under `row.style`.
+   */
+  const handleSizeSpecsClick = useCallback(
+    (row) => {
+      if (!row) return;
+      const pid = row.poid;
+      if (!pid) {
+        enqueueSnackbar('PO ID not available for this row', { variant: 'warning' });
+        return;
+      }
+      if (onClose) onClose();
+      navigate(paths.dashboard.supplyChain.sizeSpecsEditWithQuery(pid, pid), {
+        state: {
+          poNo: row.poNo,
+          styleNo: row.style,
+          buyer: row.customer,
+        },
+      });
+    },
+    [enqueueSnackbar, navigate, onClose]
+  );
 
   // --- NEW: Handlers for Milestone, View, PDF (minimal safe stubs) ---
   const handleMilestoneClick = useCallback(
@@ -393,12 +502,53 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
               {/* Field 4: Search term (PO, Style, or Date Range) */}
               {searchBy === 'PO No' && (
                 <Grid item xs={12} md={isDialog ? 6 : 6}>
-                  <TextField
-                    label="PO No"
+                  <Autocomplete
+                    freeSolo
                     fullWidth
-                    size={isDialog ? "medium" : "medium"}
+                    size="medium"
+                    options={poOptions}
+                    loading={loadingPoOptions}
                     value={poNo}
-                    onChange={(e) => setPoNo(e.target.value)}
+                    onChange={(_e, val) => setPoNo(val || '')}
+                    onInputChange={(_e, val) => setPoNo(val || '')}
+                    filterOptions={(opts, state) => {
+                      const q = String(state.inputValue || '').trim().toLowerCase();
+                      if (!q) return opts.slice(0, 100);
+                      const startsWith = [];
+                      const contains = [];
+                      opts.forEach((o) => {
+                        const lo = String(o).toLowerCase();
+                        if (lo.startsWith(q)) startsWith.push(o);
+                        else if (lo.includes(q)) contains.push(o);
+                      });
+                      return [...startsWith, ...contains].slice(0, 100);
+                    }}
+                    noOptionsText={
+                      loadingPoOptions
+                        ? 'Loading…'
+                        : poOptions.length === 0
+                        ? 'No PO Found'
+                        : 'No match'
+                    }
+                    disablePortal={isDialog}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="PO No"
+                        placeholder="Type to search PO #"
+                        InputProps={{
+                          ...params.InputProps,
+                          endAdornment: (
+                            <>
+                              {loadingPoOptions ? (
+                                <CircularProgress color="inherit" size={16} sx={{ mr: 1 }} />
+                              ) : null}
+                              {params.InputProps.endAdornment}
+                            </>
+                          ),
+                        }}
+                      />
+                    )}
                   />
                 </Grid>
               )}
@@ -528,13 +678,13 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
                               </IconButton>
                             </TableCell>
 
-                            {/* Milestone - Capsule Tag */}
+                            {/* Milestone - Neutral Capsule (matches My Orders) */}
                             <TableCell align="center">
                               <span
                                 style={{
-                                  backgroundColor: '#FFF4E5',
-                                  color: '#FB8C00',
-                                  border: '1px solid #FB8C00',
+                                  backgroundColor: '#FFFFFF',
+                                  color: '#000000',
+                                  border: '1px solid #BDBDBD',
                                   fontWeight: 600,
                                   fontSize: '12px',
                                   padding: '4px 10px',
@@ -545,11 +695,11 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
                                   transition: 'all 0.2s ease-in-out',
                                 }}
                                 onMouseEnter={(e) => {
-                                  e.target.style.backgroundColor = '#FFE0B2';
-                                  e.target.style.boxShadow = '0 0 6px rgba(251,140,0,0.4)';
+                                  e.target.style.backgroundColor = '#F5F5F5';
+                                  e.target.style.boxShadow = '0 0 6px rgba(0,0,0,0.2)';
                                 }}
                                 onMouseLeave={(e) => {
-                                  e.target.style.backgroundColor = '#FFF4E5';
+                                  e.target.style.backgroundColor = '#FFFFFF';
                                   e.target.style.boxShadow = 'none';
                                 }}
                                 onClick={() => handleMilestoneClick(row.poid)}
@@ -558,13 +708,13 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
                               </span>
                             </TableCell>
 
-                            {/* View - Capsule Tag */}
+                            {/* View - Neutral Capsule (matches My Orders) */}
                             <TableCell align="center">
                               <span
                                 style={{
-                                  backgroundColor: '#E8F0FE',
-                                  color: '#1A73E8',
-                                  border: '1px solid #1A73E8',
+                                  backgroundColor: '#FFFFFF',
+                                  color: '#000000',
+                                  border: '1px solid #BDBDBD',
                                   fontWeight: 600,
                                   fontSize: '12px',
                                   padding: '4px 10px',
@@ -575,11 +725,11 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
                                   transition: 'all 0.2s ease-in-out',
                                 }}
                                 onMouseEnter={(e) => {
-                                  e.target.style.backgroundColor = '#D2E3FC';
-                                  e.target.style.boxShadow = '0 0 6px rgba(26,115,232,0.4)';
+                                  e.target.style.backgroundColor = '#F5F5F5';
+                                  e.target.style.boxShadow = '0 0 6px rgba(0,0,0,0.2)';
                                 }}
                                 onMouseLeave={(e) => {
-                                  e.target.style.backgroundColor = '#E8F0FE';
+                                  e.target.style.backgroundColor = '#FFFFFF';
                                   e.target.style.boxShadow = 'none';
                                 }}
                                 onClick={() => handleViewOrder(row.poid)}
@@ -604,13 +754,13 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
                               </IconButton>
                             </TableCell>
 
-                            {/* Inspection - Green Capsule Tag */}
+                            {/* Inspection - Neutral Capsule (matches My Orders) */}
                             <TableCell align="center">
                               <span
                                 style={{
-                                  backgroundColor: '#E8F5E9',
-                                  color: '#43A047',
-                                  border: '1px solid #43A047',
+                                  backgroundColor: '#FFFFFF',
+                                  color: '#000000',
+                                  border: '1px solid #BDBDBD',
                                   fontWeight: 600,
                                   fontSize: '12px',
                                   padding: '4px 10px',
@@ -621,25 +771,26 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
                                   transition: 'all 0.2s ease-in-out',
                                 }}
                                 onMouseEnter={(e) => {
-                                  e.target.style.backgroundColor = '#C8E6C9';
-                                  e.target.style.boxShadow = '0 0 6px rgba(67,160,71,0.4)';
+                                  e.target.style.backgroundColor = '#F5F5F5';
+                                  e.target.style.boxShadow = '0 0 6px rgba(0,0,0,0.2)';
                                 }}
                                 onMouseLeave={(e) => {
-                                  e.target.style.backgroundColor = '#E8F5E9';
+                                  e.target.style.backgroundColor = '#FFFFFF';
                                   e.target.style.boxShadow = 'none';
                                 }}
+                                onClick={() => handleInspectionClick(row)}
                               >
                                 Inspection
                               </span>
                             </TableCell>
 
-                            {/* Size Specs - Capsule Tag */}
+                            {/* Size Specs - Neutral Capsule (matches My Orders) */}
                             <TableCell align="center">
                               <span
                                 style={{
-                                  backgroundColor: '#FDECEA', // Light red background
-                                  color: '#D32F2F', // Red text
-                                  border: '1px solid #D32F2F', // Red border
+                                  backgroundColor: '#FFFFFF',
+                                  color: '#000000',
+                                  border: '1px solid #BDBDBD',
                                   fontWeight: 600,
                                   fontSize: '12px',
                                   padding: '4px 10px',
@@ -650,20 +801,14 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
                                   transition: 'all 0.2s ease-in-out',
                                 }}
                                 onMouseEnter={(e) => {
-                                  e.target.style.backgroundColor = '#F9D6D5'; // Slightly darker on hover
-                                  e.target.style.boxShadow = '0 0 6px rgba(211,47,47,0.4)'; // Red glow
+                                  e.target.style.backgroundColor = '#F5F5F5';
+                                  e.target.style.boxShadow = '0 0 6px rgba(0,0,0,0.2)';
                                 }}
                                 onMouseLeave={(e) => {
-                                  e.target.style.backgroundColor = '#FDECEA';
+                                  e.target.style.backgroundColor = '#FFFFFF';
                                   e.target.style.boxShadow = 'none';
                                 }}
-                                onClick={() => {
-                                  if (onClose) onClose();
-                                  const q = row.poNo
-                                    ? `?poNo=${encodeURIComponent(row.poNo)}`
-                                    : '';
-                                  navigate(`${paths.dashboard.supplyChain.sizeSpecsView}${q}`);
-                                }}
+                                onClick={() => handleSizeSpecsClick(row)}
                               >
                                 Size Specs
                               </span>
@@ -696,6 +841,64 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
             ))}
         </Box>
       </LocalizationProvider>
+
+      {/* Inspection Popup — same shape as My Orders' Inspection dialog. */}
+      <Dialog
+        open={inspectionOpen}
+        onClose={() => setInspectionOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Inspection</DialogTitle>
+        <DialogContent sx={{ mt: 1 }}>
+          {inspectionPoNo && (
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              PO No: {inspectionPoNo}
+            </Typography>
+          )}
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 'bold' }}>PDF</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Inspection Date</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Insp No.</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>AQL System</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>AQL Range</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {inspectionLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      <CircularProgress size={20} />
+                    </TableCell>
+                  </TableRow>
+                ) : inspectionRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      No records to display
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  inspectionRows.map((row, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{row.pdf || ''}</TableCell>
+                      <TableCell>{row.inspectionDate || ''}</TableCell>
+                      <TableCell>{row.inspectionNo || ''}</TableCell>
+                      <TableCell>{row.aqlSystem || ''}</TableCell>
+                      <TableCell>{row.aqlRange || ''}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setInspectionOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }

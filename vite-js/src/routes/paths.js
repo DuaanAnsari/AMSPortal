@@ -201,6 +201,7 @@ export const paths = {
       fobLdpPriceList: `${ROOTS.DASHBOARD}/reports/fob-ldp-price-list`,
       wip: `${ROOTS.DASHBOARD}/reports/wip`,
       mgt: `${ROOTS.DASHBOARD}/reports/mgt`,
+      shipment: `${ROOTS.DASHBOARD}/reports/shipment`,
     },
 
     product: {

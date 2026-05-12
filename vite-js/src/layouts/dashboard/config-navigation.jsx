@@ -219,6 +219,7 @@ export function useNavData() {
               { title: 'FOB LDP PRICE LIST', path: paths.dashboard.reports.fobLdpPriceList },
               { title: 'WIP', path: paths.dashboard.reports.wip },
               { title: 'MGT', path: paths.dashboard.reports.mgt },
+              { title: 'SHIPMENT', path: paths.dashboard.reports.shipment },
             ],
           },
 
