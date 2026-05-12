@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 
 import {
   getMilestoneGridColumnSpecs,
+  milestoneSummaryFriCombinedExcelText,
   milestoneSummaryMilestoneExcelText,
   milestoneSummaryStack2ExcelText,
   pickField,
@@ -35,6 +36,7 @@ function rowToExcelValues(row, specs, reportType) {
     }
     if (spec.kind === 'qty') return formatQtyCell(pickField(row, ...spec.keys));
     if (spec.kind === 'stack2') return milestoneSummaryStack2ExcelText(row, spec, reportType);
+    if (spec.kind === 'friCombined') return milestoneSummaryFriCombinedExcelText(row, spec);
     if (spec.kind === 'milestone') return milestoneSummaryMilestoneExcelText(row, spec);
     return '';
   });

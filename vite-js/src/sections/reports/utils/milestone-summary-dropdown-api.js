@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 /**
- * Milestone Summary Page — dropdown sources (Merchandiser, Customer, Supplier, Product Portfolio).
+ * Milestone Summary & Customer WIP Report — dropdown sources (Merchandiser, Customer, Supplier, Product Portfolio).
  * Uses `VITE_API_BASE_URL` plus optional path overrides. Falls back to FOB/LDP report env paths where set.
  */
 

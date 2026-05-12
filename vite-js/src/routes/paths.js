@@ -200,6 +200,7 @@ export const paths = {
       root: `${ROOTS.DASHBOARD}/reports`,
       fobLdpPriceList: `${ROOTS.DASHBOARD}/reports/fob-ldp-price-list`,
       wip: `${ROOTS.DASHBOARD}/reports/wip`,
+      mgt: `${ROOTS.DASHBOARD}/reports/mgt`,
     },
 
     product: {
