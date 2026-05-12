@@ -138,6 +138,42 @@ const QD_INSPECTION_DTL_ROW_TYPES_FALLBACK = [
   'QTY BALANCE/EXTRA',
 ];
 
+const SIZE_ORDER_TOKENS = [
+  'XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', 'XXXL', '3XL', '4XL', '5XL', '6XL',
+];
+
+function normalizeSizeToken(sizeLabel) {
+  const s = String(sizeLabel ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!s) return '';
+  if (/^\d+X$/.test(s)) return `${s.slice(0, -1)}XL`; // 2X -> 2XL
+  if (/^\d+XL$/.test(s)) return s;
+  if (s === 'XXXL') return '3XL';
+  if (s === 'XXXXL') return '4XL';
+  return s;
+}
+
+function sizeSortRank(sizeLabel) {
+  const token = normalizeSizeToken(sizeLabel);
+  if (!token) return Number.POSITIVE_INFINITY;
+  const idx = SIZE_ORDER_TOKENS.indexOf(token);
+  if (idx >= 0) return idx;
+  return 1000; // unknown sizes come after known sequence
+}
+
+function uniqueCaseInsensitive(values) {
+  const out = [];
+  const seen = new Set();
+  (values || []).forEach((item) => {
+    const v = String(item ?? '').trim();
+    if (!v) return;
+    const key = v.toLocaleLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(v);
+  });
+  return out;
+}
+
 function emptyInspectionDtlRow(sizeType) {
   const row = { sizeType };
   for (let i = 1; i <= INSPECTION_DTL_SIZE_SLOTS; i++) {
@@ -869,7 +905,7 @@ export default function QualityDepartmentInspectionView() {
       .then((res) => {
         if (Array.isArray(res.data)) {
           console.log('Discrepancies history loaded:', res.data.length, 'items');
-          setDescHistory(res.data);
+          setDescHistory(uniqueCaseInsensitive(res.data));
         }
       })
       .catch((err) => {
@@ -880,7 +916,7 @@ export default function QualityDepartmentInspectionView() {
   const saveDiscHistory = (val) => {
     if (!val || typeof val !== 'string' || val.trim() === '') return;
     const v = val.trim();
-    setDescHistory((prev) => Array.from(new Set([...prev, v])));
+    setDescHistory((prev) => uniqueCaseInsensitive([...prev, v]));
   };
   // ------------------------------------------------
 
@@ -899,17 +935,27 @@ export default function QualityDepartmentInspectionView() {
     [data]
   );
 
-  /** Legacy: always 12 intermediate columns (+ TOTAL), like dgInspectionDtl. */
-  const numMatrixSlots = INSPECTION_DTL_SIZE_SLOTS;
-
-  const matrixColumnTitles = useMemo(() => {
+  const matrixColumns = useMemo(() => {
     const sizeRow = dtlRows.find((r) => String(r.sizeType ?? r.SizeType ?? '').trim() === 'SIZE');
-    return Array.from({ length: INSPECTION_DTL_SIZE_SLOTS }, (_, i) => {
+    const raw = Array.from({ length: INSPECTION_DTL_SIZE_SLOTS }, (_, i) => {
       if (sizeRow) return getDtlCell(sizeRow, i + 1) || '';
       const b = sizeQtyBreakdown[i];
       return (b?.size ?? b?.Size ?? '').trim() || '';
     });
+    const withSlot = raw.map((label, i) => ({ slot: i + 1, label: String(label ?? '').trim() }));
+    const nonEmpty = withSlot.filter((x) => !!x.label);
+
+    nonEmpty.sort((a, b) => {
+      const rankDiff = sizeSortRank(a.label) - sizeSortRank(b.label);
+      if (rankDiff !== 0) return rankDiff;
+      return a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' });
+    });
+    // Show only sizes received from API; no synthetic/empty columns.
+    return nonEmpty;
   }, [dtlRows, sizeQtyBreakdown]);
+
+  /** Legacy: always 12 intermediate columns (+ TOTAL), like dgInspectionDtl. */
+  const numMatrixSlots = matrixColumns.length;
 
   useEffect(() => {
     if (!data) return;
@@ -1576,7 +1622,7 @@ export default function QualityDepartmentInspectionView() {
 
       await reloadInspection(returnedId > 0 ? returnedId : null);
       enqueueSnackbar(isMainSave ? 'Saved.' : 'Saved as draft.', { variant: 'success' });
-      if (isMainSave && !isExplicitEditMode) {
+      if (isMainSave) {
         navigate(paths.dashboard.qaInspectionView);
       }
     } catch (e) {
@@ -2369,9 +2415,9 @@ export default function QualityDepartmentInspectionView() {
                   <TableHead>
                     <TableRow sx={tableHeadRowSx(theme)}>
                       <TableCell sx={{ width: 160, fontSize: 11, py: 1, px: 1.5, borderRight: 1, borderColor: 'divider' }}>SIZE</TableCell>
-                      {Array.from({ length: numMatrixSlots }, (_, i) => (
-                        <TableCell key={`h-${i}`} align="center" sx={{ width: 55, fontSize: 11, py: 1, px: 0.5, borderRight: 1, borderColor: 'divider' }}>
-                          {matrixColumnTitles[i] || ''}
+                      {matrixColumns.map((col, i) => (
+                        <TableCell key={`h-${col.slot}-${i}`} align="center" sx={{ width: 55, fontSize: 11, py: 1, px: 0.5, borderRight: 1, borderColor: 'divider' }}>
+                          {col.label || ''}
                         </TableCell>
                       ))}
                       <TableCell align="center" sx={{ width: 75, fontSize: 11, py: 1, px: 1 }}>
@@ -2407,8 +2453,8 @@ export default function QualityDepartmentInspectionView() {
                             <TableCell sx={{ fontWeight: 600, fontSize: 11.5, whiteSpace: 'nowrap', py: 0.5, px: 1.5, borderRight: 1, borderColor: 'divider' }}>
                               {st}
                             </TableCell>
-                            {Array.from({ length: numMatrixSlots }, (_, si) => {
-                              const slot = si + 1;
+                            {matrixColumns.map((col) => {
+                              const slot = col.slot;
                               const isReadOnly = ['SIZE', 'ORDER QTY', 'QTY BALANCE/EXTRA'].includes(st.toUpperCase());
 
                               let rawVal = getDtlCell(row, slot);
@@ -2434,7 +2480,7 @@ export default function QualityDepartmentInspectionView() {
                               }
 
                               return (
-                                <TableCell key={slot} align="center" sx={{ py: 0.5, px: 0, borderRight: 1, borderColor: 'divider' }}>
+                                <TableCell key={`${st}-${slot}`} align="center" sx={{ py: 0.5, px: 0, borderRight: 1, borderColor: 'divider' }}>
                                   <TextField
                                     size="small"
                                     fullWidth
