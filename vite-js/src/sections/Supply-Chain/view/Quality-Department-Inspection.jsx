@@ -307,12 +307,26 @@ function field(obj, ...keys) {
   return match ? obj[match] : '';
 }
 
-/** From PO header `ration` / `ratio`: solid pack → editable "Solid" field; ratio string → read-only "Ratio". */
-function poRationPackFieldMeta(poRationRaw) {
-  const s = String(poRationRaw ?? '').trim();
-  if (!s) return { label: 'Ratio', disabled: false };
-  if (/\bsolid\b/i.test(s)) return { label: 'Solid', disabled: false };
-  return { label: 'Ratio', disabled: true };
+/**
+ * From PO header `assortment` ('Solid'/'Ratio') and `ration` (ratio string):
+ * - Solid → label='Assortment', value='Solid', readonly
+ * - Ratio → label='Assortment', value=ratio string, editable
+ * - Unknown/empty → label='Assortment', editable
+ */
+function poAssortmentFieldMeta(assortment, rationRaw) {
+  const a = String(assortment ?? '').trim();
+  const r = String(rationRaw ?? '').trim();
+  if (/^solid$/i.test(a)) {
+    return { label: 'Assortment', value: 'Solid', readOnly: true };
+  }
+  if (/^ratio$/i.test(a)) {
+    return { label: 'Assortment', value: r, readOnly: false };
+  }
+  // Fallback: if no assortment but ration has 'solid' text
+  if (/\bsolid\b/i.test(r)) {
+    return { label: 'Assortment', value: 'Solid', readOnly: true };
+  }
+  return { label: 'Assortment', value: r, readOnly: false };
 }
 
 function toDateInput(v) {
@@ -1200,10 +1214,11 @@ export default function QualityDepartmentInspectionView() {
     return row?.aqlRange ?? row?.AQLRange ?? '';
   }, [bindDef, rangesForFirstSystem]);
 
-  const ratioSolidFieldMeta = useMemo(() => {
-    if (!h) return poRationPackFieldMeta('');
+  const assortmentFieldMeta = useMemo(() => {
+    if (!h) return { label: 'Assortment', value: '', readOnly: false };
+    const poAssortment = field(h, 'assortment', 'Assortment');
     const poRation = field(h, 'ration', 'Ration', 'ratio', 'Ratio');
-    return poRationPackFieldMeta(poRation);
+    return poAssortmentFieldMeta(poAssortment, poRation);
   }, [h]);
 
   useEffect(() => {
@@ -1243,7 +1258,13 @@ export default function QualityDepartmentInspectionView() {
       styleNo: field(h, 'styleNo', 'styleNo'),
       selectedCartons: field(snap, 'cartonNo', 'CartonNo'),
       season: field(h, 'season', 'Season'),
-      ratio: field(snap, 'ratio', 'Ratio') || field(h, 'ration', 'Ration'),
+      ratio: (() => {
+        const savedRatio = field(snap, 'ratio', 'Ratio');
+        if (savedRatio) return savedRatio;
+        const assortment = field(h, 'assortment', 'Assortment');
+        if (/^solid$/i.test(assortment)) return 'Solid';
+        return field(h, 'ration', 'Ration');
+      })(),
       offeredCtnQty: numOrEmpty(snap?.inspCartonQty ?? snap?.InspCartonQty),
       gsm: field(h, 'gms', 'gMS', 'GMS'),
       color: (field(snap, 'colorway', 'Colorway') || field(h, 'colorway', 'Colorway') || '')
@@ -2224,12 +2245,13 @@ export default function QualityDepartmentInspectionView() {
                 </Grid>
                 <Grid xs={12} sm={6} md={3}>
                   <TextField
-                    label={ratioSolidFieldMeta.label}
+                    label={assortmentFieldMeta.label}
                     fullWidth
                     size="small"
                     value={form.ratio ?? ''}
                     onChange={(e) => setF('ratio', e.target.value)}
-                    disabled={ratioSolidFieldMeta.disabled}
+                    InputProps={{ readOnly: assortmentFieldMeta.readOnly }}
+                    sx={assortmentFieldMeta.readOnly ? { '& .MuiInputBase-input': { color: 'text.secondary' } } : {}}
                   />
                 </Grid>
                 <Grid xs={12} sm={6} md={3}>
