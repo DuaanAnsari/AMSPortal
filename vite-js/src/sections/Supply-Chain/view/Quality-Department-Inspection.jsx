@@ -316,17 +316,16 @@ function field(obj, ...keys) {
 function poAssortmentFieldMeta(assortment, rationRaw) {
   const a = String(assortment ?? '').trim();
   const r = String(rationRaw ?? '').trim();
-  if (/^solid$/i.test(a)) {
+  
+  // If either field says "solid", show "Solid"
+  if (/^solid$/i.test(a) || /^solid$/i.test(r)) {
     return { label: 'Assortment', value: 'Solid', readOnly: true };
   }
-  if (/^ratio$/i.test(a)) {
-    return { label: 'Assortment', value: r, readOnly: false };
-  }
-  // Fallback: if no assortment but ration has 'solid' text
-  if (/\bsolid\b/i.test(r)) {
-    return { label: 'Assortment', value: 'Solid', readOnly: true };
-  }
-  return { label: 'Assortment', value: r, readOnly: false };
+  
+  // For anything else (like "1:2:3" or "Ratio"), prefix with "ratio: "
+  // but only if there is a value to show
+  const displayVal = r ? `ratio: ${r}` : '';
+  return { label: 'Assortment', value: displayVal, readOnly: false };
 }
 
 function toDateInput(v) {
@@ -1262,8 +1261,9 @@ export default function QualityDepartmentInspectionView() {
         const savedRatio = field(snap, 'ratio', 'Ratio');
         if (savedRatio) return savedRatio;
         const assortment = field(h, 'assortment', 'Assortment');
-        if (/^solid$/i.test(assortment)) return 'Solid';
-        return field(h, 'ration', 'Ration');
+        const ration = field(h, 'ration', 'Ration');
+        if (/^solid$/i.test(assortment) || /^solid$/i.test(ration)) return 'Solid';
+        return ration ? `ratio: ${ration}` : '';
       })(),
       offeredCtnQty: numOrEmpty(snap?.inspCartonQty ?? snap?.InspCartonQty),
       gsm: field(h, 'gms', 'gMS', 'GMS'),
