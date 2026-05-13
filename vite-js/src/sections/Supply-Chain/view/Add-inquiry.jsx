@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Grid,
@@ -13,6 +13,7 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 
 const AddInquiry = () => {
+  const navigate = useNavigate();
   const purple = '#3b2a64';
 
   const [customer, setCustomer] = useState('');
@@ -54,7 +55,7 @@ const AddInquiry = () => {
   };
 
   const handleCancel = () => {
-    alert('Cancelled');
+    navigate(-1);
   };
 
   // 🔹 Reusable Image Upload Component

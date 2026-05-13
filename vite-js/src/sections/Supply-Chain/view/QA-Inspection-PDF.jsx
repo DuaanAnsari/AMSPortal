@@ -34,7 +34,7 @@ const bool2 = (v) => {
     const s = v.toLowerCase().trim();
     if (s === '' || s === 'no' || s === 'not checked' || s === 'not conform' || s === 'not ok' || s === '-' || s === 'none' || s === 'unchecked') return false;
     // Any other text like "Checked", "Conform", "Yes" counts as checked
-    return true; 
+    return true;
   }
   return !!v;
 };
@@ -85,10 +85,10 @@ const dec2 = (v) => {
 
 // ─── styles ──────────────────────────────────────────────────────────────────
 const C = {
-  black:  '#000000',
-  red:    '#FF0000',
-  green:  '#008000',
-  gray:   '#E0E0E0', 
+  black: '#000000',
+  red: '#FF0000',
+  green: '#008000',
+  gray: '#E0E0E0',
   darkGray: '#A0A0A0'
 };
 
@@ -111,12 +111,12 @@ const styles = StyleSheet.create({
   companyTitle: { fontSize: 13, fontFamily: 'Helvetica-Bold', marginBottom: 4 },
   companySub: { fontSize: 6, marginBottom: 2 },
   reportTitle: { fontSize: 8, fontFamily: 'Helvetica-Bold', marginTop: 4 },
-  
+
   // ─── fields ───────────────────────────────────────────────────────────────
   flexRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 6 },
   label: { fontFamily: 'Helvetica-Bold', fontSize: 7, marginRight: 6 },
   valueUnderline: { flex: 1, borderBottom: '1px solid black', paddingBottom: 1, fontSize: 7, minHeight: 10 },
-  
+
   // ─── checkboxes ───────────────────────────────────────────────────────────
   checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   inspTypeRow: { flex: 1, flexDirection: 'row', alignItems: 'center', marginRight: 10 },
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
   inspectLabelCell: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', minHeight: 16, padding: '2 5' },
   inspectValueCell: { flex: 1, justifyContent: 'center', alignItems: 'flex-start', minHeight: 16, padding: '2 6' },
   singleLineText: { fontSize: 7, lineHeight: 1.1, textAlign: 'left' },
-  
+
   // ─── tables ───────────────────────────────────────────────────────────────
   table: { width: '100%', borderTop: '1px solid black', borderLeft: '1px solid black', marginBottom: 10 },
   tr: { flexDirection: 'row' },
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   sizeMatrixCell: { height: 22, paddingTop: 2, paddingBottom: 2, justifyContent: 'center' },
   sizeMatrixRow: { height: 22 },
   sizeLabelText: { fontSize: 6.8, lineHeight: 1.1 },
-  
+
   // ─── conclusion ───────────────────────────────────────────────────────────
   conclusionWrap: { flexDirection: 'row', alignItems: 'center', marginVertical: 10, gap: 25 },
   overallText: { fontFamily: 'Helvetica-Bold', fontSize: 11 },
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   sectionBox: { border: '1px solid black', padding: '2 6', alignSelf: 'flex-start', marginBottom: 4 },
   sectionTitle: { fontFamily: 'Helvetica-Bold', fontSize: 7.5 },
   remarksText: { fontSize: 7, marginTop: 4, minHeight: 40 },
-  
+
   // ─── footer ───────────────────────────────────────────────────────────────
   footer: { position: 'absolute', bottom: 20, left: 28, right: 28, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   signBlock: { width: 120, alignItems: 'center' },
@@ -208,25 +208,25 @@ export default function QAInspectionPDF({ data }) {
   const mst = data.savedInspection || data.SavedInspection || data.mst || data.Mst || data.inspectionMst || data.InspectionMst || data || {};
   const hdr = data.header || data.Header || {};
 
-  const customerName  = data.customerName  || fld(hdr, 'CustomerName',  'customerName');
-  const venderName    = data.venderName    || fld(hdr, 'VenderName',     'venderName');
-  const poNo          = data.poNo          || fld(hdr, 'PONo',           'poNo', 'PONO');
-  const season        = data.season        || fld(hdr, 'Season',         'season');
-  const shipmentDate  = data.shipmentDate  || fld(hdr, 'shipmentdatee',  'shipmentDate');
-  const styleNo       = data.styleNo       || fld(hdr, 'styleNo',        'StyleNo');
-  const orderQty      = data.orderQty      || hdr.orderQty || hdr.OrderQty;
-  const aqlSystem     = data.aqlSystemName || '';
-  const aqlRange      = data.aqlRange      || '';
-  const qaName        = data.qaName        || '';
+  const customerName = data.customerName || fld(hdr, 'CustomerName', 'customerName');
+  const venderName = data.venderName || fld(hdr, 'VenderName', 'venderName');
+  const poNo = data.poNo || fld(hdr, 'PONo', 'poNo', 'PONO');
+  const season = data.season || fld(hdr, 'Season', 'season');
+  const shipmentDate = data.shipmentDate || fld(hdr, 'shipmentdatee', 'shipmentDate');
+  const styleNo = data.styleNo || fld(hdr, 'styleNo', 'StyleNo');
+  const orderQty = data.orderQty || hdr.orderQty || hdr.OrderQty;
+  const aqlSystem = data.aqlSystemName || '';
+  const aqlRange = data.aqlRange || '';
+  const qaName = data.qaName || '';
 
-  const inspType   = mst.inspectionType ?? '';
+  const inspType = mst.inspectionType ?? '';
   // Always stamp DATE as report-generation date.
-  const inspDate   = fmtDate(new Date());
-  const inspNo     = getVal(mst, 'inspNo') ?? '';
-  const passFail   = getVal(mst, 'passFail');
-  const draftBit   = getVal(mst, 'draftBit');
-  const colorway   = mst.colorway   || fld(hdr, 'Colorway', 'colorway');
-  const ratio      = mst.ratio      || '';
+  const inspDate = fmtDate(new Date());
+  const inspNo = getVal(mst, 'inspNo') ?? '';
+  const passFail = getVal(mst, 'passFail');
+  const draftBit = getVal(mst, 'draftBit');
+  const colorway = mst.colorway || fld(hdr, 'Colorway', 'colorway');
+  const ratio = mst.ratio || '';
   const sampleSize = fmt(mst.sampleSize);
 
   // AQL stats
@@ -243,8 +243,8 @@ export default function QAInspectionPDF({ data }) {
     return s?.base64Data ?? s?.Base64Data;
   };
 
-  const qaSig      = getSig('QA');
-  const vendorSig  = getSig('VENDOR');
+  const qaSig = getSig('QA');
+  const vendorSig = getSig('VENDOR');
   const managerSig = getSig('CONTROL');
 
   const images = data.images ?? [];
@@ -300,39 +300,39 @@ export default function QAInspectionPDF({ data }) {
   const dtlRows = data.inspectionDtlRows ?? [];
   const orderedRows = ROW_ORDER.map(rt => dtlRows.find(r => (r.sizeType ?? r.SizeType ?? '').toUpperCase() === rt.toUpperCase()) ?? { sizeType: rt });
   const sizeRow = orderedRows[0];
-  const numCols = [1,2,3,4,5,6,7,8,9,10,11,12].filter(i => {
+  const numCols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].filter(i => {
     const v = sizeRow?.[`size${i}`] ?? sizeRow?.[`Size${i}`] ?? '';
     return v && v !== '0' && v !== '0.0000';
   });
   // Keep fixed 12 size slots so grid always matches printed format.
-  const activeCols = numCols.length > 0 ? [...numCols] : [1,2,3,4,5,6,7,8,9,10,11,12];
+  const activeCols = numCols.length > 0 ? [...numCols] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
   while (activeCols.length < 12) activeCols.push(`empty-${activeCols.length + 1}`);
 
   const discs = data.discrepancies ?? [];
   // Force exactly 12 rows for Discrepancies as per user request
   const filledDiscs = Array.from({ length: 12 }, (_, i) => discs[i] || {});
   const totalCrit = discs.reduce((s, d) => s + (Number(d.critical) || 0), 0);
-  const totalMaj  = discs.reduce((s, d) => s + (Number(d.major)    || 0), 0);
-  const totalMin  = discs.reduce((s, d) => s + (Number(d.minor)    || 0), 0);
+  const totalMaj = discs.reduce((s, d) => s + (Number(d.major) || 0), 0);
+  const totalMin = discs.reduce((s, d) => s + (Number(d.minor) || 0), 0);
 
   const accLeft = [
+    { label: 'CARE LABEL', checked: isCheckedByKeys(mst, ['careLabel', 'CareLabel'], ['careLblCom', 'CareLblCom']), c: getAnyVal(mst, ['careLblCom', 'CareLblCom']) },
+    { label: 'CONTENT LABEL', checked: isCheckedByKeys(mst, ['contentLabel', 'ContentLabel'], ['contentLblCom', 'ContentLblCom']), c: getAnyVal(mst, ['contentLblCom', 'ContentLblCom']) },
+    { label: 'MAIN LABEL', checked: isCheckedByKeys(mst, ['mainLabel', 'MainLabel'], ['mainLblCom', 'MainLblCom']), c: getAnyVal(mst, ['mainLblCom', 'MainLblCom']) },
     { label: 'DYE LOTS', checked: isCheckedByKeys(mst, ['dyeLot', 'DyeLot'], ['dyeLotCom', 'DyeLotCom']), c: getAnyVal(mst, ['dyeLotCom', 'DyeLotCom']) },
     { label: 'PATTERN', checked: isCheckedByKeys(mst, ['pattern', 'Pattern'], ['patternCom', 'PatternCom']), c: getAnyVal(mst, ['patternCom', 'PatternCom']) },
     { label: 'GENERAL APPEARANCE', checked: isCheckedByKeys(mst, ['generalAppearance', 'GeneralAppearance'], ['generalAppCom', 'GeneralAppCom']), c: getAnyVal(mst, ['generalAppCom', 'GeneralAppCom']) },
-    { label: 'MAIN LABEL', checked: isCheckedByKeys(mst, ['mainLabel', 'MainLabel'], ['mainLblCom', 'MainLblCom']), c: getAnyVal(mst, ['mainLblCom', 'MainLblCom']) },
-    { label: 'MAIN LABEL PLACEMENT', checked: isCheckedByKeys(mst, ['mainLabelPlacement', 'MainLabelPlacement'], ['mainLblPlacementCom', 'MainLblPlacementCom']), c: getAnyVal(mst, ['mainLblPlacementCom', 'MainLblPlacementCom']) },
-    { label: 'CARE LABEL PLACEMENT', checked: isCheckedByKeys(mst, ['careLabelPlacement', 'CareLabelPlacement'], ['careLblPlacementCom', 'CareLblPlacementCom']), c: getAnyVal(mst, ['careLblPlacementCom', 'CareLblPlacementCom']) },
-    { label: 'CONTENT LABEL PLACEMENT', checked: isCheckedByKeys(mst, ['contentLabelPlacement', 'ContentLabelPlacement'], ['contentLblPlacementCom', 'ContentLblPlacementCom']), c: getAnyVal(mst, ['contentLblPlacementCom', 'ContentLblPlacementCom']) },
     { label: 'BUTTONS', checked: isCheckedByKeys(mst, ['buttonAccessory', 'ButtonAccessory', 'button', 'Button'], ['buttonsCom', 'ButtonsCom']), c: getAnyVal(mst, ['buttonsCom', 'ButtonsCom']) },
-    { label: '', checked: false, c: '' }
-  ];
-  const accRight = [
     { label: 'ZIPPER', checked: isCheckedByKeys(mst, ['zipper', 'Zipper'], ['zipperCom', 'ZipperCom']), c: getAnyVal(mst, ['zipperCom', 'ZipperCom']) },
     { label: 'DRAWSTRING', checked: isCheckedByKeys(mst, ['drawingString', 'DrawingString'], ['drawingStrCom', 'DrawingStrCom']), c: getAnyVal(mst, ['drawingStrCom', 'DrawingStrCom']) },
+  ];
+  const accRight = [
+    { label: 'CARE LABEL PLACEMENT', checked: isCheckedByKeys(mst, ['careLabelPlacement', 'CareLabelPlacement'], ['careLblPlacementCom', 'CareLblPlacementCom']), c: getAnyVal(mst, ['careLblPlacementCom', 'CareLblPlacementCom']) },
+    { label: 'CONTENT LABEL PLACEMENT', checked: isCheckedByKeys(mst, ['contentLabelPlacement', 'ContentLabelPlacement'], ['contentLblPlacementCom', 'ContentLblPlacementCom']), c: getAnyVal(mst, ['contentLblPlacementCom', 'ContentLblPlacementCom']) },
+    { label: 'MAIN LABEL PLACEMENT', checked: isCheckedByKeys(mst, ['mainLabelPlacement', 'MainLabelPlacement'], ['mainLblPlacementCom', 'MainLblPlacementCom']), c: getAnyVal(mst, ['mainLblPlacementCom', 'MainLblPlacementCom']) },
     { label: 'HANGTAG', checked: isCheckedByKeys(mst, ['hangTag', 'HangTag'], ['hangtagCom', 'HangtagCom']), c: getAnyVal(mst, ['hangtagCom', 'HangtagCom']) },
     { label: 'PRICE TICKET', checked: isCheckedByKeys(mst, ['priceTicket', 'PriceTicket'], ['priceTicketCom', 'PriceTicketCom']), c: getAnyVal(mst, ['priceTicketCom', 'PriceTicketCom']) },
     { label: 'HANGER', checked: isCheckedByKeys(mst, ['hanger', 'Hanger'], ['hangerCom', 'HangerCom']), c: getAnyVal(mst, ['hangerCom', 'HangerCom']) },
-    { label: 'CONTENT LABEL', checked: isCheckedByKeys(mst, ['contentLabel', 'ContentLabel'], ['contentLblCom', 'ContentLblCom']), c: getAnyVal(mst, ['contentLblCom', 'ContentLblCom']) },
     { label: 'FOLD METHOD', checked: isCheckedByKeys(mst, ['foldMethod', 'FoldMethod'], ['foldMethodCom', 'FoldMethodCom']), c: getAnyVal(mst, ['foldMethodCom', 'FoldMethodCom']) },
     { label: 'INTERLINING', checked: isCheckedByKeys(mst, ['interlining', 'Interlining'], ['interLiningCom', 'InterLiningCom']), c: getAnyVal(mst, ['interLiningCom', 'InterLiningCom']) },
     { label: 'ADDITIONAL LABEL', checked: isCheckedByKeys(mst, ['additionalLbl', 'AdditionalLbl'], ['additionalLblComm', 'AdditionalLblComm']), c: getAnyVal(mst, ['additionalLblComm', 'AdditionalLblComm']) }
@@ -355,7 +355,6 @@ export default function QAInspectionPDF({ data }) {
 
   return (
     <Document title={`Inspection Report - ${inspNo}`}>
-      {/* ════════════════ PAGE 1 ════════════════ */}
       <Page size="A4" style={styles.page}>
         <View style={styles.headerRow}>
           <View style={styles.logoArea}>
@@ -446,7 +445,7 @@ export default function QAInspectionPDF({ data }) {
             })}
             <View style={[styles.tdBold, styles.sizeMatrixCell, { flex: 1.2, alignItems: 'center' }]}><Text>TOTAL</Text></View>
           </View>
-          
+
           {orderedRows.slice(1).map((row, ri) => {
             const label = row.sizeType ?? row.SizeType ?? '';
             const isBalance = label.toUpperCase().includes('BALANCE');
@@ -483,10 +482,10 @@ export default function QAInspectionPDF({ data }) {
         <Footer qaName={qaName} qaSig={qaSig} vendorSig={vendorSig} managerSig={managerSig} />
       </Page>
 
-      {/* ════════════════ PAGE 2 ════════════════ */}
+
       <Page size="A4" style={styles.page}>
-        
-        {/* Accessories Box Title */}
+
+
         <View style={styles.sectionBox}><Text style={styles.sectionTitle}>ACCESSORIES MARKINGS</Text></View>
         <View style={styles.table}>
           {Array(9).fill(0).map((_, i) => {
@@ -494,13 +493,13 @@ export default function QAInspectionPDF({ data }) {
             const R = accRight[i] || {};
             return (
               <View key={i} style={styles.tr}>
-                {/* Left Side */}
+
                 <View style={[styles.td, styles.inspectLabelCell]}>
                   {L.label ? <CheckBoxLabel label={L.label} checked={L.checked} /> : null}
                 </View>
                 <View style={[styles.td, styles.inspectValueCell]}><Text style={styles.singleLineText} wrap={false}>{L.c || ''}</Text></View>
-                
-                {/* Right Side */}
+
+
                 <View style={[styles.td, styles.inspectLabelCell]}>
                   {R.label ? <CheckBoxLabel label={R.label} checked={R.checked} /> : null}
                 </View>
@@ -510,7 +509,7 @@ export default function QAInspectionPDF({ data }) {
           })}
         </View>
 
-        {/* Packing Box Title */}
+
         <View style={styles.sectionBox}><Text style={styles.sectionTitle}>PACKING</Text></View>
         <View style={styles.table}>
           {Array(5).fill(0).map((_, i) => {
@@ -518,13 +517,13 @@ export default function QAInspectionPDF({ data }) {
             const R = packRight[i] || {};
             return (
               <View key={i} style={styles.tr}>
-                {/* Left Side */}
+
                 <View style={[styles.td, styles.inspectLabelCell]}>
                   {L.label ? <CheckBoxLabel label={L.label} checked={L.checked} /> : null}
                 </View>
                 <View style={[styles.td, styles.inspectValueCell]}><Text style={styles.singleLineText} wrap={false}>{L.c || ''}</Text></View>
-                
-                {/* Right Side */}
+
+
                 <View style={[styles.td, styles.inspectLabelCell]}>
                   {R.label ? <CheckBoxLabel label={R.label} checked={R.checked} /> : null}
                 </View>
@@ -534,7 +533,7 @@ export default function QAInspectionPDF({ data }) {
           })}
         </View>
 
-        {/* Discrepancies Table */}
+
         <View style={styles.table}>
           <View style={styles.tr}>
             <View style={[styles.tdBold, { width: 35, alignItems: 'center' }]}><Text>S.NO.</Text></View>
@@ -544,7 +543,7 @@ export default function QAInspectionPDF({ data }) {
             <View style={[styles.tdBold, { width: 40, alignItems: 'center' }]}><Text>MAJOR</Text></View>
             <View style={[styles.tdBold, { width: 40, alignItems: 'center' }]}><Text>MINOR</Text></View>
           </View>
-          
+
           {filledDiscs.map((d, i) => {
             const discText = d.discrepanices ?? d.Discrepanices ?? d.discrepancy ?? '';
             return (
@@ -559,7 +558,7 @@ export default function QAInspectionPDF({ data }) {
             );
           })}
 
-          {/* Totals - span labels across first 3 cols to match screenshot logic */}
+
           <View style={styles.tr}>
             <View style={[styles.tdBold, { width: 35 + 100, flex: 1, alignItems: 'center' }]}><Text>TOTAL</Text></View>
             <View style={[styles.td, { width: 50, alignItems: 'center' }]}><Text>{totalCrit || '0'}</Text></View>
@@ -580,7 +579,7 @@ export default function QAInspectionPDF({ data }) {
         <Footer qaName={qaName} qaSig={qaSig} vendorSig={vendorSig} managerSig={managerSig} />
       </Page>
 
-      {/* ════════════════ PAGE 3 — SPECS SHEET (only rendered when measurement spec data exists) ════════════════ */}
+
       {data.sizeSpecs && data.sizeSpecs.length > 0 && data.sizeSpecs.some(s => s.measurementPoint || s.MeasurementPoint) ? (
         <Page size="A4" style={styles.page}>
           <View style={{ alignItems: 'center', marginBottom: 4 }}>
@@ -619,7 +618,7 @@ export default function QAInspectionPDF({ data }) {
         </Page>
       ) : null}
 
-      {/* ════════════════ PAGE 4 ════════════════ */}
+
       <Page size="A4" style={styles.page}>
         <View style={[styles.sectionBox, { backgroundColor: C.gray, border: '1px solid black', width: '100%', padding: '4 6' }]}>
           <Text style={styles.sectionTitle}>Picture taken during inspection</Text>
@@ -628,13 +627,21 @@ export default function QAInspectionPDF({ data }) {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 }}>
           {images.map((img, i) => (
             <View key={i} style={{ width: '45%', border: '1px solid black', height: 195, marginBottom: 10, padding: 2 }}>
-              <Image 
-                src={img.base64Content ?? img.Base64Content} 
-                style={{ width: '100%', height: 168, objectFit: 'contain' }} 
+              <Image
+                src={img.base64Content ?? img.Base64Content}
+                style={{ width: '100%', height: 168, objectFit: 'contain' }}
               />
               <View style={{ borderTop: '1px solid black', marginTop: 2, minHeight: 20, justifyContent: 'center', alignItems: 'center', padding: '2 4' }}>
                 <Text style={{ fontSize: 7 }}>
-                  {img.imgHeader ?? img.ImgHeader ?? img.photoName ?? img.PhotoName ?? ''}
+                  {(() => {
+                    const hText = img.imgHeader ?? img.ImgHeader ?? '';
+                    const pName = img.photoName ?? img.PhotoName ?? '';
+                    const isDefect = /major defect|minor defect|critical defect/i.test(hText);
+                    if (isDefect && pName && pName !== hText) {
+                      return `${hText} (${pName})`;
+                    }
+                    return hText || pName || '';
+                  })()}
                 </Text>
               </View>
             </View>

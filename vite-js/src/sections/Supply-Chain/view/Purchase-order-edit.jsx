@@ -2008,7 +2008,7 @@ export default function CompletePurchaseOrderFormEdit() {
       await fetchStyleGrid();
 
       showSnackbar('Purchase Order and item details updated successfully!', 'success');
-      setTimeout(() => navigate('/dashboard/supply-chain'), 1000);
+      setTimeout(() => navigate(-1), 1000);
     } catch (error) {
       console.error('Error submitting form:', error);
       showSnackbar('Error updating purchase order. Please try again.', 'error');
@@ -2081,7 +2081,7 @@ export default function CompletePurchaseOrderFormEdit() {
                   color: 'primary.main',
                   '&:hover': { color: 'primary.dark' },
                 }}
-                onClick={() => navigate('/dashboard/supply-chain')}
+                onClick={() => navigate(-1)}
               />
               <Typography variant="h4">PURCHASE ORDER ENTRY </Typography>
             </Box>
@@ -3363,7 +3363,7 @@ export default function CompletePurchaseOrderFormEdit() {
                   type="button" 
                   variant="outlined" 
                   color="primary"
-                  onClick={() => navigate('/dashboard/supply-chain')}
+                  onClick={() => navigate(-1)}
                 >
                   Cancel
                 </Button>

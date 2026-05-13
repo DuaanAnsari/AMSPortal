@@ -593,7 +593,7 @@ export default function ShipmentReleaseAddPage() {
       await response.text();
 
       enqueueSnackbar('Shipment saved successfully!', { variant: 'success' });
-      navigate('/dashboard/supply-chain/list');
+      navigate(-1);
       // After successful save, clear article grid and hide master grids
       handleClearArticle();
       setForm(defaultFormValues);
@@ -632,7 +632,7 @@ export default function ShipmentReleaseAddPage() {
           <Button
             variant="outlined"
             color="inherit"
-            onClick={() => navigate('/dashboard/supply-chain/list')}
+            onClick={() => navigate(-1)}
             sx={{
               borderColor: '#171616',
               color: '#171616',

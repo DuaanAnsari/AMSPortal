@@ -762,7 +762,7 @@ export default function ShipmentEditView() {
       setSuccessMessage('Shipment updated successfully.');
       setError('');
       enqueueSnackbar('Shipment updated successfully.', { variant: 'success' });
-      navigate('/dashboard/supply-chain/list');
+      navigate(-1);
     } catch (err) {
       setSuccessMessage('');
       setError(err.message || 'Unable to update shipment');
