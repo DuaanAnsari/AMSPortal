@@ -836,6 +836,7 @@ const EditOrderPage = () => {
 
             if (successCount > 0) {
                 showSnackbar(`Successfully updated ${successCount} Purchase Order(s)${errorCount > 0 ? `, ${errorCount} failed` : ''}`, 'success');
+                navigate(-1);
             } else {
                 showSnackbar(`Failed to update Purchase Orders. ${errors.join(', ')}`, 'error');
             }
@@ -875,7 +876,7 @@ const EditOrderPage = () => {
                                 color: 'primary.main',
                                 '&:hover': { color: 'primary.dark' },
                             }}
-                            onClick={() => navigate('/dashboard/supply-chain')}
+                            onClick={() => navigate(-1)}
                         />
                         <Typography variant="h4">
                             {`EDIT PURCHASE ORDERS (${tableData.length} Selected)`}
@@ -895,7 +896,7 @@ const EditOrderPage = () => {
                         </LoadingButton>
                         <Button
                             variant="outlined"
-                            onClick={() => navigate('/dashboard/supply-chain')}
+                            onClick={() => navigate(-1)}
                         >
                             Cancel
                         </Button>

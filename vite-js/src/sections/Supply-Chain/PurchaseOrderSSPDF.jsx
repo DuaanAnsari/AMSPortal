@@ -18,14 +18,8 @@ import {
 import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import {
-    ZoomIn,
-    ZoomOut,
-    Download,
-    Print,
-    Close
-} from '@mui/icons-material';
-import { useParams } from 'react-router-dom';
+import { ArrowBack, ZoomIn, ZoomOut, Download, Print, Close } from '@mui/icons-material';
+import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { HOST_API } from 'src/config-global';
 
@@ -35,6 +29,7 @@ const PurchaseOrderSSPDF = ({ poData: propPoData, onClose }) => {
     const componentRef = useRef();
     const [zoomLevel, setZoomLevel] = useState(1.2);
     const { id } = useParams();
+    const navigate = useNavigate();
     const [fetchedData, setFetchedData] = useState(null);
     const [pdfData, setPdfData] = useState([]);
     const [loading, setLoading] = useState(!!id && !propPoData);
@@ -224,6 +219,14 @@ const PurchaseOrderSSPDF = ({ poData: propPoData, onClose }) => {
                 <Toolbar variant="dense" sx={{ minHeight: '48px !important' }}>
                     {/* Left Section - Document Info */}
                     <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                        <IconButton
+                            size="small"
+                            onClick={() => navigate(-1)}
+                            sx={{ color: '#fff', mr: 1 }}
+                            title="Back"
+                        >
+                            <ArrowBack fontSize="small" />
+                        </IconButton>
                         <Typography
                             variant="h6"
                             sx={{

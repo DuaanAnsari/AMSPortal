@@ -2706,7 +2706,7 @@ export default function CompletePurchaseOrderForm() {
         setFiles({});
 
         // Redirect to My Orders page
-        navigate('/dashboard/supply-chain');
+        navigate(-1);
     } catch (error) {
       console.error('❌ Error submitting form:', error);
       
@@ -2772,7 +2772,7 @@ export default function CompletePurchaseOrderForm() {
                   color: 'primary.main',
                   '&:hover': { color: 'primary.dark' },
                 }}
-                onClick={() => navigate('/dashboard/supply-chain')}
+                onClick={() => navigate(-1)}
               />
               <Typography variant="h6">PURCHASE ORDER ENTRY</Typography>
             </Box>

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import {
     AppBar,
     Box,
@@ -14,7 +14,7 @@ import {
     Typography,
     CircularProgress,
 } from '@mui/material';
-import { ZoomIn, ZoomOut, Print, Download } from '@mui/icons-material';
+import { ZoomIn, ZoomOut, Print, Download, ArrowBack } from '@mui/icons-material';
 import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -66,8 +66,8 @@ function numberToWords(amount) {
 }
 
 export default function PrintInvoicePage() {
-    const { state } = useLocation();
     const { id } = useParams();
+    const navigate = useNavigate();
 
     const [invoiceData, setInvoiceData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -489,6 +489,14 @@ export default function PrintInvoicePage() {
             <AppBar position="static" sx={{ backgroundColor: '#3C3C3C', color: '#fff', boxShadow: 'none' }}>
                 <Toolbar variant="dense" sx={{ minHeight: '48px !important' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                        <IconButton
+                            size="small"
+                            onClick={() => navigate(-1)}
+                            sx={{ color: '#fff', mr: 1 }}
+                            title="Back"
+                        >
+                            <ArrowBack fontSize="small" />
+                        </IconButton>
                         <Typography variant="h6" sx={{ fontSize: '14px', fontWeight: 'bold' }}>
                             Print Invoice {invoiceData?.invoiceNo ? `- ${invoiceData.invoiceNo}` : ''}
                         </Typography>

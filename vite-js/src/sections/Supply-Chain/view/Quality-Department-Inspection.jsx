@@ -323,9 +323,8 @@ function poAssortmentFieldMeta(assortment, rationRaw) {
   }
   
   // For anything else (like "1:2:3" or "Ratio"), prefix with "ratio: "
-  // but only if there is a value to show
   const displayVal = r ? `ratio: ${r}` : '';
-  return { label: 'Assortment', value: displayVal, readOnly: false };
+  return { label: 'Assortment', value: displayVal, readOnly: true };
 }
 
 function toDateInput(v) {
@@ -458,22 +457,27 @@ const ACCESSORY_UI_ROWS = [
   { accKey: 'dyeLot', label: 'Dye Lot', options: CHECKED },
   { accKey: 'zipper', label: 'Zipper', options: YES_NO },
   { accKey: 'pattern', label: 'Pattern', options: CHECKED },
+
   { accKey: 'drawingString', label: 'Drawing String', options: YES_NO },
   { accKey: 'generalAppearance', label: 'General Appearance', options: CONFORM },
   { accKey: 'hangTag', label: 'Hangtag', options: YES_NO },
+
   { accKey: 'mainLabel', label: 'Main Label', textMode: true, textKey: 'mainLabel' },
   { accKey: 'mainLabelPlacement', label: 'Main Label Placement', options: SIDE_SEAM_CB },
   { accKey: 'priceTicket', label: 'Price Ticket', options: YES_NO },
+
   { accKey: 'careLabelPlacement', label: 'Care Label Placement', options: SIDE_SEAM_CB },
-  { accKey: 'careLabel', label: 'Care Label', textMode: true, textKey: 'careLabel' },
-  { accKey: 'contentLabelPlacement', label: 'Content Label Placement', options: SIDE_SEAM_CB },
   { accKey: 'contentLabel', label: 'Content Label', textMode: true, textKey: 'contentLabel' },
+  { accKey: 'contentLabelPlacement', label: 'Content Label Placement', options: SIDE_SEAM_CB },
+
   { accKey: 'hanger', label: 'Hanger', options: YES_NO },
   { accKey: 'foldMethod', label: 'Fold Method', options: FOLD_METHOD, dropKey: 'foldMethodDdl' },
   { accKey: 'button', label: 'Buttons', options: YES_NO },
+
   { accKey: 'interlining', label: 'Inner Lining', textMode: true, textKey: 'interlining' },
   { accKey: 'additionalLabel', label: 'Additional Label', options: YES_NO },
   { accKey: 'other1', label: '', textMode: true, textKey: 'other1' },
+
   { accKey: 'other2', label: '', textMode: true, textKey: 'other2' },
 ];
 
@@ -527,12 +531,12 @@ function buildQdSavePayload(form, discRows, mstId, isMainSave, dtlRows) {
     criticalAllowed: parseOptionalDecimal(form.allowCrit),
     minorAllowed: parseOptionalDecimal(form.allowMin),
     majorAllowed: parseOptionalDecimal(form.allowMaj),
-    quantityD: form.qtyD || null,
-    conformityD: form.confD || null,
-    workmanshipD: form.workD || null,
-    packingD: form.packD || null,
-    markingD: form.markD || null,
-    measurementD: form.measD || null,
+    quantity_D: form.qtyD || null,
+    conformity_D: form.confD || null,
+    workmanship_D: form.workD || null,
+    packing_D: form.packD || null,
+    marking_D: form.markD || null,
+    measurement_D: form.measD || null,
     quantity_D_Remarks: form.qtyDR || null,
     conformity_D_Remarks: form.confDR || null,
     workmanship_D_Remarks: form.workDR || null,
@@ -1570,6 +1574,29 @@ export default function QualityDepartmentInspectionView() {
       enqueueSnackbar('Please save the inspection first to generate a PDF.', { variant: 'warning' });
       return;
     }
+
+    // Validation: Prevent report if any defect dropdown is "Not OK"
+    const defectFields = {
+      qtyD: 'Quantity',
+      confD: 'Conformity',
+      workD: 'Workmanship',
+      packD: 'Packing',
+      markD: 'Marking',
+      measD: 'Measurement',
+    };
+
+    const invalidFields = Object.keys(defectFields)
+      .filter((k) => String(form[k] || '').trim().toLowerCase() === 'not ok')
+      .map((k) => defectFields[k]);
+
+    if (invalidFields.length > 0) {
+      enqueueSnackbar(`PDF cannot be generated because the following fields are "Not OK": ${invalidFields.join(', ')}.`, {
+        variant: 'error',
+        autoHideDuration: 5000,
+      });
+      return;
+    }
+
     setPdfLoading(true);
     try {
       const { data } = await qdApi.get(`/QAInspection/inspection-report-data`, {
@@ -1607,20 +1634,6 @@ export default function QualityDepartmentInspectionView() {
   };
 
   const handleSave = async (isMainSave) => {
-    // Validation: Prevent save if any defect dropdown is "Not OK"
-    const defectFields = {
-      qtyD: 'Quantity',
-      confD: 'Conformity',
-      workD: 'Workmanship',
-      packD: 'Packing',
-    };
-
-    const invalidFieldKey = Object.keys(defectFields).find((k) => form[k] === 'Not OK');
-    if (invalidFieldKey) {
-      enqueueSnackbar(`Cannot save because "${defectFields[invalidFieldKey]}" is set to "Not OK".`, { variant: 'error' });
-      return;
-    }
-
     setSaving(true);
     try {
       const body = buildQdSavePayload(form, discRows, mstId, isMainSave, dtlRows);
@@ -1931,15 +1944,6 @@ export default function QualityDepartmentInspectionView() {
     let currentMstId = mstId;
 
     if (!currentMstId) {
-      // Auto-save master first to get the ID
-      const defectFields = {
-        qtyD: 'Quantity', confD: 'Conformity', workD: 'Workmanship', packD: 'Packing',
-      };
-      const invalidFieldKey = Object.keys(defectFields).find((k) => form[k] === 'Not OK');
-      if (invalidFieldKey) {
-        enqueueSnackbar(`Cannot auto-save master because "${defectFields[invalidFieldKey]}" is set to "Not OK".`, { variant: 'error' });
-        return;
-      }
       try {
         const body = buildQdSavePayload(form, discRows, currentMstId, false, dtlRows);
         const { data: res } = await qdApi.post(
@@ -3303,6 +3307,15 @@ export default function QualityDepartmentInspectionView() {
               </Button>
               <Button variant="outlined" disabled={saving} onClick={() => handleSave(false)}>
                 {saving ? 'Saving…' : 'Draft'}
+              </Button>
+              <Button 
+                variant="soft" 
+                color="info" 
+                startIcon={<PictureAsPdfIcon />} 
+                disabled={saving || pdfLoading} 
+                onClick={handleViewPdf}
+              >
+                {pdfLoading ? 'Loading PDF…' : 'Preview PDF'}
               </Button>
             </Stack>
           </Stack>

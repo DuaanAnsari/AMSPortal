@@ -618,7 +618,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
           <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
             <IconButton
               size="small"
-              onClick={() => navigate('/dashboard/supply-chain')}
+              onClick={() => navigate(-1)}
               sx={{ color: '#fff', mr: 1 }}
               title="Back to Orders"
             >

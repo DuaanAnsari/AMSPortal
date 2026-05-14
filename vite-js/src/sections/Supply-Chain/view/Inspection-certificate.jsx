@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import {
   AppBar,
   Box,
@@ -13,7 +13,7 @@ import {
   Toolbar,
   Typography,
 } from '@mui/material';
-import { ZoomIn, ZoomOut, Print, Download } from '@mui/icons-material';
+import { ZoomIn, ZoomOut, Print, Download, ArrowBack } from '@mui/icons-material';
 import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -21,8 +21,8 @@ import jsPDF from 'jspdf';
 // ----------------------------------------------------------------------
 
 export default function InspectionCertificatePage() {
-  const { state } = useLocation();
   const { id } = useParams();
+  const navigate = useNavigate();
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
   const SHIPMENT_DETAIL_API = `${API_BASE_URL}/api/ShipmentRelease/GetShipment`;
@@ -297,6 +297,14 @@ export default function InspectionCertificatePage() {
         <Toolbar variant="dense" sx={{ minHeight: '48px !important' }}>
           {/* Left: title */}
           <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+            <IconButton
+              size="small"
+              onClick={() => navigate(-1)}
+              sx={{ color: '#fff', mr: 1 }}
+              title="Back"
+            >
+              <ArrowBack fontSize="small" />
+            </IconButton>
             <Typography
               variant="h6"
               sx={{

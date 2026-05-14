@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import {
   AppBar,
   Alert,
@@ -15,7 +15,7 @@ import {
   Toolbar,
   Typography,
 } from '@mui/material';
-import { ZoomIn, ZoomOut, Print, Download } from '@mui/icons-material';
+import { ZoomIn, ZoomOut, Print, Download, ArrowBack } from '@mui/icons-material';
 import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -23,8 +23,8 @@ import jsPDF from 'jspdf';
 // ----------------------------------------------------------------------
 
 export default function RateDiffPage() {
-  const { state } = useLocation();
   const { id } = useParams();
+  const navigate = useNavigate();
   const shipment = state?.shipment || {};
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
   const [invoiceData, setInvoiceData] = useState(null);
@@ -376,6 +376,14 @@ export default function RateDiffPage() {
       >
         <Toolbar variant="dense" sx={{ minHeight: '48px !important' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+            <IconButton
+              size="small"
+              onClick={() => navigate(-1)}
+              sx={{ color: '#fff', mr: 1 }}
+              title="Back"
+            >
+              <ArrowBack fontSize="small" />
+            </IconButton>
             <Typography variant="h6" sx={{ fontSize: '14px', fontWeight: 'bold', color: '#fff' }}>
               Rate Diff - {invoiceData.invoiceNo || id}
             </Typography>
