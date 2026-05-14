@@ -1521,6 +1521,7 @@ export default function CompletePurchaseOrderFormEdit() {
             productCode: item.productCode || '',
             // API me size range ka naam nahi aa raha, isliye abhi blank rakha hai
             sizeRange: item.sizeRange || '',
+            sizeRangeDBID: item.sizeRangeDBID || 0,
             size: item.size || '',
             quantity,
             itemPrice,
@@ -1535,6 +1536,10 @@ export default function CompletePurchaseOrderFormEdit() {
             cartonQty: Number(item.cartonPerPcs ?? 0),
             grossWeight: Number(item.grossWeightD ?? 0),
             netWeight: Number(item.netWeightD ?? 0),
+            remarks: item.remarks || '',
+            qrCodePOD: item.qrCodePOD || '',
+            itemDescription: item.itemDescription || '',
+            article: item.article || '',
           };
       });
 
