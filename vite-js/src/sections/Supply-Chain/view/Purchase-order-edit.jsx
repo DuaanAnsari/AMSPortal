@@ -205,12 +205,25 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
   };
 
   useEffect(() => {
-    if (!fileValue) {
+    if (fileValue) {
+      if (typeof fileValue === 'string') {
+        // Existing image data from API (base64 or URL)
+        if (fileValue.startsWith('data:') || fileValue.startsWith('http')) {
+          setPreviewUrl(fileValue);
+        } else {
+          // Assume raw base64 PNG data
+          setPreviewUrl(`data:image/png;base64,${fileValue}`);
+        }
+      } else {
+        // New File object – preview already set by handleFileChange
+        // No action needed
+      }
+    } else {
       setPreviewUrl('');
     }
   }, [fileValue]);
 
-  const isImage = fileValue?.type?.startsWith('image/');
+  const isImage = typeof fileValue === 'string' ? true : fileValue?.type?.startsWith('image/');
 
   return (
     <Box>
@@ -235,7 +248,7 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
           <Grid container alignItems="center" justifyContent="space-between">
             <Grid item>
               <Typography variant="body2" noWrap>
-                {fileValue.name}
+                {typeof fileValue === 'object' ? fileValue.name : 'Existing file'}
               </Typography>
               <Typography variant="caption" color="success.main">
                 ✓ File selected
@@ -1437,8 +1450,15 @@ export default function CompletePurchaseOrderFormEdit() {
             destination: orderData.destination || 'New York',
             shipmentMode: orderData.deliveryType || '',
             
-            // Bank Details
-            bankName: orderData.bankName || '',
+
+            // Reference & Attachment fields (file uploads)
+            originalPurchaseOrder: orderData.poImage || null,
+            processOrderConfirmation: orderData.specsimage || null,
+            finalSpecs: orderData.finalspecs || null,
+            productImage: orderData.productImage || null,
+            ppComment: orderData.pPimage || null,
+            sizeSetComment: orderData.sizeset || null,
+
             bankBranch: orderData.bankBranch || '',
             titleOfAccount: orderData.titleOfAccount || '',
             accountNo: orderData.accountNo || '',
