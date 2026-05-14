@@ -746,7 +746,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               </Box>
 
               <Box sx={{ width: '30%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <Box sx={{ width: '75px', height: '85px', border: '1px solid #000', mb: 0.5, p: 0.2 }}>
+                <Box sx={{ width: '130px', height: '140px', mb: 0.5 }}>
                   <img
                     src={(() => {
                       const imgStr = data.productImage;
