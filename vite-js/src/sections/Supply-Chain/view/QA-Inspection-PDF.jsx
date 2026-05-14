@@ -183,8 +183,8 @@ const Footer = ({ qaName, qaSig, vendorSig, managerSig }) => (
       {qaSig ? <Image src={qaSig} style={styles.signImg} /> : null}
       {qaSig ? <Image src={qaSig} style={styles.signImgBoost} /> : null}
       <View style={styles.signLine} />
-      <Text style={styles.signLabel}>QA INSPECTOR SIGNATURE</Text>
-      <Text style={{ fontSize: 6, marginTop: 2 }}>{qaName}</Text>
+      <Text style={styles.signLabel}>QA SIGN</Text>
+
     </View>
     <View style={styles.signBlock}>
       {vendorSig ? <Image src={vendorSig} style={styles.signImg} /> : null}
@@ -196,7 +196,7 @@ const Footer = ({ qaName, qaSig, vendorSig, managerSig }) => (
       {managerSig ? <Image src={managerSig} style={styles.signImg} /> : null}
       {managerSig ? <Image src={managerSig} style={styles.signImgBoost} /> : null}
       <View style={styles.signLine} />
-      <Text style={styles.signLabel}>QA MANAGER SIGNATURE</Text>
+      <Text style={styles.signLabel}>MANAGER QA</Text>
     </View>
   </View>
 );

@@ -87,22 +87,33 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
         const token = localStorage.getItem('accessToken');
         const headers = { Authorization: token ? `Bearer ${token}` : '' };
 
-        const response = await axios.get(`${HOST_API}/api/Report/GeneratePOReport?poid=${id}`, { headers });
+        const [reportRes, fallbackRes] = await Promise.all([
+          axios.get(`${HOST_API}/api/Report/GeneratePOReport?poid=${id}`, { headers }),
+          axios.get(`${HOST_API}/api/MyOrders/GetPurchaseOrder/${id}`, { headers }).catch(() => ({ data: [] }))
+        ]);
 
-        const reportData = response.data;
+        let reportData = reportRes.data;
+        const orderData = Array.isArray(fallbackRes.data) ? fallbackRes.data[0] : fallbackRes.data;
         const isEmpty = !reportData || (Array.isArray(reportData) && reportData.length === 0);
 
         if (!isEmpty) {
+          // Inject missing fields from base API if the report API omitted them
+          if (orderData) {
+            reportData = reportData.map(r => ({ 
+              ...r, 
+              poImage: r.poImage || orderData.poImage,
+              buyerCustomer: r.buyerCustomer || orderData.buyerCustomer || r.customerName || orderData.customerName || '',
+              consigneeAddress1: r.consigneeAddress1 || orderData.consigneeAddress1 || orderData.consignee || '',
+              consigneeAddress2: r.consigneeAddress2 || orderData.consigneeAddress2 || ''
+            }));
+          }
           setFetchedData(reportData);
         } else {
-          // Fallback: fetch PO header + style/item rows separately
+          // Fallback: fetch style/item rows separately
           try {
-            const [fallback, styleRes] = await Promise.all([
-              axios.get(`${HOST_API}/api/MyOrders/GetPurchaseOrder/${id}`, { headers }),
-              axios.get(`${HOST_API}/api/Milestone/GetStyle?poid=${id}`, { headers }).catch(() => ({ data: [] })),
-            ]);
+            const styleRes = await axios.get(`${HOST_API}/api/Milestone/GetStyle?poid=${id}`, { headers }).catch(() => ({ data: [] }));
 
-            const order = Array.isArray(fallback.data) ? fallback.data[0] : fallback.data;
+            const order = orderData;
             const styleRows = Array.isArray(styleRes.data) ? styleRes.data : [];
 
             const baseHeader = order ? {
@@ -737,7 +748,14 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               <Box sx={{ width: '30%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                 <Box sx={{ width: '75px', height: '85px', border: '1px solid #000', mb: 0.5, p: 0.2 }}>
                   <img
-                    src={data.productImage || '/placeholder-product.png'}
+                    src={(() => {
+                      const imgStr = data.productImage;
+                      if (!imgStr || typeof imgStr !== 'string') return '/placeholder-product.png';
+                      const trimmed = imgStr.trim();
+                      if (trimmed === '0x' || trimmed.length < 50) return '/placeholder-product.png';
+                      if (trimmed.startsWith('data:') || trimmed.startsWith('http') || trimmed.startsWith('/')) return trimmed;
+                      return `data:image/jpeg;base64,${trimmed}`;
+                    })()}
                     alt="Product"
                     style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                   />
@@ -758,6 +776,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                 </Box>
                 <Box sx={{ mt: 0.5, flex: 1 }}>
                   <Typography sx={{ fontWeight: 'bold', fontSize: '11px', lineHeight: 1.1 }}>{data.addressLeft}</Typography>
+                  <Typography sx={{ fontWeight: 'bold', fontSize: '11px', lineHeight: 1.1 }}>Karachi Pakistan</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', mt: 0.5, pt: 0.2 }}>
                   <Typography sx={{ fontWeight: 'bold', minWidth: '80px', fontSize: '9px' }}>Tracking Code:-</Typography>
@@ -785,7 +804,8 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               </Box>
               <Box sx={{ flex: 1, border: '1px solid #000', p: 0.5, display: 'flex', flexDirection: 'column' }}>
                 <Typography sx={{ fontWeight: 'bold', fontSize: '8.5px', mb: 0.3 }}>Ship To:</Typography>
-                <Typography sx={{ fontWeight: 'bold', fontSize: '10px' }}>{poData.consigneeAddress1 || 'ALL SEASONS TEXTILE'}</Typography>
+                <Typography sx={{ fontWeight: 'bold', fontSize: '10px' }}>{poData.buyerCustomer || poData.customerName || 'ALL SEASONS TEXTILE'}</Typography>
+                <Typography sx={{ fontSize: '8.5px', lineHeight: 1.1 }}>{poData.consigneeAddress1 || poData.consignee || ''}</Typography>
                 <Typography sx={{ fontSize: '8.5px', lineHeight: 1.1 }}>{poData.consigneeAddress2 || ''}</Typography>
                 <Box sx={{ mt: 'auto', display: 'flex', justifyContent: 'space-between', pt: 0.2 }}>
                   <Typography sx={{ fontWeight: 'bold', fontSize: '11px' }}>NY</Typography>
@@ -1247,7 +1267,14 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               {data.productImage && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
                   <img
-                    src={data.productImage}
+                    src={(() => {
+                      const imgStr = data.productImage;
+                      if (!imgStr || typeof imgStr !== 'string') return '/placeholder-product.png';
+                      const trimmed = imgStr.trim();
+                      if (trimmed === '0x' || trimmed.length < 50) return '/placeholder-product.png';
+                      if (trimmed.startsWith('data:') || trimmed.startsWith('http') || trimmed.startsWith('/')) return trimmed;
+                      return `data:image/jpeg;base64,${trimmed}`;
+                    })()}
                     alt="Product"
                     style={{
                       maxWidth: '450px',

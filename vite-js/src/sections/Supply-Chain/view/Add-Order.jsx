@@ -1356,7 +1356,7 @@ export default function CompletePurchaseOrderForm() {
   }, [assortmentValue, setValue]);
 
   
-  const [files, setFiles] = useState({});
+  // const [files, setFiles] = useState({}); // Removed as it's not being updated by components
   const [openItemDialog, setOpenItemDialog] = useState(false);
   const [savedItemData, setSavedItemData] = useState(null);
   const [showSelections, setShowSelections] = useState(false);
@@ -1945,34 +1945,12 @@ export default function CompletePurchaseOrderForm() {
   }, [internalPoValue, clearErrors, setError]);
 
   // Handle file changes
+  // Removed unused handleFileChangeWithBase64 as components use RHF setValue
+  /*
   const handleFileChangeWithBase64 = async (field, file) => {
-    if (file) {
-      setFiles((prev) => ({
-        ...prev,
-        [field]: file,
-      }));
-
-      try {
-        // Convert file to base64 for API
-        const base64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onload = () => {
-            // Remove the data:image/...;base64, prefix
-            const base64 = reader.result.split(',')[1];
-            resolve(base64);
-          };
-          reader.onerror = error => reject(error);
-        });
-        
-        console.log(`File "${file.name}" converted to base64 successfully! Length: ${base64.length} characters`);
-        
-      } catch (error) {
-        console.error(`Error converting ${field} to base64:`, error);
-        showSnackbar(`Error converting file to base64: ${error.message}`, 'error');
-      }
-    }
+    ...
   };
+  */
 
   // Fetch APIs
   useEffect(() => {
@@ -2173,6 +2151,7 @@ export default function CompletePurchaseOrderForm() {
     }
   };
 
+  /*
   const handleFileChange = (field, e) => {
     const file = e.target.files[0];
     if (file) {
@@ -2187,6 +2166,7 @@ export default function CompletePurchaseOrderForm() {
       return newFiles;
     });
   };
+  */
 
   const handleOpenItemDialog = () => {
     setOpenItemDialog(true);
@@ -2438,7 +2418,7 @@ export default function CompletePurchaseOrderForm() {
     );
   };
 
-  // Map form data to API format - COMPLETELY UPDATED FOR IMAGE HANDLING
+  // Map form data to API format - UPDATED TO USE FORM DATA DIRECTLY
   const mapFormDataToAPI = async (data) => {
     
     const selectedCustomerObj = customerOptions.find(c => c.customerName === data.customer);
@@ -2453,6 +2433,16 @@ export default function CompletePurchaseOrderForm() {
     // Convert all files to base64
     const convertFileToBase64 = async (file) => {
       if (!file) return '';
+      // If it's already a string (base64 or URL), just return it
+      if (typeof file === 'string') {
+        // If it's a data URL, strip the prefix for API compatibility if needed
+        // Most APIs expect just the base64 part
+        if (file.includes('base64,')) {
+          return file.split('base64,')[1];
+        }
+        return file;
+      }
+      
       try {
         return await fileToBase64(file);
       } catch (error) {
@@ -2461,12 +2451,12 @@ export default function CompletePurchaseOrderForm() {
       }
     };
 
-    // Convert all images to base64
-    const poImageBase64 = await convertFileToBase64(files.image);
-    const productImageBase64 = await convertFileToBase64(files.productImage);
-    const finalSpecsBase64 = await convertFileToBase64(files.finalSpecs);
-    const ppCommentBase64 = await convertFileToBase64(files.ppComment);
-    const sizeSetCommentBase64 = await convertFileToBase64(files.sizeSetComment);
+    // Convert all images to base64 using data from the form
+    const poImageBase64 = await convertFileToBase64(data.image);
+    const productImageBase64 = await convertFileToBase64(data.productImage);
+    const finalSpecsBase64 = await convertFileToBase64(data.finalSpecs);
+    const ppCommentBase64 = await convertFileToBase64(data.ppComment);
+    const sizeSetCommentBase64 = await convertFileToBase64(data.sizeSetComment);
 
     console.log('🖼️ Image Conversion Results:', {
       poImage: poImageBase64 ? `✅ (${poImageBase64.length} chars)` : '❌ Missing',
@@ -2573,7 +2563,8 @@ export default function CompletePurchaseOrderForm() {
       amsRefNo: data.amsRef || '',
       embAndEmbellishment: data.embEmbellishment || '',
       poImage: poImageBase64, // Base64 string
-      poImgFileName: files.image ? files.image.name : '',
+      // Safely capture the filename from the File object
+      poImgFileName: data.image instanceof File ? data.image.name : (typeof data.image === 'string' ? 'existing_po_image.jpg' : ''),
       grossAndNetWeight: data.unit || '',
       shipmentModeText: data.shipmentMode || '',
       costingMstID: 0,
@@ -2599,10 +2590,10 @@ export default function CompletePurchaseOrderForm() {
       pPimage: ppCommentBase64, // Base64 string
       finalspecs: finalSpecsBase64, // Base64 string
       sizeset: sizeSetCommentBase64, // Base64 string
-      specstype: files.finalSpecs ? files.finalSpecs.type : '',
-      pptype: files.ppComment ? files.ppComment.type : '',
-      finaltype: files.finalSpecs ? files.finalSpecs.type : '',
-      sizetype: files.sizeSetComment ? files.sizeSetComment.type : '',
+      specstype: data.finalSpecs instanceof File ? data.finalSpecs.type : '',
+      pptype: data.ppComment instanceof File ? data.ppComment.type : '',
+      finaltype: data.finalSpecs instanceof File ? data.finalSpecs.type : '',
+      sizetype: data.sizeSetComment instanceof File ? data.sizeSetComment.type : '',
       poQtyUnit: data.set || '',
       barCodeTFPO: '',
       etanjDate: formatDate(data.etaNewJerseyDate),
@@ -2612,8 +2603,9 @@ export default function CompletePurchaseOrderForm() {
       inquiryMstID: selectedInquiryObj?.inquiryMstID ? safeParseInt(selectedInquiryObj.inquiryMstID) : 0,
       bankID: safeParseInt(data.bankID),
       
-      prodImgFileName: files.productImage ? files.productImage.name : '',
-      originalPDFName: files.originalPurchaseOrder ? files.originalPurchaseOrder.name : '',
+      // Captured filenames for other attachments
+      prodImgFileName: data.productImage instanceof File ? data.productImage.name : (typeof data.productImage === 'string' ? 'existing_product_image.jpg' : ''),
+      originalPDFName: data.originalPurchaseOrder instanceof File ? data.originalPurchaseOrder.name : (typeof data.originalPurchaseOrder === 'string' ? 'existing_po_doc.pdf' : ''),
       buyerCustomer: data.buyerCustomer || '',
     };
 
@@ -2703,7 +2695,6 @@ export default function CompletePurchaseOrderForm() {
         // Reset form after successful submission
         methods.reset(defaultValues);
         setSavedItemData(null);
-        setFiles({});
 
         // Redirect to My Orders page
         navigate(-1);
