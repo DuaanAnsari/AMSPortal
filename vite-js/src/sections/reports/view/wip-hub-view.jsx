@@ -356,7 +356,16 @@ async function runMilestoneSummaryPdfFromFilters(enqueueSnackbar, filters, mode,
     /** Client-side narrowing — API returns the full set; empty match → empty grid (no rows). */
     const filtered = filterMilestoneRowsByFilters(raw, filters, dropdowns);
 
-    const pdf = await buildMilestoneSummaryPdfBlobFromRows(filtered, meta);
+    const pdf = await buildMilestoneSummaryPdfBlobFromRows(filtered, {
+      ...meta,
+      /**
+       * Forward the same Bearer token used for the data API so the PDF
+       * builder can pull auth-protected image bytes from the backend.
+       * `<img src>` cannot carry an Authorization header, so without this
+       * hook every row image would render as the placeholder.
+       */
+      imageAuthHeaders: wipLdpFobAuthHeaders(),
+    });
     await assertValidMilestonePdfBlob(pdf);
 
     if (mode === 'view') {
@@ -3420,7 +3429,8 @@ function WipReportForm({ pageTitle }) {
     reportType: 'merchandiserWise',
     merchandiser: ALL,
     supplier: ALL,
-    productPortfolio: ALL,
+    /** Default Product Portfolio is the hardcoded `Apparel` option (not an API row). */
+    productPortfolio: 'apparel',
     customer: ALL,
     poScope: ALL,
     reportVariant: 'general',
@@ -3564,6 +3574,7 @@ function WipReportForm({ pageTitle }) {
       }
       if (
         prev.productPortfolio !== ALL &&
+        prev.productPortfolio !== 'apparel' &&
         !portfolios.some((r) => milestonePortfolioKey(r) === prev.productPortfolio)
       ) {
         next.productPortfolio = ALL;
@@ -3638,8 +3649,13 @@ function WipReportForm({ pageTitle }) {
                   disabled={loadingDropdowns && portfolios.length === 0}
                 >
                   <MenuItem value={ALL}>All</MenuItem>
+                  <MenuItem value="apparel">Apparel</MenuItem>
                   {portfolios
                     .filter((row) => milestonePortfolioKey(row))
+                    .filter(
+                      (row) =>
+                        milestonePortfolioLabel(row).trim().toLowerCase() !== 'apparel'
+                    )
                     .map((row) => {
                       const val = milestonePortfolioKey(row);
                       return (
@@ -3773,8 +3789,13 @@ function WipReportForm({ pageTitle }) {
                   disabled={loadingDropdowns && portfolios.length === 0}
                 >
                   <MenuItem value={ALL}>All</MenuItem>
+                  <MenuItem value="apparel">Apparel</MenuItem>
                   {portfolios
                     .filter((row) => milestonePortfolioKey(row))
+                    .filter(
+                      (row) =>
+                        milestonePortfolioLabel(row).trim().toLowerCase() !== 'apparel'
+                    )
                     .map((row) => {
                       const val = milestonePortfolioKey(row);
                       return (

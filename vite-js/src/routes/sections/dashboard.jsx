@@ -166,6 +166,9 @@ const FobLdpPriceListPage = lazy(
 const WipHubPage = lazy(() => import('src/sections/reports/view/wip-hub-view'));
 const MgtHubPage = lazy(() => import('src/sections/reports/view/mgt-hub-view'));
 const ShipmentHubPage = lazy(() => import('src/sections/reports/view/shipment-hub-view'));
+const InspectionHubPage = lazy(() => import('src/sections/reports/view/inspection-hub-view'));
+const InquiryHubPage = lazy(() => import('src/sections/reports/view/inquiry-hub-view'));
+const OtherHubPage = lazy(() => import('src/sections/reports/view/other-hub-view'));
 
 // BLOG
 const BlogPostsPage = lazy(() => import('src/pages/dashboard/post/list'));
@@ -317,6 +320,18 @@ export const dashboardRoutes = [
       {
         path: 'reports/shipment',
         element: <ShipmentHubPage />,
+      },
+      {
+        path: 'reports/inspection',
+        element: <InspectionHubPage />,
+      },
+      {
+        path: 'reports/inquiry',
+        element: <InquiryHubPage />,
+      },
+      {
+        path: 'reports/other',
+        element: <OtherHubPage />,
       },
 
       // {

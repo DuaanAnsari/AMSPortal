@@ -218,8 +218,11 @@ export function useNavData() {
             children: [
               { title: 'FOB LDP PRICE LIST', path: paths.dashboard.reports.fobLdpPriceList },
               { title: 'WIP', path: paths.dashboard.reports.wip },
+              { title: 'INQUIRY', path: paths.dashboard.reports.inquiry },
               { title: 'MGT', path: paths.dashboard.reports.mgt },
               { title: 'SHIPMENT', path: paths.dashboard.reports.shipment },
+              { title: 'OTHER', path: paths.dashboard.reports.other },
+              { title: 'INSPECTION', path: paths.dashboard.reports.inspection },
             ],
           },
 

@@ -200,8 +200,11 @@ export const paths = {
       root: `${ROOTS.DASHBOARD}/reports`,
       fobLdpPriceList: `${ROOTS.DASHBOARD}/reports/fob-ldp-price-list`,
       wip: `${ROOTS.DASHBOARD}/reports/wip`,
+      inquiry: `${ROOTS.DASHBOARD}/reports/inquiry`,
       mgt: `${ROOTS.DASHBOARD}/reports/mgt`,
       shipment: `${ROOTS.DASHBOARD}/reports/shipment`,
+      inspection: `${ROOTS.DASHBOARD}/reports/inspection`,
+      other: `${ROOTS.DASHBOARD}/reports/other`,
     },
 
     product: {
