@@ -11,6 +11,9 @@ const H_MARGIN = 4;
 const HEADER_BLOCK_H = 96;
 const TABLE_HEADER_ROW_H = 46;
 const DATA_ROW_H = 70;
+
+/** Fixed max inner image box inside merged Image column (rowspan-aware; centered in cell). */
+const MERGED_LEAD_IMAGE_BOX_MAX_PT = { w: 40, h: 48 };
 const TITLE_BLUE = [0, 51, 153];
 
 /** A4 landscape width / height (pt) — fixed size for paging + browser PDF viewer. */
@@ -154,6 +157,57 @@ const COL_TEMPLATE_SUPPLIER_WISE = [
 
 function pickColTemplate(reportType) {
   return reportType === 'supplierWise' ? COL_TEMPLATE_SUPPLIER_WISE : COL_TEMPLATE_MERCHANDISER_WISE;
+}
+
+/** How many leading columns merge when PO + Supplier + Customer (or supplier-wise lead) repeat. */
+function mergeLeadColumnCount(reportType) {
+  return reportType === 'supplierWise' ? 3 : 4;
+}
+
+function normalizeLeadKeyPart(v) {
+  return String(v ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+/**
+ * Group consecutive API rows that share the same PO / Supplier / Customer (merchandiser-wise)
+ * or Merchandiser / PO / Customer (supplier-wise) so the PDF can rowspan-merge those columns.
+ *
+ * @param {object[]} rows
+ * @param {'supplierWise'|'merchandiserWise'} reportType
+ * @returns {{ displayRaw: object; rows: object[] }[]}
+ */
+export function groupMilestoneRowsByLeadKey(rows, reportType = 'merchandiserWise') {
+  const template = pickColTemplate(reportType);
+  const keyPartsFor = (raw) => {
+    if (reportType === 'supplierWise') {
+      return [
+        pickField(raw, ...(template[0].keys || [])),
+        pickField(raw, ...(template[1].keys || [])),
+        pickField(raw, ...(template[2].keys || [])),
+      ];
+    }
+    return [
+      pickField(raw, ...(template[1].keys || [])),
+      pickField(raw, ...(template[2].keys || [])),
+      pickField(raw, ...(template[3].keys || [])),
+    ];
+  };
+  const keyOf = (raw) => keyPartsFor(raw).map(normalizeLeadKeyPart).join('\u001f');
+
+  const out = [];
+  rows.forEach((raw) => {
+    const k = keyOf(raw);
+    const prev = out[out.length - 1];
+    if (prev && prev._key === k) {
+      prev.rows.push(raw);
+    } else {
+      out.push({ _key: k, displayRaw: raw, rows: [raw] });
+    }
+  });
+  return out.map(({ displayRaw, rows: r }) => ({ displayRaw, rows: r }));
 }
 
 /**
@@ -1128,6 +1182,11 @@ function drawImagePlaceholder(doc, x, y, w, h) {
 
 function drawImageCell(doc, x, y, w, h, raw) {
   drawCellBorder(doc, x, y, w, h);
+  embedRowImageInBox(doc, x, y, w, h, raw);
+}
+
+/** Image only (no cell border) — used inside merged rowspan blocks. */
+function embedRowImageInBox(doc, x, y, w, h, raw) {
   const url = pickField(raw, ...IMAGE_FIELD_KEYS);
   const trimmed = url ? String(url).trim() : '';
   const info = trimmed ? layoutSnapshot?.imageCache?.get(trimmed) || null : null;
@@ -1283,8 +1342,10 @@ function drawStackedTwoDates(doc, x, y, w, h, raw, spec) {
   doc.text(line2, cx, cy + 6.2, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
 }
 
-function drawLeftText(doc, x, y, w, h, text, textAlign = 'left') {
-  drawCellBorder(doc, x, y, w, h);
+function drawLeftText(doc, x, y, w, h, text, textAlign = 'left', opts = {}) {
+  const skipBorder = opts.skipBorder === true;
+  const maxLines = Number.isFinite(opts.maxLines) ? opts.maxLines : 8;
+  if (!skipBorder) drawCellBorder(doc, x, y, w, h);
   const pad = 2;
   const center = textAlign === 'center';
   const maxW = Math.max(4, center ? w - 4 : w - pad * 2);
@@ -1297,12 +1358,17 @@ function drawLeftText(doc, x, y, w, h, text, textAlign = 'left') {
     doc.setFontSize(fs);
     lines = doc.splitTextToSize(String(text || '—'), maxW);
   }
+  if (lines.length > 6 && h > DATA_ROW_H * 1.45) {
+    fs = 5.65;
+    doc.setFontSize(fs);
+    lines = doc.splitTextToSize(String(text || '—'), maxW);
+  }
   const lineH = fs * 1.16;
   const block = lines.length * lineH;
   const yMid = y + h / 2;
   const firstY = yMid - (block - lineH) / 2;
   const xText = center ? x + w / 2 : x + pad;
-  lines.slice(0, 8).forEach((ln, i) => {
+  lines.slice(0, maxLines).forEach((ln, i) => {
     doc.text(ln, xText, firstY + i * lineH, {
       align: center ? 'center' : 'left',
       baseline: 'middle',
@@ -1324,6 +1390,89 @@ function drawQty(doc, x, y, w, h, raw, spec) {
   doc.text(t, x + w / 2, y + h / 2, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
 }
 
+/** Outer frame + vertical dividers for rowspan lead block (no per-cell rects — avoids double strokes). */
+function drawLeadMergeSectionFrame(doc, xs, y, cols, mergeCount, h) {
+  const x0 = xs[0];
+  const xEnd = xs[mergeCount - 1] + cols[mergeCount - 1].w;
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.28);
+  doc.rect(x0, y, xEnd - x0, h);
+  for (let i = 1; i < mergeCount; i += 1) {
+    const xv = xs[i];
+    doc.line(xv, y, xv, y + h);
+  }
+}
+
+function drawMergedRowspanImageCell(doc, x, y, w, h, displayRaw) {
+  const pad = 3;
+  const boxW = Math.min(MERGED_LEAD_IMAGE_BOX_MAX_PT.w, Math.max(18, w - pad * 2));
+  const boxH = Math.min(MERGED_LEAD_IMAGE_BOX_MAX_PT.h, Math.max(22, h - pad * 2));
+  const bx = x + (w - boxW) / 2;
+  const by = y + (h - boxH) / 2;
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.22);
+  doc.rect(bx, by, boxW, boxH);
+  embedRowImageInBox(doc, bx + 1.5, by + 1.5, boxW - 3, boxH - 3, displayRaw);
+}
+
+function drawMergedLeadColumns(doc, y, h, displayRaw, reportType) {
+  const xs = colXs();
+  const cols = layoutSnapshot.colDef;
+  const mergeCount = mergeLeadColumnCount(reportType);
+  drawLeadMergeSectionFrame(doc, xs, y, cols, mergeCount, h);
+
+  const textMaxLines = h > DATA_ROW_H * 1.51 ? 16 : 8;
+  for (let i = 0; i < mergeCount; i += 1) {
+    const c = cols[i];
+    const xi = xs[i];
+    const wi = cols[i].w;
+    if (c.kind === 'image') {
+      drawMergedRowspanImageCell(doc, xi, y, wi, h, displayRaw);
+    } else if (c.kind === 'left') {
+      const txt = pickField(displayRaw, ...(c.keys || []));
+      drawLeftText(doc, xi, y, wi, h, txt, c.align || 'center', {
+        skipBorder: true,
+        maxLines: textMaxLines,
+      });
+    }
+  }
+}
+
+function drawDataCell(doc, x, y, w, h, raw, c) {
+  if (c.kind === 'image') drawImageCell(doc, x, y, w, h, raw);
+  else if (c.kind === 'left')
+    drawLeftText(doc, x, y, w, h, pickField(raw, ...(c.keys || [])), c.align || 'left');
+  else if (c.kind === 'qty') drawQty(doc, x, y, w, h, raw, c);
+  else if (c.kind === 'stack2') drawStackedTwoDates(doc, x, y, w, h, raw, c);
+  else if (c.kind === 'friCombined') drawFriCombinedCell(doc, x, y, w, h, raw, c);
+  else if (c.kind === 'milestone') drawMilestoneCell(doc, x, y, w, h, raw, c);
+}
+
+function drawDataRowGroup(doc, y, chunkRows, displayRaw, reportType) {
+  const xs = colXs();
+  const cols = layoutSnapshot.colDef;
+  const mergeCount = mergeLeadColumnCount(reportType);
+  const n = chunkRows.length;
+  const hTot = n * DATA_ROW_H;
+
+  drawMergedLeadColumns(doc, y, hTot, displayRaw, reportType);
+
+  for (let r = 0; r < n; r += 1) {
+    const yRow = y + r * DATA_ROW_H;
+    if (r > 0) {
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.32);
+      const xSep = xs[mergeCount];
+      const xEnd = xs[cols.length - 1] + cols[cols.length - 1].w;
+      doc.line(xSep, yRow, xEnd, yRow);
+    }
+    for (let j = mergeCount; j < cols.length; j += 1) {
+      drawDataCell(doc, xs[j], yRow, cols[j].w, DATA_ROW_H, chunkRows[r], cols[j]);
+    }
+  }
+  return y + hTot;
+}
+
 function drawTableHeaderRow(doc, y) {
   const xs = colXs();
   const cols = layoutSnapshot.colDef;
@@ -1338,15 +1487,7 @@ function drawDataRow(doc, y, raw) {
   const xs = colXs();
   const cols = layoutSnapshot.colDef;
   for (let i = 0; i < cols.length; i += 1) {
-    const c = cols[i];
-    const x = xs[i];
-    if (c.kind === 'image') drawImageCell(doc, x, y, c.w, DATA_ROW_H, raw);
-    else if (c.kind === 'left')
-      drawLeftText(doc, x, y, c.w, DATA_ROW_H, pickField(raw, ...(c.keys || [])), c.align || 'left');
-    else if (c.kind === 'qty') drawQty(doc, x, y, c.w, DATA_ROW_H, raw, c);
-    else if (c.kind === 'stack2') drawStackedTwoDates(doc, x, y, c.w, DATA_ROW_H, raw, c);
-    else if (c.kind === 'friCombined') drawFriCombinedCell(doc, x, y, c.w, DATA_ROW_H, raw, c);
-    else if (c.kind === 'milestone') drawMilestoneCell(doc, x, y, c.w, DATA_ROW_H, raw, c);
+    drawDataCell(doc, xs[i], y, cols[i].w, DATA_ROW_H, raw, cols[i]);
   }
   return y + DATA_ROW_H;
 }
@@ -1447,13 +1588,24 @@ export async function buildMilestoneSummaryPdfBlobFromRows(rawRows, meta = {}) {
     return doc.output('blob');
   }
 
-  rows.forEach((raw) => {
-    if (y + DATA_ROW_H > pageH() - V_MARGIN) {
-      closeSegment();
-      doc.addPage([PAGE_W, PAGE_H], 'l');
-      startSheet();
+  const rt = meta.reportType || 'merchandiserWise';
+  const grouped = groupMilestoneRowsByLeadKey(rows, rt);
+
+  grouped.forEach((g) => {
+    let rest = g.rows;
+    while (rest.length) {
+      const maxRowsThisPage = Math.floor((pageH() - V_MARGIN - y) / DATA_ROW_H);
+      if (maxRowsThisPage < 1) {
+        closeSegment();
+        doc.addPage([PAGE_W, PAGE_H], 'l');
+        startSheet();
+        continue;
+      }
+      const take = Math.min(maxRowsThisPage, rest.length);
+      const chunk = rest.slice(0, take);
+      rest = rest.slice(take);
+      y = drawDataRowGroup(doc, y, chunk, g.displayRaw, rt);
     }
-    y = drawDataRow(doc, y, raw);
   });
 
   closeSegment();

@@ -28,8 +28,9 @@ import jsPDF from 'jspdf';
 
 const LOGO_PATH = `${import.meta.env.BASE_URL}logo/AMSlogo.png`;
 
-const PAGE_W = 595;
-const PAGE_H = 842;
+/** Slightly larger than A4 portrait (595×842) so the 8-column grid breathes. */
+const PAGE_W = 720;
+const PAGE_H = 1020;
 const H_MARGIN = 12;
 const V_MARGIN_TOP = 22;
 const V_MARGIN_BOTTOM = 28;
@@ -265,7 +266,7 @@ function drawPage1Header(doc, logoDataUrl, fromDate, toDate) {
     { baseline: 'top' }
   );
   doc.text(
-    'Karachi - Pakistan.            Telephone # : (+92213) 485-3935 & 36',
+    'Karachi - Pakistan.            Telephone # : 02134937216 & 02134946005',
     x,
     addressY1 + 12,
     { baseline: 'top' }
