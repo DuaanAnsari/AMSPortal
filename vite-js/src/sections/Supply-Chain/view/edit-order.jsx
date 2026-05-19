@@ -731,6 +731,11 @@ const EditOrderPage = () => {
             cellEditor: 'agSelectCellEditor',
             cellEditorParams: {
                 values: paymentOptions.map(o => o.name)
+            },
+            valueFormatter: (params) => {
+                if (!params.value) return '';
+                const match = paymentOptions.find(o => String(o.id) === String(params.value) || o.name === params.value);
+                return match ? match.name : params.value;
             }
         },
         {
@@ -738,6 +743,11 @@ const EditOrderPage = () => {
             cellEditor: 'agSelectCellEditor',
             cellEditorParams: {
                 values: shipmentOptions.map(o => o.name)
+            },
+            valueFormatter: (params) => {
+                if (!params.value) return '';
+                const match = shipmentOptions.find(o => String(o.id) === String(params.value) || o.name === params.value);
+                return match ? match.name : params.value;
             }
         },
         { headerName: "Destination", field: "destination" },
@@ -746,6 +756,11 @@ const EditOrderPage = () => {
             cellEditor: 'agSelectCellEditor',
             cellEditorParams: {
                 values: deliveryOptions.map(o => o.name)
+            },
+            valueFormatter: (params) => {
+                if (!params.value) return '';
+                const match = deliveryOptions.find(o => String(o.id) === String(params.value) || o.name === params.value);
+                return match ? match.name : params.value;
             }
         },
     ], [allOptions]);
