@@ -5,16 +5,19 @@ const LOGO_PATH = `${import.meta.env.BASE_URL}logo/AMSlogo.png`;
 const V_MARGIN = 10;
 const H_MARGIN = 14;
 const HEADER_BLOCK_H = 102;
-const TABLE_HEADER_ROW_H = 40;
-const DATA_ROW_H = 62;
+const TABLE_HEADER_ROW_H = 46;
+/** Body row height — milestone cells use spaced label/value rows (no repeat of column titles). */
+const DATA_ROW_H = 90;
 const FOOTER_H = 26;
 const TITLE_BLUE = [0, 51, 153];
 const RED = [200, 0, 0];
+/** Table header row fill (light gray). */
+const HEADER_FILL_GRAY = [244, 244, 244];
 
 const PAGE_W = 842;
 const PAGE_H = 595;
 
-const PDF_VIEW_ZOOM_HASH = '#zoom=110';
+export const PDF_VIEW_ZOOM_HASH = '#zoom=110';
 
 /** Demo rows — replace with API rows when backend is ready. */
 export const FACTORY_WIP_DEMO_ROWS = [
@@ -30,6 +33,8 @@ export const FACTORY_WIP_DEMO_ROWS = [
     itemLines: ['Men', 'Crew sweat'],
     colorQty: '1-(LAVENDER_1824)',
     statusNums: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    statusCellLines: Array.from({ length: 12 }, () => ['Not Required']),
+    productionStatusLines: ['N/A'],
     productionStatus: 'N/A',
   },
   {
@@ -45,6 +50,8 @@ export const FACTORY_WIP_DEMO_ROWS = [
     itemLines: ['Men', 'Mens pullover hoody'],
     colorQty: '1-(NAVY_3984)',
     statusNums: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    statusCellLines: Array.from({ length: 12 }, () => ['Not Required']),
+    productionStatusLines: ['N/A'],
     productionStatus: 'N/A',
   },
   {
@@ -60,12 +67,15 @@ export const FACTORY_WIP_DEMO_ROWS = [
     itemLines: ['boys', 'Tricot Jogger'],
     colorQty: '1-(BLACK_2880)',
     statusNums: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    statusCellLines: Array.from({ length: 12 }, () => ['Not Required']),
+    productionStatusLines: ['N/A'],
     productionStatus: 'N/A',
   },
 ];
 
 const HEADERS = [
   'Image',
+  /** Three separate stacked labels — spacing handled in `drawHeaderCell` for col 1. */
   'PO No.\n/ Style /\nProd Code',
   'PO QTY /\nShip Qty /\nBal. Qty',
   'Shipment',
@@ -161,7 +171,9 @@ function drawCellBorder(doc, x, y, w, h) {
   doc.rect(x, y, w, h);
 }
 
-function drawHeaderCell(doc, x, y, w, h, headerText) {
+function drawHeaderCell(doc, x, y, w, h, headerText, colIndex = -1) {
+  doc.setFillColor(HEADER_FILL_GRAY[0], HEADER_FILL_GRAY[1], HEADER_FILL_GRAY[2]);
+  doc.rect(x, y, w, h, 'F');
   drawCellBorder(doc, x, y, w, h);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
@@ -171,22 +183,26 @@ function drawHeaderCell(doc, x, y, w, h, headerText) {
     .filter((p) => p.length > 0);
   if (parts.length === 0) parts.push('—');
 
-  let fs = 5.4;
+  /** PO / Style / Prod column: three distinct lines with extra vertical gap (reference PDF). */
+  const isPoTripleHeader = colIndex === 1;
+  const padX = isPoTripleHeader ? 5 : 4;
+
+  let fs = 6.15;
   doc.setFontSize(fs);
   let lines = [];
   parts.forEach((p) => {
-    lines.push(...doc.splitTextToSize(p, Math.max(4, w - 4)));
+    lines.push(...doc.splitTextToSize(p, Math.max(4, w - 2 * padX)));
   });
   if (lines.length > 5) {
-    fs = 4.7;
+    fs = 5.45;
     doc.setFontSize(fs);
     lines = [];
     parts.forEach((p) => {
-      lines.push(...doc.splitTextToSize(p, Math.max(4, w - 4)));
+      lines.push(...doc.splitTextToSize(p, Math.max(4, w - 2 * padX)));
     });
   }
 
-  const lineH = fs * 1.15;
+  const lineH = fs * (isPoTripleHeader ? 1.42 : 1.15);
   const block = lines.length * lineH;
   const yMid = y + h / 2;
   const firstY = yMid - (block - lineH) / 2;
@@ -194,34 +210,286 @@ function drawHeaderCell(doc, x, y, w, h, headerText) {
     doc.text(ln, x + w / 2, firstY + i * lineH, {
       align: 'center',
       baseline: 'middle',
-      maxWidth: w - 3,
+      maxWidth: w - 2 * padX,
     });
   });
 }
 
-function drawMultilineCell(doc, x, y, w, h, lines, align = 'left', fontSize = 5.6) {
+function drawMultilineCell(doc, x, y, w, h, lines, align = 'left', fontSize = 6.55, textRgb = RED, opts = {}) {
+  const { lineMult = 1.12, maxLines = 10, padX = 2, padTop = 2, vertical = 'middle' } = opts;
   drawCellBorder(doc, x, y, w, h);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(RED[0], RED[1], RED[2]);
+  doc.setTextColor(textRgb[0], textRgb[1], textRgb[2]);
   doc.setFontSize(fontSize);
-  const maxW = Math.max(4, w - 4);
+  const maxW = Math.max(4, w - 2 * padX);
   const flat = [];
   (lines || []).forEach((ln) => {
     flat.push(...doc.splitTextToSize(String(ln), maxW));
   });
-  const lineH = fontSize * 1.12;
-  const block = flat.length * lineH;
-  const yMid = y + h / 2;
-  const firstY = yMid - (block - lineH) / 2;
-  const xText = align === 'center' ? x + w / 2 : x + 2;
-  flat.slice(0, 10).forEach((ln, i) => {
-    doc.text(ln, xText, firstY + i * lineH, {
-      align,
-      baseline: 'middle',
-      maxWidth: maxW,
+  const lineH = fontSize * lineMult;
+  const xText = align === 'center' ? x + w / 2 : x + padX;
+  const slice = flat.slice(0, maxLines);
+
+  if (vertical === 'top') {
+    let yy = y + padTop;
+    const maxY = y + h - padTop;
+    slice.forEach((ln) => {
+      if (yy + lineH > maxY + 0.5) return;
+      doc.text(ln, xText, yy, {
+        align,
+        baseline: 'top',
+        maxWidth: maxW,
+      });
+      yy += lineH;
+    });
+  } else {
+    const block = slice.length * lineH;
+    const yMid = y + h / 2;
+    const firstY = yMid - (block - lineH) / 2;
+    slice.forEach((ln, i) => {
+      doc.text(ln, xText, firstY + i * lineH, {
+        align,
+        baseline: 'middle',
+        maxWidth: maxW,
+      });
+    });
+  }
+  doc.setTextColor(0, 0, 0);
+}
+
+/**
+ * PO No. → Style → Prod Code: three stacked lines, top-aligned, fixed vertical gap (reference layout).
+ */
+function drawPoStackCell(doc, x, y, w, h, lines, textRgb) {
+  drawCellBorder(doc, x, y, w, h);
+  const padX = 5.5;
+  const padY = 7;
+  const fs = 6.95;
+  /** Space between each printed line (PO / Style / Prod — uniform gaps). */
+  const lineGap = 15.2;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(fs);
+  doc.setTextColor(textRgb[0], textRgb[1], textRgb[2]);
+  const maxW = Math.max(4, w - 2 * padX);
+  const rawList = Array.isArray(lines) ? lines : [];
+  const parts = [0, 1, 2].map((idx) => {
+    const v = rawList[idx];
+    if (v != null && String(v).trim() !== '') return String(v).trim();
+    if (idx === 0) return '—';
+    return 'NA';
+  });
+  let yLine = y + padY;
+  const maxY = y + h - padY;
+  parts.forEach((segment) => {
+    const rows = doc.splitTextToSize(segment, maxW);
+    rows.slice(0, 2).forEach((ln) => {
+      if (yLine > maxY - 2) return;
+      doc.text(ln, x + padX, yLine, { align: 'left', baseline: 'top', maxWidth: maxW });
+      yLine += lineGap;
     });
   });
   doc.setTextColor(0, 0, 0);
+}
+
+const PDF_TEXT_BLACK = [0, 0, 0];
+
+/**
+ * Parse milestone cell line stack from `buildMilestoneCellLines` / PDF fallback arrays.
+ * @param {string[]} lines
+ * @returns {{ mode: 'empty'|'notRequired'|'detail'; pairs: { label: string; value: string }[]; status: string }}
+ */
+function parseMilestonePdfLines(lines) {
+  if (!Array.isArray(lines) || lines.length === 0) {
+    return { mode: 'empty', pairs: [], status: '' };
+  }
+  if (lines.length === 1 && String(lines[0]).trim() === 'Not Required') {
+    return { mode: 'notRequired', pairs: [], status: 'Not Required' };
+  }
+  const copy = lines.map((x) => String(x ?? ''));
+  const status = copy.length ? String(copy.pop()).trim() : '';
+  const pairs = [];
+  for (let i = 0; i < copy.length; ) {
+    const label = copy[i]?.trim();
+    if (
+      label === 'Target Date' ||
+      label === 'Submission' ||
+      label === 'Approval' ||
+      label === 'Remarks' ||
+      label === 'Qty'
+    ) {
+      pairs.push({ label, value: String(copy[i + 1] ?? '') });
+      i += 2;
+    } else {
+      i += 1;
+    }
+  }
+  return { mode: 'detail', pairs, status };
+}
+
+/**
+ * Milestone data cell: white body, thin border — column titles appear only in the table header row.
+ * Label/value/status text use row color (red only when API row is delayed via `_pdfTextRgb`).
+ */
+function drawMilestoneDataCell(doc, x, y, w, h, lines, rowRgb) {
+  const textRgb = rowRgb;
+  const padX = 2;
+  const maxW = Math.max(4, w - 2 * padX);
+
+  doc.setFillColor(255, 255, 255);
+  doc.rect(x, y, w, h, 'F');
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.25);
+  doc.rect(x, y, w, h, 'S');
+
+  const parsed = parseMilestonePdfLines(lines ?? []);
+  const padTopBody = 5.75;
+  const LABEL_FS = 4.85;
+  const VALUE_FS = 5.95;
+  const STATUS_FS = 6.05;
+  const labelLead = LABEL_FS * 1.22;
+  const valueLead = VALUE_FS * 1.22;
+  const pairGap = 3.45;
+  const statusReserve = Math.min(18, Math.max(13, STATUS_FS * 1.28 + 3));
+
+  if (parsed.mode === 'notRequired') {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(5.95);
+    doc.setTextColor(textRgb[0], textRgb[1], textRgb[2]);
+    doc.text(parsed.status, x + w / 2, y + h / 2, { align: 'center', baseline: 'middle', maxWidth: maxW });
+    doc.setTextColor(0, 0, 0);
+    return;
+  }
+
+  if (parsed.mode === 'empty') {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(5.75);
+    doc.setTextColor(120, 120, 120);
+    doc.text('—', x + w / 2, y + h / 2, { align: 'center', baseline: 'middle' });
+    doc.setTextColor(0, 0, 0);
+    return;
+  }
+
+  let cy = y + padTopBody;
+  const contentBottom = y + h - statusReserve - 2;
+
+  doc.setFont('helvetica', 'bold');
+  parsed.pairs.forEach(({ label, value }) => {
+    if (cy > contentBottom - labelLead - valueLead - 1) return;
+    doc.setFontSize(LABEL_FS);
+    doc.setTextColor(textRgb[0], textRgb[1], textRgb[2]);
+    const lw = doc.splitTextToSize(label, maxW);
+    lw.slice(0, 2).forEach((ln) => {
+      if (cy > contentBottom) return;
+      doc.text(ln, x + w / 2, cy, { align: 'center', baseline: 'top', maxWidth: maxW });
+      cy += labelLead;
+    });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(VALUE_FS);
+    doc.setTextColor(textRgb[0], textRgb[1], textRgb[2]);
+    const vw = doc.splitTextToSize(String(value || ''), maxW);
+    vw.slice(0, 2).forEach((ln) => {
+      if (cy > contentBottom) return;
+      doc.text(ln, x + w / 2, cy, { align: 'center', baseline: 'top', maxWidth: maxW });
+      cy += valueLead;
+    });
+    cy += pairGap;
+  });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(STATUS_FS);
+  doc.setTextColor(rowRgb[0], rowRgb[1], rowRgb[2]);
+  doc.text(String(parsed.status || ''), x + w / 2, y + h - 4, { align: 'center', baseline: 'bottom', maxWidth: maxW });
+  doc.setTextColor(0, 0, 0);
+}
+
+function getRowPdfTextRgb(row) {
+  const rgb = row?._pdfTextRgb;
+  if (Array.isArray(rgb) && rgb.length === 3) return rgb;
+  return PDF_TEXT_BLACK;
+}
+
+/** jsPDF `addImage` format string from a data URL mime segment. */
+function inferPdfImageFormat(dataUrl) {
+  const m = /^data:image\/([a-z0-9+.-]+);base64,/i.exec(String(dataUrl || ''));
+  if (!m) return 'JPEG';
+  const sub = m[1].toLowerCase();
+  if (sub === 'jpeg' || sub === 'jpg' || sub === 'pjpeg') return 'JPEG';
+  if (sub === 'png' || sub === 'x-png') return 'PNG';
+  if (sub === 'gif') return 'GIF';
+  if (sub === 'webp') return 'WEBP';
+  return 'JPEG';
+}
+
+/** Fit natural image size inside cell padding; preserves aspect ratio (letterbox). */
+function fitImageInCell(x, y, w, h, naturalW, naturalH, pad = 2) {
+  const innerW = Math.max(1, w - 2 * pad);
+  const innerH = Math.max(1, h - 2 * pad);
+  const nw = naturalW > 0 ? naturalW : 1;
+  const nh = naturalH > 0 ? naturalH : 1;
+  const scale = Math.min(innerW / nw, innerH / nh);
+  const iw = nw * scale;
+  const ih = nh * scale;
+  const ix = x + pad + (innerW - iw) / 2;
+  const iy = y + pad + (innerH - ih) / 2;
+  return { ix, iy, iw, ih };
+}
+
+function drawImageCellPlaceholder(doc, x, y, w, h, row) {
+  doc.setFillColor(232, 232, 232);
+  doc.rect(x + 1, y + 1, w - 2, h - 2, 'F');
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.2);
+  doc.rect(x + 1, y + 1, w - 2, h - 2, 'S');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(5.85);
+  const phRgb = getRowPdfTextRgb(row);
+  doc.setTextColor(phRgb[0], phRgb[1], phRgb[2]);
+  const cy = y + h / 2;
+  doc.text('NO IMAGE', x + w / 2, cy - 5.25, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
+  doc.text('AVAILABLE', x + w / 2, cy + 5.25, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
+  doc.setTextColor(0, 0, 0);
+}
+
+/**
+ * Decode each row's `poImageDataUrl` once to get natural dimensions for PDF layout (aspect fit).
+ * Mutates rows with `_poImageNaturalW` / `_poImageNaturalH` (0 on missing/invalid).
+ * @param {object[]} rows
+ */
+export async function attachFactoryWipPoImageDimensions(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  await Promise.all(
+    list.map(
+      (row) =>
+        new Promise((resolve) => {
+          const url = row?.poImageDataUrl;
+          if (typeof url !== 'string' || url.length < 24 || !/^data:image\//i.test(url)) {
+            row._poImageNaturalW = 0;
+            row._poImageNaturalH = 0;
+            resolve();
+            return;
+          }
+          const img = document.createElement('img');
+          let settled = false;
+          const done = (w, h) => {
+            if (settled) return;
+            settled = true;
+            row._poImageNaturalW = w;
+            row._poImageNaturalH = h;
+            resolve();
+          };
+          img.onload = () => done(img.naturalWidth || 0, img.naturalHeight || 0);
+          img.onerror = () => done(0, 0);
+          try {
+            img.src = url;
+            if (img.complete) {
+              done(img.naturalWidth || 0, img.naturalHeight || 0);
+            }
+          } catch {
+            done(0, 0);
+          }
+        })
+    )
+  );
 }
 
 function drawImageCell(doc, x, y, w, h, row) {
@@ -240,22 +508,33 @@ function drawImageCell(doc, x, y, w, h, row) {
     doc.rect(x + 2, y + 2, w - 4, h - 4, 'S');
     return;
   }
-  doc.setFillColor(232, 232, 232);
-  doc.rect(x + 1, y + 1, w - 2, h - 2, 'F');
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.2);
-  doc.rect(x + 1, y + 1, w - 2, h - 2, 'S');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(4.9);
-  doc.setTextColor(RED[0], RED[1], RED[2]);
-  const cy = y + h / 2;
-  doc.text('NO IMAGE', x + w / 2, cy - 4.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
-  doc.text('AVAILABLE', x + w / 2, cy + 4.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
-  doc.setTextColor(0, 0, 0);
+
+  const url = row.poImageDataUrl;
+  const nw = Number(row._poImageNaturalW) || 0;
+  const nh = Number(row._poImageNaturalH) || 0;
+  if (typeof url === 'string' && url.length > 22 && nw > 0 && nh > 0) {
+    const fmt = inferPdfImageFormat(url);
+    doc.setFillColor(255, 255, 255);
+    doc.rect(x + 1, y + 1, w - 2, h - 2, 'F');
+    const { ix, iy, iw, ih } = fitImageInCell(x, y, w, h, nw, nh, 2);
+    try {
+      doc.addImage(url, fmt, ix, iy, iw, ih, undefined, 'FAST');
+    } catch {
+      drawImageCellPlaceholder(doc, x, y, w, h, row);
+      return;
+    }
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.2);
+    doc.rect(x + 1, y + 1, w - 2, h - 2, 'S');
+    return;
+  }
+
+  drawImageCellPlaceholder(doc, x, y, w, h, row);
 }
 
 function drawQtyStackCell(doc, x, y, w, h, row) {
   drawCellBorder(doc, x, y, w, h);
+  const rgb = getRowPdfTextRgb(row);
 
   /** Upper band: PO Qty + Ship Qty; lower band: Bal Qty — divider matches reference PDF. */
   const splitY = y + h * 0.42;
@@ -266,12 +545,12 @@ function drawQtyStackCell(doc, x, y, w, h, row) {
   const pad = 3;
   const rx = x + w - pad;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.2);
-  doc.setTextColor(RED[0], RED[1], RED[2]);
+  doc.setFontSize(7.25);
+  doc.setTextColor(rgb[0], rgb[1], rgb[2]);
 
   const topMid = (y + splitY) / 2;
-  const yPo = topMid - 5;
-  const yShip = topMid + 5;
+  const yPo = topMid - 5.5;
+  const yShip = topMid + 5.5;
   doc.text(String(row.poQty ?? ''), rx, yPo, { align: 'right', baseline: 'middle' });
   doc.text(String(row.shipQty ?? ''), rx, yShip, { align: 'right', baseline: 'middle' });
 
@@ -281,10 +560,10 @@ function drawQtyStackCell(doc, x, y, w, h, row) {
   doc.setTextColor(0, 0, 0);
 }
 
-function drawCenterTextCell(doc, x, y, w, h, text, fontSize = 6) {
+function drawCenterTextCell(doc, x, y, w, h, text, fontSize = 7, textRgb = RED) {
   drawCellBorder(doc, x, y, w, h);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(RED[0], RED[1], RED[2]);
+  doc.setTextColor(textRgb[0], textRgb[1], textRgb[2]);
   doc.setFontSize(fontSize);
   doc.text(String(text ?? ''), x + w / 2, y + h / 2, {
     align: 'center',
@@ -294,48 +573,60 @@ function drawCenterTextCell(doc, x, y, w, h, text, fontSize = 6) {
   doc.setTextColor(0, 0, 0);
 }
 
-function drawRedZeroCell(doc, x, y, w, h, val) {
-  drawCellBorder(doc, x, y, w, h);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.setTextColor(RED[0], RED[1], RED[2]);
-  doc.text(String(val ?? '0'), x + w / 2, y + h / 2, { align: 'center', baseline: 'middle' });
-  doc.setTextColor(0, 0, 0);
-}
-
 function drawTableHeaderRow(doc, y, x0, widths) {
   const xs = colXs(x0, widths);
   for (let i = 0; i < HEADERS.length; i += 1) {
-    drawHeaderCell(doc, xs[i], y, widths[i], TABLE_HEADER_ROW_H, HEADERS[i]);
+    drawHeaderCell(doc, xs[i], y, widths[i], TABLE_HEADER_ROW_H, HEADERS[i], i);
   }
   return y + TABLE_HEADER_ROW_H;
 }
 
 function drawDataRow(doc, y, x0, widths, row) {
   const xs = colXs(x0, widths);
+  const rgb = getRowPdfTextRgb(row);
   let i = 0;
   drawImageCell(doc, xs[i], y, widths[i], DATA_ROW_H, row);
   i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.poLines, 'left', 5.5);
+  drawPoStackCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.poLines, rgb);
   i += 1;
   drawQtyStackCell(doc, xs[i], y, widths[i], DATA_ROW_H, row);
   i += 1;
-  drawCenterTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.shipment, 6);
+  drawCenterTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.shipment, 7, rgb);
   i += 1;
-  drawCenterTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.mos, 5.8);
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, [String(row.mos ?? 'N/A')], 'center', 6.75, rgb, {
+    lineMult: 1.1,
+    maxLines: 8,
+    padX: 2,
+    padTop: 3,
+    vertical: 'top',
+  });
   i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.fabricLines, 'left', 5.2);
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.fabricLines, 'left', 6.15, rgb);
   i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.itemLines, 'left', 5.6);
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.itemLines, 'left', 6.55, rgb);
   i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, [row.colorQty], 'left', 5.4);
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, [row.colorQty], 'left', 6.35, rgb);
   i += 1;
   const nums = row.statusNums || [];
   for (let k = 0; k < 12; k += 1) {
-    drawRedZeroCell(doc, xs[i], y, widths[i], DATA_ROW_H, nums[k] ?? 0);
+    const mLines = row.statusCellLines?.[k];
+    const fallback =
+      (nums[k] ?? 0) !== 0 ? ['Target Date', 'N/A', 'Submission', 'N/A', 'Approval', 'N/A', String(nums[k])] : ['Not Required'];
+    const cellLines = Array.isArray(mLines) && mLines.length > 0 ? mLines : fallback;
+    drawMilestoneDataCell(doc, xs[i], y, widths[i], DATA_ROW_H, cellLines, rgb);
     i += 1;
   }
-  drawCenterTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.productionStatus, 6);
+  const prodLines =
+    Array.isArray(row.productionStatusLines) && row.productionStatusLines.length > 0
+      ? row.productionStatusLines
+      : [row.productionStatus != null && String(row.productionStatus).trim() !== '' ? String(row.productionStatus).trim() : 'N/A'];
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, prodLines, 'center', 5.15, rgb, {
+    lineMult: 1.08,
+    maxLines: 10,
+    padX: 3,
+    padTop: 3,
+    vertical: 'top',
+  });
   return y + DATA_ROW_H;
 }
 
@@ -348,7 +639,6 @@ function drawOuterTableFrame(doc, x, y, w, h) {
 function drawPageHeader(doc, logoDataUrl, meta) {
   const innerLeft = H_MARGIN;
   const innerRight = PAGE_W - H_MARGIN;
-  const innerW = innerRight - innerLeft;
   const logoW = 78;
   const logoH = 32;
   const logoX = innerRight - logoW;
@@ -412,7 +702,7 @@ function drawFooter(doc, pageIndex, totalPages) {
 }
 
 /**
- * @param {object[]} [rows] — when empty or omitted, uses {@link FACTORY_WIP_DEMO_ROWS}
+ * @param {object[]} [rows] — PDF table body; empty array yields header-only pages.
  * @param {{
  *   customerLabel?: string;
  *   supplierLabel?: string;
@@ -422,8 +712,9 @@ function drawFooter(doc, pageIndex, totalPages) {
  * }} [meta]
  */
 export async function buildFactoryWipPdfBlobFromRows(rows, meta = {}) {
-  const data =
-    Array.isArray(rows) && rows.length > 0 ? rows : FACTORY_WIP_DEMO_ROWS;
+  const data = Array.isArray(rows) ? rows : [];
+  await attachFactoryWipPoImageDimensions(data);
+  // eslint-disable-next-line new-cap -- jsPDF default export constructor
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
   const logoDataUrl = await loadLogoDataUrl().catch(() => null);
 
@@ -434,13 +725,11 @@ export async function buildFactoryWipPdfBlobFromRows(rows, meta = {}) {
   const pageBodyBottom = PAGE_H - V_MARGIN - FOOTER_H;
   let tableSegTop = 0;
   let y = 0;
-  let segHeight = 0;
 
   const startPage = () => {
     const tableTop = drawPageHeader(doc, logoDataUrl, meta);
     tableSegTop = tableTop;
     y = drawTableHeaderRow(doc, tableTop, innerLeft, widths);
-    segHeight = TABLE_HEADER_ROW_H;
   };
 
   const flushSegmentFrame = () => {
@@ -459,7 +748,6 @@ export async function buildFactoryWipPdfBlobFromRows(rows, meta = {}) {
       startPage();
     }
     y = drawDataRow(doc, y, innerLeft, widths, row);
-    segHeight += DATA_ROW_H;
   });
 
   flushSegmentFrame();
@@ -477,11 +765,21 @@ export async function buildFactoryWipPdfBlobFromRows(rows, meta = {}) {
  * @param {'view'|'pdf'} mode
  * @param {Blob} pdfBlob
  */
-export function openFactoryWipPdf(mode, pdfBlob) {
+export function openFactoryWipPdf(mode, pdfBlob, previewWindow = null) {
   const pdf = new Blob([pdfBlob], { type: 'application/pdf' });
   const blobUrl = URL.createObjectURL(pdf);
 
   if (mode === 'view') {
+    if (previewWindow && !previewWindow.closed) {
+      try {
+        previewWindow.location.replace(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`);
+        previewWindow.focus?.();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
+        return;
+      } catch {
+        /* fall through to window.open */
+      }
+    }
     window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
     setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000);
     return;

@@ -19,7 +19,6 @@ import {
   Autocomplete,
   CircularProgress,
 } from '@mui/material';
-
 import { paths } from 'src/routes/paths';
 
 import { useSnackbar } from 'src/components/snackbar';
@@ -38,7 +37,12 @@ import {
   buildMilestoneSummaryXlsxFilename,
   downloadMilestoneSummaryXlsx,
 } from 'src/sections/reports/utils/milestone-summary-excel-export';
-import { buildFactoryWipPdfBlobFromRows, openFactoryWipPdf } from 'src/sections/reports/utils/factory-wip-pdf-export';
+import { buildFactoryWipPdfBlobFromRows, openFactoryWipPdf, PDF_VIEW_ZOOM_HASH } from 'src/sections/reports/utils/factory-wip-pdf-export';
+import { fetchFactoryWipReportRows, tryFetchFactoryWipServerPdfBlob } from 'src/sections/reports/utils/factory-wip-report-api';
+import {
+  mapApiRowToFactoryWipPdfRow,
+  filterFactoryWipRowsByUiFilters,
+} from 'src/sections/reports/utils/factory-wip-report-map';
 import {
   buildCustomerWipPdfBlobFromRows,
   openCustomerWipPdf,
@@ -77,6 +81,9 @@ const DEFAULT_REPORT_ID = 'milestone-summary';
 const REPORT_QUERY_KEY = 'report';
 
 const ALL = 'all';
+
+/** Hardcoded Product Portfolio option on Factory WIP Report (not from milestone dropdown API). */
+const FACTORY_WIP_APPAREL_PORTFOLIO = 'apparel';
 
 const WIP_LDP_FOB_ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -615,8 +622,9 @@ MilestoneSummaryReportActions.propTypes = {
   }),
 };
 
-/** Factory WIP PDF — demo grid until API rows are wired (`buildFactoryWipPdfBlobFromRows(rows, meta)`). */
-async function runFactoryWipPdfFromFilters(enqueueSnackbar, filters, mode) {
+/** Factory WIP — server PDF if `Accept: application/pdf` returns bytes; else client jsPDF from mapped rows. */
+async function runFactoryWipPdfFromFilters(enqueueSnackbar, filters, mode, opts = {}) {
+  const { previewWindow, pdfRows = [], dropdowns = {} } = opts;
   const fromDate = filters.fromDate;
   const toDate = filters.toDate;
   if (!fromDate || !toDate) {
@@ -628,30 +636,143 @@ async function runFactoryWipPdfFromFilters(enqueueSnackbar, filters, mode) {
     return;
   }
 
+  const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+  if (!base) {
+    enqueueSnackbar('API URL missing: set VITE_API_BASE_URL', { variant: 'error' });
+    return;
+  }
+
+  const merchants = dropdowns.merchants || [];
+  const customers = dropdowns.customers || [];
+  const suppliers = dropdowns.suppliers || [];
+
+  const merchantLabel =
+    filters.merchandiser === ALL
+      ? 'All'
+      : (() => {
+          const row = merchants.find((r) => milestoneMerchantKey(r) === filters.merchandiser);
+          return row ? milestoneMerchantLabel(row) : String(filters.merchandiser);
+        })();
+
+  const customerLabel =
+    filters.customer === ALL
+      ? 'All'
+      : (() => {
+          const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+          return row ? milestoneCustomerLabel(row) : String(filters.customer);
+        })();
+
+  const supplierLabel =
+    filters.supplier === ALL
+      ? 'All'
+      : (() => {
+          const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
+          return row ? milestoneSupplierLabel(row) : String(filters.supplier);
+        })();
+
   const meta = {
-    customerLabel: filters.customer === ALL ? 'All' : String(filters.customer),
-    supplierLabel: filters.supplier === ALL ? 'All' : String(filters.supplier),
-    merchantLabel: filters.merchandiser === ALL ? 'MUHAMMAD SHAHZAIB' : String(filters.merchandiser),
+    customerLabel,
+    supplierLabel,
+    merchantLabel,
     fromDate,
     toDate,
   };
 
+  const headers = wipLdpFobAuthHeaders();
+
   try {
-    const blob = await buildFactoryWipPdfBlobFromRows([], meta);
-    openFactoryWipPdf(mode, blob);
+    const serverPdf = await tryFetchFactoryWipServerPdfBlob({ fromDate, toDate }, headers);
+    if (serverPdf) {
+      await assertValidMilestonePdfBlob(serverPdf);
+      if (mode === 'view') {
+        if (!previewWindow) {
+          enqueueSnackbar('Open the report using the View Report button.', { variant: 'warning' });
+          return;
+        }
+        if (previewWindow.closed) {
+          enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
+            variant: 'warning',
+          });
+          return;
+        }
+        const blobUrl = URL.createObjectURL(serverPdf);
+        try {
+          previewWindow.location.replace(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`);
+        } catch (navErr) {
+          URL.revokeObjectURL(blobUrl);
+          throw navErr;
+        }
+        previewWindow.focus?.();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
+      } else {
+        openFactoryWipPdf(mode, serverPdf);
+      }
+      enqueueSnackbar(
+        mode === 'view' ? 'Factory WIP PDF opened in a new tab' : 'Factory WIP PDF downloaded',
+        { variant: 'success' }
+      );
+      return;
+    }
+
+    const pdf = await buildFactoryWipPdfBlobFromRows(pdfRows, meta);
+    await assertValidMilestonePdfBlob(pdf);
+
+    if (mode === 'view') {
+      if (!previewWindow) {
+        enqueueSnackbar('Open the report using the View Report button.', { variant: 'warning' });
+        return;
+      }
+      if (previewWindow.closed) {
+        enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
+          variant: 'warning',
+        });
+        return;
+      }
+      const blobUrl = URL.createObjectURL(pdf);
+      try {
+        previewWindow.location.replace(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`);
+      } catch (navErr) {
+        URL.revokeObjectURL(blobUrl);
+        throw navErr;
+      }
+      previewWindow.focus?.();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
+    } else {
+      openFactoryWipPdf(mode, pdf);
+    }
+
     enqueueSnackbar(
-      mode === 'view' ? 'Factory WIP PDF opened in a new tab' : 'Factory WIP PDF downloaded',
+      mode === 'view'
+        ? pdfRows.length
+          ? 'Factory WIP PDF opened in a new tab'
+          : 'Factory WIP PDF opened (no rows)'
+        : pdfRows.length
+          ? 'Factory WIP PDF downloaded'
+          : 'Downloaded PDF (no rows)',
       { variant: 'success' }
     );
   } catch (err) {
-    console.error('[WIP] Factory WIP PDF', err);
     const msg =
       err?.response?.data?.message ||
       err?.response?.data?.Message ||
       (typeof err?.response?.data === 'string' ? err.response.data : null) ||
+      (typeof err === 'string' ? err : null) ||
       err?.message ||
       'Factory WIP PDF failed';
     enqueueSnackbar(msg, { variant: 'error' });
+
+    if (mode === 'view' && previewWindow && !previewWindow.closed) {
+      try {
+        const doc = previewWindow.document;
+        doc.open();
+        doc.write(
+          `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${escapeHtmlMilestonePreview(msg)}</p></body></html>`
+        );
+        doc.close();
+      } catch {
+        /* ignore */
+      }
+    }
   }
 }
 
@@ -1060,21 +1181,60 @@ async function runCustomisedCustomerWipPdfFromFilters(
   }
 }
 
-function FactoryWipReportActions({ filters }) {
+function FactoryWipReportActions({ filters, dropdowns, pdfRows }) {
   const { enqueueSnackbar } = useSnackbar();
   const [busyMode, setBusyMode] = useState(null);
 
-  const run = useCallback(
+  const runPdfDownload = useCallback(
     async (m) => {
       setBusyMode(m);
       try {
-        await runFactoryWipPdfFromFilters(enqueueSnackbar, filters, m);
+        await runFactoryWipPdfFromFilters(enqueueSnackbar, filters, m, {
+          pdfRows,
+          dropdowns,
+        });
       } finally {
         setBusyMode(null);
       }
     },
-    [enqueueSnackbar, filters]
+    [enqueueSnackbar, filters, dropdowns, pdfRows]
   );
+
+  const handleViewReport = useCallback(() => {
+    const fromDate = filters.fromDate;
+    const toDate = filters.toDate;
+    if (!fromDate || !toDate) {
+      enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+      return;
+    }
+    if (!WIP_LDP_FOB_ISO_DATE.test(fromDate) || !WIP_LDP_FOB_ISO_DATE.test(toDate)) {
+      enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+      return;
+    }
+
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      enqueueSnackbar(
+        'Unable to open a new tab — your browser may have blocked the pop-up. Allow pop-ups for this site and try again.',
+        { variant: 'error' }
+      );
+      return;
+    }
+
+    writeMilestonePdfPreviewPlaceholder(previewWindow);
+    setBusyMode('view');
+    void (async () => {
+      try {
+        await runFactoryWipPdfFromFilters(enqueueSnackbar, filters, 'view', {
+          previewWindow,
+          pdfRows,
+          dropdowns,
+        });
+      } finally {
+        setBusyMode(null);
+      }
+    })();
+  }, [enqueueSnackbar, filters, dropdowns, pdfRows]);
 
   const busy = busyMode !== null;
 
@@ -1085,7 +1245,7 @@ function FactoryWipReportActions({ filters }) {
         color="primary"
         size="medium"
         disabled={busy}
-        onClick={() => run('view')}
+        onClick={handleViewReport}
         sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
       >
         {busyMode === 'view' ? <CircularProgress size={22} color="inherit" /> : 'View Report'}
@@ -1095,7 +1255,7 @@ function FactoryWipReportActions({ filters }) {
         color="primary"
         size="medium"
         disabled={busy}
-        onClick={() => run('pdf')}
+        onClick={() => runPdfDownload('pdf')}
         sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
       >
         {busyMode === 'pdf' ? <CircularProgress size={22} color="inherit" /> : 'Download PDF'}
@@ -1106,6 +1266,12 @@ function FactoryWipReportActions({ filters }) {
 
 FactoryWipReportActions.propTypes = {
   filters: PropTypes.object.isRequired,
+  dropdowns: PropTypes.shape({
+    customers: PropTypes.array,
+    suppliers: PropTypes.array,
+    merchants: PropTypes.array,
+  }),
+  pdfRows: PropTypes.arrayOf(PropTypes.object),
 };
 
 function CustomerWipReportActions({ filters, dropdowns = {} }) {
@@ -1473,7 +1639,7 @@ function FactoryWipReportForm({ pageTitle }) {
 
   const [filters, setFilters] = useState({
     merchandiser: ALL,
-    productPortfolio: ALL,
+    productPortfolio: FACTORY_WIP_APPAREL_PORTFOLIO,
     supplier: ALL,
     customer: ALL,
     poScope: ALL,
@@ -1563,11 +1729,11 @@ function FactoryWipReportForm({ pageTitle }) {
         next.merchandiser = ALL;
         changed = true;
       }
-      if (
-        prev.productPortfolio !== ALL &&
-        !portfolios.some((r) => milestonePortfolioKey(r) === prev.productPortfolio)
-      ) {
-        next.productPortfolio = ALL;
+      const portfolioValid =
+        prev.productPortfolio === FACTORY_WIP_APPAREL_PORTFOLIO ||
+        portfolios.some((r) => milestonePortfolioKey(r) === prev.productPortfolio);
+      if (!portfolioValid || prev.productPortfolio === ALL) {
+        next.productPortfolio = FACTORY_WIP_APPAREL_PORTFOLIO;
         changed = true;
       }
 
@@ -1630,6 +1796,97 @@ function FactoryWipReportForm({ pageTitle }) {
     });
   }, [poNumbers]);
 
+  const factoryDropdownBundle = useMemo(
+    () => ({ customers, suppliers, merchants }),
+    [customers, suppliers, merchants]
+  );
+
+  const factoryFilterLabelBundle = useMemo(() => {
+    const customerLabel =
+      filters.customer === ALL
+        ? ''
+        : (() => {
+            const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+            return row ? milestoneCustomerLabel(row) : '';
+          })();
+    const supplierLabel =
+      filters.supplier === ALL
+        ? ''
+        : (() => {
+            const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
+            return row ? milestoneSupplierLabel(row) : '';
+          })();
+    const merchandiserLabel =
+      filters.merchandiser === ALL
+        ? ''
+        : (() => {
+            const row = merchants.find((r) => milestoneMerchantKey(r) === filters.merchandiser);
+            return row ? milestoneMerchantLabel(row) : '';
+          })();
+    return { customerLabel, supplierLabel, merchandiserLabel };
+  }, [filters.customer, filters.supplier, filters.merchandiser, customers, suppliers, merchants]);
+
+  const [factoryApiRows, setFactoryApiRows] = useState([]);
+
+  const factoryFilteredRaw = useMemo(
+    () => filterFactoryWipRowsByUiFilters(factoryApiRows, filters, factoryFilterLabelBundle),
+    [factoryApiRows, filters, factoryFilterLabelBundle]
+  );
+
+  const factoryPdfRows = useMemo(
+    () => factoryFilteredRaw.map((r, idx) => mapApiRowToFactoryWipPdfRow(r, idx)),
+    [factoryFilteredRaw]
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
+    const base = getMilestoneSummaryDropdownApiBase();
+    if (!base) {
+      setFactoryApiRows([]);
+      return undefined;
+    }
+
+    const fromDate = filters.fromDate;
+    const toDate = filters.toDate;
+    if (!fromDate || !toDate || !WIP_LDP_FOB_ISO_DATE.test(fromDate) || !WIP_LDP_FOB_ISO_DATE.test(toDate)) {
+      return undefined;
+    }
+
+    (async () => {
+      try {
+        const rows = await fetchFactoryWipReportRows(
+          { fromDate, toDate },
+          wipLdpFobAuthHeaders(),
+          { signal: controller.signal }
+        );
+        if (cancelled) return;
+        setFactoryApiRows(Array.isArray(rows) ? rows : []);
+      } catch (err) {
+        if (axios.isCancel?.(err) || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') {
+          return;
+        }
+        if (!cancelled) {
+          setFactoryApiRows([]);
+          const msg =
+            err?.response?.data?.Message ||
+            err?.response?.data?.message ||
+            (typeof err?.response?.data === 'string' ? err.response.data : null) ||
+            (typeof err === 'string' ? err : null) ||
+            err?.message ||
+            'Could not load Factory WIP data';
+          enqueueSnackbar(msg, { variant: 'error' });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [filters.fromDate, filters.toDate, enqueueSnackbar]);
+
   return (
     <Card variant="outlined" sx={cardSx}>
       <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary', mb: 3 }}>
@@ -1673,11 +1930,14 @@ function FactoryWipReportForm({ pageTitle }) {
               value={filters.productPortfolio}
               onChange={handleSelect('productPortfolio')}
               sx={selectSx}
-              disabled={loadingDropdowns && portfolios.length === 0}
             >
-              <MenuItem value={ALL}>All</MenuItem>
+              <MenuItem value={FACTORY_WIP_APPAREL_PORTFOLIO}>Apparel</MenuItem>
               {portfolios
                 .filter((row) => milestonePortfolioKey(row))
+                .filter(
+                  (row) =>
+                    milestonePortfolioLabel(row).trim().toLowerCase() !== 'apparel'
+                )
                 .map((row) => {
                   const val = milestonePortfolioKey(row);
                   return (
@@ -1820,7 +2080,11 @@ function FactoryWipReportForm({ pageTitle }) {
 
         <Grid item xs={12}>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1 }}>
-            <FactoryWipReportActions filters={filters} />
+            <FactoryWipReportActions
+              filters={filters}
+              dropdowns={factoryDropdownBundle}
+              pdfRows={factoryPdfRows}
+            />
             <Button
               variant="contained"
               color="primary"
@@ -3572,12 +3836,11 @@ function WipReportForm({ pageTitle }) {
         next.merchandiser = ALL;
         changed = true;
       }
-      if (
-        prev.productPortfolio !== ALL &&
-        prev.productPortfolio !== 'apparel' &&
-        !portfolios.some((r) => milestonePortfolioKey(r) === prev.productPortfolio)
-      ) {
-        next.productPortfolio = ALL;
+      const portfolioValid =
+        prev.productPortfolio === 'apparel' ||
+        portfolios.some((r) => milestonePortfolioKey(r) === prev.productPortfolio);
+      if (!portfolioValid || prev.productPortfolio === ALL) {
+        next.productPortfolio = 'apparel';
         changed = true;
       }
 
@@ -3648,7 +3911,6 @@ function WipReportForm({ pageTitle }) {
                   sx={selectSx}
                   disabled={loadingDropdowns && portfolios.length === 0}
                 >
-                  <MenuItem value={ALL}>All</MenuItem>
                   <MenuItem value="apparel">Apparel</MenuItem>
                   {portfolios
                     .filter((row) => milestonePortfolioKey(row))
@@ -3788,7 +4050,6 @@ function WipReportForm({ pageTitle }) {
                   sx={selectSx}
                   disabled={loadingDropdowns && portfolios.length === 0}
                 >
-                  <MenuItem value={ALL}>All</MenuItem>
                   <MenuItem value="apparel">Apparel</MenuItem>
                   {portfolios
                     .filter((row) => milestonePortfolioKey(row))
