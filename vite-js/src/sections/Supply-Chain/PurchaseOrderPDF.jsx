@@ -99,8 +99,8 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
         if (!isEmpty) {
           // Inject missing fields from base API if the report API omitted them
           if (orderData) {
-            reportData = reportData.map(r => ({ 
-              ...r, 
+            reportData = reportData.map(r => ({
+              ...r,
               poImage: r.poImage || orderData.poImage,
               buyerCustomer: r.buyerCustomer || orderData.buyerCustomer || r.customerName || orderData.customerName || '',
               consigneeAddress1: r.consigneeAddress1 || orderData.consigneeAddress1 || orderData.consignee || '',
@@ -904,10 +904,10 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                   </TableRow>
                   {/* Other Row - Large field style */}
                   <TableRow>
-                    <TableCell sx={{ borderRight: '1px solid #000', fontWeight: 'bold', fontSize: '10px', p: '4px 6px', textAlign: 'center' }}>
+                    <TableCell sx={{ borderRight: '1px solid #000', fontWeight: 'bold', verticalAlign: 'top', fontSize: '10px', p: '4px 6px', textAlign: 'center' }}>
                       Other
                     </TableCell>
-                    <TableCell colSpan={5} sx={{ fontSize: '10px', p: '4px 8px', verticalAlign: 'top', height: '30px' }}>
+                    <TableCell colSpan={5} sx={{ fontSize: '10px', p: '4px 39px', verticalAlign: 'top', height: '30px' }}>
                       {data.otherFabric}
                     </TableCell>
                   </TableRow>
