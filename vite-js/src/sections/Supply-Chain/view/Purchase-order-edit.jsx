@@ -1,4 +1,10 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, createContext, useContext, useCallback } from 'react';
+import {
+  mapAttachmentsFromApi,
+  normalizeAttachmentValue,
+  applyAttachmentsToPayload,
+  FORM_TO_ASSET_KEY,
+} from '../utils/purchase-order-attachments';
 import { useForm, Controller, FormProvider, useFormContext } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
@@ -80,7 +86,7 @@ const safeParseFloat = (value) => {
 
 // Create axios instance with authorization header
 const apiClient = axios.create({
-  baseURL: `${API_BASE_URL}/api`,
+baseURL: `${API_BASE_URL}/api`,
 });
 
 // Add request interceptor to include authorization token
@@ -143,7 +149,7 @@ function FullScreenImagePreview({ open, imageUrl, onClose }) {
         >
           <CloseIcon />
         </IconButton>
-
+        
         {imageUrl && (
           <img
             src={imageUrl}
@@ -161,43 +167,86 @@ function FullScreenImagePreview({ open, imageUrl, onClose }) {
   );
 }
 
+const AttachmentAssetsContext = createContext(null);
+
 // -------------------- File Upload Component with Preview --------------------
-function FileUploadWithPreview({ name, label, accept = "image/*" }) {
+function FileUploadWithPreview({ name, label, accept = 'image/*,.pdf,.doc,.docx' }) {
   const { setValue, watch } = useFormContext();
+  const attachmentCtx = useContext(AttachmentAssetsContext);
   const fileInputRef = useRef(null);
-  const [previewUrl, setPreviewUrl] = useState('');
+  const [localPreviewUrl, setLocalPreviewUrl] = useState('');
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const fileValue = watch(name);
 
+  const assetKey = FORM_TO_ASSET_KEY[name];
+  const storedAsset = assetKey && attachmentCtx?.assets?.[assetKey];
+  const previewUrl =
+    localPreviewUrl || storedAsset?.previewUrl || '';
+  const displayFileName =
+    (fileValue instanceof File ? fileValue.name : null) ||
+    storedAsset?.fileName ||
+    (typeof fileValue === 'string' && fileValue.length < 120 ? fileValue : null) ||
+    'Existing file';
+
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
-    if (file) {
-      setValue(name, file, { shouldValidate: true });
+    if (!file) return;
 
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          setPreviewUrl(e.target.result);
-        };
-        reader.readAsDataURL(file);
-      } else {
-        setPreviewUrl('');
-      }
+    setValue(name, file, { shouldValidate: true });
+
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => setLocalPreviewUrl(e.target.result);
+      reader.readAsDataURL(file);
+    } else {
+      setLocalPreviewUrl(URL.createObjectURL(file));
+    }
+
+    if (assetKey && attachmentCtx?.updateAsset) {
+      attachmentCtx.updateAsset(assetKey, normalizeAttachmentValue(file));
     }
   };
 
   const handleRemoveFile = () => {
+    if (localPreviewUrl && !localPreviewUrl.startsWith('data:')) {
+      URL.revokeObjectURL(localPreviewUrl);
+    }
     setValue(name, null, { shouldValidate: true });
-    setPreviewUrl('');
+    setLocalPreviewUrl('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+    if (assetKey && attachmentCtx?.updateAsset) {
+      attachmentCtx.updateAsset(assetKey, normalizeAttachmentValue(null));
     }
   };
 
   const handlePreviewClick = () => {
-    if (previewUrl) {
-      setFullScreenOpen(true);
+    if (!previewUrl) return;
+
+    const isFileObj = fileValue instanceof File;
+    const mime = isFileObj ? fileValue.type : storedAsset?.mimeType;
+    const isPdf =
+      mime === 'application/pdf' ||
+      storedAsset?.isPdf ||
+      /\.pdf$/i.test(displayFileName || '');
+
+    if (isPdf) {
+      window.open(previewUrl, '_blank');
+      return;
     }
+
+    if (isFileObj && fileValue.type?.startsWith('image/')) {
+      setFullScreenOpen(true);
+      return;
+    }
+
+    if (storedAsset?.previewUrl && !storedAsset?.isPdf) {
+      setFullScreenOpen(true);
+      return;
+    }
+
+    window.open(previewUrl, '_blank');
   };
 
   const handleCloseFullScreen = () => {
@@ -205,29 +254,29 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
   };
 
   useEffect(() => {
-    if (fileValue) {
-      if (typeof fileValue === 'string') {
-        // Existing image data from API (base64 or URL)
-        if (fileValue.startsWith('data:') || fileValue.startsWith('http')) {
-          setPreviewUrl(fileValue);
-        } else {
-          // Assume raw base64 PNG data
-          setPreviewUrl(`data:image/png;base64,${fileValue}`);
-        }
-      } else {
-        // New File object – preview already set by handleFileChange
-        // No action needed
-      }
-    } else {
-      setPreviewUrl('');
+    if (!fileValue) {
+      setLocalPreviewUrl('');
+      return undefined;
     }
-  }, [fileValue]);
+    if (fileValue instanceof File) {
+      return undefined;
+    }
+    if (storedAsset?.previewUrl) {
+      setLocalPreviewUrl(storedAsset.previewUrl);
+    }
+    return undefined;
+  }, [fileValue, storedAsset?.previewUrl]);
 
-  const isImage = typeof fileValue === 'string'
-    ? (fileValue.match(/\.(jpeg|jpg|gif|png)$/i) != null || fileValue.startsWith('data:image'))
-    : fileValue?.type?.startsWith('image/');
+  const isImage =
+    (fileValue instanceof File && fileValue.type?.startsWith('image/')) ||
+    (storedAsset?.previewUrl && !storedAsset?.isPdf && !storedAsset?.missingBinary);
+  const isPDF =
+    (fileValue instanceof File && fileValue.type === 'application/pdf') ||
+    storedAsset?.isPdf;
+  const missingBinary = storedAsset?.missingBinary && !(fileValue instanceof File);
 
-  const isPdfOrDoc = typeof fileValue === 'string' && fileValue.match(/\.(pdf|doc|docx)$/i) != null;
+  const hasFile = Boolean(fileValue) || Boolean(storedAsset?.raw);
+
   return (
     <Box>
       <Button
@@ -246,23 +295,24 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
         />
       </Button>
 
-      {fileValue && (
+      {hasFile && (
         <Box sx={{ mt: 1, p: 1, border: '1px solid #ddd', borderRadius: 1 }}>
           <Grid container alignItems="center" justifyContent="space-between">
             <Grid item>
               <Typography variant="body2" noWrap>
-                {typeof fileValue === 'object' ? fileValue.name : 'Existing file'}
+                {displayFileName}
               </Typography>
               <Typography variant="caption" color="success.main">
-                ✓ File selected
+                ✓ File loaded
               </Typography>
+              {missingBinary && (
+                <Typography variant="caption" color="warning.main" sx={{ display: 'block' }}>
+                  API ne sirf filename bheja hai — PDF preview ke liye backend se base64/url chahiye.
+                </Typography>
+              )}
             </Grid>
             <Grid item>
-              <IconButton
-                size="small"
-                onClick={handleRemoveFile}
-                color="error"
-              >
+              <IconButton size="small" onClick={handleRemoveFile} color="error">
                 <DeleteIcon />
               </IconButton>
             </Grid>
@@ -275,9 +325,7 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
                   position: 'relative',
                   display: 'inline-block',
                   cursor: 'pointer',
-                  '&:hover .preview-overlay': {
-                    opacity: 1,
-                  },
+                  '&:hover .preview-overlay': { opacity: 1 },
                 }}
                 onClick={handlePreviewClick}
               >
@@ -317,10 +365,17 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
             </Box>
           )}
 
-          {isPdfOrDoc && (
+          {isPDF && previewUrl && (
             <Box sx={{ mt: 2, textAlign: 'center' }}>
-              <Button variant="outlined" component="a" href={fileValue} target="_blank" rel="noopener noreferrer" startIcon={<UploadFileIcon />}>
-                View / Download Document
+              <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                startIcon={<ZoomInIcon />}
+                onClick={handlePreviewClick}
+                sx={{ textTransform: 'none' }}
+              >
+                Open PDF Preview
               </Button>
             </Box>
           )}
@@ -339,37 +394,36 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
 // -------------------- Simple Image Upload Component --------------------
 function SimpleImageUploadField({ name, label = "Image" }) {
   const { setValue, watch } = useFormContext();
+  const attachmentCtx = useContext(AttachmentAssetsContext);
   const fileInputRef = useRef(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const imageValue = watch(name);
 
-  // Derive display source dynamically
-  let displaySrc = '';
-  if (imageValue && typeof imageValue === 'object') {
-    // New file selected
-    displaySrc = previewUrl;
-  } else if (typeof imageValue === 'string' && imageValue) {
-    // Existing image string
-    if (imageValue.startsWith('http') || imageValue.startsWith('data:')) {
-      displaySrc = imageValue;
-    } else {
-      // Assume base64 and prepend data URI
-      displaySrc = `data:image/png;base64,${imageValue}`;
-    }
-  }
+  const assetKey = FORM_TO_ASSET_KEY[name];
+  const storedAsset = assetKey && attachmentCtx?.assets?.[assetKey];
 
+  let displaySrc = previewUrl || storedAsset?.previewUrl || '';
+  if (!displaySrc && imageValue instanceof File && previewUrl) {
+    displaySrc = previewUrl;
+  } else if (!displaySrc && typeof imageValue === 'string' && imageValue) {
+    displaySrc = normalizeAttachmentValue(imageValue).previewUrl || '';
+  }
+ 
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
     if (file) {
       setValue(name, file, { shouldValidate: true });
-
+      
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = (e) => {
           setPreviewUrl(e.target.result);
         };
         reader.readAsDataURL(file);
+      }
+      if (assetKey && attachmentCtx?.updateAsset) {
+        attachmentCtx.updateAsset(assetKey, normalizeAttachmentValue(file));
       }
     }
   };
@@ -379,6 +433,9 @@ function SimpleImageUploadField({ name, label = "Image" }) {
     setPreviewUrl('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+    if (assetKey && attachmentCtx?.updateAsset) {
+      attachmentCtx.updateAsset(assetKey, normalizeAttachmentValue(null));
     }
   };
 
@@ -392,12 +449,16 @@ function SimpleImageUploadField({ name, label = "Image" }) {
     setFullScreenOpen(false);
   };
 
-  // Reset local preview if value is cleared externally
   useEffect(() => {
     if (!imageValue) {
       setPreviewUrl('');
+      return;
     }
-  }, [imageValue]);
+    if (imageValue instanceof File) return;
+    if (storedAsset?.previewUrl) {
+      setPreviewUrl(storedAsset.previewUrl);
+    }
+  }, [imageValue, storedAsset?.previewUrl]);
 
   return (
     <Box>
@@ -410,8 +471,8 @@ function SimpleImageUploadField({ name, label = "Image" }) {
             value={typeof imageValue === 'string' ? (imageValue ? 'Current Image' : '') : (imageValue?.name || '')}
             InputProps={{
               endAdornment: displaySrc && (
-                <IconButton
-                  size="small"
+                <IconButton 
+                  size="small" 
                   onClick={handleRemoveImage}
                   color="error"
                 >
@@ -430,15 +491,15 @@ function SimpleImageUploadField({ name, label = "Image" }) {
             ref={fileInputRef}
             onChange={handleFileChange}
           />
-          <Button
-            variant="contained"
+          <Button 
+            variant="contained" 
             onClick={() => fileInputRef.current?.click()}
           >
             Select
           </Button>
         </Grid>
       </Grid>
-
+      
       {displaySrc && (
         <Box sx={{ mt: 2, textAlign: 'center', position: 'relative' }}>
           <Box
@@ -566,7 +627,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
 
   const onSubmit = (data) => {
     const sizes = generateSizes(data.sizeRange);
-
+    
     const newRows = sizes.map((size) => ({
       styleNo: data.styleNo || '',
       colorway: data.colorway || '',
@@ -579,9 +640,9 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       ldpPrice: parseFloat(data.ldpPrice) || 0,
       ldpValue: 0,
     }));
-
+    
     setRows([...rows, ...newRows]);
-
+    
     reset({
       styleNo: data.styleNo || '',
       colorway: data.colorway || '',
@@ -619,7 +680,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
         totalLdpValue
       }
     };
-
+    
     onSaveData(savedData);
     setFormError('');
   };
@@ -642,7 +703,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
         totalLdpValue
       }
     };
-
+    
     onSaveData(savedData);
     onClose();
   };
@@ -663,18 +724,18 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
             {formError}
           </Alert>
         )}
-
+        
         <Grid container spacing={2} sx={{ mt: 1 }}>
           <Grid item xs={6} sm={4}>
             <Controller
               name="styleNo"
               control={control}
               render={({ field }) => (
-                <TextField
-                  {...field}
-                  label="Style No"
-                  fullWidth
-                  size="small"
+                <TextField 
+                  {...field} 
+                  label="Style No" 
+                  fullWidth 
+                  size="small" 
                 />
               )}
             />
@@ -684,11 +745,11 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="colorway"
               control={control}
               render={({ field }) => (
-                <TextField
-                  {...field}
-                  label="Colorway"
-                  fullWidth
-                  size="small"
+                <TextField 
+                  {...field} 
+                  label="Colorway" 
+                  fullWidth 
+                  size="small" 
                 />
               )}
             />
@@ -698,11 +759,11 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="productCode"
               control={control}
               render={({ field }) => (
-                <TextField
-                  {...field}
-                  label="Product Code"
-                  fullWidth
-                  size="small"
+                <TextField 
+                  {...field} 
+                  label="Product Code" 
+                  fullWidth 
+                  size="small" 
                 />
               )}
             />
@@ -712,12 +773,12 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="itemPrice"
               control={control}
               render={({ field }) => (
-                <TextField
-                  {...field}
-                  label="Item Price"
-                  type="number"
-                  fullWidth
-                  size="small"
+                <TextField 
+                  {...field} 
+                  label="Item Price" 
+                  type="number" 
+                  fullWidth 
+                  size="small" 
                 />
               )}
             />
@@ -727,12 +788,12 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
               name="ldpPrice"
               control={control}
               render={({ field }) => (
-                <TextField
-                  {...field}
-                  label="LDP Price"
-                  type="number"
-                  fullWidth
-                  size="small"
+                <TextField 
+                  {...field} 
+                  label="LDP Price" 
+                  type="number" 
+                  fullWidth 
+                  size="small" 
                 />
               )}
             />
@@ -749,11 +810,11 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
                     value={field.value || ''}
                     onChange={(_, newValue) => field.onChange(newValue || '')}
                     renderInput={(params) => (
-                      <TextField
+                  <TextField
                         {...params}
-                        label="Size Range"
+                    label="Size Range"
                         placeholder="Select Size Range"
-                        size="small"
+                    size="small"
                       />
                     )}
                   />
@@ -763,9 +824,9 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
           </Grid>
         </Grid>
 
-        <Button
-          variant="contained"
-          sx={{ mt: 2 }}
+        <Button 
+          variant="contained" 
+          sx={{ mt: 2 }} 
           onClick={handleSubmit(onSubmit)}
         >
           Add
@@ -840,17 +901,17 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       </DialogContent>
 
       <DialogActions>
-        <Button
-          onClick={handleSave}
-          variant="contained"
+        <Button 
+          onClick={handleSave} 
+          variant="contained" 
           color="primary"
           disabled={rows.length === 0}
         >
           Save
         </Button>
-        <Button
-          onClick={handleSaveAndClose}
-          variant="contained"
+        <Button 
+          onClick={handleSaveAndClose} 
+          variant="contained" 
           color="success"
           disabled={rows.length === 0}
         >
@@ -995,11 +1056,23 @@ export default function CompletePurchaseOrderFormEdit() {
     getValues,
   } = methods;
 
-  const [files, setFiles] = useState({});
+  const [attachmentAssets, setAttachmentAssets] = useState(() => mapAttachmentsFromApi({}).assets);
   const [openItemDialog, setOpenItemDialog] = useState(false);
   const [savedItemData, setSavedItemData] = useState(null);
   const [showSelections, setShowSelections] = useState(true);
   const [showCalculationFields, setShowCalculationFields] = useState(false);
+  const updateAttachmentAsset = useCallback((assetKey, asset) => {
+    setAttachmentAssets((prev) => ({
+      ...prev,
+      [assetKey]: asset,
+    }));
+  }, []);
+
+  const attachmentContextValue = {
+    assets: attachmentAssets,
+    updateAsset: updateAttachmentAsset,
+  };
+
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [loading, setLoading] = useState(true);
   const [apiData, setApiData] = useState(null);
@@ -1087,7 +1160,7 @@ export default function CompletePurchaseOrderFormEdit() {
         const response = await apiClient.get('/MyOrders/GetCustomer');
         if (response.data) {
           // Remove duplicates based on customerID
-          const uniqueCustomers = response.data.filter((customer, index, self) =>
+          const uniqueCustomers = response.data.filter((customer, index, self) => 
             index === self.findIndex(c => c.customerID === customer.customerID)
           );
           setCustomers(uniqueCustomers);
@@ -1108,7 +1181,7 @@ export default function CompletePurchaseOrderFormEdit() {
         const response = await apiClient.get('/MyOrders/GetSupplier');
         if (response.data) {
           // Remove duplicates based on venderLibraryID
-          const uniqueSuppliers = response.data.filter((supplier, index, self) =>
+          const uniqueSuppliers = response.data.filter((supplier, index, self) => 
             index === self.findIndex(s => s.venderLibraryID === supplier.venderLibraryID)
           );
           setSuppliers(uniqueSuppliers);
@@ -1342,12 +1415,12 @@ export default function CompletePurchaseOrderFormEdit() {
       try {
         setLoading(true);
         const response = await apiClient.get(`/MyOrders/GetPurchaseOrder/${id}`);
-
+        
         if (response.data && response.data.length > 0) {
           const orderData = response.data[0];
           console.log("=== PURCHASE ORDER GET DATA PAYLOAD ===", orderData);
           setApiData(orderData);
-
+          
           // Find customer name based on customerID from purchase order
           const customerFromAPI = customers.find(customer => customer.customerID === orderData.customerID);
           const customerName = customerFromAPI ? customerFromAPI.customerName : '';
@@ -1373,15 +1446,16 @@ export default function CompletePurchaseOrderFormEdit() {
             category => category.productCategoriesID === orderData.productCategoriesID
           );
           const categoryName = categoryFromAPI ? categoryFromAPI.productCategories : '';
-
+          
           // Find product group name based on productGroupID from purchase order
           const groupFromAPI = productGroups.find(
             group => group.productGroupID === orderData.productGroupID
           );
           const groupName = groupFromAPI ? groupFromAPI.productGroup : '';
 
-          // Helper to get static file URL unconditionally from folder
-          const getFileUrl = (defaultName, originalName) => {
+          // Helper to get static file URL
+          const getFileUrl = (data, defaultName, originalName) => {
+            if (!data) return null;
             const fileName = originalName || defaultName;
             // API_BASE_URL might be http://localhost:5254/api, so we replace /api if needed
             const baseUrl = API_BASE_URL.endsWith('/api') ? API_BASE_URL.slice(0, -4) : API_BASE_URL;
@@ -1392,7 +1466,7 @@ export default function CompletePurchaseOrderFormEdit() {
           reset({
             // Basic Order Info
             masterPo: orderData.masterPO || '',
-            image: getFileUrl('POImage.png', orderData.poImgFileName),
+            image: orderData.poImage || null,
             customerPo: orderData.pono || '',
             internalPo: orderData.internalPONO || '',
             amsRef: orderData.amsRefNo || '',
@@ -1410,21 +1484,21 @@ export default function CompletePurchaseOrderFormEdit() {
             version: orderData.version || '',
             commission: orderData.commission || 0,
             vendorCommission: orderData.vendorCommission || 0,
-
+            
             // Dates - Using the mappings you provided
             placementDate: orderData.placementDate ? orderData.placementDate.split('T')[0] : '',
             etaNewJerseyDate: orderData.etanjDate ? orderData.etanjDate.split('T')[0] : '',
             etaWarehouseDate: orderData.etaWarehouseDate ? orderData.etaWarehouseDate.split('T')[0] : '',
             finalInspectionDate: orderData.finalInspDate ? orderData.finalInspDate.split('T')[0] : '',
-
+            
             // Buyer Shipment Dates
             buyerShipInitial: orderData.tolerance ? orderData.tolerance.split('T')[0] : '',
             buyerShipLast: orderData.buyerExIndiaTolerance ? orderData.buyerExIndiaTolerance.split('T')[0] : '',
-
+            
             // Vendor Shipment Dates
             vendorShipInitial: orderData.shipmentDate ? orderData.shipmentDate.split('T')[0] : '',
             vendorShipLast: orderData.vendorExIndiaShipmentDate ? orderData.vendorExIndiaShipmentDate.split('T')[0] : '',
-
+            
             // Product Information
             season: orderData.season || '',
             fabric: orderData.fabric || '',
@@ -1452,14 +1526,14 @@ export default function CompletePurchaseOrderFormEdit() {
             embEmbellishment: orderData.embAndEmbellishment || 'Not Required',
             buyerCustomer: orderData.buyerCustomer || '',
             itemDescriptionShippingInvoice: orderData.itemDescriptionShippingInvoice || '',
-
+            
             // Product Specific Information
             currency: orderData.currency || '',
             // Preserve 0 exchange rate as "0", only empty when null/undefined
             exchangeRate: orderData.exchangeRate ?? '',
             // Prefer styleNo (as shown in My-Order list), fallback to design
             style: orderData.styleNo || orderData.design || '',
-
+            
             // Shipping and Payment Terms
             // "paymentMode":  "2"  -> Payment Mode select (values: "2", "3", ...)
             // "shipmentMode": "5"  -> Shipment Term select (values: "4", "5", ...)
@@ -1468,29 +1542,29 @@ export default function CompletePurchaseOrderFormEdit() {
             shipmentTerm: orderData.shipmentMode || '',
             destination: orderData.destination || 'New York',
             shipmentMode: orderData.deliveryType || '',
-
+            
 
 
             // Reference & Attachment fields (file uploads)
-            originalPurchaseOrder: getFileUrl('OriginalPurchaseOrder.pdf', orderData.poImgFileName),
-            processOrderConfirmation: getFileUrl('ProcessOrderConfirmation.pdf', ''),
-            finalSpecs: getFileUrl('FinalSpecs.pdf', ''),
-            productImage: getFileUrl('ProductImage.png', orderData.prodImgFileName),
-            ppComment: getFileUrl('PPComment.pdf', ''),
-            sizeSetComment: getFileUrl('SizeSetComment.pdf', ''),
+            originalPurchaseOrder: getFileUrl(orderData.poImage, 'OriginalPurchaseOrder.pdf', orderData.poImgFileName),
+            processOrderConfirmation: getFileUrl(orderData.specsimage, 'ProcessOrderConfirmation.pdf', ''),
+            finalSpecs: getFileUrl(orderData.finalspecs, 'FinalSpecs.pdf', ''),
+            productImage: getFileUrl(orderData.productImage, 'ProductImage.png', orderData.prodImgFileName),
+            ppComment: getFileUrl(orderData.pPimage, 'PPComment.pdf', ''),
+            sizeSetComment: getFileUrl(orderData.sizeset, 'SizeSetComment.pdf', ''),
 
 
             bankBranch: orderData.bankBranch || '',
             titleOfAccount: orderData.titleOfAccount || '',
             accountNo: orderData.accountNo || '',
-
+            
             // Keep existing values for fields not in API
             // Costing Ref: API sends costingMstID; our select uses IDs as string values.
             // Treat 0 as empty (no costing ref selected)
             costingRef:
-              orderData.costingMstID !== undefined &&
-                orderData.costingMstID !== null &&
-                orderData.costingMstID !== 0
+              orderData.costingMstID !== undefined && 
+              orderData.costingMstID !== null && 
+              orderData.costingMstID !== 0
                 ? String(orderData.costingMstID)
                 : '',
             RevisedShipmentDate: '',
@@ -1514,7 +1588,7 @@ export default function CompletePurchaseOrderFormEdit() {
             calculationField2: '',
           });
         }
-
+        
       } catch (error) {
         console.error('Error fetching purchase order data:', error);
         showSnackbar('Error loading purchase order data', 'error');
@@ -1525,8 +1599,8 @@ export default function CompletePurchaseOrderFormEdit() {
 
     // Fetch purchase order data only when main dependent data is loaded
     // AND costing options are loaded
-    if (customers.length > 0 && suppliers.length > 0 && merchants.length > 0 &&
-      productPortfolios.length > 0 && !costingLoading) {
+    if (customers.length > 0 && suppliers.length > 0 && merchants.length > 0 && 
+        productPortfolios.length > 0 && !costingLoading) {
       fetchPurchaseOrderData();
     }
   }, [id, reset, customers, suppliers, merchants, productPortfolios, costingLoading]);
@@ -1544,44 +1618,44 @@ export default function CompletePurchaseOrderFormEdit() {
       }
 
       const rows = data.map((item) => {
-        const quantity = Number(item.quantity || 0);
-        const itemPrice = Number(
-          item.itemPrice ?? item.rate ?? 0
-        );
-        const ldpPrice = Number(
-          item.ldpRate ?? item.ldpPrice ?? 0
-        );
+          const quantity = Number(item.quantity || 0);
+          const itemPrice = Number(
+            item.itemPrice ?? item.rate ?? 0
+          );
+          const ldpPrice = Number(
+            item.ldpRate ?? item.ldpPrice ?? 0
+          );
 
-        const value = quantity * itemPrice;
-        const ldpValue = quantity * ldpPrice;
+          const value = quantity * itemPrice;
+          const ldpValue = quantity * ldpPrice;
 
-        return {
-          styleId: item.styleID || item.styleId || 0, // Map styleId for updates
-          styleNo: item.styleNo || '',
-          colorway: item.colorway || '',
-          productCode: item.productCode || '',
-          // API me size range ka naam nahi aa raha, isliye abhi blank rakha hai
-          sizeRange: item.sizeRange || '',
-          sizeRangeDBID: item.sizeRangeDBID || 0,
-          size: item.size || '',
-          quantity,
-          itemPrice,
-          value,
-          ldpPrice,
-          ldpValue,
+          return {
+            styleId: item.styleID || item.styleId || 0, // Map styleId for updates
+            styleNo: item.styleNo || '',
+            colorway: item.colorway || '',
+            productCode: item.productCode || '',
+            // API me size range ka naam nahi aa raha, isliye abhi blank rakha hai
+            sizeRange: item.sizeRange || '',
+            sizeRangeDBID: item.sizeRangeDBID || 0,
+            size: item.size || '',
+            quantity,
+            itemPrice,
+            value,
+            ldpPrice,
+            ldpValue,
 
-          // Extra fields (future editable grid ke liye useful)
-          barcode: item.barCodeTF || '',
-          ratio: item.ratioPOD || 0,
-          vendorPrice: Number(item.vendorRate ?? 0),
-          cartonQty: Number(item.cartonPerPcs ?? 0),
-          grossWeight: Number(item.grossWeightD ?? 0),
-          netWeight: Number(item.netWeightD ?? 0),
-          remarks: item.remarks || '',
-          qrCodePOD: item.qrCodePOD || '',
-          itemDescription: item.itemDescription || '',
-          article: item.article || '',
-        };
+            // Extra fields (future editable grid ke liye useful)
+            barcode: item.barCodeTF || '',
+            ratio: item.ratioPOD || 0,
+            vendorPrice: Number(item.vendorRate ?? 0),
+            cartonQty: Number(item.cartonPerPcs ?? 0),
+            grossWeight: Number(item.grossWeightD ?? 0),
+            netWeight: Number(item.netWeightD ?? 0),
+            remarks: item.remarks || '',
+            qrCodePOD: item.qrCodePOD || '',
+            itemDescription: item.itemDescription || '',
+            article: item.article || '',
+          };
       });
 
       const totals = {
@@ -1925,34 +1999,17 @@ export default function CompletePurchaseOrderFormEdit() {
     payload.creationDate = apiData.creationDate || new Date().toISOString();
     payload.lastUpdate = new Date().toISOString();
 
-    // Remove image/file fields ONLY if they are File objects (to prevent SQL type clash)
-    // But KEEP them if they are strings (filenames), as the backend requires them ("Must declare scalar variable")
-    const imageFieldsToCheck = [
-      'image',
-      'originalPurchaseOrder',
-      'processOrderConfirmation',
-      'finalSpecs',
-      'productImage',
-      'ppComment',
-      'sizeSetComment',
-      'specsimage',
-      'prodImgFileName',
-      'poImgFileName',
-    ];
+    // Strip form-only keys; images applied in onSubmit via applyAttachmentsToPayload
+    ['image', 'originalPurchaseOrder', 'processOrderConfirmation', 'finalSpecs', 'productImage', 'ppComment', 'sizeSetComment'].forEach(
+      (k) => {
+        delete payload[k];
+      }
+    );
 
-    imageFieldsToCheck.forEach(field => {
-      // If it's a File object (from new upload), revert to original string or empty string
-      // We cannot send File objects to this endpoint
-      if (payload[field] && typeof payload[field] === 'object' && payload[field].name) {
-        // It's likely a File object
-        payload[field] = apiData[field] || '';
-      }
-      // If it's undefined/null, ensure it's at least an empty string if required (though null might be valid for some)
-      // But for "Must declare", the key must exist.
-      if (payload[field] === undefined) {
-        payload[field] = apiData[field] || '';
-      }
-    });
+    if (payload.productImage === undefined) payload.productImage = apiData.productImage || '';
+    if (payload.specsimage === undefined) payload.specsimage = apiData.specsimage || '';
+    if (payload.poImgFileName === undefined) payload.poImgFileName = apiData.poImgFileName || '';
+    if (payload.prodImgFileName === undefined) payload.prodImgFileName = apiData.prodImgFileName || '';
 
     return payload;
   };
@@ -1986,18 +2043,6 @@ export default function CompletePurchaseOrderFormEdit() {
     }));
   };
 
-  const fileToBase64 = (file) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        // Remove data URL prefix
-        const base64String = reader.result.split(',')[1];
-        resolve(base64String);
-      };
-      reader.onerror = (error) => reject(error);
-    });
-
   const onSubmit = async (data) => {
     // Validate: at least one item/style must be added
     if (!savedItemData || !savedItemData.rows || savedItemData.rows.length === 0) {
@@ -2006,7 +2051,7 @@ export default function CompletePurchaseOrderFormEdit() {
     }
 
     try {
-      const payload = buildUpdatePayload(data, customers, suppliers, merchants, productPortfolios, productCategories, productGroups);
+      let payload = buildUpdatePayload(data, customers, suppliers, merchants, productPortfolios, productCategories, productGroups);
       if (!payload) {
         showSnackbar('Unable to build update payload. Please reload the page.', 'error');
         return;
@@ -2020,14 +2065,9 @@ export default function CompletePurchaseOrderFormEdit() {
         return null;
       };
 
-      if (data.image instanceof File) {
-        payload.poImage = await processFile(data.image);
-        payload.poImgFileName = data.image.name;
-      }
-
       if (data.originalPurchaseOrder instanceof File) {
-        // Just send filename if it's uploaded, since POImage is used by image
-        payload.originalPDFName = data.originalPurchaseOrder.name;
+        payload.poImage = await processFile(data.originalPurchaseOrder);
+        payload.poImgFileName = data.originalPurchaseOrder.name;
       }
       if (data.processOrderConfirmation instanceof File) {
         payload.specsimage = await processFile(data.processOrderConfirmation);
@@ -2080,6 +2120,8 @@ export default function CompletePurchaseOrderFormEdit() {
             productCode: row.productCode || '',
           };
 
+          console.log(`[My Orders Edit Save] Style payload (styleId=${row.styleId}):`, stylePayload);
+
           try {
             await apiClient.post(
               `/Milestone/UpdateStyle?poid=${id}&styleId=${row.styleId}`,
@@ -2128,6 +2170,7 @@ export default function CompletePurchaseOrderFormEdit() {
   }
 
   return (
+    <AttachmentAssetsContext.Provider value={attachmentContextValue}>
     <FormProvider {...methods}>
       <Box
         sx={(theme) => ({
@@ -2139,1363 +2182,1363 @@ export default function CompletePurchaseOrderFormEdit() {
         <Container maxWidth="xl">
           <form onSubmit={handleSubmit(onSubmit)}>
 
-            {/* Top Stepper */}
-            <Box sx={{ py: 3 }}>
-              <Stepper
-                activeStep={activeStep}
-                alternativeLabel
+          {/* Top Stepper */}
+          <Box sx={{ py: 3 }}>
+            <Stepper
+              activeStep={activeStep}
+              alternativeLabel
+              sx={{
+                '& .MuiStepIcon-root.Mui-completed': {
+                  color: 'primary.main',
+                },
+                '& .MuiStepLabel-label': {
+                  fontWeight: 600,
+                },
+              }}
+            >
+              {STEPS.map((label) => (
+                <Step key={label}>
+                  <StepLabel>{label}</StepLabel>
+                </Step>
+              ))}
+            </Stepper>
+          </Box>
+
+          {/* ----------------- Section: Basic Order Info ----------------- */}
+          {activeStep === 0 && (
+          <Card sx={{ p: 3, mb: 4 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <ArrowBackIosIcon
                 sx={{
-                  '& .MuiStepIcon-root.Mui-completed': {
-                    color: 'primary.main',
-                  },
-                  '& .MuiStepLabel-label': {
-                    fontWeight: 600,
-                  },
+                  cursor: 'pointer',
+                  mr: 1,
+                  fontSize: '1.2rem',
+                  color: 'primary.main',
+                  '&:hover': { color: 'primary.dark' },
                 }}
-              >
-                {STEPS.map((label) => (
-                  <Step key={label}>
-                    <StepLabel>{label}</StepLabel>
-                  </Step>
-                ))}
-              </Stepper>
+                onClick={() => navigate(-1)}
+              />
+              <Typography variant="h4">PURCHASE ORDER ENTRY </Typography>
             </Box>
-
-            {/* ----------------- Section: Basic Order Info ----------------- */}
-            {activeStep === 0 && (
-              <Card sx={{ p: 3, mb: 4 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <ArrowBackIosIcon
-                    sx={{
-                      cursor: 'pointer',
-                      mr: 1,
-                      fontSize: '1.2rem',
-                      color: 'primary.main',
-                      '&:hover': { color: 'primary.dark' },
-                    }}
-                    onClick={() => navigate(-1)}
-                  />
-                  <Typography variant="h4">PURCHASE ORDER ENTRY </Typography>
-                </Box>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
-                    <Controller
-                      name="costingRef"
-                      render={({ field }) => (
-                        <TextField
-                          {...field}
-                          label="Costing Ref No."
-                          select
-                          fullWidth
-                          size="medium"
-                          variant="outlined"
-                          InputLabelProps={{ shrink: true }}
-                        >
-                          <MenuItem value="">Select</MenuItem>
-                          {costingLoading ? (
-                            <MenuItem value="" disabled>
-                              Loading...
-                            </MenuItem>
-                          ) : (
-                            costingOptions.map((opt) => (
-                              <MenuItem
-                                key={opt.costingMstID ?? opt.costingNo}
-                                value={String(opt.costingMstID)}
-                              >
-                                {opt.costingNo}
-                              </MenuItem>
-                            ))
-                          )}
-                        </TextField>
-                      )}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} sm={6}>
-                    <SimpleImageUploadField name="image" label="PO Image" />
-                  </Grid>
-
-                  {[
-                    { name: 'masterPo', label: 'Master PO. No.' },
-                    { name: 'amsRef', label: 'AMS Ref No.' },
-                    { name: 'customerPo', label: 'Customer PO. No.' },
-                    { name: 'internalPo', label: 'Internal PO. No.' },
-                    { name: 'rnNo', label: 'RN No.' },
-                    { name: 'consignee', label: 'Consignee' },
-                  ].map((item) => (
-                    <Grid item xs={12} sm={6} key={item.name}>
-                      <Controller
-                        name={item.name}
-                        control={control}
-                        render={({ field }) => (
-                          <TextField
-                            {...field}
-                            label={item.label}
-                            fullWidth
-                            disabled={item.name === 'amsRef'}
-                          />
-                        )}
-                      />
-                    </Grid>
-                  ))}
-
-                  <Grid item xs={12} sm={6}>
-                    <Controller
-                      name="customer"
-                      render={({ field }) => (
-                        <TextField
-                          {...field}
-                          label="Customer"
-                          fullWidth
-                          select
-                          disabled
-                          value={field.value || ''}
-                        >
-                          <MenuItem value="">Select Customer</MenuItem>
-                          {customers.map((customer) => (
-                            <MenuItem key={customer.customerID} value={customer.customerName}>
-                              {customer.customerName}
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                      )}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} sm={6}>
-                    <Controller
-                      name="supplier"
-                      render={({ field }) => (
-                        <TextField
-                          {...field}
-                          label="Supplier"
-                          fullWidth
-                          select
-                          disabled
-                          value={field.value || ''}
-                        >
-                          <MenuItem value="">Select Supplier</MenuItem>
-                          {suppliers.map((supplier) => (
-                            <MenuItem key={supplier.venderLibraryID} value={supplier.venderName}>
-                              {supplier.venderName}
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                      )}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} sm={6}>
-                    <MerchantMultipleSelect
-                      name="merchant"
-                      label="Merchant"
-                      merchants={merchants}
-                      selectedMerchantNames={selectedMerchantNames}
-                    />
-                  </Grid>
-
-                  {[
-                    {
-                      name: 'proceedings',
-                      label: 'Proceedings',
-                      disabled: false,
-                      options: [
-                        { label: 'Supply Chain', value: 'Supply Chain' },
-                        { label: 'Inspection Only', value: 'Inspection Only' },
-                      ],
-                    },
-                    {
-                      name: 'orderType',
-                      label: 'Order Type',
-                      disabled: false,
-                      options: [
-                        { label: 'New', value: 'New' },
-                        { label: 'Repeat', value: 'Repeat' },
-                      ],
-                    },
-                    {
-                      name: 'transactions',
-                      label: 'Transactions',
-                      disabled: true,
-                      options: [
-                        { label: 'Services', value: 'Services' },
-                        { label: 'Trade', value: 'Trade' },
-                      ],
-                    },
-                    {
-                      name: 'version',
-                      label: 'Version',
-                      disabled: false,
-                      options: [
-                        { label: 'Regular', value: 'Regular' },
-                        { label: 'Promotion', value: 'Promotion' },
-                        { label: 'Advertising', value: 'Advertising' },
-                        { label: 'On-line', value: 'On-line' },
-                      ],
-                    },
-                  ].map(({ name, label, options, disabled }) => (
-                    <Grid item xs={12} sm={6} key={name}>
-                      <Controller
-                        name={name}
-                        control={control}
-                        render={({ field }) => (
-                          <TextField
-                            {...field}
-                            label={label}
-                            fullWidth
-                            select
-                            disabled={disabled}
-                            value={field.value || ''}
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="costingRef"
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="Costing Ref No."
+                      select
+                      fullWidth
+                      size="medium"
+                      variant="outlined"
+                      InputLabelProps={{ shrink: true }}
+                    >
+                      <MenuItem value="">Select</MenuItem>
+                      {costingLoading ? (
+                        <MenuItem value="" disabled>
+                          Loading...
+                        </MenuItem>
+                      ) : (
+                        costingOptions.map((opt) => (
+                          <MenuItem
+                            key={opt.costingMstID ?? opt.costingNo}
+                            value={String(opt.costingMstID)}
                           >
-                            <MenuItem value="">Select</MenuItem>
-                            {options.map((opt, idx) => (
-                              <MenuItem key={idx} value={opt.value}>
-                                {opt.label}
-                              </MenuItem>
-                            ))}
-                          </TextField>
-                        )}
+                            {opt.costingNo}
+                          </MenuItem>
+                        ))
+                      )}
+                    </TextField>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <SimpleImageUploadField name="image" label="PO Image" />
+              </Grid>
+
+              {[
+                { name: 'masterPo', label: 'Master PO. No.' },
+                { name: 'amsRef', label: 'AMS Ref No.' },
+                { name: 'customerPo', label: 'Customer PO. No.' },
+                { name: 'internalPo', label: 'Internal PO. No.' },
+                { name: 'rnNo', label: 'RN No.' },
+                { name: 'consignee', label: 'Consignee' },
+              ].map((item) => (
+                <Grid item xs={12} sm={6} key={item.name}>
+                  <Controller
+                    name={item.name}
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label={item.label}
+                        fullWidth
+                        disabled={item.name === 'amsRef'}
                       />
-                    </Grid>
-                  ))}
-
-                  <Grid item xs={12} sm={6}>
-                    <Controller
-                      name="commission"
-                      render={({ field }) => (
-                        <TextField
-                          {...field}
-                          label="Commission (%)"
-                          type="number"
-                          fullWidth
-                          helperText="Auto-filled from selected customer"
-                          value={
-                            field.value !== undefined && field.value !== ''
-                              ? Number(field.value).toFixed(2)
-                              : ''
-                          }
-                        />
-                      )}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} sm={6}>
-                    <Controller
-                      name="vendorCommission"
-                      render={({ field }) => (
-                        <TextField {...field} label="Vendor Commission (%)" type="number" fullWidth />
-                      )}
-                    />
-                  </Grid>
+                    )}
+                  />
                 </Grid>
-              </Card>
-            )}
+              ))}
 
-            {/* ----------------- Section: Important Dates + Shipment Windows ----------------- */}
-            {activeStep === 1 && (
-              <>
-                <Card sx={{ p: 3, mb: 4 }}>
-                  <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                    PURCHASE ORDER IMPORTANT DATES
-                  </Typography>
-                  <Grid container spacing={2}>
-                    {[
-                      { name: 'placementDate', label: 'Placement Date' },
-                      { name: 'etaNewJerseyDate', label: 'ETA New Jersey Date' },
-                      { name: 'etaWarehouseDate', label: 'ETA Warehouse Date' },
-                    ].map(({ name, label }) => (
-                      <Grid item xs={12} sm={4} key={name}>
-                        <Controller
-                          name={name}
-                          control={control}
-                          render={({ field, fieldState }) => (
-                            <TextField
-                              {...field}
-                              label={label}
-                              type="date"
-                              fullWidth
-                              InputLabelProps={{ shrink: true }}
-                              error={!!fieldState.error}
-                              helperText={fieldState.error?.message}
-                              onChange={(e) => {
-                                field.onChange(e);
-                                if (name === 'placementDate') {
-                                  const val = e.target.value;
-                                  const toLocal = (s) => { const [y, m, d] = s.split('-'); return new Date(y, m - 1, d); };
-                                  clearErrors('placementDate');
-                                  const vendorInit = getValues('vendorShipInitial');
-                                  if (val && vendorInit && toLocal(vendorInit) <= toLocal(val))
-                                    setError('vendorShipInitial', { type: 'manual', message: 'Vendor Ship. Dt. (Initial) must be after Placement Date' });
-                                  else if (vendorInit) clearErrors('vendorShipInitial');
-                                  const buyerInit = getValues('buyerShipInitial');
-                                  if (val && buyerInit && toLocal(buyerInit) <= toLocal(val))
-                                    setError('buyerShipInitial', { type: 'manual', message: 'Buyer Ship. Dt. (Initial) must be after Placement Date' });
-                                  else if (buyerInit) clearErrors('buyerShipInitial');
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="customer"
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="Customer"
+                      fullWidth
+                      select
+                      disabled
+                      value={field.value || ''}
+                    >
+                      <MenuItem value="">Select Customer</MenuItem>
+                      {customers.map((customer) => (
+                        <MenuItem key={customer.customerID} value={customer.customerName}>
+                          {customer.customerName}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="supplier"
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="Supplier"
+                      fullWidth
+                      select
+                      disabled
+                      value={field.value || ''}
+                    >
+                      <MenuItem value="">Select Supplier</MenuItem>
+                      {suppliers.map((supplier) => (
+                        <MenuItem key={supplier.venderLibraryID} value={supplier.venderName}>
+                          {supplier.venderName}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <MerchantMultipleSelect
+                  name="merchant"
+                  label="Merchant"
+                  merchants={merchants}
+                  selectedMerchantNames={selectedMerchantNames}
+                />
+              </Grid>
+
+              {[
+                {
+                  name: 'proceedings',
+                  label: 'Proceedings',
+                  disabled: false,
+                  options: [
+                    { label: 'Supply Chain', value: 'Supply Chain' },
+                    { label: 'Inspection Only', value: 'Inspection Only' },
+                  ],
+                },
+                {
+                  name: 'orderType',
+                  label: 'Order Type',
+                  disabled: false,
+                  options: [
+                    { label: 'New', value: 'New' },
+                    { label: 'Repeat', value: 'Repeat' },
+                  ],
+                },
+                {
+                  name: 'transactions',
+                  label: 'Transactions',
+                  disabled: true,
+                  options: [
+                    { label: 'Services', value: 'Services' },
+                    { label: 'Trade', value: 'Trade' },
+                  ],
+                },
+                {
+                  name: 'version',
+                  label: 'Version',
+                  disabled: false,
+                  options: [
+                    { label: 'Regular', value: 'Regular' },
+                    { label: 'Promotion', value: 'Promotion' },
+                    { label: 'Advertising', value: 'Advertising' },
+                    { label: 'On-line', value: 'On-line' },
+                  ],
+                },
+              ].map(({ name, label, options, disabled }) => (
+                <Grid item xs={12} sm={6} key={name}>
+                  <Controller
+                    name={name}
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label={label}
+                        fullWidth
+                        select
+                        disabled={disabled}
+                        value={field.value || ''}
+                      >
+                        <MenuItem value="">Select</MenuItem>
+                        {options.map((opt, idx) => (
+                          <MenuItem key={idx} value={opt.value}>
+                            {opt.label}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    )}
+                  />
+                </Grid>
+              ))}
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="commission"
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="Commission (%)"
+                      type="number"
+                      fullWidth
+                      helperText="Auto-filled from selected customer"
+                      value={
+                        field.value !== undefined && field.value !== ''
+                          ? Number(field.value).toFixed(2)
+                          : ''
+                      }
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="vendorCommission"
+                  render={({ field }) => (
+                    <TextField {...field} label="Vendor Commission (%)" type="number" fullWidth />
+                  )}
+                />
+              </Grid>
+            </Grid>
+          </Card>
+          )}
+
+          {/* ----------------- Section: Important Dates + Shipment Windows ----------------- */}
+          {activeStep === 1 && (
+          <>
+          <Card sx={{ p: 3, mb: 4 }}>
+            <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+              PURCHASE ORDER IMPORTANT DATES
+            </Typography>
+            <Grid container spacing={2}>
+              {[
+                { name: 'placementDate', label: 'Placement Date' },
+                { name: 'etaNewJerseyDate', label: 'ETA New Jersey Date' },
+                { name: 'etaWarehouseDate', label: 'ETA Warehouse Date' },
+              ].map(({ name, label }) => (
+                <Grid item xs={12} sm={4} key={name}>
+                  <Controller
+                    name={name}
+                    control={control}
+                    render={({ field, fieldState }) => (
+                      <TextField
+                        {...field}
+                        label={label}
+                        type="date"
+                        fullWidth
+                        InputLabelProps={{ shrink: true }}
+                        error={!!fieldState.error}
+                        helperText={fieldState.error?.message}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          if (name === 'placementDate') {
+                            const val = e.target.value;
+                            const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
+                            clearErrors('placementDate');
+                            const vendorInit = getValues('vendorShipInitial');
+                            if (val && vendorInit && toLocal(vendorInit) <= toLocal(val))
+                              setError('vendorShipInitial', { type: 'manual', message: 'Vendor Ship. Dt. (Initial) must be after Placement Date' });
+                            else if (vendorInit) clearErrors('vendorShipInitial');
+                            const buyerInit = getValues('buyerShipInitial');
+                            if (val && buyerInit && toLocal(buyerInit) <= toLocal(val))
+                              setError('buyerShipInitial', { type: 'manual', message: 'Buyer Ship. Dt. (Initial) must be after Placement Date' });
+                            else if (buyerInit) clearErrors('buyerShipInitial');
+                          }
+                        }}
+                      />
+                    )}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          </Card>
+
+          {/* ----------------- Section: Buyer Shipment ----------------- */}
+          <Card sx={{ p: 3, mb: 4 }}>
+            <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+              BUYER SHIPMENT WINDOW
+            </Typography>
+            <Grid container spacing={2}>
+              {/* Buyer Ship. Dt. (Initial) */}
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="buyerShipInitial"
+                  control={control}
+                  render={({ field, fieldState }) => (
+                    <TextField
+                      {...field}
+                      label="Buyer Ship. Dt. (Initial)"
+                      type="date"
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                      error={!!fieldState.error}
+                      helperText={fieldState.error?.message}
+                      onChange={(e) => {
+                        field.onChange(e);
+                        const val = e.target.value;
+                        const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
+                        if (!val) { clearErrors('buyerShipInitial'); return; }
+                        // Validate vs vendorShipInitial
+                        const vendorInit = getValues('vendorShipInitial');
+                        // Validate vs placementDate
+                        const placement = getValues('placementDate');
+                        if (placement && toLocal(val) <= toLocal(placement)) {
+                          setError('buyerShipInitial', { type: 'manual', message: 'Buyer Ship. Dt. (Initial) must be after Placement Date' });
+                        } else {
+                          clearErrors('buyerShipInitial');
+                          const lastVal = getValues('buyerShipLast');
+                          if (lastVal && toLocal(lastVal) < toLocal(val))
+                            setError('buyerShipLast', { type: 'manual', message: 'Buyer Ship. Dt. (Last) must be same or after Initial date' });
+                          else if (lastVal) clearErrors('buyerShipLast');
+                        }
+                      }}
+                    />
+                  )}
+                />
+              </Grid>
+              {/* Buyer Ship. Dt. (Last) */}
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="buyerShipLast"
+                  control={control}
+                  render={({ field, fieldState }) => (
+                    <TextField
+                      {...field}
+                      label="Buyer Ship. Dt. (Last)"
+                      type="date"
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                      error={!!fieldState.error}
+                      helperText={fieldState.error?.message}
+                      onChange={(e) => {
+                        field.onChange(e);
+                        const val = e.target.value;
+                        const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
+                        if (!val) { clearErrors('buyerShipLast'); return; }
+                        const initVal = getValues('buyerShipInitial');
+                        if (initVal && toLocal(val) < toLocal(initVal))
+                          setError('buyerShipLast', { type: 'manual', message: 'Buyer Ship. Dt. (Last) must be same or after Initial date' });
+                        else clearErrors('buyerShipLast');
+                      }}
+                    />
+                  )}
+                />
+              </Grid>
+              {/* Revised Shipment Date (B) */}
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="RevisedShipmentDate"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="Revised Shipment Date (B):"
+                      type="date"
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  )}
+                />
+              </Grid>
+            </Grid>
+          </Card>
+
+          {/* ----------------- Section: Vendor Shipment ----------------- */}
+          <Card sx={{ p: 3, mb: 4 }}>
+            <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+              VENDOR SHIPMENT WINDOW
+            </Typography>
+            <Grid container spacing={2}>
+              {/* Vendor Ship. Dt. (Initial) */}
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="vendorShipInitial"
+                  control={control}
+                  render={({ field, fieldState }) => (
+                    <TextField
+                      {...field}
+                      label="Vendor Ship. Dt. (Initial)"
+                      type="date"
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                      error={!!fieldState.error}
+                      helperText={fieldState.error?.message}
+                      onChange={(e) => {
+                        field.onChange(e);
+                        const val = e.target.value;
+                        const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
+                        if (!val) { clearErrors('vendorShipInitial'); return; }
+                        // Validate vs placementDate
+                        const placement = getValues('placementDate');
+                        if (placement && toLocal(val) <= toLocal(placement)) {
+                          setError('vendorShipInitial', { type: 'manual', message: 'Vendor Ship. Dt. (Initial) must be after Placement Date' });
+                        } else {
+                          clearErrors('vendorShipInitial');
+                          const lastVal = getValues('vendorShipLast');
+                          if (lastVal && toLocal(lastVal) < toLocal(val))
+                            setError('vendorShipLast', { type: 'manual', message: 'Vendor Ship. Dt. (Last) must be same or after Initial date' });
+                          else if (lastVal) clearErrors('vendorShipLast');
+                        }
+                      }}
+                    />
+                  )}
+                />
+              </Grid>
+              {/* Vendor Ship. Dt. (Last) */}
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="vendorShipLast"
+                  control={control}
+                  render={({ field, fieldState }) => (
+                    <TextField
+                      {...field}
+                      label="Vendor Ship. Dt. (Last)"
+                      type="date"
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                      error={!!fieldState.error}
+                      helperText={fieldState.error?.message}
+                      onChange={(e) => {
+                        field.onChange(e);
+                        const val = e.target.value;
+                        const toLocal = (s) => { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); };
+                        if (!val) { clearErrors('vendorShipLast'); return; }
+                        const initVal = getValues('vendorShipInitial');
+                        if (initVal && toLocal(val) < toLocal(initVal))
+                          setError('vendorShipLast', { type: 'manual', message: 'Vendor Ship. Dt. (Last) must be same or after Initial date' });
+                        else clearErrors('vendorShipLast');
+                      }}
+                    />
+                  )}
+                />
+              </Grid>
+              {/* Revised Shipment Date (V) */}
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="RevisedShipmentDate"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="Revised Shipment Date (V):"
+                      type="date"
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  )}
+                />
+              </Grid>
+              {/* Final Inspection Date */}
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="finalInspectionDate"
+                  control={control}
+                  render={({ field, fieldState }) => (
+                    <TextField
+                      {...field}
+                      label="Final Inspection Date"
+                      type="date"
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                      error={!!fieldState.error}
+                      helperText={fieldState.error?.message}
+                      onChange={(e) => {
+                        field.onChange(e);
+                        clearErrors('finalInspectionDate');
+                      }}
+                    />
+                  )}
+                />
+              </Grid>
+              {[
+                { name: 'reasonReviseBuyer', label: 'Reason of Revise Shipment Dates(B)' },
+                { name: 'reasonReviseVendor', label: 'Reason of Revise Shipment Dates(V)' },
+              ].map(({ name, label }) => (
+                <Grid item xs={12} key={name}>
+                  <Controller
+                    name={name}
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label={label}
+                        fullWidth
+                        multiline
+                        minRows={2}
+                      />
+                    )}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          </Card>
+          </>
+          )}
+
+          {/* ----------------- Section: Product Portfolio ----------------- */}
+          {activeStep === 2 && (
+          <Box
+            sx={(theme) => ({
+              backgroundColor: theme.palette.background.paper,
+              p: 3,
+              borderRadius: 2,
+              mb: 4,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            })}
+          >
+            <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+              PRODUCT INFORMATION
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="productPortfolio"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Product Portfolio</InputLabel>
+                      <Select
+                        {...field}
+                        label="Product Portfolio"
+                        value={field.value || ''}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          // Reset dependent fields when portfolio changes
+                          setValue('productCategory', '');
+                          setValue('productGroup', '');
+                        }}
+                      >
+                        <MenuItem value="">Select Portfolio</MenuItem>
+                        {productPortfolios.map((portfolio) => (
+                          <MenuItem key={portfolio.productPortfolioID} value={portfolio.productPortfolio}>
+                            {portfolio.productPortfolio}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="productCategory"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Product Category</InputLabel>
+                      <Select
+                        {...field}
+                        label="Product Category"
+                        value={field.value || ''}
+                        disabled={!selectedProductPortfolio}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          // Reset product group when category changes
+                          setValue('productGroup', '');
+                        }}
+                      >
+                        <MenuItem value="">Select Category</MenuItem>
+                        {filteredProductCategories.map((category) => (
+                          <MenuItem key={category.productCategoriesID} value={category.productCategories}>
+                            {category.productCategories}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="productGroup"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Product Group</InputLabel>
+                      <Select
+                        {...field}
+                        label="Product Group"
+                        value={field.value || ''}
+                        disabled={!selectedProductCategory}
+                      >
+                        <MenuItem value="">Select Group</MenuItem>
+                        {filteredProductGroups.map((group) => (
+                          <MenuItem key={group.productGroupID} value={group.productGroup}>
+                            {group.productGroup}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Controller name="season" render={({ field }) => <TextField {...field} fullWidth label="Season" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="tolQuantity" render={({ field }) => <TextField {...field} fullWidth label="Tol. Quantity" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="set"
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Set</InputLabel>
+                      <Select {...field} label="Set" value={field.value || ''}>
+                        <MenuItem value="Set">Set</MenuItem>
+                        <MenuItem value="PCS">PCS</MenuItem>
+                        <MenuItem value="KG">KG</MenuItem>
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Controller name="fabric" render={({ field }) => <TextField {...field} fullWidth label="Fabric" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="item" render={({ field }) => <TextField {...field} fullWidth label="Item" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="qualityComposition" render={({ field }) => <TextField {...field} fullWidth label="Quality / Composition" />} />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Controller name="gsm" render={({ field }) => <TextField {...field} fullWidth label="GSM" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="design" render={({ field }) => <TextField {...field} fullWidth label="Design" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="otherFabric" render={({ field }) => <TextField {...field} fullWidth label="Other Fabric" />} />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller name="gsmOF" render={({ field }) => <TextField {...field} fullWidth label="GSM (O.F)" />} />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="construction" render={({ field }) => <TextField {...field} fullWidth label="Construction" />} />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller name="poSpecialOperation" render={({ field }) => <TextField {...field} fullWidth label="PO Special Operation" />} />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="status"
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Status</InputLabel>
+                      <Select {...field} label="Status" value={field.value || ''}>
+                        <MenuItem value="Confirm">Confirm</MenuItem>
+                        <MenuItem value="Cancel">Cancel</MenuItem>
+                        <MenuItem value="Close">Close</MenuItem>
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Controller name="poSpecialTreatment" render={({ field }) => <TextField {...field} fullWidth label="PO Special Treatment" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="styleSource" render={({ field }) => <TextField {...field} fullWidth label="Style Source" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="brand" render={({ field }) => <TextField {...field} fullWidth label="Brand" />} />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="assortment"
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Assortment</InputLabel>
+                      <Select {...field} label="Assortment" value={field.value || ''}>
+                        <MenuItem value="Solid">Solid</MenuItem>
+                        <MenuItem value="Ratio">Ratio</MenuItem>
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="ratio" render={({ field }) => <TextField {...field} fullWidth label="Ratio" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="cartonMarking" render={({ field }) => <TextField {...field} fullWidth label="Carton Marking" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="poSpecialInstructions" render={({ field }) => <TextField {...field} fullWidth label="PO Special Instructions" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="washingCareLabel"
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Washing Care Label Instructions"
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Controller name="importantNote" render={({ field }) => <TextField {...field} fullWidth label="Important Note" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="moreInfo" render={({ field }) => <TextField {...field} fullWidth label="More Info" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="samplingRequirements" render={({ field }) => <TextField {...field} fullWidth label="Sampling Requirements" />} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="pcsPerCarton" render={({ field }) => <TextField {...field} fullWidth label="Pcs Per Carton" />} />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="itemDescriptionShippingInvoice"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Item Description at shipping invoice"
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={2}>
+                <Controller name="grossWeight" render={({ field }) => <TextField {...field} fullWidth label="Gross Weight" />} />
+              </Grid>
+              <Grid item xs={12} sm={2}>
+                <Controller name="netWeight" render={({ field }) => <TextField {...field} fullWidth label="Net Weight" />} />
+              </Grid>
+              <Grid item xs={12} sm={2}>
+                <Controller
+                  name="unit"
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Unit</InputLabel>
+                      <Select {...field} label="Unit" value={field.value || ''}>
+                        <MenuItem value="KG">KG</MenuItem>
+                        <MenuItem value="DZN">DZN</MenuItem>
+                        <MenuItem value="LBS">LBS</MenuItem>
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="packingList"
+                  control={control}
+                  render={({ field }) => <TextField {...field} fullWidth label="Packing List" />}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="embEmbellishment"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Emb & Embellishment"
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="inquiryNo"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Inquiry No</InputLabel>
+                      <Select {...field} label="Inquiry No" value={field.value || ''}>
+                        <MenuItem value="INQ001">INQ001</MenuItem>
+                        <MenuItem value="INQ002">INQ002</MenuItem>
+                        <MenuItem value="INQ003">INQ003</MenuItem>
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="buyerCustomer"
+                  control={control}
+                  render={({ field }) => <TextField {...field} fullWidth label="Buyer Customer" />}
+                />
+              </Grid>
+            </Grid>
+          </Box>
+          )}
+
+          {/* ----------------- Product Specific Information ----------------- */}
+          {activeStep === 3 && (
+          <Card sx={{ p: 3, mb: 4 }}>
+            <CardContent>
+              <Typography variant="h6" sx={{ fontWeight: "bold", mb: 2 }}>
+                PRODUCT SPECIFIC INFORMATION
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="currency"
+                    render={({ field }) => (
+                      <FormControl fullWidth>
+                        <InputLabel>Currency</InputLabel>
+                        <Select {...field} label="Currency" value={field.value || ''}>
+                          <MenuItem value="Dollar">Dollar</MenuItem>
+                          <MenuItem value="PKR">PKR</MenuItem>
+                          <MenuItem value="Euro">Euro</MenuItem>
+                        </Select>
+                      </FormControl>
+                    )}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="exchangeRate"
+                    render={({ field }) => (
+                      <TextField {...field} fullWidth label="Exchange Rate (to USD)" type="number" />
+                    )}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="style"
+                    render={({ field }) => <TextField {...field} fullWidth label="Style" />}
+                  />
+                </Grid>
+              </Grid>
+
+              <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 3 }}>
+                <Button variant="contained" color="primary" onClick={handleOpenItemDialog}>
+                  Add Item Details
+                </Button>
+                <Button variant="contained" color="primary" onClick={handleShowSelections}>
+                  {showSelections ? 'Hide Selections' : 'Show Selections'}
+                </Button>
+              </Stack>
+
+              {showSelections && savedItemData && (
+                <Box sx={{ mt: 3 }}>
+                  <TableContainer component={Paper}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Style #</TableCell>
+                          <TableCell>Colorway</TableCell>
+                          <TableCell>ProductCode</TableCell>
+                          <TableCell>Size Range</TableCell>
+                          <TableCell>Size</TableCell>
+                          <TableCell>Barcode</TableCell>
+                          <TableCell>Ratio</TableCell>
+                          <TableCell>PO Quantity</TableCell>
+                          <TableCell>Item Price</TableCell>
+                          <TableCell>Value</TableCell>
+                          <TableCell>Vendor Price</TableCell>
+                          <TableCell>LDP Price</TableCell>
+                          <TableCell>LDP Value</TableCell>
+                          <TableCell>Carton Qty</TableCell>
+                          <TableCell>Gross Weight</TableCell>
+                          <TableCell>Net Weight</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {savedItemData.rows.map((row, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{row.styleNo === 'string' ? '' : row.styleNo}</TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.colorway === 'string' ? '' : (row.colorway || '')}
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'colorway', e.target.value)
                                 }
-                              }}
-                            />
-                          )}
-                        />
+                                sx={{ width: 100 }}
+                              />
+                            </TableCell>
+                            <TableCell>{row.productCode === 'string' ? '' : row.productCode}</TableCell>
+                            <TableCell>{row.sizeRange === 'string' ? '' : row.sizeRange}</TableCell>
+                            <TableCell>{row.size === 'string' ? '' : row.size}</TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.barcode || ''}
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'barcode', e.target.value)
+                                }
+                                sx={{ width: 90 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.ratio || ''}
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'ratio', e.target.value)
+                                }
+                                sx={{ width: 80 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.quantity === 0 ? '' : row.quantity ?? ''}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'quantity', e.target.value)
+                                }
+                                sx={{ width: 70 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.itemPrice === 0 ? '' : row.itemPrice ?? ''}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'itemPrice', e.target.value)
+                                }
+                                sx={{ width: 70 }}
+                              />
+                            </TableCell>
+                            <TableCell>{(row.value ?? 0).toFixed(2)}</TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.vendorPrice === 0 ? '' : row.vendorPrice ?? ''}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'vendorPrice', e.target.value)
+                                }
+                                sx={{ width: 80 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.ldpPrice === 0 ? '' : row.ldpPrice ?? ''}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'ldpPrice', e.target.value)
+                                }
+                                sx={{ width: 80 }}
+                              />
+                            </TableCell>
+                            <TableCell>{(row.ldpValue ?? 0).toFixed(2)}</TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.cartonQty === 0 ? '' : row.cartonQty ?? ''}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'cartonQty', e.target.value)
+                                }
+                                sx={{ width: 70 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.grossWeight === 0 ? '' : row.grossWeight ?? ''}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'grossWeight', e.target.value)
+                                }
+                                sx={{ width: 80 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                value={row.netWeight === 0 ? '' : row.netWeight ?? ''}
+                                type="number"
+                                size="small"
+                                onChange={(e) =>
+                                  handleSelectionRowChange(index, 'netWeight', e.target.value)
+                                }
+                                sx={{ width: 80 }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+
+                  <Box sx={{ mt: 2, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+                    <Grid container spacing={3}>
+                      <Grid item xs={4}>
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          Total Qty: {savedItemData.totals.totalQuantity}
+                        </Typography>
                       </Grid>
-                    ))}
-                  </Grid>
-                </Card>
+                      <Grid item xs={4}>
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          Total Value: {savedItemData.totals.totalValue.toFixed(2)}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={4}>
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          Total LDP Value: {savedItemData.totals.totalLdpValue.toFixed(2)}
+                        </Typography>
+                      </Grid>
+                    </Grid>
+                  </Box>
 
-                {/* ----------------- Section: Buyer Shipment ----------------- */}
-                <Card sx={{ p: 3, mb: 4 }}>
-                  <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                    BUYER SHIPMENT WINDOW
-                  </Typography>
-                  <Grid container spacing={2}>
-                    {/* Buyer Ship. Dt. (Initial) */}
-                    <Grid item xs={12} sm={4}>
-                      <Controller
-                        name="buyerShipInitial"
-                        control={control}
-                        render={({ field, fieldState }) => (
-                          <TextField
-                            {...field}
-                            label="Buyer Ship. Dt. (Initial)"
-                            type="date"
-                            fullWidth
-                            InputLabelProps={{ shrink: true }}
-                            error={!!fieldState.error}
-                            helperText={fieldState.error?.message}
-                            onChange={(e) => {
-                              field.onChange(e);
-                              const val = e.target.value;
-                              const toLocal = (s) => { const [y, m, d] = s.split('-'); return new Date(y, m - 1, d); };
-                              if (!val) { clearErrors('buyerShipInitial'); return; }
-                              // Validate vs vendorShipInitial
-                              const vendorInit = getValues('vendorShipInitial');
-                              // Validate vs placementDate
-                              const placement = getValues('placementDate');
-                              if (placement && toLocal(val) <= toLocal(placement)) {
-                                setError('buyerShipInitial', { type: 'manual', message: 'Buyer Ship. Dt. (Initial) must be after Placement Date' });
-                              } else {
-                                clearErrors('buyerShipInitial');
-                                const lastVal = getValues('buyerShipLast');
-                                if (lastVal && toLocal(lastVal) < toLocal(val))
-                                  setError('buyerShipLast', { type: 'manual', message: 'Buyer Ship. Dt. (Last) must be same or after Initial date' });
-                                else if (lastVal) clearErrors('buyerShipLast');
-                              }
-                            }}
-                          />
-                        )}
-                      />
-                    </Grid>
-                    {/* Buyer Ship. Dt. (Last) */}
-                    <Grid item xs={12} sm={4}>
-                      <Controller
-                        name="buyerShipLast"
-                        control={control}
-                        render={({ field, fieldState }) => (
-                          <TextField
-                            {...field}
-                            label="Buyer Ship. Dt. (Last)"
-                            type="date"
-                            fullWidth
-                            InputLabelProps={{ shrink: true }}
-                            error={!!fieldState.error}
-                            helperText={fieldState.error?.message}
-                            onChange={(e) => {
-                              field.onChange(e);
-                              const val = e.target.value;
-                              const toLocal = (s) => { const [y, m, d] = s.split('-'); return new Date(y, m - 1, d); };
-                              if (!val) { clearErrors('buyerShipLast'); return; }
-                              const initVal = getValues('buyerShipInitial');
-                              if (initVal && toLocal(val) < toLocal(initVal))
-                                setError('buyerShipLast', { type: 'manual', message: 'Buyer Ship. Dt. (Last) must be same or after Initial date' });
-                              else clearErrors('buyerShipLast');
-                            }}
-                          />
-                        )}
-                      />
-                    </Grid>
-                    {/* Revised Shipment Date (B) */}
-                    <Grid item xs={12} sm={4}>
-                      <Controller
-                        name="RevisedShipmentDate"
-                        control={control}
-                        render={({ field }) => (
-                          <TextField
-                            {...field}
-                            label="Revised Shipment Date (B):"
-                            type="date"
-                            fullWidth
-                            InputLabelProps={{ shrink: true }}
-                          />
-                        )}
-                      />
-                    </Grid>
-                  </Grid>
-                </Card>
+                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button 
+                      variant="contained" 
+                      color="secondary" 
+                      startIcon={<CalculateIcon />}
+                      onClick={handleShowCalculationFields}
+                    >
+                      Calculate
+                    </Button>
+                  </Box>
 
-                {/* ----------------- Section: Vendor Shipment ----------------- */}
-                <Card sx={{ p: 3, mb: 4 }}>
-                  <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                    VENDOR SHIPMENT WINDOW
-                  </Typography>
-                  <Grid container spacing={2}>
-                    {/* Vendor Ship. Dt. (Initial) */}
-                    <Grid item xs={12} sm={4}>
-                      <Controller
-                        name="vendorShipInitial"
-                        control={control}
-                        render={({ field, fieldState }) => (
-                          <TextField
-                            {...field}
-                            label="Vendor Ship. Dt. (Initial)"
-                            type="date"
-                            fullWidth
-                            InputLabelProps={{ shrink: true }}
-                            error={!!fieldState.error}
-                            helperText={fieldState.error?.message}
-                            onChange={(e) => {
-                              field.onChange(e);
-                              const val = e.target.value;
-                              const toLocal = (s) => { const [y, m, d] = s.split('-'); return new Date(y, m - 1, d); };
-                              if (!val) { clearErrors('vendorShipInitial'); return; }
-                              // Validate vs placementDate
-                              const placement = getValues('placementDate');
-                              if (placement && toLocal(val) <= toLocal(placement)) {
-                                setError('vendorShipInitial', { type: 'manual', message: 'Vendor Ship. Dt. (Initial) must be after Placement Date' });
-                              } else {
-                                clearErrors('vendorShipInitial');
-                                const lastVal = getValues('vendorShipLast');
-                                if (lastVal && toLocal(lastVal) < toLocal(val))
-                                  setError('vendorShipLast', { type: 'manual', message: 'Vendor Ship. Dt. (Last) must be same or after Initial date' });
-                                else if (lastVal) clearErrors('vendorShipLast');
-                              }
-                            }}
-                          />
-                        )}
-                      />
-                    </Grid>
-                    {/* Vendor Ship. Dt. (Last) */}
-                    <Grid item xs={12} sm={4}>
-                      <Controller
-                        name="vendorShipLast"
-                        control={control}
-                        render={({ field, fieldState }) => (
-                          <TextField
-                            {...field}
-                            label="Vendor Ship. Dt. (Last)"
-                            type="date"
-                            fullWidth
-                            InputLabelProps={{ shrink: true }}
-                            error={!!fieldState.error}
-                            helperText={fieldState.error?.message}
-                            onChange={(e) => {
-                              field.onChange(e);
-                              const val = e.target.value;
-                              const toLocal = (s) => { const [y, m, d] = s.split('-'); return new Date(y, m - 1, d); };
-                              if (!val) { clearErrors('vendorShipLast'); return; }
-                              const initVal = getValues('vendorShipInitial');
-                              if (initVal && toLocal(val) < toLocal(initVal))
-                                setError('vendorShipLast', { type: 'manual', message: 'Vendor Ship. Dt. (Last) must be same or after Initial date' });
-                              else clearErrors('vendorShipLast');
-                            }}
-                          />
-                        )}
-                      />
-                    </Grid>
-                    {/* Revised Shipment Date (V) */}
-                    <Grid item xs={12} sm={4}>
-                      <Controller
-                        name="RevisedShipmentDate"
-                        control={control}
-                        render={({ field }) => (
-                          <TextField
-                            {...field}
-                            label="Revised Shipment Date (V):"
-                            type="date"
-                            fullWidth
-                            InputLabelProps={{ shrink: true }}
-                          />
-                        )}
-                      />
-                    </Grid>
-                    {/* Final Inspection Date */}
-                    <Grid item xs={12} sm={4}>
-                      <Controller
-                        name="finalInspectionDate"
-                        control={control}
-                        render={({ field, fieldState }) => (
-                          <TextField
-                            {...field}
-                            label="Final Inspection Date"
-                            type="date"
-                            fullWidth
-                            InputLabelProps={{ shrink: true }}
-                            error={!!fieldState.error}
-                            helperText={fieldState.error?.message}
-                            onChange={(e) => {
-                              field.onChange(e);
-                              clearErrors('finalInspectionDate');
-                            }}
-                          />
-                        )}
-                      />
-                    </Grid>
-                    {[
-                      { name: 'reasonReviseBuyer', label: 'Reason of Revise Shipment Dates(B)' },
-                      { name: 'reasonReviseVendor', label: 'Reason of Revise Shipment Dates(V)' },
-                    ].map(({ name, label }) => (
-                      <Grid item xs={12} key={name}>
+                  {showCalculationFields && (
+                    <Grid container spacing={2} sx={{ mt: 2 }}>
+                      <Grid item xs={12} sm={6}>
                         <Controller
-                          name={name}
+                          name="calculationField1"
                           control={control}
                           render={({ field }) => (
                             <TextField
                               {...field}
-                              label={label}
                               fullWidth
-                              multiline
-                              minRows={2}
+                              label="Enter value for calculation"
+                              type="number"
+                              placeholder="0"
                             />
                           )}
                         />
                       </Grid>
-                    ))}
-                  </Grid>
-                </Card>
-              </>
-            )}
-
-            {/* ----------------- Section: Product Portfolio ----------------- */}
-            {activeStep === 2 && (
-              <Box
-                sx={(theme) => ({
-                  backgroundColor: theme.palette.background.paper,
-                  p: 3,
-                  borderRadius: 2,
-                  mb: 4,
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                })}
-              >
-                <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                  PRODUCT INFORMATION
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={4}>
-                    <Controller
-                      name="productPortfolio"
-                      control={control}
-                      render={({ field }) => (
-                        <FormControl fullWidth>
-                          <InputLabel>Product Portfolio</InputLabel>
-                          <Select
-                            {...field}
-                            label="Product Portfolio"
-                            value={field.value || ''}
-                            onChange={(e) => {
-                              field.onChange(e);
-                              // Reset dependent fields when portfolio changes
-                              setValue('productCategory', '');
-                              setValue('productGroup', '');
-                            }}
-                          >
-                            <MenuItem value="">Select Portfolio</MenuItem>
-                            {productPortfolios.map((portfolio) => (
-                              <MenuItem key={portfolio.productPortfolioID} value={portfolio.productPortfolio}>
-                                {portfolio.productPortfolio}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                      )}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} sm={4}>
-                    <Controller
-                      name="productCategory"
-                      control={control}
-                      render={({ field }) => (
-                        <FormControl fullWidth>
-                          <InputLabel>Product Category</InputLabel>
-                          <Select
-                            {...field}
-                            label="Product Category"
-                            value={field.value || ''}
-                            disabled={!selectedProductPortfolio}
-                            onChange={(e) => {
-                              field.onChange(e);
-                              // Reset product group when category changes
-                              setValue('productGroup', '');
-                            }}
-                          >
-                            <MenuItem value="">Select Category</MenuItem>
-                            {filteredProductCategories.map((category) => (
-                              <MenuItem key={category.productCategoriesID} value={category.productCategories}>
-                                {category.productCategories}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                      )}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} sm={4}>
-                    <Controller
-                      name="productGroup"
-                      control={control}
-                      render={({ field }) => (
-                        <FormControl fullWidth>
-                          <InputLabel>Product Group</InputLabel>
-                          <Select
-                            {...field}
-                            label="Product Group"
-                            value={field.value || ''}
-                            disabled={!selectedProductCategory}
-                          >
-                            <MenuItem value="">Select Group</MenuItem>
-                            {filteredProductGroups.map((group) => (
-                              <MenuItem key={group.productGroupID} value={group.productGroup}>
-                                {group.productGroup}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                      )}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="season" render={({ field }) => <TextField {...field} fullWidth label="Season" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="tolQuantity" render={({ field }) => <TextField {...field} fullWidth label="Tol. Quantity" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Controller
-                      name="set"
-                      render={({ field }) => (
-                        <FormControl fullWidth>
-                          <InputLabel>Set</InputLabel>
-                          <Select {...field} label="Set" value={field.value || ''}>
-                            <MenuItem value="Set">Set</MenuItem>
-                            <MenuItem value="PCS">PCS</MenuItem>
-                            <MenuItem value="KG">KG</MenuItem>
-                          </Select>
-                        </FormControl>
-                      )}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="fabric" render={({ field }) => <TextField {...field} fullWidth label="Fabric" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="item" render={({ field }) => <TextField {...field} fullWidth label="Item" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="qualityComposition" render={({ field }) => <TextField {...field} fullWidth label="Quality / Composition" />} />
-                  </Grid>
-
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="gsm" render={({ field }) => <TextField {...field} fullWidth label="GSM" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="design" render={({ field }) => <TextField {...field} fullWidth label="Design" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="otherFabric" render={({ field }) => <TextField {...field} fullWidth label="Other Fabric" />} />
-                  </Grid>
-
-                  <Grid item xs={12} sm={6}>
-                    <Controller name="gsmOF" render={({ field }) => <TextField {...field} fullWidth label="GSM (O.F)" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Controller name="construction" render={({ field }) => <TextField {...field} fullWidth label="Construction" />} />
-                  </Grid>
-
-                  <Grid item xs={12} sm={6}>
-                    <Controller name="poSpecialOperation" render={({ field }) => <TextField {...field} fullWidth label="PO Special Operation" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Controller
-                      name="status"
-                      render={({ field }) => (
-                        <FormControl fullWidth>
-                          <InputLabel>Status</InputLabel>
-                          <Select {...field} label="Status" value={field.value || ''}>
-                            <MenuItem value="Confirm">Confirm</MenuItem>
-                            <MenuItem value="Cancel">Cancel</MenuItem>
-                            <MenuItem value="Close">Close</MenuItem>
-                          </Select>
-                        </FormControl>
-                      )}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="poSpecialTreatment" render={({ field }) => <TextField {...field} fullWidth label="PO Special Treatment" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="styleSource" render={({ field }) => <TextField {...field} fullWidth label="Style Source" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="brand" render={({ field }) => <TextField {...field} fullWidth label="Brand" />} />
-                  </Grid>
-
-                  <Grid item xs={12} sm={4}>
-                    <Controller
-                      name="assortment"
-                      render={({ field }) => (
-                        <FormControl fullWidth>
-                          <InputLabel>Assortment</InputLabel>
-                          <Select {...field} label="Assortment" value={field.value || ''}>
-                            <MenuItem value="Solid">Solid</MenuItem>
-                            <MenuItem value="Ratio">Ratio</MenuItem>
-                          </Select>
-                        </FormControl>
-                      )}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="ratio" render={({ field }) => <TextField {...field} fullWidth label="Ratio" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="cartonMarking" render={({ field }) => <TextField {...field} fullWidth label="Carton Marking" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="poSpecialInstructions" render={({ field }) => <TextField {...field} fullWidth label="PO Special Instructions" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Controller
-                      name="washingCareLabel"
-                      render={({ field }) => (
-                        <TextField
-                          {...field}
-                          fullWidth
-                          label="Washing Care Label Instructions"
-                        />
-                      )}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="importantNote" render={({ field }) => <TextField {...field} fullWidth label="Important Note" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="moreInfo" render={({ field }) => <TextField {...field} fullWidth label="More Info" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="samplingRequirements" render={({ field }) => <TextField {...field} fullWidth label="Sampling Requirements" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Controller name="pcsPerCarton" render={({ field }) => <TextField {...field} fullWidth label="Pcs Per Carton" />} />
-                  </Grid>
-
-                  <Grid item xs={12} sm={6}>
-                    <Controller
-                      name="itemDescriptionShippingInvoice"
-                      control={control}
-                      render={({ field }) => (
-                        <TextField
-                          {...field}
-                          fullWidth
-                          label="Item Description at shipping invoice"
-                        />
-                      )}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} sm={2}>
-                    <Controller name="grossWeight" render={({ field }) => <TextField {...field} fullWidth label="Gross Weight" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={2}>
-                    <Controller name="netWeight" render={({ field }) => <TextField {...field} fullWidth label="Net Weight" />} />
-                  </Grid>
-                  <Grid item xs={12} sm={2}>
-                    <Controller
-                      name="unit"
-                      render={({ field }) => (
-                        <FormControl fullWidth>
-                          <InputLabel>Unit</InputLabel>
-                          <Select {...field} label="Unit" value={field.value || ''}>
-                            <MenuItem value="KG">KG</MenuItem>
-                            <MenuItem value="DZN">DZN</MenuItem>
-                            <MenuItem value="LBS">LBS</MenuItem>
-                          </Select>
-                        </FormControl>
-                      )}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Controller
-                      name="packingList"
-                      control={control}
-                      render={({ field }) => <TextField {...field} fullWidth label="Packing List" />}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Controller
-                      name="embEmbellishment"
-                      control={control}
-                      render={({ field }) => (
-                        <TextField
-                          {...field}
-                          fullWidth
-                          label="Emb & Embellishment"
-                        />
-                      )}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} sm={6}>
-                    <Controller
-                      name="inquiryNo"
-                      control={control}
-                      render={({ field }) => (
-                        <FormControl fullWidth>
-                          <InputLabel>Inquiry No</InputLabel>
-                          <Select {...field} label="Inquiry No" value={field.value || ''}>
-                            <MenuItem value="INQ001">INQ001</MenuItem>
-                            <MenuItem value="INQ002">INQ002</MenuItem>
-                            <MenuItem value="INQ003">INQ003</MenuItem>
-                          </Select>
-                        </FormControl>
-                      )}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} sm={6}>
-                    <Controller
-                      name="buyerCustomer"
-                      control={control}
-                      render={({ field }) => <TextField {...field} fullWidth label="Buyer Customer" />}
-                    />
-                  </Grid>
-                </Grid>
-              </Box>
-            )}
-
-            {/* ----------------- Product Specific Information ----------------- */}
-            {activeStep === 3 && (
-              <Card sx={{ p: 3, mb: 4 }}>
-                <CardContent>
-                  <Typography variant="h6" sx={{ fontWeight: "bold", mb: 2 }}>
-                    PRODUCT SPECIFIC INFORMATION
-                  </Typography>
-
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={4}>
-                      <Controller
-                        name="currency"
-                        render={({ field }) => (
-                          <FormControl fullWidth>
-                            <InputLabel>Currency</InputLabel>
-                            <Select {...field} label="Currency" value={field.value || ''}>
-                              <MenuItem value="Dollar">Dollar</MenuItem>
-                              <MenuItem value="PKR">PKR</MenuItem>
-                              <MenuItem value="Euro">Euro</MenuItem>
-                            </Select>
-                          </FormControl>
-                        )}
-                      />
-                    </Grid>
-
-                    <Grid item xs={12} sm={4}>
-                      <Controller
-                        name="exchangeRate"
-                        render={({ field }) => (
-                          <TextField {...field} fullWidth label="Exchange Rate (to USD)" type="number" />
-                        )}
-                      />
-                    </Grid>
-
-                    <Grid item xs={12} sm={4}>
-                      <Controller
-                        name="style"
-                        render={({ field }) => <TextField {...field} fullWidth label="Style" />}
-                      />
-                    </Grid>
-                  </Grid>
-
-                  <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 3 }}>
-                    <Button variant="contained" color="primary" onClick={handleOpenItemDialog}>
-                      Add Item Details
-                    </Button>
-                    <Button variant="contained" color="primary" onClick={handleShowSelections}>
-                      {showSelections ? 'Hide Selections' : 'Show Selections'}
-                    </Button>
-                  </Stack>
-
-                  {showSelections && savedItemData && (
-                    <Box sx={{ mt: 3 }}>
-                      <TableContainer component={Paper}>
-                        <Table size="small">
-                          <TableHead>
-                            <TableRow>
-                              <TableCell>Style #</TableCell>
-                              <TableCell>Colorway</TableCell>
-                              <TableCell>ProductCode</TableCell>
-                              <TableCell>Size Range</TableCell>
-                              <TableCell>Size</TableCell>
-                              <TableCell>Barcode</TableCell>
-                              <TableCell>Ratio</TableCell>
-                              <TableCell>PO Quantity</TableCell>
-                              <TableCell>Item Price</TableCell>
-                              <TableCell>Value</TableCell>
-                              <TableCell>Vendor Price</TableCell>
-                              <TableCell>LDP Price</TableCell>
-                              <TableCell>LDP Value</TableCell>
-                              <TableCell>Carton Qty</TableCell>
-                              <TableCell>Gross Weight</TableCell>
-                              <TableCell>Net Weight</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {savedItemData.rows.map((row, index) => (
-                              <TableRow key={index}>
-                                <TableCell>{row.styleNo === 'string' ? '' : row.styleNo}</TableCell>
-                                <TableCell>
-                                  <TextField
-                                    value={row.colorway === 'string' ? '' : (row.colorway || '')}
-                                    size="small"
-                                    onChange={(e) =>
-                                      handleSelectionRowChange(index, 'colorway', e.target.value)
-                                    }
-                                    sx={{ width: 100 }}
-                                  />
-                                </TableCell>
-                                <TableCell>{row.productCode === 'string' ? '' : row.productCode}</TableCell>
-                                <TableCell>{row.sizeRange === 'string' ? '' : row.sizeRange}</TableCell>
-                                <TableCell>{row.size === 'string' ? '' : row.size}</TableCell>
-                                <TableCell>
-                                  <TextField
-                                    value={row.barcode || ''}
-                                    size="small"
-                                    onChange={(e) =>
-                                      handleSelectionRowChange(index, 'barcode', e.target.value)
-                                    }
-                                    sx={{ width: 90 }}
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <TextField
-                                    value={row.ratio || ''}
-                                    size="small"
-                                    onChange={(e) =>
-                                      handleSelectionRowChange(index, 'ratio', e.target.value)
-                                    }
-                                    sx={{ width: 80 }}
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <TextField
-                                    value={row.quantity === 0 ? '' : row.quantity ?? ''}
-                                    type="number"
-                                    size="small"
-                                    onChange={(e) =>
-                                      handleSelectionRowChange(index, 'quantity', e.target.value)
-                                    }
-                                    sx={{ width: 70 }}
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <TextField
-                                    value={row.itemPrice === 0 ? '' : row.itemPrice ?? ''}
-                                    type="number"
-                                    size="small"
-                                    onChange={(e) =>
-                                      handleSelectionRowChange(index, 'itemPrice', e.target.value)
-                                    }
-                                    sx={{ width: 70 }}
-                                  />
-                                </TableCell>
-                                <TableCell>{(row.value ?? 0).toFixed(2)}</TableCell>
-                                <TableCell>
-                                  <TextField
-                                    value={row.vendorPrice === 0 ? '' : row.vendorPrice ?? ''}
-                                    type="number"
-                                    size="small"
-                                    onChange={(e) =>
-                                      handleSelectionRowChange(index, 'vendorPrice', e.target.value)
-                                    }
-                                    sx={{ width: 80 }}
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <TextField
-                                    value={row.ldpPrice === 0 ? '' : row.ldpPrice ?? ''}
-                                    type="number"
-                                    size="small"
-                                    onChange={(e) =>
-                                      handleSelectionRowChange(index, 'ldpPrice', e.target.value)
-                                    }
-                                    sx={{ width: 80 }}
-                                  />
-                                </TableCell>
-                                <TableCell>{(row.ldpValue ?? 0).toFixed(2)}</TableCell>
-                                <TableCell>
-                                  <TextField
-                                    value={row.cartonQty === 0 ? '' : row.cartonQty ?? ''}
-                                    type="number"
-                                    size="small"
-                                    onChange={(e) =>
-                                      handleSelectionRowChange(index, 'cartonQty', e.target.value)
-                                    }
-                                    sx={{ width: 70 }}
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <TextField
-                                    value={row.grossWeight === 0 ? '' : row.grossWeight ?? ''}
-                                    type="number"
-                                    size="small"
-                                    onChange={(e) =>
-                                      handleSelectionRowChange(index, 'grossWeight', e.target.value)
-                                    }
-                                    sx={{ width: 80 }}
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <TextField
-                                    value={row.netWeight === 0 ? '' : row.netWeight ?? ''}
-                                    type="number"
-                                    size="small"
-                                    onChange={(e) =>
-                                      handleSelectionRowChange(index, 'netWeight', e.target.value)
-                                    }
-                                    sx={{ width: 80 }}
-                                  />
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
-
-                      <Box sx={{ mt: 2, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
-                        <Grid container spacing={3}>
-                          <Grid item xs={4}>
-                            <Typography variant="subtitle1" fontWeight="bold">
-                              Total Qty: {savedItemData.totals.totalQuantity}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={4}>
-                            <Typography variant="subtitle1" fontWeight="bold">
-                              Total Value: {savedItemData.totals.totalValue.toFixed(2)}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={4}>
-                            <Typography variant="subtitle1" fontWeight="bold">
-                              Total LDP Value: {savedItemData.totals.totalLdpValue.toFixed(2)}
-                            </Typography>
-                          </Grid>
-                        </Grid>
-                      </Box>
-
-                      <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-                        <Button
-                          variant="contained"
-                          color="secondary"
-                          startIcon={<CalculateIcon />}
-                          onClick={handleShowCalculationFields}
-                        >
-                          Calculate
-                        </Button>
-                      </Box>
-
-                      {showCalculationFields && (
-                        <Grid container spacing={2} sx={{ mt: 2 }}>
-                          <Grid item xs={12} sm={6}>
-                            <Controller
-                              name="calculationField1"
-                              control={control}
-                              render={({ field }) => (
-                                <TextField
-                                  {...field}
-                                  fullWidth
-                                  label="Enter value for calculation"
-                                  type="number"
-                                  placeholder="0"
-                                />
-                              )}
+                      <Grid item xs={12} sm={6}>
+                        <Controller
+                          name="calculationField2"
+                          control={control}
+                          render={({ field }) => (
+                            <TextField
+                              {...field}
+                              fullWidth
+                              label="Enter value for calculation"
+                              type="number"
+                              placeholder="0"
                             />
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                            <Controller
-                              name="calculationField2"
-                              control={control}
-                              render={({ field }) => (
-                                <TextField
-                                  {...field}
-                                  fullWidth
-                                  label="Enter value for calculation"
-                                  type="number"
-                                  placeholder="0"
-                                />
-                              )}
-                            />
-                          </Grid>
-                        </Grid>
-                      )}
-                    </Box>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* ----------------- Shipping and Payment Terms ----------------- */}
-            {activeStep === 4 && (
-              <Card sx={{ p: 3, mb: 4 }}>
-                <CardContent>
-                  <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-                    SHIPPING AND PAYMENT TERMS
-                  </Typography>
-
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={3}>
-                      <Controller
-                        name="paymentMode"
-                        control={control}
-                        render={({ field }) => (
-                          <FormControl fullWidth>
-                            <InputLabel>Payment Mode</InputLabel>
-                            <Select {...field} label="Payment Mode" value={field.value || ''}>
-                              <MenuItem value="2">DP</MenuItem>
-                              <MenuItem value="3">Dp/ap</MenuItem>
-
-                            </Select>
-                          </FormControl>
-                        )}
-                      />
-                    </Grid>
-
-                    <Grid item xs={12} sm={3}>
-                      <Controller
-                        name="shipmentTerm"
-                        control={control}
-                        render={({ field }) => (
-                          <FormControl fullWidth>
-                            <InputLabel>Shipment Term</InputLabel>
-                            <Select {...field} label="Shipment Term" value={field.value || ''}>
-                              <MenuItem value="4">CNF</MenuItem>
-                              <MenuItem value="5">FOB</MenuItem>
-
-                            </Select>
-                          </FormControl>
-                        )}
-                      />
-                    </Grid>
-
-                    <Grid item xs={12} sm={3}>
-                      <Controller
-                        name="destination"
-                        render={({ field }) => <TextField {...field} fullWidth label="Destination" />}
-                      />
-                    </Grid>
-
-                    <Grid item xs={12} sm={3}>
-                      <Controller
-                        name="shipmentMode"
-                        control={control}
-                        render={({ field }) => (
-                          <FormControl fullWidth>
-                            <InputLabel>Shipment Mode</InputLabel>
-                            <Select {...field} label="Shipment Mode" value={field.value || ''}>
-                              <MenuItem value="1">Air</MenuItem>
-                              <MenuItem value="7">Sea</MenuItem>
-                              <MenuItem value="8">courier</MenuItem>
-                            </Select>
-                          </FormControl>
-                        )}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={3}>
-                      <Controller
-                        name="naField"
-                        control={control}
-                        render={({ field }) => (
-                          <TextField
-                            {...field}
-                            fullWidth
-                            label="N/A"
-                          />
-                        )}
-                      />
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* ----------------- Reference & Attachment Form ----------------- */}
-            {activeStep === 5 && (
-              <Card sx={{ p: 3, mb: 4 }}>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
-                    REFERENCE & ATTACHMENT
-                  </Typography>
-
-                  <Grid container spacing={3}>
-                    {[
-                      { name: "originalPurchaseOrder", label: "Original Purchase Order" },
-                      { name: "processOrderConfirmation", label: "Process at the time Order Confirmation" },
-                      { name: "finalSpecs", label: "Final Specs" },
-                      { name: "productImage", label: "Product Image" },
-                      { name: "ppComment", label: "PP Comment Received" },
-                      { name: "sizeSetComment", label: "Size Set Comment" },
-                    ].map(({ name, label }) => (
-                      <Grid item xs={12} sm={6} key={name}>
-                        <FileUploadWithPreview
-                          name={name}
-                          label={label}
-                          accept="image/*,.pdf,.doc,.docx"
+                          )}
                         />
                       </Grid>
-                    ))}
+                    </Grid>
+                  )}
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+          )}
+
+          {/* ----------------- Shipping and Payment Terms ----------------- */}
+          {activeStep === 4 && (
+          <Card sx={{ p: 3, mb: 4 }}>
+            <CardContent>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+                SHIPPING AND PAYMENT TERMS
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={3}>
+                  <Controller
+                    name="paymentMode"
+                    control={control}
+                    render={({ field }) => (
+                      <FormControl fullWidth>
+                        <InputLabel>Payment Mode</InputLabel>
+                        <Select {...field} label="Payment Mode" value={field.value || ''}>
+                          <MenuItem value="2">DP</MenuItem>
+                          <MenuItem value="3">Dp/ap</MenuItem>
+                         
+                        </Select>
+                      </FormControl>
+                    )}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={3}>
+                  <Controller
+                    name="shipmentTerm"
+                    control={control}
+                    render={({ field }) => (
+                      <FormControl fullWidth>
+                        <InputLabel>Shipment Term</InputLabel>
+                        <Select {...field} label="Shipment Term" value={field.value || ''}>
+                          <MenuItem value="4">CNF</MenuItem>
+                          <MenuItem value="5">FOB</MenuItem>
+                         
+                        </Select>
+                      </FormControl>
+                    )}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={3}>
+                  <Controller
+                    name="destination"
+                    render={({ field }) => <TextField {...field} fullWidth label="Destination" />}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={3}>
+                  <Controller
+                    name="shipmentMode"
+                    control={control}
+                    render={({ field }) => (
+                      <FormControl fullWidth>
+                        <InputLabel>Shipment Mode</InputLabel>
+                        <Select {...field} label="Shipment Mode" value={field.value || ''}>
+                          <MenuItem value="1">Air</MenuItem>
+                          <MenuItem value="7">Sea</MenuItem>
+                          <MenuItem value="8">courier</MenuItem>
+                        </Select>
+                      </FormControl>
+                    )}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={3}>
+                  <Controller
+                    name="naField"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        fullWidth
+                        label="N/A"
+                      />
+                    )}
+                  />
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+          )}
+
+          {/* ----------------- Reference & Attachment Form ----------------- */}
+          {activeStep === 5 && (
+          <Card sx={{ p: 3, mb: 4 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
+                REFERENCE & ATTACHMENT
+              </Typography>
+
+              <Grid container spacing={3}>
+                {[
+                  { name: "originalPurchaseOrder", label: "Original Purchase Order" },
+                  { name: "processOrderConfirmation", label: "Process at the time Order Confirmation" },
+                  { name: "finalSpecs", label: "Final Specs" },
+                  { name: "productImage", label: "Product Image" },
+                  { name: "ppComment", label: "PP Comment Received" },
+                  { name: "sizeSetComment", label: "Size Set Comment" },
+                ].map(({ name, label }) => (
+                  <Grid item xs={12} sm={6} key={name}>
+                    <FileUploadWithPreview 
+                      name={name} 
+                      label={label} 
+                      accept="image/*,.pdf,.doc,.docx" 
+                    />
                   </Grid>
-                </CardContent>
-              </Card>
-            )}
+                ))}
+              </Grid>
+            </CardContent>
+          </Card>
+          )}
 
-            {/* ----------------- Bank Detail Form ----------------- */}
-            {activeStep === 6 && (
-              <Card sx={{ p: 3, mb: 4 }}>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
-                    BANK DETAILS
-                  </Typography>
+          {/* ----------------- Bank Detail Form ----------------- */}
+          {activeStep === 6 && (
+          <Card sx={{ p: 3, mb: 4 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
+                BANK DETAILS
+              </Typography>
 
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} sm={4}>
-                      <Controller
-                        name="bankID"
-                        control={control}
-                        render={({ field }) => (
-                          <FormControl fullWidth>
-                            <InputLabel>Bank</InputLabel>
-                            <Select {...field} label="Bank" value={field.value || ''}>
-                              {bankLoading ? (
-                                <MenuItem disabled>Loading...</MenuItem>
-                              ) : bankError ? (
-                                <MenuItem disabled>{bankError}</MenuItem>
-                              ) : bankOptions.length > 0 ? (
-                                bankOptions.map((bank) => (
-                                  <MenuItem
-                                    key={bank.bankID}
-                                    value={String(bank.bankID)}
-                                  >
-                                    {bank.bankName}
-                                  </MenuItem>
-                                ))
-                              ) : (
-                                <MenuItem disabled>No banks found</MenuItem>
-                              )}
-                            </Select>
-                          </FormControl>
-                        )}
-                      />
-                    </Grid>
+              <Grid container spacing={3}>
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="bankID"
+                    control={control}
+                    render={({ field }) => (
+                      <FormControl fullWidth>
+                        <InputLabel>Bank</InputLabel>
+                        <Select {...field} label="Bank" value={field.value || ''}>
+                          {bankLoading ? (
+                            <MenuItem disabled>Loading...</MenuItem>
+                          ) : bankError ? (
+                            <MenuItem disabled>{bankError}</MenuItem>
+                          ) : bankOptions.length > 0 ? (
+                            bankOptions.map((bank) => (
+                              <MenuItem
+                                key={bank.bankID}
+                                value={String(bank.bankID)}
+                              >
+                                {bank.bankName}
+                              </MenuItem>
+                            ))
+                          ) : (
+                            <MenuItem disabled>No banks found</MenuItem>
+                          )}
+                        </Select>
+                      </FormControl>
+                    )}
+                  />
+                </Grid>
 
-                    <Grid item xs={12} sm={4}>
-                      <Controller
-                        name="titleOfAccount"
-                        render={({ field }) => (
-                          <TextField {...field} label="Title Of Account" fullWidth />
-                        )}
-                      />
-                    </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="titleOfAccount"
+                    render={({ field }) => (
+                      <TextField {...field} label="Title Of Account" fullWidth />
+                    )}
+                  />
+                </Grid>
 
-                    <Grid item xs={12} sm={4}>
-                      <Controller
-                        name="bankName"
-                        render={({ field }) => <TextField {...field} label="Bank Name" fullWidth />}
-                      />
-                    </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="bankName"
+                    render={({ field }) => <TextField {...field} label="Bank Name" fullWidth />}
+                  />
+                </Grid>
 
-                    <Grid item xs={12} sm={4}>
-                      <Controller
-                        name="bankBranch"
-                        render={({ field }) => <TextField {...field} label="Bank Branch" fullWidth />}
-                      />
-                    </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="bankBranch"
+                    render={({ field }) => <TextField {...field} label="Bank Branch" fullWidth />}
+                  />
+                </Grid>
 
-                    <Grid item xs={12} sm={4}>
-                      <Controller
-                        name="accountNo"
-                        render={({ field }) => <TextField {...field} label="Account No." fullWidth />}
-                      />
-                    </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="accountNo"
+                    render={({ field }) => <TextField {...field} label="Account No." fullWidth />}
+                  />
+                </Grid>
 
-                    <Grid item xs={12} sm={4}>
-                      <Controller
-                        name="routingNo"
-                        render={({ field }) => <TextField {...field} label="Routing No." fullWidth />}
-                      />
-                    </Grid>
-                  </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="routingNo"
+                    render={({ field }) => <TextField {...field} label="Routing No." fullWidth />}
+                  />
+                </Grid>
+              </Grid>
 
-                  <Stack direction="row" justifyContent="flex-end" spacing={2} sx={{ mt: 3 }}>
-                    <LoadingButton
-                      type="submit"
-                      variant="contained"
-                      color="primary"
-                      loading={isSubmitting}
-                    >
-                      Save
-                    </LoadingButton>
-                    <LoadingButton
-                      type="button"
-                      variant="contained"
-                      color="primary"
-                      loading={isSubmitting}
-                      onClick={handleSubmit(handleSaveAndEmail)}
-                    >
-                      Save & Email
-                    </LoadingButton>
-                    <Button
-                      type="button"
-                      variant="outlined"
-                      color="primary"
-                      onClick={() => navigate(-1)}
-                    >
-                      Cancel
-                    </Button>
-                  </Stack>
-                </CardContent>
-              </Card>
-            )}
+              <Stack direction="row" justifyContent="flex-end" spacing={2} sx={{ mt: 3 }}>
+                <LoadingButton 
+                  type="submit" 
+                  variant="contained" 
+                  color="primary"
+                  loading={isSubmitting}
+                >
+                  Save
+                </LoadingButton>
+                <LoadingButton 
+                  type="button" 
+                  variant="contained" 
+                  color="primary"
+                  loading={isSubmitting}
+                  onClick={handleSubmit(handleSaveAndEmail)}
+                >
+                  Save & Email
+                </LoadingButton>
+                <Button 
+                  type="button" 
+                  variant="outlined" 
+                  color="primary"
+                  onClick={() => navigate(-1)}
+                >
+                  Cancel
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+          )}
 
-            {/* Step navigation buttons */}
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                mt: 2,
-                mb: 4,
-              }}
+          {/* Step navigation buttons */}
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              mt: 2,
+              mb: 4,
+            }}
+          >
+            <Button
+              type="button"
+              variant="outlined"
+              color="primary"
+              disabled={activeStep === 0}
+              onClick={handlePrevStep}
             >
+              Back
+            </Button>
+
+            {!isLastStep && (
               <Button
                 type="button"
-                variant="outlined"
+                variant="contained"
                 color="primary"
-                disabled={activeStep === 0}
-                onClick={handlePrevStep}
+                onClick={handleNextStep}
               >
-                Back
+                Next
               </Button>
-
-              {!isLastStep && (
-                <Button
-                  type="button"
-                  variant="contained"
-                  color="primary"
-                  onClick={handleNextStep}
-                >
-                  Next
-                </Button>
-              )}
-            </Box>
-          </form>
+            )}
+          </Box>
+        </form>
         </Container>
       </Box>
 
@@ -3518,5 +3561,6 @@ export default function CompletePurchaseOrderFormEdit() {
         </Alert>
       </Snackbar>
     </FormProvider>
+    </AttachmentAssetsContext.Provider>
   );
 }
