@@ -1380,9 +1380,8 @@ export default function CompletePurchaseOrderFormEdit() {
           );
           const groupName = groupFromAPI ? groupFromAPI.productGroup : '';
 
-          // Helper to get static file URL
-          const getFileUrl = (data, defaultName, originalName) => {
-            if (!data) return null;
+          // Helper to get static file URL unconditionally from folder
+          const getFileUrl = (defaultName, originalName) => {
             const fileName = originalName || defaultName;
             // API_BASE_URL might be http://localhost:5254/api, so we replace /api if needed
             const baseUrl = API_BASE_URL.endsWith('/api') ? API_BASE_URL.slice(0, -4) : API_BASE_URL;
@@ -1393,7 +1392,7 @@ export default function CompletePurchaseOrderFormEdit() {
           reset({
             // Basic Order Info
             masterPo: orderData.masterPO || '',
-            image: orderData.poImage || null,
+            image: getFileUrl('POImage.png', orderData.poImgFileName),
             customerPo: orderData.pono || '',
             internalPo: orderData.internalPONO || '',
             amsRef: orderData.amsRefNo || '',
@@ -1473,12 +1472,12 @@ export default function CompletePurchaseOrderFormEdit() {
 
 
             // Reference & Attachment fields (file uploads)
-            originalPurchaseOrder: getFileUrl(orderData.poImage, 'OriginalPurchaseOrder.pdf', orderData.poImgFileName),
-            processOrderConfirmation: getFileUrl(orderData.specsimage, 'ProcessOrderConfirmation.pdf', ''),
-            finalSpecs: getFileUrl(orderData.finalspecs, 'FinalSpecs.pdf', ''),
-            productImage: getFileUrl(orderData.productImage, 'ProductImage.png', orderData.prodImgFileName),
-            ppComment: getFileUrl(orderData.pPimage, 'PPComment.pdf', ''),
-            sizeSetComment: getFileUrl(orderData.sizeset, 'SizeSetComment.pdf', ''),
+            originalPurchaseOrder: getFileUrl('OriginalPurchaseOrder.pdf', orderData.poImgFileName),
+            processOrderConfirmation: getFileUrl('ProcessOrderConfirmation.pdf', ''),
+            finalSpecs: getFileUrl('FinalSpecs.pdf', ''),
+            productImage: getFileUrl('ProductImage.png', orderData.prodImgFileName),
+            ppComment: getFileUrl('PPComment.pdf', ''),
+            sizeSetComment: getFileUrl('SizeSetComment.pdf', ''),
 
 
             bankBranch: orderData.bankBranch || '',
@@ -2021,9 +2020,14 @@ export default function CompletePurchaseOrderFormEdit() {
         return null;
       };
 
+      if (data.image instanceof File) {
+        payload.poImage = await processFile(data.image);
+        payload.poImgFileName = data.image.name;
+      }
+
       if (data.originalPurchaseOrder instanceof File) {
-        payload.poImage = await processFile(data.originalPurchaseOrder);
-        payload.poImgFileName = data.originalPurchaseOrder.name;
+        // Just send filename if it's uploaded, since POImage is used by image
+        payload.originalPDFName = data.originalPurchaseOrder.name;
       }
       if (data.processOrderConfirmation instanceof File) {
         payload.specsimage = await processFile(data.processOrderConfirmation);
