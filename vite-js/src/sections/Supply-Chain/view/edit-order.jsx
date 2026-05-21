@@ -764,7 +764,7 @@ const EditOrderPage = () => {
 
     // Handle Save/Update all POs
     const handleSaveAll = async () => {
-        console.log('=== SAVE ALL STARTED ===');
+        console.log('[My Orders Edit Save] === SAVE ALL STARTED ===');
         console.log('gridRef.current:', gridRef.current);
         console.log('gridRef.current?.api:', gridRef.current?.api);
 
@@ -788,8 +788,9 @@ const EditOrderPage = () => {
             return;
         }
 
-        console.log('Total rows to save:', rowData.length);
-        console.log('Row data:', JSON.stringify(rowData, null, 2));
+        console.log('[My Orders Edit Save] Total rows to save:', rowData.length);
+        console.log('[My Orders Edit Save] Grid row data:', rowData);
+        console.log('[My Orders Edit Save] Grid row data (JSON):', JSON.stringify(rowData, null, 2));
 
         if (rowData.length === 0) {
             showSnackbar('No data to save', 'warning');
@@ -815,8 +816,9 @@ const EditOrderPage = () => {
                 try {
                     const payload = transformGridRowToAPIPayload(row, allOptions);
                     const apiUrl = `/MyOrders/UpdatePurchaseOrder?poid=${row.poid}`;
-                    console.log(`API URL: ${apiUrl}`);
-                    console.log(`Payload for PO ${row.poid}:`, JSON.stringify(payload, null, 2));
+                    console.log(`[My Orders Edit Save] API URL: ${apiUrl}`);
+                    console.log(`[My Orders Edit Save] Payload for PO ${row.poid}:`, payload);
+                    console.log(`[My Orders Edit Save] Payload for PO ${row.poid} (JSON):`, JSON.stringify(payload, null, 2));
 
                     const response = await apiClient.post(apiUrl, payload);
                     console.log(`Response for PO ${row.poid}:`, response);
@@ -830,7 +832,7 @@ const EditOrderPage = () => {
                 }
             }
 
-            console.log('=== SAVE ALL COMPLETED ===');
+            console.log('[My Orders Edit Save] === SAVE ALL COMPLETED ===');
             console.log(`Success: ${successCount}, Errors: ${errorCount}`);
             console.log('Errors:', errors);
 

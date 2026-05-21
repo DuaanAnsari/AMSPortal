@@ -5,9 +5,9 @@ const LOGO_PATH = `${import.meta.env.BASE_URL}logo/AMSlogo.png`;
 const V_MARGIN = 10;
 const H_MARGIN = 14;
 const HEADER_BLOCK_H = 102;
-const TABLE_HEADER_ROW_H = 46;
+const TABLE_HEADER_ROW_H = 40;
 /** Body row height — milestone cells use spaced label/value rows (no repeat of column titles). */
-const DATA_ROW_H = 90;
+const DATA_ROW_H = 78;
 const FOOTER_H = 26;
 const TITLE_BLUE = [0, 51, 153];
 const RED = [200, 0, 0];
@@ -187,14 +187,14 @@ function drawHeaderCell(doc, x, y, w, h, headerText, colIndex = -1) {
   const isPoTripleHeader = colIndex === 1;
   const padX = isPoTripleHeader ? 5 : 4;
 
-  let fs = 6.15;
+  let fs = 5.4;
   doc.setFontSize(fs);
   let lines = [];
   parts.forEach((p) => {
     lines.push(...doc.splitTextToSize(p, Math.max(4, w - 2 * padX)));
   });
   if (lines.length > 5) {
-    fs = 5.45;
+    fs = 4.7;
     doc.setFontSize(fs);
     lines = [];
     parts.forEach((p) => {
@@ -215,7 +215,7 @@ function drawHeaderCell(doc, x, y, w, h, headerText, colIndex = -1) {
   });
 }
 
-function drawMultilineCell(doc, x, y, w, h, lines, align = 'left', fontSize = 6.55, textRgb = RED, opts = {}) {
+function drawMultilineCell(doc, x, y, w, h, lines, align = 'left', fontSize = 5.6, textRgb = RED, opts = {}) {
   const { lineMult = 1.12, maxLines = 10, padX = 2, padTop = 2, vertical = 'middle' } = opts;
   drawCellBorder(doc, x, y, w, h);
   doc.setFont('helvetica', 'normal');
@@ -263,10 +263,10 @@ function drawMultilineCell(doc, x, y, w, h, lines, align = 'left', fontSize = 6.
 function drawPoStackCell(doc, x, y, w, h, lines, textRgb) {
   drawCellBorder(doc, x, y, w, h);
   const padX = 5.5;
-  const padY = 7;
-  const fs = 6.95;
+  const padY = 6.5;
+  const fs = 6;
   /** Space between each printed line (PO / Style / Prod — uniform gaps). */
-  const lineGap = 15.2;
+  const lineGap = 13.2;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(fs);
   doc.setTextColor(textRgb[0], textRgb[1], textRgb[2]);
@@ -342,18 +342,18 @@ function drawMilestoneDataCell(doc, x, y, w, h, lines, rowRgb) {
   doc.rect(x, y, w, h, 'S');
 
   const parsed = parseMilestonePdfLines(lines ?? []);
-  const padTopBody = 5.75;
-  const LABEL_FS = 4.85;
-  const VALUE_FS = 5.95;
-  const STATUS_FS = 6.05;
+  const padTopBody = 5;
+  const LABEL_FS = 4.05;
+  const VALUE_FS = 5.05;
+  const STATUS_FS = 5.1;
   const labelLead = LABEL_FS * 1.22;
   const valueLead = VALUE_FS * 1.22;
-  const pairGap = 3.45;
+  const pairGap = 3.15;
   const statusReserve = Math.min(18, Math.max(13, STATUS_FS * 1.28 + 3));
 
   if (parsed.mode === 'notRequired') {
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(5.95);
+    doc.setFontSize(5.05);
     doc.setTextColor(textRgb[0], textRgb[1], textRgb[2]);
     doc.text(parsed.status, x + w / 2, y + h / 2, { align: 'center', baseline: 'middle', maxWidth: maxW });
     doc.setTextColor(0, 0, 0);
@@ -362,7 +362,7 @@ function drawMilestoneDataCell(doc, x, y, w, h, lines, rowRgb) {
 
   if (parsed.mode === 'empty') {
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(5.75);
+    doc.setFontSize(4.9);
     doc.setTextColor(120, 120, 120);
     doc.text('—', x + w / 2, y + h / 2, { align: 'center', baseline: 'middle' });
     doc.setTextColor(0, 0, 0);
@@ -441,12 +441,12 @@ function drawImageCellPlaceholder(doc, x, y, w, h, row) {
   doc.setLineWidth(0.2);
   doc.rect(x + 1, y + 1, w - 2, h - 2, 'S');
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(5.85);
+  doc.setFontSize(4.9);
   const phRgb = getRowPdfTextRgb(row);
   doc.setTextColor(phRgb[0], phRgb[1], phRgb[2]);
   const cy = y + h / 2;
-  doc.text('NO IMAGE', x + w / 2, cy - 5.25, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
-  doc.text('AVAILABLE', x + w / 2, cy + 5.25, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
+  doc.text('NO IMAGE', x + w / 2, cy - 4.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
+  doc.text('AVAILABLE', x + w / 2, cy + 4.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
   doc.setTextColor(0, 0, 0);
 }
 
@@ -545,12 +545,12 @@ function drawQtyStackCell(doc, x, y, w, h, row) {
   const pad = 3;
   const rx = x + w - pad;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.25);
+  doc.setFontSize(6.2);
   doc.setTextColor(rgb[0], rgb[1], rgb[2]);
 
   const topMid = (y + splitY) / 2;
-  const yPo = topMid - 5.5;
-  const yShip = topMid + 5.5;
+  const yPo = topMid - 5;
+  const yShip = topMid + 5;
   doc.text(String(row.poQty ?? ''), rx, yPo, { align: 'right', baseline: 'middle' });
   doc.text(String(row.shipQty ?? ''), rx, yShip, { align: 'right', baseline: 'middle' });
 
@@ -560,7 +560,7 @@ function drawQtyStackCell(doc, x, y, w, h, row) {
   doc.setTextColor(0, 0, 0);
 }
 
-function drawCenterTextCell(doc, x, y, w, h, text, fontSize = 7, textRgb = RED) {
+function drawCenterTextCell(doc, x, y, w, h, text, fontSize = 6, textRgb = RED) {
   drawCellBorder(doc, x, y, w, h);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(textRgb[0], textRgb[1], textRgb[2]);
@@ -591,9 +591,9 @@ function drawDataRow(doc, y, x0, widths, row) {
   i += 1;
   drawQtyStackCell(doc, xs[i], y, widths[i], DATA_ROW_H, row);
   i += 1;
-  drawCenterTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.shipment, 7, rgb);
+  drawCenterTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.shipment, 6, rgb);
   i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, [String(row.mos ?? 'N/A')], 'center', 6.75, rgb, {
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, [String(row.mos ?? 'N/A')], 'center', 5.75, rgb, {
     lineMult: 1.1,
     maxLines: 8,
     padX: 2,
@@ -601,11 +601,11 @@ function drawDataRow(doc, y, x0, widths, row) {
     vertical: 'top',
   });
   i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.fabricLines, 'left', 6.15, rgb);
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.fabricLines, 'left', 5.2, rgb);
   i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.itemLines, 'left', 6.55, rgb);
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.itemLines, 'left', 5.6, rgb);
   i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, [row.colorQty], 'left', 6.35, rgb);
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, [row.colorQty], 'left', 5.4, rgb);
   i += 1;
   const nums = row.statusNums || [];
   for (let k = 0; k < 12; k += 1) {
@@ -620,7 +620,7 @@ function drawDataRow(doc, y, x0, widths, row) {
     Array.isArray(row.productionStatusLines) && row.productionStatusLines.length > 0
       ? row.productionStatusLines
       : [row.productionStatus != null && String(row.productionStatus).trim() !== '' ? String(row.productionStatus).trim() : 'N/A'];
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, prodLines, 'center', 5.15, rgb, {
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, prodLines, 'center', 4.25, rgb, {
     lineMult: 1.08,
     maxLines: 10,
     padX: 3,
