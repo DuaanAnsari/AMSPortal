@@ -1672,12 +1672,11 @@ export default function CompletePurchaseOrderForm() {
           style: order.styleNo || order.design || defaultValues.style,
 
           // Shipping and Payment Terms
-          // We save: shipmentMode <- shipmentMode (Air/Sea/etc)
-          //          deliveryType <- shipmentTerm (CNF/FOB/etc)
+          // Load: API shipmentMode -> UI shipmentTerm | API deliveryType -> UI shipmentMode
           paymentMode: order.paymentMode || defaultValues.paymentMode,
-          shipmentTerm: order.deliveryType || order.shipmentTerm || defaultValues.shipmentTerm,
+          shipmentTerm: order.shipmentMode || order.shipmentTerm || defaultValues.shipmentTerm,
           destination: order.destination || defaultValues.destination,
-          shipmentMode: order.shipmentMode || defaultValues.shipmentMode,
+          shipmentMode: order.deliveryType || order.shipmentMode || defaultValues.shipmentMode,
 
           // Bank Details
           bankName: order.bankName || '',
@@ -2492,12 +2491,12 @@ export default function CompletePurchaseOrderForm() {
       season: data.season || '',
       quality: data.qualityComposition || '',
       construction: data.construction || '',
-      shipmentMode: data.shipmentMode || '',
+      // UI Shipment Term (CNF/FOB) -> API shipmentMode | UI Shipment Mode (Air/Sea) -> API deliveryType
+      shipmentMode: data.shipmentTerm || '',
       paymentMode: data.paymentMode || '',
       paymentType: data.paymentMode || '',
       ekNumber: '',
-      deliveryType: data.shipmentTerm || '',
-      currency: data.currency || '',
+      deliveryType: data.shipmentMode || '',      currency: data.currency || '',
       poRefNo: data.costingRef || '',
       design: data.design || '',
       exchangeRate: safeParseFloat(data.exchangeRate),
@@ -2566,8 +2565,7 @@ export default function CompletePurchaseOrderForm() {
       // Safely capture the filename from the File object
       poImgFileName: data.image instanceof File ? data.image.name : (typeof data.image === 'string' ? 'existing_po_image.jpg' : ''),
       grossAndNetWeight: data.unit || '',
-      shipmentModeText: data.shipmentMode || '',
-      costingMstID: 0,
+      shipmentModeText: data.shipmentTerm || '',      costingMstID: 0,
       userID: 0,
       reasonforReviseShpmnt: data.reasonReviseBuyer || '',
       reasonforReviseShpmntVendor: data.reasonReviseVendor || '',
