@@ -99,12 +99,15 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
         if (!isEmpty) {
           // Inject missing fields from base API if the report API omitted them
           if (orderData) {
-            reportData = reportData.map(r => ({ 
-              ...r, 
+            reportData = reportData.map(r => ({
+              ...r,
               poImage: r.poImage || orderData.poImage,
               buyerCustomer: r.buyerCustomer || orderData.buyerCustomer || r.customerName || orderData.customerName || '',
               consigneeAddress1: r.consigneeAddress1 || orderData.consigneeAddress1 || orderData.consignee || '',
-              consigneeAddress2: r.consigneeAddress2 || orderData.consigneeAddress2 || ''
+              consigneeAddress2: r.consigneeAddress2 || orderData.consigneeAddress2 || '',
+              otherFabric: r.otherFabric || orderData.otherFabric || '',
+              construction: r.construction || orderData.construction || '',
+              ribGSM: r.ribGSM || orderData.ribGSM || r.ribGsm || orderData.ribGsm || r.RibGSM || orderData.RibGSM || '',
             }));
           }
           setFetchedData(reportData);
@@ -143,6 +146,8 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               rnNo: order.rnNo || '',
               moreInfo: order.moreInfo || '',
               otherFabric: order.otherFabric || '',
+              construction: order.construction || '',
+              ribGSM: order.ribGSM || order.ribGsm || order.RibGSM || '',
               gms: order.gms || '',
               bankName: order.bankName || '',
               bankBranch: order.bankBranch || '',
@@ -401,13 +406,13 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
       return { labels, qty };
     }
 
-    // If API didn’t provide s1.. fields, fall back to existing 4 qty fields (keeps layout working)
+    // If API didnâ€™t provide s1.. fields, fall back to existing 4 qty fields (keeps layout working)
     if (!qty.length) {
       const fallbackQty = [obj?.s1, obj?.s2, obj?.s3, obj?.s4].filter(
         (v) => v !== undefined && v !== null && String(v).trim() !== ''
       );
       fallbackQty.forEach((v) => qty.push(toNumber(v)));
-      // No hardcoded size names; leave labels empty when API doesn’t send them
+      // No hardcoded size names; leave labels empty when API doesnâ€™t send them
       while (labels.length < qty.length) labels.push('');
     }
 
@@ -468,6 +473,8 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
     specialOperation: poData.pO_Special_Operation || '',
     samplingReq: poData.samplingReq || 'N/A',
     otherFabric: poData.otherFabric || '',
+    construction: poData.construction || '',
+    gsmOF: poData.ribGSM || poData.ribGsm || poData.RibGSM || '',
     beneficiaryBank: poData.bankNameBank || '',
     accountNo: poData.accountNoBank || '',
     routingNo: poData.ibanBank || '',
@@ -872,7 +879,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               </Box>
 
               {/* Data Grid - Proper Table for perfect column alignment */}
-              <Table size="small" sx={{ borderCollapse: 'collapse', width: '100%', border: '1px solid #000', tableLayout: 'fixed' }}>
+              <Table debug size="small" sx={{ borderCollapse: 'collapse', width: '100%', border: '1px solid #000', tableLayout: 'fixed',borderBottom:'1px solid black' }}>
                 <colgroup>
                   <col style={{ width: '12.5%' }} />
                   <col style={{ width: '15.5%' }} />
@@ -883,7 +890,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                 </colgroup>
                 <TableBody>
                   {/* Header Row */}
-                  <TableRow sx={{ backgroundColor: '#f9f9f9' }}>
+                  <TableRow sx={{ backgroundColor: '#f9f9f9' }} debug>
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontWeight: 'bold', fontSize: '9px', p: '2px 6px', textAlign: 'center' }}>Description</TableCell>
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontWeight: 'bold', fontSize: '9px', p: '2px 6px', textAlign: 'center' }}>Fabric</TableCell>
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontWeight: 'bold', fontSize: '9px', p: '2px 6px', textAlign: 'center' }}>Content</TableCell>
@@ -893,24 +900,33 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                   </TableRow>
                   {/* Body Row */}
                   <TableRow>
-                    <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontWeight: 'bold', fontSize: '10px', p: '4px 6px', textAlign: 'center' }}>
+                    <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontWeight: 'bold', fontSize: '10px', p: '4px 6px', textAlign: 'center', verticalAlign: 'middle' }}>
                       Body
                     </TableCell>
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.fabric.fabric}</TableCell>
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.fabric.content}</TableCell>
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.fabric.weight}</TableCell>
-                    <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontSize: '9.5px', p: '4px 8px', verticalAlign: 'middle', lineHeight: 1.2 }}>{data.packingInstructions}</TableCell>
-                    <TableCell sx={{ borderBottom: '1px solid #000', fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.ration}</TableCell>
+                    <TableCell sx={{ borderRight: '1px solid #000', fontSize: '9.5px', p: '4px 8px', verticalAlign: 'middle', lineHeight: 1.2 }}>{data.packingInstructions}</TableCell>
+                    <TableCell sx={{  fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.ration}</TableCell>
                   </TableRow>
-                  {/* Other Row - Large field style */}
-                  <TableRow>
-                    <TableCell sx={{ borderRight: '1px solid #000', fontWeight: 'bold', fontSize: '10px', p: '4px 6px', textAlign: 'center' }}>
+                  {/* Other Row */}
+                  <TableRow sx={{borderBottom:'1px solid black'}} debug>
+                    <TableCell debug sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontWeight: 'bold', fontSize: '10px', p: '4px 6px', textAlign: 'center', verticalAlign: 'middle' }}>
                       Other
                     </TableCell>
-                    <TableCell colSpan={5} sx={{ fontSize: '10px', p: '4px 8px', verticalAlign: 'top', height: '30px' }}>
+                    <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>
                       {data.otherFabric}
                     </TableCell>
+                    <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>
+                      {data.construction}
+                    </TableCell>
+                    <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>
+                      {data.gsmOF ? `${data.gsmOF} gsm` : ''}
+                    </TableCell>
+                    <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontSize: '9.5px', p: '4px 8px', verticalAlign: 'middle', lineHeight: 1.2 }}>&nbsp;</TableCell>
+                    <TableCell sx={{ borderBottom: '1px solid #000', fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>&nbsp;</TableCell>
                   </TableRow>
+                  <TableRow debug></TableRow>
                 </TableBody>
               </Table>
             </Box>
@@ -1011,7 +1027,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                 <TableBody>
                   <TableRow sx={{ height: '22px' }}>
                     <TableCell sx={{ width: '80px' }}></TableCell>
-                    <TableCell sx={{ width: '70px', textAlign: 'right', fontWeight: 'bold', fontSize: '11px' }}>P.O Total:</TableCell>
+                    <TableCell sx={{ width: '100px', textAlign: 'right', fontWeight: 'bold', fontSize: '11px' }}>P.O Total:</TableCell>
                     <TableCell sx={{ width: '60px', textAlign: 'center', fontWeight: 'bold', fontSize: '11px' }}>{data.fmtInt(data.totalQtyNum)}</TableCell>
                     <TableCell sx={{ width: '70px', textAlign: 'left', fontWeight: 'bold', fontSize: '11px' }}>PCS</TableCell>
                     <TableCell sx={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11px' }}>{data.fmtMoney(data.totalQtyNum / 12)} Dz</TableCell>
