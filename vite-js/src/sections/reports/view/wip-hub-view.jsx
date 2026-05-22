@@ -1,4 +1,4 @@
-roamn meimport axios from 'axios';
+import axios from 'axios';
 import PropTypes from 'prop-types';
 import { useSearchParams } from 'react-router-dom';
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
@@ -47,6 +47,11 @@ import {
   buildCustomerWipPdfBlobFromRows,
   openCustomerWipPdf,
 } from 'src/sections/reports/utils/customer-wip-pdf-export';
+import { fetchCustomerWipReportRows } from 'src/sections/reports/utils/customer-wip-report-api';
+import {
+  filterCustomerWipRowsByUiFilters,
+  mapApiRowToCustomerWipPdfRow,
+} from 'src/sections/reports/utils/customer-wip-report-map';
 import { buildAmsWipPdfBlobFromRows, openAmsWipPdf } from 'src/sections/reports/utils/ams-wip-pdf-export';
 import { buildSaltWipPdfBlobFromRows, openSaltWipPdf } from 'src/sections/reports/utils/salt-wip-pdf-export';
 import {
@@ -776,7 +781,7 @@ async function runFactoryWipPdfFromFilters(enqueueSnackbar, filters, mode, opts 
   }
 }
 
-/** Customer WIP PDF — demo grid until API rows are wired (`buildCustomerWipPdfBlobFromRows(rows, meta)`). */
+/** Customer WIP PDF — GET `/api/Report/GetCustomerWIPReport`, client jsPDF + autotable. */
 async function runCustomerWipPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns = {}, opts = {}) {
   const fromDate = filters.fromDate;
   const toDate = filters.toDate;
@@ -791,6 +796,12 @@ async function runCustomerWipPdfFromFilters(enqueueSnackbar, filters, mode, drop
 
   if (mode === 'view' && !opts.previewWindow) {
     enqueueSnackbar('Open the report using the View Report button.', { variant: 'warning' });
+    return;
+  }
+
+  const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+  if (!base) {
+    enqueueSnackbar('API URL missing: set VITE_API_BASE_URL', { variant: 'error' });
     return;
   }
 
@@ -816,6 +827,28 @@ async function runCustomerWipPdfFromFilters(enqueueSnackbar, filters, mode, drop
     return row ? milestoneSupplierLabel(row) : String(filters.supplier);
   };
 
+  const customerLabelForFilter =
+    filters.customer !== ALL
+      ? (() => {
+          const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+          return row ? milestoneCustomerLabel(row) : '';
+        })()
+      : '';
+  const supplierLabelForFilter =
+    filters.supplier !== ALL
+      ? (() => {
+          const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
+          return row ? milestoneSupplierLabel(row) : '';
+        })()
+      : '';
+  const merchandiserLabelForFilter =
+    filters.merchandiser !== ALL
+      ? (() => {
+          const row = merchants.find((r) => milestoneMerchantKey(r) === filters.merchandiser);
+          return row ? milestoneMerchantLabel(row) : '';
+        })()
+      : '';
+
   const meta = {
     customerLabel: resolveCustomerLabel(),
     supplierLabel: resolveSupplierLabel(),
@@ -825,7 +858,26 @@ async function runCustomerWipPdfFromFilters(enqueueSnackbar, filters, mode, drop
   };
 
   try {
-    const blob = await buildCustomerWipPdfBlobFromRows([], meta);
+    const raw = await fetchCustomerWipReportRows(
+      {
+        reportType: filters.reportType,
+        productPortfolio: filters.productPortfolio,
+        reportSubType: filters.reportSubType || 'general',
+        fromDate,
+        toDate,
+        portfolios: dropdowns.portfolios || [],
+      },
+      wipLdpFobAuthHeaders()
+    );
+
+    const filtered = filterCustomerWipRowsByUiFilters(raw, filters, dropdowns, {
+      customerLabel: customerLabelForFilter,
+      supplierLabel: supplierLabelForFilter,
+      merchandiserLabel: merchandiserLabelForFilter,
+    });
+
+    const pdfRows = filtered.map((row) => mapApiRowToCustomerWipPdfRow(row));
+    const blob = await buildCustomerWipPdfBlobFromRows(pdfRows, meta);
     await assertValidMilestonePdfBlob(blob);
 
     if (mode === 'view') {
@@ -838,7 +890,7 @@ async function runCustomerWipPdfFromFilters(enqueueSnackbar, filters, mode, drop
       }
       const blobUrl = URL.createObjectURL(blob);
       try {
-        previewWindow.location.replace(blobUrl);
+        previewWindow.location.replace(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`);
       } catch (navErr) {
         URL.revokeObjectURL(blobUrl);
         throw navErr;
@@ -850,8 +902,12 @@ async function runCustomerWipPdfFromFilters(enqueueSnackbar, filters, mode, drop
     }
 
     enqueueSnackbar(
-      mode === 'view' ? 'Customer WIP PDF opened in a new tab' : 'Customer WIP PDF downloaded',
-      { variant: 'success' }
+      filtered.length
+        ? mode === 'view'
+          ? 'Customer WIP PDF opened in a new tab'
+          : 'Customer WIP PDF downloaded'
+        : 'No Data Found — PDF generated with empty message',
+      { variant: filtered.length ? 'success' : 'warning' }
     );
   } catch (err) {
     console.error('[WIP] Customer WIP PDF', err);
@@ -2125,7 +2181,7 @@ function CustomerWipReportForm() {
   const [filters, setFilters] = useState({
     reportType: 'merchandiserWise',
     merchandiser: ALL,
-    productPortfolio: ALL,
+    productPortfolio: FACTORY_WIP_APPAREL_PORTFOLIO,
     customer: ALL,
     supplier: ALL,
     poScope: ALL,
@@ -2268,11 +2324,11 @@ function CustomerWipReportForm() {
         next.merchandiser = ALL;
         changed = true;
       }
-      if (
-        prev.productPortfolio !== ALL &&
-        !portfolios.some((r) => milestonePortfolioKey(r) === prev.productPortfolio)
-      ) {
-        next.productPortfolio = ALL;
+      const portfolioValid =
+        prev.productPortfolio === FACTORY_WIP_APPAREL_PORTFOLIO ||
+        portfolios.some((r) => milestonePortfolioKey(r) === prev.productPortfolio);
+      if (!portfolioValid || prev.productPortfolio === ALL) {
+        next.productPortfolio = FACTORY_WIP_APPAREL_PORTFOLIO;
         changed = true;
       }
 
@@ -2347,9 +2403,13 @@ function CustomerWipReportForm() {
               sx={selectSx}
               disabled={loadingDropdowns && portfolios.length === 0}
             >
-              <MenuItem value={ALL}>All</MenuItem>
+              <MenuItem value={FACTORY_WIP_APPAREL_PORTFOLIO}>Apparel</MenuItem>
               {portfolios
                 .filter((row) => milestonePortfolioKey(row))
+                .filter(
+                  (row) =>
+                    milestonePortfolioLabel(row).trim().toLowerCase() !== 'apparel'
+                )
                 .map((row) => {
                   const val = milestonePortfolioKey(row);
                   return (

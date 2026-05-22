@@ -1,10 +1,4 @@
-import { useRef, useState, useEffect, createContext, useContext, useCallback } from 'react';
-import {
-  mapAttachmentsFromApi,
-  normalizeAttachmentValue,
-  applyAttachmentsToPayload,
-  FORM_TO_ASSET_KEY,
-} from '../utils/purchase-order-attachments';
+import { useRef, useState, useEffect } from 'react';
 import { useForm, Controller, FormProvider, useFormContext } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
@@ -167,86 +161,43 @@ function FullScreenImagePreview({ open, imageUrl, onClose }) {
   );
 }
 
-const AttachmentAssetsContext = createContext(null);
-
 // -------------------- File Upload Component with Preview --------------------
-function FileUploadWithPreview({ name, label, accept = 'image/*,.pdf,.doc,.docx' }) {
+function FileUploadWithPreview({ name, label, accept = "image/*" }) {
   const { setValue, watch } = useFormContext();
-  const attachmentCtx = useContext(AttachmentAssetsContext);
   const fileInputRef = useRef(null);
-  const [localPreviewUrl, setLocalPreviewUrl] = useState('');
+  const [previewUrl, setPreviewUrl] = useState('');
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const fileValue = watch(name);
 
-  const assetKey = FORM_TO_ASSET_KEY[name];
-  const storedAsset = assetKey && attachmentCtx?.assets?.[assetKey];
-  const previewUrl =
-    localPreviewUrl || storedAsset?.previewUrl || '';
-  const displayFileName =
-    (fileValue instanceof File ? fileValue.name : null) ||
-    storedAsset?.fileName ||
-    (typeof fileValue === 'string' && fileValue.length < 120 ? fileValue : null) ||
-    'Existing file';
-
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
-    if (!file) return;
-
-    setValue(name, file, { shouldValidate: true });
-
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => setLocalPreviewUrl(e.target.result);
-      reader.readAsDataURL(file);
-    } else {
-      setLocalPreviewUrl(URL.createObjectURL(file));
-    }
-
-    if (assetKey && attachmentCtx?.updateAsset) {
-      attachmentCtx.updateAsset(assetKey, normalizeAttachmentValue(file));
+    if (file) {
+      setValue(name, file, { shouldValidate: true });
+      
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setPreviewUrl(e.target.result);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setPreviewUrl('');
+      }
     }
   };
 
   const handleRemoveFile = () => {
-    if (localPreviewUrl && !localPreviewUrl.startsWith('data:')) {
-      URL.revokeObjectURL(localPreviewUrl);
-    }
     setValue(name, null, { shouldValidate: true });
-    setLocalPreviewUrl('');
+    setPreviewUrl('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
-    }
-    if (assetKey && attachmentCtx?.updateAsset) {
-      attachmentCtx.updateAsset(assetKey, normalizeAttachmentValue(null));
     }
   };
 
   const handlePreviewClick = () => {
-    if (!previewUrl) return;
-
-    const isFileObj = fileValue instanceof File;
-    const mime = isFileObj ? fileValue.type : storedAsset?.mimeType;
-    const isPdf =
-      mime === 'application/pdf' ||
-      storedAsset?.isPdf ||
-      /\.pdf$/i.test(displayFileName || '');
-
-    if (isPdf) {
-      window.open(previewUrl, '_blank');
-      return;
-    }
-
-    if (isFileObj && fileValue.type?.startsWith('image/')) {
+    if (previewUrl) {
       setFullScreenOpen(true);
-      return;
     }
-
-    if (storedAsset?.previewUrl && !storedAsset?.isPdf) {
-      setFullScreenOpen(true);
-      return;
-    }
-
-    window.open(previewUrl, '_blank');
   };
 
   const handleCloseFullScreen = () => {
@@ -254,28 +205,25 @@ function FileUploadWithPreview({ name, label, accept = 'image/*,.pdf,.doc,.docx'
   };
 
   useEffect(() => {
-    if (!fileValue) {
-      setLocalPreviewUrl('');
-      return undefined;
+    if (fileValue) {
+      if (typeof fileValue === 'string') {
+        // Existing image data from API (base64 or URL)
+        if (fileValue.startsWith('data:') || fileValue.startsWith('http')) {
+          setPreviewUrl(fileValue);
+        } else {
+          // Assume raw base64 PNG data
+          setPreviewUrl(`data:image/png;base64,${fileValue}`);
+        }
+      } else {
+        // New File object – preview already set by handleFileChange
+        // No action needed
+      }
+    } else {
+      setPreviewUrl('');
     }
-    if (fileValue instanceof File) {
-      return undefined;
-    }
-    if (storedAsset?.previewUrl) {
-      setLocalPreviewUrl(storedAsset.previewUrl);
-    }
-    return undefined;
-  }, [fileValue, storedAsset?.previewUrl]);
+  }, [fileValue]);
 
-  const isImage =
-    (fileValue instanceof File && fileValue.type?.startsWith('image/')) ||
-    (storedAsset?.previewUrl && !storedAsset?.isPdf && !storedAsset?.missingBinary);
-  const isPDF =
-    (fileValue instanceof File && fileValue.type === 'application/pdf') ||
-    storedAsset?.isPdf;
-  const missingBinary = storedAsset?.missingBinary && !(fileValue instanceof File);
-
-  const hasFile = Boolean(fileValue) || Boolean(storedAsset?.raw);
+  const isImage = typeof fileValue === 'string' ? true : fileValue?.type?.startsWith('image/');
 
   return (
     <Box>
@@ -294,25 +242,24 @@ function FileUploadWithPreview({ name, label, accept = 'image/*,.pdf,.doc,.docx'
           onChange={handleFileChange}
         />
       </Button>
-
-      {hasFile && (
+      
+      {fileValue && (
         <Box sx={{ mt: 1, p: 1, border: '1px solid #ddd', borderRadius: 1 }}>
           <Grid container alignItems="center" justifyContent="space-between">
             <Grid item>
               <Typography variant="body2" noWrap>
-                {displayFileName}
+                {typeof fileValue === 'object' ? fileValue.name : 'Existing file'}
               </Typography>
               <Typography variant="caption" color="success.main">
-                ✓ File loaded
+                ✓ File selected
               </Typography>
-              {missingBinary && (
-                <Typography variant="caption" color="warning.main" sx={{ display: 'block' }}>
-                  API ne sirf filename bheja hai — PDF preview ke liye backend se base64/url chahiye.
-                </Typography>
-              )}
             </Grid>
             <Grid item>
-              <IconButton size="small" onClick={handleRemoveFile} color="error">
+              <IconButton 
+                size="small" 
+                onClick={handleRemoveFile}
+                color="error"
+              >
                 <DeleteIcon />
               </IconButton>
             </Grid>
@@ -325,7 +272,9 @@ function FileUploadWithPreview({ name, label, accept = 'image/*,.pdf,.doc,.docx'
                   position: 'relative',
                   display: 'inline-block',
                   cursor: 'pointer',
-                  '&:hover .preview-overlay': { opacity: 1 },
+                  '&:hover .preview-overlay': {
+                    opacity: 1,
+                  },
                 }}
                 onClick={handlePreviewClick}
               >
@@ -364,21 +313,6 @@ function FileUploadWithPreview({ name, label, accept = 'image/*,.pdf,.doc,.docx'
               </Typography>
             </Box>
           )}
-
-          {isPDF && previewUrl && (
-            <Box sx={{ mt: 2, textAlign: 'center' }}>
-              <Button
-                variant="contained"
-                color="primary"
-                size="small"
-                startIcon={<ZoomInIcon />}
-                onClick={handlePreviewClick}
-                sx={{ textTransform: 'none' }}
-              >
-                Open PDF Preview
-              </Button>
-            </Box>
-          )}
         </Box>
       )}
 
@@ -394,20 +328,24 @@ function FileUploadWithPreview({ name, label, accept = 'image/*,.pdf,.doc,.docx'
 // -------------------- Simple Image Upload Component --------------------
 function SimpleImageUploadField({ name, label = "Image" }) {
   const { setValue, watch } = useFormContext();
-  const attachmentCtx = useContext(AttachmentAssetsContext);
   const fileInputRef = useRef(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const imageValue = watch(name);
 
-  const assetKey = FORM_TO_ASSET_KEY[name];
-  const storedAsset = assetKey && attachmentCtx?.assets?.[assetKey];
-
-  let displaySrc = previewUrl || storedAsset?.previewUrl || '';
-  if (!displaySrc && imageValue instanceof File && previewUrl) {
+  // Derive display source dynamically
+  let displaySrc = '';
+  if (imageValue && typeof imageValue === 'object') {
+    // New file selected
     displaySrc = previewUrl;
-  } else if (!displaySrc && typeof imageValue === 'string' && imageValue) {
-    displaySrc = normalizeAttachmentValue(imageValue).previewUrl || '';
+  } else if (typeof imageValue === 'string' && imageValue) {
+    // Existing image string
+    if (imageValue.startsWith('http') || imageValue.startsWith('data:')) {
+      displaySrc = imageValue;
+    } else {
+      // Assume base64 and prepend data URI
+      displaySrc = `data:image/png;base64,${imageValue}`;
+    }
   }
  
   const handleFileChange = async (event) => {
@@ -422,9 +360,6 @@ function SimpleImageUploadField({ name, label = "Image" }) {
         };
         reader.readAsDataURL(file);
       }
-      if (assetKey && attachmentCtx?.updateAsset) {
-        attachmentCtx.updateAsset(assetKey, normalizeAttachmentValue(file));
-      }
     }
   };
 
@@ -433,9 +368,6 @@ function SimpleImageUploadField({ name, label = "Image" }) {
     setPreviewUrl('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
-    }
-    if (assetKey && attachmentCtx?.updateAsset) {
-      attachmentCtx.updateAsset(assetKey, normalizeAttachmentValue(null));
     }
   };
 
@@ -449,16 +381,12 @@ function SimpleImageUploadField({ name, label = "Image" }) {
     setFullScreenOpen(false);
   };
 
+  // Reset local preview if value is cleared externally
   useEffect(() => {
     if (!imageValue) {
       setPreviewUrl('');
-      return;
     }
-    if (imageValue instanceof File) return;
-    if (storedAsset?.previewUrl) {
-      setPreviewUrl(storedAsset.previewUrl);
-    }
-  }, [imageValue, storedAsset?.previewUrl]);
+  }, [imageValue]);
 
   return (
     <Box>
@@ -1056,23 +984,11 @@ export default function CompletePurchaseOrderFormEdit() {
     getValues,
   } = methods;
 
-  const [attachmentAssets, setAttachmentAssets] = useState(() => mapAttachmentsFromApi({}).assets);
+  const [files, setFiles] = useState({});
   const [openItemDialog, setOpenItemDialog] = useState(false);
   const [savedItemData, setSavedItemData] = useState(null);
   const [showSelections, setShowSelections] = useState(true);
   const [showCalculationFields, setShowCalculationFields] = useState(false);
-  const updateAttachmentAsset = useCallback((assetKey, asset) => {
-    setAttachmentAssets((prev) => ({
-      ...prev,
-      [assetKey]: asset,
-    }));
-  }, []);
-
-  const attachmentContextValue = {
-    assets: attachmentAssets,
-    updateAsset: updateAttachmentAsset,
-  };
-
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [loading, setLoading] = useState(true);
   const [apiData, setApiData] = useState(null);
@@ -1453,15 +1369,11 @@ export default function CompletePurchaseOrderFormEdit() {
           );
           const groupName = groupFromAPI ? groupFromAPI.productGroup : '';
           
-          const { assets, formFiles } = mapAttachmentsFromApi(orderData);
-          setAttachmentAssets(assets);
-          console.log('[PO Edit] Attachment assets mapped:', assets);
-
           // Map API data to form fields with date mappings
           reset({
             // Basic Order Info
             masterPo: orderData.masterPO || '',
-            image: formFiles.image,
+            image: orderData.poImage || null,
             customerPo: orderData.pono || '',
             internalPo: orderData.internalPONO || '',
             amsRef: orderData.amsRefNo || '',
@@ -1539,13 +1451,13 @@ export default function CompletePurchaseOrderFormEdit() {
             shipmentMode: orderData.deliveryType || '',
             
 
-            // Reference & Attachment — exact API field mapping (see purchase-order-attachments.js)
-            originalPurchaseOrder: formFiles.originalPurchaseOrder,
-            processOrderConfirmation: formFiles.processOrderConfirmation,
-            finalSpecs: formFiles.finalSpecs,
-            productImage: formFiles.productImage,
-            ppComment: formFiles.ppComment,
-            sizeSetComment: formFiles.sizeSetComment,
+            // Reference & Attachment fields (file uploads)
+            originalPurchaseOrder: orderData.poImage || null,
+            processOrderConfirmation: orderData.specsimage || null,
+            finalSpecs: orderData.finalspecs || null,
+            productImage: orderData.productImage || null,
+            ppComment: orderData.pPimage || null,
+            sizeSetComment: orderData.sizeset || null,
 
             bankBranch: orderData.bankBranch || '',
             titleOfAccount: orderData.titleOfAccount || '',
@@ -1567,7 +1479,7 @@ export default function CompletePurchaseOrderFormEdit() {
             set: orderData.poQtyUnit || '',
             qualityComposition: orderData.quality || 0,
             gsm: orderData.gms || 0,
-            gsmOF: orderData.costingMstID || 0,
+            gsmOF: orderData.ribGSM || orderData.ribGsm || orderData.RibGSM || '',
             poSpecialOperation: orderData.pO_Special_Operation || '',
             poSpecialTreatment: orderData.pO_Special_Treatement || '',
             inquiryNo: orderData.inquiryMstID ? `INQ${orderData.inquiryMstID}` : '',
@@ -1992,17 +1904,34 @@ export default function CompletePurchaseOrderFormEdit() {
     payload.creationDate = apiData.creationDate || new Date().toISOString();
     payload.lastUpdate = new Date().toISOString();
 
-    // Strip form-only keys; images applied in onSubmit via applyAttachmentsToPayload
-    ['image', 'originalPurchaseOrder', 'processOrderConfirmation', 'finalSpecs', 'productImage', 'ppComment', 'sizeSetComment'].forEach(
-      (k) => {
-        delete payload[k];
-      }
-    );
+    // Remove image/file fields ONLY if they are File objects (to prevent SQL type clash)
+    // But KEEP them if they are strings (filenames), as the backend requires them ("Must declare scalar variable")
+    const imageFieldsToCheck = [
+      'image',
+      'originalPurchaseOrder',
+      'processOrderConfirmation',
+      'finalSpecs',
+      'productImage',
+      'ppComment',
+      'sizeSetComment',
+      'specsimage',
+      'prodImgFileName',
+      'poImgFileName',
+    ];
 
-    if (payload.productImage === undefined) payload.productImage = apiData.productImage || '';
-    if (payload.specsimage === undefined) payload.specsimage = apiData.specsimage || '';
-    if (payload.poImgFileName === undefined) payload.poImgFileName = apiData.poImgFileName || '';
-    if (payload.prodImgFileName === undefined) payload.prodImgFileName = apiData.prodImgFileName || '';
+    imageFieldsToCheck.forEach(field => {
+      // If it's a File object (from new upload), revert to original string or empty string
+      // We cannot send File objects to this endpoint
+      if (payload[field] && typeof payload[field] === 'object' && payload[field].name) {
+        // It's likely a File object
+        payload[field] = apiData[field] || '';
+      }
+      // If it's undefined/null, ensure it's at least an empty string if required (though null might be valid for some)
+      // But for "Must declare", the key must exist.
+      if (payload[field] === undefined) {
+        payload[field] = apiData[field] || '';
+      }
+    });
 
     return payload;
   };
@@ -2044,18 +1973,11 @@ export default function CompletePurchaseOrderFormEdit() {
     }
 
     try {
-      let payload = buildUpdatePayload(data, customers, suppliers, merchants, productPortfolios, productCategories, productGroups);
+      const payload = buildUpdatePayload(data, customers, suppliers, merchants, productPortfolios, productCategories, productGroups);
       if (!payload) {
         showSnackbar('Unable to build update payload. Please reload the page.', 'error');
         return;
       }
-
-      payload = await applyAttachmentsToPayload(payload, data, apiData);
-
-      console.log('[My Orders Edit Save] PO ID:', id);
-      console.log('[My Orders Edit Save] Form data:', data);
-      console.log('[My Orders Edit Save] Update PO payload:', payload);
-      console.log('[My Orders Edit Save] Item rows:', savedItemData);
 
       await apiClient.post(`/MyOrders/UpdatePurchaseOrder?poid=${id}`, payload);
 
@@ -2090,8 +2012,6 @@ export default function CompletePurchaseOrderFormEdit() {
             sizeRangeDBID: Number(row.sizeRangeDBID ?? 0),
             productCode: row.productCode || '',
           };
-
-          console.log(`[My Orders Edit Save] Style payload (styleId=${row.styleId}):`, stylePayload);
 
           try {
             await apiClient.post(
@@ -2141,7 +2061,6 @@ export default function CompletePurchaseOrderFormEdit() {
   }
 
   return (
-    <AttachmentAssetsContext.Provider value={attachmentContextValue}>
     <FormProvider {...methods}>
       <Box
         sx={(theme) => ({
@@ -3532,6 +3451,5 @@ export default function CompletePurchaseOrderFormEdit() {
         </Alert>
       </Snackbar>
     </FormProvider>
-    </AttachmentAssetsContext.Provider>
   );
 }

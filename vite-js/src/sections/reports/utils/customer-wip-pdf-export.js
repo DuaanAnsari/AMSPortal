@@ -1,92 +1,28 @@
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+import {
+  CUSTOMER_WIP_TABLE_HEADERS,
+  customerWipPdfRowToTableCells,
+  preloadCustomerWipPoImageDimensions,
+} from './customer-wip-report-map';
 
 const LOGO_PATH = `${import.meta.env.BASE_URL}logo/AMSlogo.png`;
 
 const V_MARGIN = 10;
-const H_MARGIN = 14;
-const HEADER_BLOCK_H = 102;
-const TABLE_HEADER_ROW_H = 40;
-const DATA_ROW_H = 62;
-const FOOTER_H = 26;
+const H_MARGIN = 12;
+const HEADER_BLOCK_H = 98;
+const FOOTER_H = 24;
 const TITLE_BLUE = [0, 51, 153];
-const RED = [200, 0, 0];
+const IMAGE_COL_INDEX = 1;
+const IMAGE_BOX_PT = { w: 34, h: 40 };
+const MIN_DATA_ROW_H = 44;
 
 const PAGE_W = 842;
 const PAGE_H = 595;
 
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
-
-/** Demo rows — replace with API rows when backend is ready. */
-export const CUSTOMER_WIP_DEMO_ROWS = [
-  {
-    imageKind: 'swatch',
-    swatch: { fill: [175, 220, 230] },
-    poLines: ['38831-MP O-NAVY', 'LR3015', 'NA'],
-    totalQty: 3984,
-    shipment: '03/15/2026',
-    mos: 'SEA',
-    itemLines: ['MEN', 'MENS PULLOVER HOODY'],
-    fabricLines: ['FLEECE', '80% COTTON 10% POLYESTER 10% RECYCLED', '280 GSM'],
-    colorQty: '1- (NAVY_3984)',
-    statusCells: ['0', '0', '0', '0', '0', '0', '0', '', '', '', '', ''],
-    productionStatus: 'N/A',
-  },
-  {
-    imageKind: 'none',
-    poLines: ['38831-MC S-LAVE', 'LR3016', 'NA'],
-    totalQty: 1824,
-    shipment: '03/15/2026',
-    mos: 'SEA',
-    itemLines: ['MEN', 'CREW SWEAT'],
-    fabricLines: ['FLEECE', '80% COTTON 10% POLYESTER 10% RECYCLED', '280 GSM'],
-    colorQty: '1- (LAVENDER_1824)',
-    statusCells: ['0', '0', '0', '0', '0', '0', '0', '', '', '', '', ''],
-    productionStatus: 'N/A',
-  },
-];
-
-const HEADERS = [
-  'Image',
-  'PO No.\n/ Style /\nProd Code',
-  'Total\nQTY',
-  'Shipment\nDate',
-  'MOS',
-  'Item\nDescription',
-  'Fabric /\nContent /\nGSM',
-  'Color /\nQty',
-  'Lab\nDip',
-  'Proto /\nFIT',
-  'Dye Lot /\nBlanket',
-  'Print Emb /\nStrike off',
-  'PP Sample\nto',
-  'Knitting /\nFabric In house',
-  'Dying',
-  'Cutting\nPCS',
-  'Print /\nEmb. PCS',
-  'Stitching',
-  'Garment\nWash',
-  'Packing\nPCS',
-  'Production\nStatus',
-];
-
-/** Relative weights → scaled to inner table width (21 cols; Item before Fabric per reference). */
-const COL_WEIGHTS = [
-  38, 52, 30, 34, 26, 42, 66, 38, 20, 20, 20, 20, 20, 22, 20, 22, 22, 22, 22, 22, 44,
-];
-
-function colWidths(innerW) {
-  const sum = COL_WEIGHTS.reduce((a, b) => a + b, 0);
-  const out = COL_WEIGHTS.map((w) => (w / sum) * innerW);
-  const drift = innerW - out.reduce((a, b) => a + b, 0);
-  out[out.length - 1] += drift;
-  return out;
-}
-
-function colXs(x0, widths) {
-  const xs = [x0];
-  for (let i = 0; i < widths.length; i += 1) xs.push(xs[i] + widths[i]);
-  return xs;
-}
+const PDF_FILENAME = 'Customer_WIP_Report.pdf';
 
 async function loadLogoDataUrl() {
   const res = await fetch(LOGO_PATH);
@@ -118,201 +54,17 @@ function formatPrintStamp() {
   return `Print Date: ${date} ${time}`;
 }
 
-function drawBlueBoldUnderline(doc, text, x, y, maxW) {
-  doc.setTextColor(TITLE_BLUE[0], TITLE_BLUE[1], TITLE_BLUE[2]);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  const lines = doc.splitTextToSize(String(text), maxW);
-  let yy = y;
-  lines.forEach((line) => {
-    doc.text(line, x, yy);
-    const tw = doc.getTextWidth(line);
-    doc.setDrawColor(TITLE_BLUE[0], TITLE_BLUE[1], TITLE_BLUE[2]);
-    doc.setLineWidth(0.35);
-    doc.line(x, yy + 2, x + tw, yy + 2);
-    yy += 12;
-  });
-  doc.setTextColor(0, 0, 0);
-  return yy;
+function jsPdfImageFormatFromDataUrl(dataUrl) {
+  const m = /^data:image\/(\w+);/i.exec(String(dataUrl || ''));
+  if (!m) return 'JPEG';
+  const t = m[1].toLowerCase();
+  if (t === 'png') return 'PNG';
+  if (t === 'webp') return 'WEBP';
+  if (t === 'gif') return 'GIF';
+  return 'JPEG';
 }
 
-function drawCellBorder(doc, x, y, w, h) {
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.25);
-  doc.rect(x, y, w, h);
-}
-
-function drawHeaderCell(doc, x, y, w, h, headerText) {
-  doc.setFillColor(220, 220, 222);
-  doc.rect(x, y, w, h, 'F');
-  drawCellBorder(doc, x, y, w, h);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(0, 0, 0);
-  const parts = String(headerText || '—')
-    .split('\n')
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
-  if (parts.length === 0) parts.push('—');
-
-  let fs = 5.4;
-  doc.setFontSize(fs);
-  let lines = [];
-  parts.forEach((p) => {
-    lines.push(...doc.splitTextToSize(p, Math.max(4, w - 4)));
-  });
-  if (lines.length > 5) {
-    fs = 4.7;
-    doc.setFontSize(fs);
-    lines = [];
-    parts.forEach((p) => {
-      lines.push(...doc.splitTextToSize(p, Math.max(4, w - 4)));
-    });
-  }
-
-  const lineH = fs * 1.15;
-  const block = lines.length * lineH;
-  const yMid = y + h / 2;
-  const firstY = yMid - (block - lineH) / 2;
-  lines.slice(0, 7).forEach((ln, i) => {
-    doc.text(ln, x + w / 2, firstY + i * lineH, {
-      align: 'center',
-      baseline: 'middle',
-      maxWidth: w - 3,
-    });
-  });
-}
-
-function drawMultilineCell(doc, x, y, w, h, lines, align = 'left', fontSize = 5.6) {
-  drawCellBorder(doc, x, y, w, h);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(RED[0], RED[1], RED[2]);
-  doc.setFontSize(fontSize);
-  const maxW = Math.max(4, w - 4);
-  const flat = [];
-  (lines || []).forEach((ln) => {
-    flat.push(...doc.splitTextToSize(String(ln), maxW));
-  });
-  const lineH = fontSize * 1.12;
-  const block = flat.length * lineH;
-  const yMid = y + h / 2;
-  const firstY = yMid - (block - lineH) / 2;
-  const xText = align === 'center' ? x + w / 2 : x + 2;
-  flat.slice(0, 10).forEach((ln, i) => {
-    doc.text(ln, xText, firstY + i * lineH, {
-      align,
-      baseline: 'middle',
-      maxWidth: maxW,
-    });
-  });
-  doc.setTextColor(0, 0, 0);
-}
-
-function drawImageCell(doc, x, y, w, h, row) {
-  drawCellBorder(doc, x, y, w, h);
-  if (row.imageKind === 'swatch' && row.swatch?.fill) {
-    const [r, g, b] = row.swatch.fill;
-    doc.setFillColor(r, g, b);
-    doc.rect(x + 2, y + 2, w - 4, h - 4, 'F');
-    if (row.swatch.stripe) {
-      const [sr, sg, sb] = row.swatch.stripe;
-      doc.setFillColor(sr, sg, sb);
-      doc.rect(x + w * 0.55, y + 2, 4, h - 4, 'F');
-    }
-    doc.setDrawColor(0, 0, 0);
-    doc.setLineWidth(0.2);
-    doc.rect(x + 2, y + 2, w - 4, h - 4, 'S');
-    return;
-  }
-  doc.setFillColor(232, 232, 232);
-  doc.rect(x + 1, y + 1, w - 2, h - 2, 'F');
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.2);
-  doc.rect(x + 1, y + 1, w - 2, h - 2, 'S');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(4.9);
-  doc.setTextColor(RED[0], RED[1], RED[2]);
-  const cy = y + h / 2;
-  doc.text('NO IMAGE', x + w / 2, cy - 4.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
-  doc.text('AVAILABLE', x + w / 2, cy + 4.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
-  doc.setTextColor(0, 0, 0);
-}
-
-function drawTotalQtyCell(doc, x, y, w, h, qty) {
-  drawCellBorder(doc, x, y, w, h);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.setTextColor(RED[0], RED[1], RED[2]);
-  doc.text(String(qty ?? ''), x + w - 3, y + h / 2, { align: 'right', baseline: 'middle' });
-  doc.setTextColor(0, 0, 0);
-}
-
-function drawCenterTextCell(doc, x, y, w, h, text, fontSize = 6) {
-  drawCellBorder(doc, x, y, w, h);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(RED[0], RED[1], RED[2]);
-  doc.setFontSize(fontSize);
-  doc.text(String(text ?? ''), x + w / 2, y + h / 2, {
-    align: 'center',
-    baseline: 'middle',
-    maxWidth: w - 3,
-  });
-  doc.setTextColor(0, 0, 0);
-}
-
-function drawStatusValueCell(doc, x, y, w, h, val) {
-  drawCellBorder(doc, x, y, w, h);
-  const s = val == null ? '' : String(val);
-  if (s === '') return;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.setTextColor(RED[0], RED[1], RED[2]);
-  doc.text(s, x + w / 2, y + h / 2, { align: 'center', baseline: 'middle' });
-  doc.setTextColor(0, 0, 0);
-}
-
-function drawTableHeaderRow(doc, y, x0, widths) {
-  const xs = colXs(x0, widths);
-  for (let i = 0; i < HEADERS.length; i += 1) {
-    drawHeaderCell(doc, xs[i], y, widths[i], TABLE_HEADER_ROW_H, HEADERS[i]);
-  }
-  return y + TABLE_HEADER_ROW_H;
-}
-
-function drawDataRow(doc, y, x0, widths, row) {
-  const xs = colXs(x0, widths);
-  let i = 0;
-  drawImageCell(doc, xs[i], y, widths[i], DATA_ROW_H, row);
-  i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.poLines, 'left', 5.5);
-  i += 1;
-  drawTotalQtyCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.totalQty);
-  i += 1;
-  drawCenterTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.shipment, 6);
-  i += 1;
-  drawCenterTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.mos, 5.8);
-  i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.itemLines, 'left', 5.6);
-  i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.fabricLines, 'left', 5.2);
-  i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, [row.colorQty], 'left', 5.4);
-  i += 1;
-  const cells = row.statusCells || [];
-  for (let k = 0; k < 12; k += 1) {
-    drawStatusValueCell(doc, xs[i], y, widths[i], DATA_ROW_H, cells[k]);
-    i += 1;
-  }
-  drawCenterTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.productionStatus, 6);
-  return y + DATA_ROW_H;
-}
-
-function drawOuterTableFrame(doc, x, y, w, h) {
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.45);
-  doc.rect(x, y, w, h);
-}
-
-function drawPageHeader(doc, logoDataUrl, meta) {
+function drawPageHeader(doc, logoDataUrl, meta, startY) {
   const innerLeft = H_MARGIN;
   const innerRight = PAGE_W - H_MARGIN;
   const logoW = 78;
@@ -321,17 +73,23 @@ function drawPageHeader(doc, logoDataUrl, meta) {
   const logoY = V_MARGIN + 4;
   const leftMaxW = Math.max(120, logoX - innerLeft - 8);
 
-  let y = V_MARGIN + 10;
-  y =
-    drawBlueBoldUnderline(
-      doc,
-      'Customer WIP Report / Summary of Production Status',
-      innerLeft,
-      y,
-      leftMaxW
-    ) + 2;
+  let y = startY ?? V_MARGIN + 10;
+  doc.setTextColor(TITLE_BLUE[0], TITLE_BLUE[1], TITLE_BLUE[2]);
   doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  const title = 'Customer WIP Report / Summary of Production Status Report';
+  const titleLines = doc.splitTextToSize(title, leftMaxW);
+  titleLines.forEach((line) => {
+    doc.text(line, innerLeft, y);
+    const tw = doc.getTextWidth(line);
+    doc.setDrawColor(TITLE_BLUE[0], TITLE_BLUE[1], TITLE_BLUE[2]);
+    doc.setLineWidth(0.35);
+    doc.line(innerLeft, y + 2, innerLeft + tw, y + 2);
+    y += 12;
+  });
+
   doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.2);
   doc.text(`Customer: ${meta.customerLabel ?? 'All'}`, innerLeft, y);
   y += 11;
@@ -376,16 +134,64 @@ function drawFooter(doc, pageIndex, totalPages) {
     align: 'center',
     baseline: 'bottom',
   });
-  const sigW = 72;
-  const sigX = PAGE_W - H_MARGIN - sigW;
-  doc.setLineWidth(0.35);
-  doc.line(sigX, fy - 10, sigX + sigW, fy - 10);
-  doc.setFontSize(6.8);
-  doc.text('Head of Dept.', sigX + sigW / 2, fy - 2, { align: 'center', baseline: 'bottom' });
+}
+
+function drawImagePlaceholder(doc, x, y, w, h) {
+  doc.setFillColor(240, 240, 240);
+  doc.rect(x, y, w, h, 'F');
+  doc.setDrawColor(180, 180, 180);
+  doc.setLineWidth(0.25);
+  doc.rect(x, y, w, h, 'S');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(5);
+  doc.setTextColor(120, 120, 120);
+  doc.text('No Image', x + w / 2, y + h / 2 - 3, { align: 'center', baseline: 'middle' });
+  doc.text('Available', x + w / 2, y + h / 2 + 5, { align: 'center', baseline: 'middle' });
+  doc.setTextColor(0, 0, 0);
+}
+
+function drawPoImageInCell(doc, row, cell) {
+  const pad = 2;
+  const boxW = Math.min(IMAGE_BOX_PT.w, cell.width - pad * 2);
+  const boxH = Math.min(IMAGE_BOX_PT.h, cell.height - pad * 2);
+  const cx = cell.x + (cell.width - boxW) / 2;
+  const cy = cell.y + (cell.height - boxH) / 2;
+
+  const url = row?.poImageDataUrl;
+  const nw = Number(row?._poImageNaturalW) || 0;
+  const nh = Number(row?._poImageNaturalH) || 0;
+
+  if (!url || nw <= 0 || nh <= 0) {
+    drawImagePlaceholder(doc, cx, cy, boxW, boxH);
+    return;
+  }
+
+  const scale = Math.min(boxW / nw, boxH / nh);
+  const iw = nw * scale;
+  const ih = nh * scale;
+  const ix = cx + (boxW - iw) / 2;
+  const iy = cy + (boxH - ih) / 2;
+
+  try {
+    doc.addImage(url, jsPdfImageFormatFromDataUrl(url), ix, iy, iw, ih, undefined, 'FAST');
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.2);
+    doc.rect(cx, cy, boxW, boxH, 'S');
+  } catch {
+    drawImagePlaceholder(doc, cx, cy, boxW, boxH);
+  }
+}
+
+function drawNoDataFound(doc, tableTop) {
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(80, 80, 80);
+  doc.text('No Data Found', PAGE_W / 2, tableTop + 40, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
 }
 
 /**
- * @param {object[]} [rows] — when empty or omitted, uses {@link CUSTOMER_WIP_DEMO_ROWS}
+ * @param {object[]} mappedRows — rows from {@link mapApiRowToCustomerWipPdfRow}
  * @param {{
  *   customerLabel?: string;
  *   supplierLabel?: string;
@@ -394,44 +200,72 @@ function drawFooter(doc, pageIndex, totalPages) {
  *   toDate?: string;
  * }} [meta]
  */
-export async function buildCustomerWipPdfBlobFromRows(rows, meta = {}) {
-  const data = Array.isArray(rows) && rows.length > 0 ? rows : CUSTOMER_WIP_DEMO_ROWS;
+export async function buildCustomerWipPdfBlobFromRows(mappedRows, meta = {}) {
+  const rows = Array.isArray(mappedRows) ? mappedRows : [];
+
+  await preloadCustomerWipPoImageDimensions(rows);
+
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
   const logoDataUrl = await loadLogoDataUrl().catch(() => null);
+  const tableTop = drawPageHeader(doc, logoDataUrl, meta);
 
-  const innerLeft = H_MARGIN;
-  const innerW = PAGE_W - 2 * H_MARGIN;
-  const widths = colWidths(innerW);
-
-  const pageBodyBottom = PAGE_H - V_MARGIN - FOOTER_H;
-  let tableSegTop = 0;
-  let y = 0;
-
-  const startPage = () => {
-    const tableTop = drawPageHeader(doc, logoDataUrl, meta);
-    tableSegTop = tableTop;
-    y = drawTableHeaderRow(doc, tableTop, innerLeft, widths);
-  };
-
-  const flushSegmentFrame = () => {
-    const h = y - tableSegTop;
-    if (h > 0) {
-      drawOuterTableFrame(doc, innerLeft, tableSegTop, innerW, h);
+  if (!rows.length) {
+    drawNoDataFound(doc, tableTop);
+    const total = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= total; p += 1) {
+      doc.setPage(p);
+      drawFooter(doc, p, total);
     }
-  };
+    return doc.output('blob');
+  }
 
-  startPage();
+  const body = rows.map((row) => customerWipPdfRowToTableCells(row));
 
-  data.forEach((row) => {
-    if (y + DATA_ROW_H > pageBodyBottom) {
-      flushSegmentFrame();
-      doc.addPage([PAGE_W, PAGE_H], 'l');
-      startPage();
-    }
-    y = drawDataRow(doc, y, innerLeft, widths, row);
+  autoTable(doc, {
+    startY: tableTop,
+    head: [CUSTOMER_WIP_TABLE_HEADERS],
+    body,
+    theme: 'grid',
+    margin: { left: H_MARGIN, right: H_MARGIN, top: tableTop, bottom: V_MARGIN + FOOTER_H },
+    tableWidth: PAGE_W - 2 * H_MARGIN,
+    styles: {
+      font: 'helvetica',
+      fontSize: 5.2,
+      cellPadding: 2,
+      overflow: 'linebreak',
+      valign: 'middle',
+      lineColor: [0, 0, 0],
+      lineWidth: 0.25,
+      textColor: [0, 0, 0],
+    },
+    headStyles: {
+      fillColor: [220, 220, 222],
+      textColor: [0, 0, 0],
+      fontStyle: 'bold',
+      fontSize: 4.8,
+      halign: 'center',
+      valign: 'middle',
+    },
+    bodyStyles: {
+      minCellHeight: MIN_DATA_ROW_H,
+    },
+    columnStyles: {
+      0: { cellWidth: 36, halign: 'left' },
+      1: { cellWidth: 40, halign: 'center' },
+      2: { cellWidth: 38 },
+      3: { cellWidth: 42 },
+      4: { cellWidth: 42 },
+      5: { cellWidth: 40 },
+      6: { cellWidth: 38, halign: 'center' },
+      7: { cellWidth: 32, halign: 'right' },
+    },
+    didDrawCell: (data) => {
+      if (data.section !== 'body' || data.column.index !== IMAGE_COL_INDEX) return;
+      const row = rows[data.row.index];
+      if (!row) return;
+      drawPoImageInCell(doc, row, data.cell);
+    },
   });
-
-  flushSegmentFrame();
 
   const total = doc.internal.getNumberOfPages();
   for (let p = 1; p <= total; p += 1) {
@@ -458,10 +292,12 @@ export function openCustomerWipPdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Customer-WIP-Report.pdf';
+  a.download = PDF_FILENAME;
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
 }
+
+export { PDF_VIEW_ZOOM_HASH };

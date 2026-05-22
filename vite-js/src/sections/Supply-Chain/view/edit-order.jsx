@@ -48,25 +48,48 @@ const normalizePaymentModes = (list = []) =>
         };
     }).filter((p) => p.id || p.name);
 
-const normalizeShipmentTerms = (list = []) =>
-    list.map((s) => {
-        const id = String(s.deliveryTypeID ?? s.shipmentTermID ?? s.id ?? s.code ?? s.value ?? '');
-        const name = s.deliveryType ?? s.deliveryTypeName ?? s.shipmentTerm ?? s.name ?? s.description ?? '';
+const normalizeLookupOptions = (list = []) =>
+    (list || []).map((item) => {
+        const id = item.id ?? item.shipmentModeID ?? item.deliveryTypeID ?? item.code ?? item.value ?? '';
+        const name = item.name ?? item.shipmentMode ?? item.shipmentModeName ?? item.deliveryType ?? item.deliveryTypeName ?? item.description ?? '';
         return {
-            id: id || name,
-            name: name || id,
+            id: id === '' || id == null ? '' : String(id),
+            name: name || (id !== '' && id != null ? String(id) : ''),
         };
-    }).filter((s) => s.id || s.name);
+    }).filter((item) => item.id !== '' && item.id != null);
 
-const normalizeShipmentModes = (list = []) =>
-    list.map((d) => {
-        const id = String(d.shipmentModeID ?? d.DeliveryModeID ?? d.deliveryModeID ?? d.deliveryTypeID ?? d.id ?? d.code ?? d.value ?? '');
-        const name = d.shipmentMode ?? d.shipmentModeName ?? d.ShipmentMode ?? d.ShipmentModeName ?? d.deliveryType ?? d.deliveryTypeName ?? d.name ?? d.description ?? '';
-        return {
-            id: id || name,
-            name: name || id,
-        };
-    }).filter((d) => d.id || d.name);
+const resolveLookupId = (lookupArray = [], value) => {
+    if (value == null || value === '') return '';
+    const byId = lookupArray.find((x) => Number(x.id) === Number(value));
+    if (byId) return byId.id;
+    const byName = lookupArray.find((x) => x.name === value);
+    return byName ? byName.id : value;
+};
+
+const resolveLookupDisplayName = (value, primaryLookup = [], fallbackLookup = []) => {
+    if (value == null || value === '') return '';
+    const primaryMatch = primaryLookup.find((x) => Number(x.id) === Number(value));
+    const fallbackMatch = fallbackLookup.find((x) => Number(x.id) === Number(value));
+    return primaryMatch?.name || fallbackMatch?.name || value;
+};
+
+const createShipmentModeRenderer = (shipmentModes = [], deliveryTypes = []) => (params) => {
+    console.log('Shipment Value:', params.value);
+    const shipmentMatch = shipmentModes.find((x) => Number(x.id) === Number(params.value));
+    const deliveryMatch = deliveryTypes.find((x) => Number(x.id) === Number(params.value));
+    console.log('Shipment Match:', shipmentMatch);
+    console.log('Delivery Fallback Match:', deliveryMatch);
+    return shipmentMatch?.name || deliveryMatch?.name || params.value || '';
+};
+
+const createDeliveryTypeRenderer = (deliveryTypes = [], shipmentModes = []) => (params) => {
+    console.log('Delivery Value:', params.value);
+    const deliveryMatch = deliveryTypes.find((x) => Number(x.id) === Number(params.value));
+    const shipmentMatch = shipmentModes.find((x) => Number(x.id) === Number(params.value));
+    console.log('Delivery Match:', deliveryMatch);
+    console.log('Shipment Fallback Match:', shipmentMatch);
+    return deliveryMatch?.name || shipmentMatch?.name || params.value || '';
+};
 
 // Helper function to transform API data to grid format
 const transformPODataToGridRow = (orderData, options = {}) => {
@@ -173,10 +196,9 @@ const transformPODataToGridRow = (orderData, options = {}) => {
         style: orderData.styleNo || orderData.design || '',
         // Shipping and Payment Terms
         paymentMode: findNameSimple(options.paymentOptions || [], orderData.paymentModeName || orderData.PaymentModeName || orderData.paymentModeText || orderData.paymentMode || orderData.paymentModeID || orderData.paymentType || orderData.paymentTerms) || '',
-        // API Swapped Logic: shipmentOptions (Terms) comes from shipmentMode field, deliveryOptions (Modes) comes from deliveryType field
-        shipmentTerm: findNameSimple(options.shipmentOptions || [], orderData.shipmentModeName || orderData.ShipmentModeName || orderData.shipmentModeText || orderData.terms || orderData.shipmentMode || orderData.shipmentModeID || orderData.shipmentTermID || orderData.deliveryModeID) || findNameSimple(options.deliveryOptions || [], orderData.shipmentModeName || orderData.shipmentMode || orderData.shipmentModeID) || '',
         destination: orderData.destination || '',
-        shipmentMode: findNameSimple(options.deliveryOptions || [], orderData.deliveryTypeName || orderData.DeliveryTypeName || orderData.modeName || orderData.shipmentModeName || orderData.deliveryType || orderData.deliveryTypeID || orderData.deliveryModeID || orderData.shipmentModeID || orderData.shipmentType || orderData.mode) || findNameSimple(options.shipmentOptions || [], orderData.deliveryTypeName || orderData.deliveryType || orderData.deliveryTypeID) || '',
+        shipmentMode: orderData.shipmentMode ?? orderData.shipmentModeID ?? '',
+        deliveryType: orderData.deliveryType ?? orderData.deliveryTypeID ?? '',
     };
 };
 
@@ -225,8 +247,17 @@ const transformGridRowToAPIPayload = (row, options = {}) => {
     const supplierID = findId(options.supplierOptions || [], row.supplier, 'venderName', 'venderLibraryID');
 
     const paymentModeID = findIdSimple(options.paymentOptions || [], row.paymentMode);
-    const shipmentTermID = findIdSimple(options.shipmentOptions || [], row.shipmentTerm);
-    const shipmentModeID = findIdSimple(options.deliveryOptions || [], row.shipmentMode);
+    const selectedShipmentMode = resolveLookupId(options.shipmentModeOptions || [], row.shipmentMode);
+    const selectedDeliveryType = resolveLookupId(options.deliveryTypeOptions || [], row.deliveryType);
+
+    console.log({
+        gridShipmentMode: row.shipmentMode,
+        gridDeliveryType: row.deliveryType,
+        selectedShipmentMode,
+        selectedDeliveryType,
+        shipmentMode: selectedShipmentMode || original.shipmentMode || '',
+        deliveryType: selectedDeliveryType || original.deliveryType || '',
+    });
 
     // Overwrite with grid values
     Object.assign(payload, {
@@ -302,9 +333,9 @@ const transformGridRowToAPIPayload = (row, options = {}) => {
 
         // Shipping and Payment Terms
         paymentMode: paymentModeID || '',
-        shipmentMode: shipmentTermID || '',
-        deliveryType: shipmentModeID || '',
-        shipmentModeText: shipmentModeID || '',
+        shipmentMode: selectedShipmentMode || original.shipmentMode || '',
+        deliveryType: selectedDeliveryType || original.deliveryType || '',
+        shipmentModeText: selectedShipmentMode || original.shipmentModeText || '',
         destination: row.destination || '',
 
         // IDs (parse as numbers if present)
@@ -392,8 +423,8 @@ const EditOrderPage = () => {
     const [productGroups, setProductGroups] = useState([]);
     const [inquiryOptions, setInquiryOptions] = useState([]);
     const [paymentOptions, setPaymentOptions] = useState([]);
-    const [shipmentOptions, setShipmentOptions] = useState([]); // Delivery Types
-    const [deliveryOptions, setDeliveryOptions] = useState([]); // Shipment Modes
+    const [shipmentModeOptions, setShipmentModeOptions] = useState([]);
+    const [deliveryTypeOptions, setDeliveryTypeOptions] = useState([]);
     const [bankOptions, setBankOptions] = useState([]);
 
     // Combined options object for helpers
@@ -407,10 +438,10 @@ const EditOrderPage = () => {
         productGroups,
         inquiryOptions,
         paymentOptions,
-        shipmentOptions,
-        deliveryOptions,
+        shipmentModeOptions,
+        deliveryTypeOptions,
         bankOptions
-    }), [costingOptions, customerOptions, supplierOptions, merchantOptions, productPortfolios, productCategories, productGroups, inquiryOptions, paymentOptions, shipmentOptions, deliveryOptions, bankOptions]);
+    }), [costingOptions, customerOptions, supplierOptions, merchantOptions, productPortfolios, productCategories, productGroups, inquiryOptions, paymentOptions, shipmentModeOptions, deliveryTypeOptions, bankOptions]);
 
     // Fetch Options
     useEffect(() => {
@@ -423,8 +454,8 @@ const EditOrderPage = () => {
                 { name: 'portfolios', url: '/MyOrders/GetProductPortfolio', setter: setProductPortfolios },
                 { name: 'inquiries', url: '/MyOrders/GetInquirySamples', setter: setInquiryOptions },
                 { name: 'paymentModes', url: '/MyOrders/GetPaymentModes', setter: (d) => setPaymentOptions(normalizePaymentModes(d)) },
-                { name: 'shipmentModes', url: '/MyOrders/GetDeliveryTypes', setter: (d) => setShipmentOptions(normalizeShipmentTerms(d)) }, // Term/DeliveryType
-                { name: 'deliveryTypes', url: '/MyOrders/GetShipmentModes', setter: (d) => setDeliveryOptions(normalizeShipmentModes(d)) }, // Mode
+                { name: 'shipmentModes', url: '/MyOrders/GetShipmentModes', setter: (d) => setShipmentModeOptions(normalizeLookupOptions(d)) },
+                { name: 'deliveryTypes', url: '/MyOrders/GetDeliveryTypes', setter: (d) => setDeliveryTypeOptions(normalizeLookupOptions(d)) },
                 { name: 'banks', url: '/MyOrders/GetBanks', setter: setBankOptions },
             ];
 
@@ -588,6 +619,15 @@ const EditOrderPage = () => {
         }
     }, [rawData, allOptions]);
 
+    // Refresh lookup columns after async options load so names render instead of raw IDs
+    useEffect(() => {
+        if (gridRef.current?.api && (shipmentModeOptions.length > 0 || deliveryTypeOptions.length > 0)) {
+            gridRef.current.api.refreshCells({
+                columns: ['shipmentMode', 'deliveryType'],
+                force: true,
+            });
+        }
+    }, [shipmentModeOptions, deliveryTypeOptions]);
 
     // Column definitions
     const columnDefs = useMemo(() => [
@@ -733,22 +773,62 @@ const EditOrderPage = () => {
                 values: paymentOptions.map(o => o.name)
             }
         },
-        {
-            headerName: "Shipment Term", field: "shipmentTerm",
-            cellEditor: 'agSelectCellEditor',
-            cellEditorParams: {
-                values: shipmentOptions.map(o => o.name)
-            }
-        },
         { headerName: "Destination", field: "destination" },
         {
-            headerName: "Shipment Mode", field: "shipmentMode",
+            headerName: 'Shipment Mode',
+            field: 'shipmentMode',
+            cellRenderer: createShipmentModeRenderer(shipmentModeOptions, deliveryTypeOptions),
             cellEditor: 'agSelectCellEditor',
             cellEditorParams: {
-                values: deliveryOptions.map(o => o.name)
-            }
+                values: shipmentModeOptions.map((o) => o.name),
+            },
+            valueSetter: (params) => {
+                if (params.newValue == null || params.newValue === '') {
+                    params.data.shipmentMode = '';
+                    return true;
+                }
+                const matched = shipmentModeOptions.find((x) => x.name === params.newValue);
+                params.data.shipmentMode = matched ? matched.id : params.newValue;
+                return true;
+            },
+            filterValueGetter: (params) => {
+                const cellValue = params.data?.shipmentMode;
+                return resolveLookupDisplayName(cellValue, shipmentModeOptions, deliveryTypeOptions);
+            },
+            comparator: (valueA, valueB) => {
+                const nameA = resolveLookupDisplayName(valueA, shipmentModeOptions, deliveryTypeOptions);
+                const nameB = resolveLookupDisplayName(valueB, shipmentModeOptions, deliveryTypeOptions);
+                return String(nameA).localeCompare(String(nameB));
+            },
         },
-    ], [allOptions]);
+        {
+            headerName: 'Delivery Type',
+            field: 'deliveryType',
+            cellRenderer: createDeliveryTypeRenderer(deliveryTypeOptions, shipmentModeOptions),
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: {
+                values: deliveryTypeOptions.map((o) => o.name),
+            },
+            valueSetter: (params) => {
+                if (params.newValue == null || params.newValue === '') {
+                    params.data.deliveryType = '';
+                    return true;
+                }
+                const matched = deliveryTypeOptions.find((x) => x.name === params.newValue);
+                params.data.deliveryType = matched ? matched.id : params.newValue;
+                return true;
+            },
+            filterValueGetter: (params) => {
+                const cellValue = params.data?.deliveryType;
+                return resolveLookupDisplayName(cellValue, deliveryTypeOptions, shipmentModeOptions);
+            },
+            comparator: (valueA, valueB) => {
+                const nameA = resolveLookupDisplayName(valueA, deliveryTypeOptions, shipmentModeOptions);
+                const nameB = resolveLookupDisplayName(valueB, deliveryTypeOptions, shipmentModeOptions);
+                return String(nameA).localeCompare(String(nameB));
+            },
+        },
+    ], [allOptions, shipmentModeOptions, deliveryTypeOptions]);
 
     // Default column settings - all columns editable for drag-fill
     const defaultColDef = useMemo(() => ({
@@ -764,7 +844,7 @@ const EditOrderPage = () => {
 
     // Handle Save/Update all POs
     const handleSaveAll = async () => {
-        console.log('[My Orders Edit Save] === SAVE ALL STARTED ===');
+        console.log('=== SAVE ALL STARTED ===');
         console.log('gridRef.current:', gridRef.current);
         console.log('gridRef.current?.api:', gridRef.current?.api);
 
@@ -788,9 +868,8 @@ const EditOrderPage = () => {
             return;
         }
 
-        console.log('[My Orders Edit Save] Total rows to save:', rowData.length);
-        console.log('[My Orders Edit Save] Grid row data:', rowData);
-        console.log('[My Orders Edit Save] Grid row data (JSON):', JSON.stringify(rowData, null, 2));
+        console.log('Total rows to save:', rowData.length);
+        console.log('Row data:', JSON.stringify(rowData, null, 2));
 
         if (rowData.length === 0) {
             showSnackbar('No data to save', 'warning');
@@ -816,9 +895,8 @@ const EditOrderPage = () => {
                 try {
                     const payload = transformGridRowToAPIPayload(row, allOptions);
                     const apiUrl = `/MyOrders/UpdatePurchaseOrder?poid=${row.poid}`;
-                    console.log(`[My Orders Edit Save] API URL: ${apiUrl}`);
-                    console.log(`[My Orders Edit Save] Payload for PO ${row.poid}:`, payload);
-                    console.log(`[My Orders Edit Save] Payload for PO ${row.poid} (JSON):`, JSON.stringify(payload, null, 2));
+                    console.log(`API URL: ${apiUrl}`);
+                    console.log(`Payload for PO ${row.poid}:`, JSON.stringify(payload, null, 2));
 
                     const response = await apiClient.post(apiUrl, payload);
                     console.log(`Response for PO ${row.poid}:`, response);
@@ -832,7 +910,7 @@ const EditOrderPage = () => {
                 }
             }
 
-            console.log('[My Orders Edit Save] === SAVE ALL COMPLETED ===');
+            console.log('=== SAVE ALL COMPLETED ===');
             console.log(`Success: ${successCount}, Errors: ${errorCount}`);
             console.log('Errors:', errors);
 
