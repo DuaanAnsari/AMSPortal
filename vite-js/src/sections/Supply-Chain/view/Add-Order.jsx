@@ -2698,7 +2698,7 @@ export default function CompletePurchaseOrderForm() {
             hasFiles = true;
           }
           if (data.ppComment instanceof File) {
-            formData.append('pplImage', data.ppComment);
+            formData.append('ppImage', data.ppComment);  // fixed: was 'pplImage', API expects 'ppImage'
             hasFiles = true;
           }
           if (data.finalSpecs instanceof File) {

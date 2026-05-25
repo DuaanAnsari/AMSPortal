@@ -434,7 +434,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
     itemDescription: poData.itemDescriptionShippingInvoice || '',
     exFactory: (poData.shipmentDate && !poData.shipmentDate.startsWith('1900-01-01')) ? new Date(poData.shipmentDate).toLocaleDateString('en-US') : '',
     finalInspection: (poData.finalInspDate && !poData.finalInspDate.startsWith('1900-01-01')) ? new Date(poData.finalInspDate).toLocaleDateString('en-US') : '',
-    leadTime: poData.timeSpame ? `${poData.timeSpame} Days` : '',
+    leadtime: poData.leadtime ? `${poData.leadtime} Days` : '',
     fabric: {
       description: 'Body',
       fabric: poData.fabric || '',
@@ -830,7 +830,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                   <Typography sx={{ fontSize: '9.5px', fontWeight: 'bold' }}>Ex-Factory(Ship Date)</Typography>
                   <Typography sx={{ fontSize: '10.5px' }}>{data.exFactory} - {data.exFactory}</Typography>
                   <Typography sx={{ fontSize: '9.5px', fontWeight: 'bold' }}>Lead Time</Typography>
-                  <Typography sx={{ fontSize: '10.5px' }}>{data.leadTime}</Typography>
+                  <Typography sx={{ fontSize: '10.5px' }}>{data.leadtime}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.2, pl: '100px', gap: 1.5 }}>
                   <Typography sx={{ fontSize: '9.5px', fontWeight: 'bold' }}>Final Inspection Date</Typography>
@@ -879,7 +879,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               </Box>
 
               {/* Data Grid - Proper Table for perfect column alignment */}
-              <Table debug size="small" sx={{ borderCollapse: 'collapse', width: '100%', border: '1px solid #000', tableLayout: 'fixed',borderBottom:'1px solid black' }}>
+              <Table debug size="small" sx={{ borderCollapse: 'collapse', width: '100%', border: '1px solid #000', tableLayout: 'fixed', borderBottom: '1px solid black' }}>
                 <colgroup>
                   <col style={{ width: '12.5%' }} />
                   <col style={{ width: '15.5%' }} />
@@ -907,10 +907,10 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.fabric.content}</TableCell>
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.fabric.weight}</TableCell>
                     <TableCell sx={{ borderRight: '1px solid #000', fontSize: '9.5px', p: '4px 8px', verticalAlign: 'middle', lineHeight: 1.2 }}>{data.packingInstructions}</TableCell>
-                    <TableCell sx={{  fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.ration}</TableCell>
+                    <TableCell sx={{ fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.ration}</TableCell>
                   </TableRow>
                   {/* Other Row */}
-                  <TableRow sx={{borderBottom:'1px solid black'}} debug>
+                  <TableRow sx={{ borderBottom: '1px solid black' }} debug>
                     <TableCell debug sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontWeight: 'bold', fontSize: '10px', p: '4px 6px', textAlign: 'center', verticalAlign: 'middle' }}>
                       Other
                     </TableCell>
