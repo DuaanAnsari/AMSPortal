@@ -2151,47 +2151,58 @@ export default function CompletePurchaseOrderFormEdit() {
       try {
         if (id) {
           const formData = new FormData();
-          let hasFiles = false;
 
-          if (data.originalPurchaseOrder instanceof File) {
-            formData.append('orginalpurchaseorder', data.originalPurchaseOrder);
-            hasFiles = true;
-          }
-          if (data.productImage instanceof File) {
-            formData.append('productImage', data.productImage);
-            hasFiles = true;
-          }
-          if (data.processOrderConfirmation instanceof File) {
-            formData.append('process', data.processOrderConfirmation);
-            hasFiles = true;
-          }
-          if (data.ppComment instanceof File) {
-            formData.append('pplImage', data.ppComment);
-            hasFiles = true;
-          }
-          if (data.finalSpecs instanceof File) {
-            formData.append('finalSpecs', data.finalSpecs);
-            hasFiles = true;
-          }
-          if (data.sizeSetComment instanceof File) {
-            formData.append('sizeSet', data.sizeSetComment);
-            hasFiles = true;
-          }
+          const fetchExistingFile = async (url, defaultName) => {
+             try {
+                const response = await fetch(url);
+                const blob = await response.blob();
+                const fileName = url.split('/').pop() || defaultName;
+                return new File([blob], fileName, { type: blob.type });
+             } catch (error) {
+                console.error("Failed to fetch existing file for re-upload:", url);
+                return null;
+             }
+          };
 
-          if (hasFiles) {
-            console.log('📤 Uploading files for PO:', id);
+          const processField = async (fieldName, fileValue, defaultName) => {
+            if (fileValue instanceof File) {
+               formData.append(fieldName, fileValue);
+            } else if (typeof fileValue === 'string' && fileValue.startsWith('http')) {
+               const existingFile = await fetchExistingFile(fileValue, defaultName);
+               if (existingFile) {
+                  formData.append(fieldName, existingFile);
+               }
+            }
+          };
+
+          await processField('orginalpurchaseorder', data.originalPurchaseOrder, 'originalpurchaseorder.pdf');
+          await processField('productImage', data.productImage, 'ProductImage.png');
+          await processField('process', data.processOrderConfirmation, 'ProcessOrderConfirmation.pdf');
+          await processField('pplImage', data.ppComment, 'PPComment.pdf');
+          await processField('finalSpecs', data.finalSpecs, 'FinalSpecs.pdf');
+          await processField('sizeSet', data.sizeSetComment, 'SizeSetComment.pdf');
+
+          console.log('📤 Syncing files for PO:', id);
+          try {
             await apiClient.post(`/MyOrders/UploadPOFiles/${id}`, formData, {
               headers: {
                 'Content-Type': 'multipart/form-data',
               },
               timeout: 60000,
             });
-            console.log('✅ Files uploaded successfully');
+            console.log('✅ Files synced successfully');
+          } catch (apiErr) {
+            // Ignore the 400 error if it just means all files were successfully cleared
+            if (apiErr.response && apiErr.response.status === 400 && apiErr.response.data?.message?.includes("Folder is now empty")) {
+               console.log("✅ All files cleared successfully");
+            } else {
+               throw apiErr;
+            }
           }
         }
       } catch (uploadError) {
-        console.error('❌ Error uploading files:', uploadError);
-        showSnackbar('Purchase Order updated, but file upload failed.', 'warning');
+        console.error('❌ Error syncing files:', uploadError);
+        showSnackbar('Purchase Order updated, but file sync failed.', 'warning');
       }
       // ---------------------------------------------------
 
