@@ -162,7 +162,7 @@ function FullScreenImagePreview({ open, imageUrl, onClose }) {
 }
 
 // -------------------- File Upload Component with Preview --------------------
-function FileUploadWithPreview({ name, label, accept = "image/*" }) {
+function FileUploadWithPreview({ name, label, accept = "*/*" }) {
   const { setValue, watch } = useFormContext();
   const fileInputRef = useRef(null);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -194,12 +194,6 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
     }
   };
 
-  const handlePreviewClick = () => {
-    if (previewUrl) {
-      setFullScreenOpen(true);
-    }
-  };
-
   const handleCloseFullScreen = () => {
     setFullScreenOpen(false);
   };
@@ -207,23 +201,41 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
   useEffect(() => {
     if (fileValue) {
       if (typeof fileValue === 'string') {
-        // Existing image data from API (base64 or URL)
-        if (fileValue.startsWith('data:') || fileValue.startsWith('http')) {
-          setPreviewUrl(fileValue);
-        } else {
-          // Assume raw base64 PNG data
-          setPreviewUrl(`data:image/png;base64,${fileValue}`);
-        }
+        // Existing file data from API (URL)
+        setPreviewUrl(fileValue);
       } else {
-        // New File object – preview already set by handleFileChange
-        // No action needed
+        // New File object – preview for images is already set by handleFileChange
       }
     } else {
       setPreviewUrl('');
     }
   }, [fileValue]);
 
-  const isImage = typeof fileValue === 'string' ? true : fileValue?.type?.startsWith('image/');
+  const isString = typeof fileValue === 'string';
+  const fileNameStr = isString ? fileValue.toLowerCase() : (fileValue?.name || '').toLowerCase();
+  
+  const isImage = fileNameStr.match(/\.(jpeg|jpg|gif|png|webp|svg)$/) != null || fileValue?.type?.startsWith('image/');
+  const isPDF = fileNameStr.endsWith('.pdf') || fileValue?.type === 'application/pdf';
+  const isExcel = fileNameStr.match(/\.(xls|xlsx)$/) != null || fileValue?.type === 'application/vnd.ms-excel' || fileValue?.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const isWord = fileNameStr.match(/\.(doc|docx)$/) != null || fileValue?.type === 'application/msword' || fileValue?.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  const isOtherFile = fileValue && !isImage && !isPDF && !isExcel && !isWord;
+
+  const handlePreviewClick = () => {
+    if (isImage) {
+      setFullScreenOpen(true);
+    } else {
+      // For documents (PDF, Excel, etc.)
+      if (typeof fileValue === 'string' && fileValue) {
+        window.open(fileValue, '_blank');
+      } else if (fileValue instanceof File) {
+        const url = URL.createObjectURL(fileValue);
+        window.open(url, '_blank');
+        // We let the browser handle cleanup when tab is closed
+      } else if (previewUrl) {
+        window.open(previewUrl, '_blank');
+      }
+    }
+  };
 
   return (
     <Box>
@@ -247,7 +259,7 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
         <Box sx={{ mt: 1, p: 1, border: '1px solid #ddd', borderRadius: 1 }}>
           <Grid container alignItems="center" justifyContent="space-between">
             <Grid item>
-              <Typography variant="body2" noWrap>
+              <Typography variant="body2" noWrap sx={{ maxWidth: '200px' }}>
                 {typeof fileValue === 'object' ? fileValue.name : 'Existing file'}
               </Typography>
               <Typography variant="caption" color="success.main">
@@ -265,6 +277,7 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
             </Grid>
           </Grid>
 
+          {/* Image Preview */}
           {isImage && previewUrl && (
             <Box sx={{ mt: 2, textAlign: 'center', position: 'relative' }}>
               <Box
@@ -286,6 +299,10 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
                     maxHeight: '200px',
                     border: '1px solid #ddd',
                     borderRadius: '4px',
+                  }}
+                  onError={(e) => {
+                     // fallback if image breaks
+                     e.target.style.display = 'none';
                   }}
                 />
                 <Box
@@ -313,9 +330,86 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
               </Typography>
             </Box>
           )}
+
+          {/* PDF Preview Button */}
+          {isPDF && (
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                startIcon={<ZoomInIcon />}
+                onClick={handlePreviewClick}
+                sx={{ textTransform: 'none' }}
+              >
+                Open PDF Preview
+              </Button>
+              <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
+                Click to view PDF in new tab
+              </Typography>
+            </Box>
+          )}
+
+          {/* Excel Preview Button */}
+          {isExcel && (
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Button
+                variant="contained"
+                color="success"
+                size="small"
+                startIcon={<ZoomInIcon />}
+                onClick={handlePreviewClick}
+                sx={{ textTransform: 'none' }}
+              >
+                Open Excel Preview
+              </Button>
+              <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
+                Click to view Excel in new tab
+              </Typography>
+            </Box>
+          )}
+
+          {/* Word Preview Button */}
+          {isWord && (
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Button
+                variant="contained"
+                color="info"
+                size="small"
+                startIcon={<UploadFileIcon />}
+                onClick={handlePreviewClick}
+                sx={{ textTransform: 'none' }}
+              >
+                Download Word File
+              </Button>
+              <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
+                Click to download and open Word document
+              </Typography>
+            </Box>
+          )}
+
+          {/* Other Files Preview Button */}
+          {isOtherFile && (
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Button
+                variant="contained"
+                color="secondary"
+                size="small"
+                startIcon={<ZoomInIcon />}
+                onClick={handlePreviewClick}
+                sx={{ textTransform: 'none' }}
+              >
+                Open File
+              </Button>
+              <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
+                Click to view file in new tab
+              </Typography>
+            </Box>
+          )}
         </Box>
       )}
 
+      {/* Full Screen Preview Dialog */}
       <FullScreenImagePreview
         open={fullScreenOpen}
         imageUrl={previewUrl}
@@ -1337,6 +1431,27 @@ export default function CompletePurchaseOrderFormEdit() {
           console.log("=== PURCHASE ORDER GET DATA PAYLOAD ===", orderData);
           setApiData(orderData);
           
+          let poFiles = {};
+          try {
+            const filesResponse = await apiClient.get(`/MyOrders/GetPOFiles/${id}`);
+            if (Array.isArray(filesResponse.data)) {
+              filesResponse.data.forEach(file => {
+                const name = (file.fileName || '').toLowerCase();
+                if (name.includes('originalpurchaseorder') || name.includes('orginalpurchaseorder')) poFiles.orginalpurchaseorder = file.fileUrl;
+                else if (name.includes('processorderconfirmation') || name.includes('process')) poFiles.process = file.fileUrl;
+                else if (name.includes('finalspecs')) poFiles.finalSpecs = file.fileUrl;
+                else if (name.includes('productimage')) poFiles.productImage = file.fileUrl;
+                else if (name.includes('sizesetcomment') || name.includes('sizeset')) poFiles.sizeSet = file.fileUrl;
+                else if (name.includes('ppcomment') || name.includes('pplimage') || name.includes('pp comment')) poFiles.pplImage = file.fileUrl;
+              });
+            } else {
+              poFiles = filesResponse.data || {};
+            }
+            console.log("=== MAPPED PO FILES DATA ===", poFiles);
+          } catch (filesErr) {
+            console.error("Error fetching PO Files:", filesErr);
+          }
+          
           // Find customer name based on customerID from purchase order
           const customerFromAPI = customers.find(customer => customer.customerID === orderData.customerID);
           const customerName = customerFromAPI ? customerFromAPI.customerName : '';
@@ -1452,12 +1567,12 @@ export default function CompletePurchaseOrderFormEdit() {
             
 
             // Reference & Attachment fields (file uploads)
-            originalPurchaseOrder: orderData.poImage || null,
-            processOrderConfirmation: orderData.specsimage || null,
-            finalSpecs: orderData.finalspecs || null,
-            productImage: orderData.productImage || null,
-            ppComment: orderData.pPimage || null,
-            sizeSetComment: orderData.sizeset || null,
+            originalPurchaseOrder: poFiles.orginalpurchaseorder || orderData.poImage || null,
+            processOrderConfirmation: poFiles.process || orderData.specsimage || null,
+            finalSpecs: poFiles.finalSpecs || orderData.finalspecs || null,
+            productImage: poFiles.productImage || orderData.productImage || null,
+            ppComment: poFiles.pplImage || orderData.pPimage || null,
+            sizeSetComment: poFiles.sizeSet || orderData.sizeset || null,
 
             bankBranch: orderData.bankBranch || '',
             titleOfAccount: orderData.titleOfAccount || '',
@@ -2031,6 +2146,54 @@ export default function CompletePurchaseOrderFormEdit() {
       // from the Item Details dialog (handleSaveItemData). Here we only
       // need to refresh grid so latest data is shown after main Save.
       await fetchStyleGrid();
+
+      // ---------------- FILE UPLOAD LOGIC ----------------
+      try {
+        if (id) {
+          const formData = new FormData();
+          let hasFiles = false;
+
+          if (data.originalPurchaseOrder instanceof File) {
+            formData.append('orginalpurchaseorder', data.originalPurchaseOrder);
+            hasFiles = true;
+          }
+          if (data.productImage instanceof File) {
+            formData.append('productImage', data.productImage);
+            hasFiles = true;
+          }
+          if (data.processOrderConfirmation instanceof File) {
+            formData.append('process', data.processOrderConfirmation);
+            hasFiles = true;
+          }
+          if (data.ppComment instanceof File) {
+            formData.append('pplImage', data.ppComment);
+            hasFiles = true;
+          }
+          if (data.finalSpecs instanceof File) {
+            formData.append('finalSpecs', data.finalSpecs);
+            hasFiles = true;
+          }
+          if (data.sizeSetComment instanceof File) {
+            formData.append('sizeSet', data.sizeSetComment);
+            hasFiles = true;
+          }
+
+          if (hasFiles) {
+            console.log('📤 Uploading files for PO:', id);
+            await apiClient.post(`/MyOrders/UploadPOFiles/${id}`, formData, {
+              headers: {
+                'Content-Type': 'multipart/form-data',
+              },
+              timeout: 60000,
+            });
+            console.log('✅ Files uploaded successfully');
+          }
+        }
+      } catch (uploadError) {
+        console.error('❌ Error uploading files:', uploadError);
+        showSnackbar('Purchase Order updated, but file upload failed.', 'warning');
+      }
+      // ---------------------------------------------------
 
       showSnackbar('Purchase Order and item details updated successfully!', 'success');
       setTimeout(() => navigate(-1), 1000);

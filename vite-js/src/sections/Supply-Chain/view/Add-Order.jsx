@@ -2679,6 +2679,55 @@ export default function CompletePurchaseOrderForm() {
         }
       }
 
+      // ---------------- FILE UPLOAD LOGIC ----------------
+      try {
+        if (createdPoId) {
+          const formData = new FormData();
+          let hasFiles = false;
+
+          if (data.originalPurchaseOrder instanceof File) {
+            formData.append('orginalpurchaseorder', data.originalPurchaseOrder);
+            hasFiles = true;
+          }
+          if (data.productImage instanceof File) {
+            formData.append('productImage', data.productImage);
+            hasFiles = true;
+          }
+          if (data.processOrderConfirmation instanceof File) {
+            formData.append('process', data.processOrderConfirmation);
+            hasFiles = true;
+          }
+          if (data.ppComment instanceof File) {
+            formData.append('pplImage', data.ppComment);
+            hasFiles = true;
+          }
+          if (data.finalSpecs instanceof File) {
+            formData.append('finalSpecs', data.finalSpecs);
+            hasFiles = true;
+          }
+          if (data.sizeSetComment instanceof File) {
+            formData.append('sizeSet', data.sizeSetComment);
+            hasFiles = true;
+          }
+
+          if (hasFiles) {
+            console.log('📤 Uploading files for PO:', createdPoId);
+            await axios.post(`${API_BASE_URL}/api/MyOrders/UploadPOFiles/${createdPoId}`, formData, {
+              headers: {
+                ...headers,
+                'Content-Type': 'multipart/form-data',
+              },
+              timeout: 60000,
+            });
+            console.log('✅ Files uploaded successfully');
+          }
+        }
+      } catch (uploadError) {
+        console.error('❌ Error uploading files:', uploadError);
+        showSnackbar('Purchase Order saved, but file upload failed.', 'warning');
+      }
+      // ---------------------------------------------------
+
       showSnackbar(
         savedItemData?.rows?.length
           ? 'Purchase Order and item details saved successfully!'
