@@ -1348,12 +1348,26 @@ export default function CompletePurchaseOrderForm() {
   } = methods;
 
   const assortmentValue = watch('assortment');
+  const pcsPerCartonWatched = watch('pcsPerCarton');
 
   useEffect(() => {
     if (assortmentValue === 'Solid') {
       setValue('ratio', '');
     }
   }, [assortmentValue, setValue]);
+
+  // Recalculate cartonQty for all rows whenever pcsPerCarton changes
+  useEffect(() => {
+    const ppcVal = Number(pcsPerCartonWatched) || 0;
+    setSavedItemData((prev) => {
+      if (!prev || !prev.rows || prev.rows.length === 0) return prev;
+      const rows = prev.rows.map((row) => ({
+        ...row,
+        cartonQty: ppcVal > 0 ? Math.ceil((Number(row.quantity) || 0) / ppcVal) : 0,
+      }));
+      return { ...prev, rows };
+    });
+  }, [pcsPerCartonWatched]);
 
   
   // const [files, setFiles] = useState({}); // Removed as it's not being updated by components
@@ -2176,6 +2190,14 @@ export default function CompletePurchaseOrderForm() {
   };
 
   const handleSaveItemData = (data) => {
+    // Auto-calculate cartonQty for newly saved rows
+    const ppcVal = Number(getValues('pcsPerCarton')) || 0;
+    if (data && data.rows) {
+      data.rows = data.rows.map((row) => ({
+        ...row,
+        cartonQty: ppcVal > 0 ? Math.ceil((Number(row.quantity) || 0) / ppcVal) : 0,
+      }));
+    }
     setSavedItemData(data);
   };
 
@@ -2294,6 +2316,10 @@ export default function CompletePurchaseOrderForm() {
         const ldpPrice = Number(updated.ldpPrice) || 0;
         updated.value = qty * itemPrice;
         updated.ldpValue = qty * ldpPrice;
+
+        // Auto-calculate cartonQty = quantity / pcsPerCarton
+        const pcsPerCartonVal = Number(getValues('pcsPerCarton')) || 0;
+        updated.cartonQty = pcsPerCartonVal > 0 ? Math.ceil(qty / pcsPerCartonVal) : 0;
 
         return updated;
       });
@@ -3799,27 +3825,7 @@ export default function CompletePurchaseOrderForm() {
                               />
                             </TableCell>
                             <TableCell>{(row.ldpValue ?? 0).toFixed(2)}</TableCell>
-                            <TableCell>
-                              <TextField
-                                value={row.cartonQty ?? 0}
-                                type="number"
-                                size="small"
-                                onChange={(e) =>
-                                  handleSelectionRowChange(index, 'cartonQty', e.target.value)
-                                }
-                                onFocus={(e) => {
-                                  if (e.target.value === '0' || e.target.value === 0) {
-                                    e.target.select();
-                                  }
-                                }}
-                                onKeyDown={(e) => {
-                                  if ((e.target.value === '0' || e.target.value === 0) && e.key !== 'Tab' && e.key !== 'Enter' && e.key !== 'Escape' && e.key !== 'Backspace' && e.key !== 'Delete') {
-                                    e.target.value = '';
-                                  }
-                                }}
-                                sx={{ width: 70 }}
-                              />
-                            </TableCell>
+                            <TableCell>{row.cartonQty ?? 0}</TableCell>
                             <TableCell>
                               <TextField
                                 value={row.grossWeight ?? 0}
@@ -3892,16 +3898,7 @@ export default function CompletePurchaseOrderForm() {
                     </Grid>
                   </Box>
 
-                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-                    <Button 
-                      variant="contained" 
-                      color="secondary" 
-                      startIcon={<CalculateIcon />}
-                      onClick={handleShowCalculationFields}
-                    >
-                      Calculate
-                    </Button>
-                  </Box>
+
                 </Box>
               )}
             </CardContent>
