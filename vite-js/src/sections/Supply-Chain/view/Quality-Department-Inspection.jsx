@@ -37,6 +37,9 @@ import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Tooltip from '@mui/material/Tooltip';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import Stepper from '@mui/material/Stepper';
+import Step from '@mui/material/Step';
+import StepLabel from '@mui/material/StepLabel';
 import { alpha, useTheme } from '@mui/material/styles';
 
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
@@ -879,6 +882,27 @@ export default function QualityDepartmentInspectionView() {
   // isMPCCreated passed from the grid row so Final can be guarded
   const isMPCCreated = Number(searchParams.get('isMPCCreated') ?? 0);
 
+  const STEPS = [
+    'Inspection Info',
+    'Conclusion & Size Matrix',
+    'Accessories & Packing',
+    'Specs & Discrepancies',
+    'Attachments & Images',
+  ];
+  const [activeStep, setActiveStep] = useState(0);
+
+  const handleNextStep = () => {
+    if (activeStep < STEPS.length - 1) {
+      setActiveStep((prev) => prev + 1);
+    }
+  };
+
+  const handlePrevStep = () => {
+    if (activeStep > 0) {
+      setActiveStep((prev) => prev - 1);
+    }
+  };
+
   /** Switches inspection type — updates URL; useEffect re-fires automatically */
   const handleInspTypeChange = (_e, newType) => {
     if (!newType) return; // prevent deselect
@@ -890,6 +914,7 @@ export default function QualityDepartmentInspectionView() {
       next.delete('qdInspectionMstId');
       return next;
     });
+    setActiveStep(0);
   };
 
   const [data, setData] = useState(null);
@@ -2132,1174 +2157,1287 @@ export default function QualityDepartmentInspectionView() {
 
         {!loading && !error && data && h && (
           <Stack spacing={3}>
-            <SectionCard title="INSPECTION INFORMATION">
-              <Grid container spacing={2}>
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField
-                    label="Inspection No"
-                    fullWidth
-                    size="small"
-                    value={form.inspNo ?? ''}
-                    onChange={(e) => setF('inspNo', e.target.value)}
-                    InputProps={{ readOnly: true }}
-                  />
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField label="Shipment Date" fullWidth size="small" value={form.shipmentDate ?? ''} InputProps={{ readOnly: true }} />
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField label="PO Qty" fullWidth size="small" value={form.poQtyLabel ?? ''} InputProps={{ readOnly: true }} />
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField
-                    select
-                    label="System (AQL)"
-                    fullWidth
-                    size="small"
-                    value={form.aqlSystemId ?? ''}
-                    onChange={(e) => setF('aqlSystemId', e.target.value)}
-                  >
-                    {aqlSystems.map((s) => (
-                      <MenuItem key={s.aqlSysytemId ?? s.AQLSysytemId} value={s.aqlSysytemId ?? s.AQLSysytemId}>
-                        {s.aqlSystem ?? s.AQLSystem}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
+            <Box sx={{ py: 2 }}>
+              <Stepper activeStep={activeStep} alternativeLabel>
+                {STEPS.map((label) => (
+                  <Step key={label}>
+                    <StepLabel>{label}</StepLabel>
+                  </Step>
+                ))}
+              </Stepper>
+            </Box>
 
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField label="Customer" fullWidth size="small" value={form.customer ?? ''} InputProps={{ readOnly: true }} />
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField
-                    type="date"
-                    label="Inspection Date"
-                    fullWidth
-                    size="small"
-                    value={form.inspectionDate ?? ''}
-                    onChange={(e) => setF('inspectionDate', e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField
-                    label="Offered Qty"
-                    fullWidth
-                    size="small"
-                    value={form.offeredQty ?? ''}
-                    onChange={(e) => setF('offeredQty', e.target.value)}
-                  />
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField
-                    select
-                    label="Range (AQL)"
-                    fullWidth
-                    size="small"
-                    value={form.aqlRangeId ?? ''}
-                    onChange={(e) => setF('aqlRangeId', e.target.value)}
-                  >
-                    {aqlRanges
-                      .filter((r) => {
-                        const sid = form.aqlSystemId || firstSystemId;
-                        if (sid == null) return true;
-                        return (r.aqlSysytemId ?? r.AQLSysytemId) === sid;
-                      })
-                      .map((r) => (
-                        <MenuItem key={r.aqlRangeId ?? r.AQLRangeId} value={r.aqlRangeId ?? r.AQLRangeId}>
-                          {r.aqlRange ?? r.AQLRange}
-                        </MenuItem>
-                      ))}
-                  </TextField>
-                </Grid>
-
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField label="Supplier" fullWidth size="small" value={form.supplier ?? ''} InputProps={{ readOnly: true }} />
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField label="Factory" fullWidth size="small" value={form.factory ?? ''} onChange={(e) => setF('factory', e.target.value)} />
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField
-                    label="Required Ctn Qty"
-                    fullWidth
-                    size="small"
-                    value={form.requiredCtnQty ?? ''}
-                    onChange={(e) => setF('requiredCtnQty', e.target.value)}
-                  />
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField label="Style" fullWidth size="small" value={form.styleNo ?? ''} InputProps={{ readOnly: true }} />
-                </Grid>
-
-                <Grid xs={12}>
-                  <TextField
-                    label="Selected Carton No"
-                    fullWidth
-                    multiline
-                    minRows={2}
-                    size="small"
-                    value={form.selectedCartons ?? ''}
-                    onChange={(e) => setF('selectedCartons', e.target.value)}
-                  />
-                </Grid>
-
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField label="Season" fullWidth size="small" value={form.season ?? ''} InputProps={{ readOnly: true }} />
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField
-                    label={assortmentFieldMeta.label}
-                    fullWidth
-                    size="small"
-                    value={form.ratio ?? ''}
-                    onChange={(e) => setF('ratio', e.target.value)}
-                    InputProps={{ readOnly: assortmentFieldMeta.readOnly }}
-                    sx={assortmentFieldMeta.readOnly ? { '& .MuiInputBase-input': { color: 'text.secondary' } } : {}}
-                  />
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField
-                    label="Offered Carton Qty"
-                    fullWidth
-                    size="small"
-                    value={form.offeredCtnQty ?? ''}
-                    onChange={(e) => setF('offeredCtnQty', e.target.value)}
-                  />
-                </Grid>
-                <Grid xs={12} sm={6} md={3}>
-                  <TextField label="GSM" fullWidth size="small" value={form.gsm ?? ''} InputProps={{ readOnly: true }} />
-                </Grid>
-
-                <Grid xs={12} sm={6} md={4}>
-                  <TextField
-                    select
-                    SelectProps={{
-                      multiple: true,
-                      renderValue: (selected) => selected.join(', '),
-                    }}
-                    label="Color"
-                    fullWidth
-                    size="small"
-                    value={Array.isArray(form.color) ? form.color : []}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val.includes('all')) {
-                        const isAllSelected = form.color?.length === colorOptions.length && colorOptions.length > 0;
-                        setF('color', isAllSelected ? [] : [...colorOptions]);
-                      } else {
-                        setF('color', typeof val === 'string' ? val.split(',') : val);
-                      }
-                    }}
-                    helperText={colorOptions.length > 1 ? 'Select PO color(s)' : undefined}
-                  >
-                    <MenuItem value="all">
-                      <Checkbox
-                        size="small"
-                        checked={form.color?.length === colorOptions.length && colorOptions.length > 0}
-                        indeterminate={form.color?.length > 0 && form.color?.length < colorOptions.length}
-                      />
-                      <Typography variant="body2" fontWeight={600}>Select All</Typography>
-                    </MenuItem>
-                    {colorOptions.map((c) => (
-                      <MenuItem key={c} value={c}>
-                        <Checkbox size="small" checked={form.color?.includes(c)} />
-                        {c}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
-                <Grid xs={12} sm={6} md={4}>
-                  <TextField label="Design" fullWidth size="small" value={form.design ?? ''} InputProps={{ readOnly: true }} />
-                </Grid>
-                <Grid xs={12} sm={6} md={4}>
-                  <TextField
-                    select
-                    label="Shipment mode"
-                    fullWidth
-                    size="small"
-                    value={form.shipmentMode ?? '0'}
-                    onChange={(e) => setF('shipmentMode', e.target.value)}
-                  >
-                    <MenuItem value="0">By Sea</MenuItem>
-                    <MenuItem value="1">By Air</MenuItem>
-                  </TextField>
-                </Grid>
-
-                <Grid xs={12}>
-                  <Divider sx={{ my: 1 }} />
-                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    Defects (Quantity / Conformity / Workmanship / Packing)
-                  </Typography>
-                </Grid>
-                
-                {/* Row 1: Quantity, Conformity, Workmanship Selectors */}
-                {[
-                  ['qtyD', 'Quantity', OK_NOT_OK],
-                  ['confD', 'Conformity', OK_NOT_OK],
-                  ['workD', 'Workmanship', OK_NOT_OK],
-                ].map(([k, label, opts]) => (
-                  <Grid key={k} xs={12} sm={6} md={4}>
+            {activeStep === 0 && (
+              <SectionCard title="INSPECTION INFORMATION">
+                <Grid container spacing={2}>
+                  <Grid xs={12} sm={6} md={3}>
                     <TextField
-                      select
-                      label={label}
+                      label="Inspection No"
                       fullWidth
                       size="small"
-                      value={form[k] ?? opts[0]}
-                      onChange={(e) => setF(k, e.target.value)}
+                      value={form.inspNo ?? ''}
+                      onChange={(e) => setF('inspNo', e.target.value)}
+                      InputProps={{ readOnly: true }}
+                    />
+                  </Grid>
+                  <Grid xs={12} sm={6} md={3}>
+                    <TextField label="Shipment Date" fullWidth size="small" value={form.shipmentDate ?? ''} InputProps={{ readOnly: true }} />
+                  </Grid>
+                  <Grid xs={12} sm={6} md={3}>
+                    <TextField label="PO Qty" fullWidth size="small" value={form.poQtyLabel ?? ''} InputProps={{ readOnly: true }} />
+                  </Grid>
+                  <Grid xs={12} sm={6} md={3}>
+                    <TextField
+                      select
+                      label="System (AQL)"
+                      fullWidth
+                      size="small"
+                      value={form.aqlSystemId ?? ''}
+                      onChange={(e) => setF('aqlSystemId', e.target.value)}
                     >
-                      {opts.map((o) => (
-                        <MenuItem key={o} value={o}>
-                          {o}
+                      {aqlSystems.map((s) => (
+                        <MenuItem key={s.aqlSysytemId ?? s.AQLSysytemId} value={s.aqlSysytemId ?? s.AQLSysytemId}>
+                          {s.aqlSystem ?? s.AQLSystem}
                         </MenuItem>
                       ))}
                     </TextField>
                   </Grid>
-                ))}
 
-                {/* Row 2: Quantity, Conformity, Workmanship Remarks */}
-                {[
-                  ['qtyDR', 'Quantity remarks'],
-                  ['confDR', 'Conformity remarks'],
-                  ['workDR', 'Workmanship remarks'],
-                ].map(([k, ph]) => (
-                  <Grid key={k} xs={12} sm={6} md={4}>
+                  <Grid xs={12} sm={6} md={3}>
+                    <TextField label="Customer" fullWidth size="small" value={form.customer ?? ''} InputProps={{ readOnly: true }} />
+                  </Grid>
+                  <Grid xs={12} sm={6} md={3}>
                     <TextField
-                      placeholder={ph}
+                      type="date"
+                      label="Inspection Date"
                       fullWidth
                       size="small"
-                      value={form[k] ?? ''}
-                      onChange={(e) => setF(k, e.target.value)}
+                      value={form.inspectionDate ?? ''}
+                      onChange={(e) => setF('inspectionDate', e.target.value)}
+                      InputLabelProps={{ shrink: true }}
                     />
                   </Grid>
-                ))}
-
-                {/* Row 3: Packing, Marking, Measurement Selectors */}
-                {[
-                  ['packD', 'Packing', OK_NOT_OK],
-                  ['markD', 'Marking', OK_NOT_OK],
-                  ['measD', 'Measurement', OK_NOT_OK],
-                ].map(([k, label, opts]) => (
-                  <Grid key={k} xs={12} sm={6} md={4}>
+                  <Grid xs={12} sm={6} md={3}>
+                    <TextField
+                      label="Offered Qty"
+                      fullWidth
+                      size="small"
+                      value={form.offeredQty ?? ''}
+                      onChange={(e) => setF('offeredQty', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid xs={12} sm={6} md={3}>
                     <TextField
                       select
-                      label={label}
+                      label="Range (AQL)"
                       fullWidth
                       size="small"
-                      value={form[k] ?? opts[0]}
-                      onChange={(e) => setF(k, e.target.value)}
+                      value={form.aqlRangeId ?? ''}
+                      onChange={(e) => setF('aqlRangeId', e.target.value)}
                     >
-                      {opts.map((o) => (
-                        <MenuItem key={o} value={o}>
-                          {o}
-                        </MenuItem>
-                      ))}
+                      {aqlRanges
+                        .filter((r) => {
+                          const sid = form.aqlSystemId || firstSystemId;
+                          if (sid == null) return true;
+                          return (r.aqlSysytemId ?? r.AQLSysytemId) === sid;
+                        })
+                        .map((r) => (
+                          <MenuItem key={r.aqlRangeId ?? r.AQLRangeId} value={r.aqlRangeId ?? r.AQLRangeId}>
+                            {r.aqlRange ?? r.AQLRange}
+                          </MenuItem>
+                        ))}
                     </TextField>
                   </Grid>
-                ))}
 
-                {/* Row 4: Packing, Marking, Measurement Remarks */}
-                {[
-                  ['packDR', 'Packing remarks'],
-                  ['markDR', 'Marking remarks'],
-                  ['measDR', 'Measurement remarks'],
-                ].map(([k, ph]) => (
-                  <Grid key={k} xs={12} sm={6} md={4}>
+                  <Grid xs={12} sm={6} md={3}>
+                    <TextField label="Supplier" fullWidth size="small" value={form.supplier ?? ''} InputProps={{ readOnly: true }} />
+                  </Grid>
+                  <Grid xs={12} sm={6} md={3}>
+                    <TextField label="Factory" fullWidth size="small" value={form.factory ?? ''} onChange={(e) => setF('factory', e.target.value)} />
+                  </Grid>
+                  <Grid xs={12} sm={6} md={3}>
                     <TextField
-                      placeholder={ph}
+                      label="Required Ctn Qty"
                       fullWidth
                       size="small"
-                      value={form[k] ?? ''}
-                      onChange={(e) => setF(k, e.target.value)}
+                      value={form.requiredCtnQty ?? ''}
+                      onChange={(e) => setF('requiredCtnQty', e.target.value)}
                     />
                   </Grid>
-                ))}
-              </Grid>
-            </SectionCard>
-
-            <SectionCard
-              title="OVERALL CONCLUSION"
-            // subtitle="Size × quantity matrix (QDInspectionDtl + GetSizeQty): 12 size columns + TOTAL like legacy. If the API sends no matrix rows, they are built from sizeQtyBreakdown. Saves with the main Save button."
-            >
-              <Grid container spacing={2} sx={{ mb: 2 }}>
-                <Grid xs={12} sm={4}>
-                  <TextField
-                    label="%"
-                    fullWidth
-                    size="small"
-                    placeholder="%"
-                    value={form.calPerc ?? ''}
-                    onChange={(e) => handlePercChange(e.target.value)}
-                  />
-                </Grid>
-              </Grid>
-              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
-                Size matrix (legacy dgInspectionDtl)
-              </Typography>
-              <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto', mb: 3 }}>
-                <Table size="small" sx={{ minWidth: 895, tableLayout: 'fixed' }}>
-                  <TableHead>
-                    <TableRow sx={tableHeadRowSx(theme)}>
-                      <TableCell sx={{ width: 160, fontSize: 11, py: 1, px: 1.5, borderRight: 1, borderColor: 'divider' }}>SIZE</TableCell>
-                      {matrixColumns.map((col, i) => (
-                        <TableCell key={`h-${col.slot}-${i}`} align="center" sx={{ width: 55, fontSize: 11, py: 1, px: 0.5, borderRight: 1, borderColor: 'divider' }}>
-                          {col.label || ''}
-                        </TableCell>
-                      ))}
-                      <TableCell align="center" sx={{ width: 75, fontSize: 11, py: 1, px: 1 }}>
-                        TOTAL
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {dtlRows.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={numMatrixSlots + 2}>
-                          <Typography variant="body2" color="text.secondary">
-                            {loading ? 'Loading matrix…' : 'No matrix data.'}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      dtlRows.map((row, rowIdx) => {
-                        const st = String(row.sizeType ?? row.SizeType ?? '').trim();
-                        if (st.toUpperCase() === 'SIZE') return null;
-
-                        const isStaticRow = ['ORDER QTY', 'QTY BALANCE/EXTRA'].includes(st.toUpperCase());
-
-                        return (
-                          <TableRow
-                            key={`${st}-${rowIdx}`}
-                            sx={{
-                              '&:nth-of-type(odd)': { bgcolor: 'action.hover' },
-                              ...(isStaticRow && { bgcolor: alpha(theme.palette.primary.main, 0.04) }),
-                              height: 44,
-                            }}
-                          >
-                            <TableCell sx={{ fontWeight: 600, fontSize: 11.5, whiteSpace: 'nowrap', py: 0.5, px: 1.5, borderRight: 1, borderColor: 'divider' }}>
-                              {st}
-                            </TableCell>
-                            {matrixColumns.map((col) => {
-                              const slot = col.slot;
-                              const isReadOnly = ['SIZE', 'ORDER QTY', 'QTY BALANCE/EXTRA'].includes(st.toUpperCase());
-
-                              let rawVal = getDtlCell(row, slot);
-                              let displayVal = rawVal;
-                              let cellBgColor = 'transparent';
-                              let cellTextColor = isReadOnly ? 'text.primary' : 'inherit';
-
-                              if (st.toUpperCase() === 'QTY BALANCE/EXTRA' && rawVal !== '') {
-                                const num = parseFloat(rawVal);
-                                if (!isNaN(num)) {
-                                  if (num > 0) {
-                                    cellBgColor = 'error.main'; // Red fill
-                                    cellTextColor = 'error.contrastText'; // White text
-                                    displayVal = String(Math.abs(num));
-                                  } else if (num < 0) {
-                                    cellBgColor = 'success.main'; // Green fill
-                                    cellTextColor = 'success.contrastText'; // White text
-                                    displayVal = String(Math.abs(num));
-                                  } else {
-                                    displayVal = '0';
-                                  }
-                                }
-                              }
-
-                              return (
-                                <TableCell key={`${st}-${slot}`} align="center" sx={{ py: 0.5, px: 0, borderRight: 1, borderColor: 'divider' }}>
-                                  <TextField
-                                    size="small"
-                                    fullWidth
-                                    value={displayVal}
-                                    onChange={(e) => updateDtlCell(rowIdx, slot, e.target.value)}
-                                    inputProps={{ readOnly: isReadOnly }}
-                                    InputProps={{
-                                      sx: {
-                                        fontSize: 11.5,
-                                        bgcolor: cellBgColor,
-                                        height: 38,
-                                        '& .MuiInputBase-input': {
-                                          py: 0.5,
-                                          px: 0.5,
-                                          textAlign: 'center',
-                                          ...(isReadOnly && { fontWeight: 700 }),
-                                          color: cellBgColor !== 'transparent' ? `${theme.palette.mode === 'light' ? '#fff' : '#fff'} !important` : cellTextColor,
-                                          WebkitTextFillColor: cellBgColor !== 'transparent' ? `#fff !important` : undefined,
-                                        },
-                                      },
-                                    }}
-                                  />
-                                </TableCell>
-                              );
-                            })}
-                            <TableCell align="right" sx={{ py: 0.25, px: 0.25 }}>
-                              {(() => {
-                                let totalVal = row.sizeTotal ?? row.SizeTotal ?? '';
-                                let totalBgColor = alpha(theme.palette.primary.main, 0.08);
-                                let totalTextColor = 'inherit';
-                                if (st.toUpperCase() === 'QTY BALANCE/EXTRA' && totalVal !== '') {
-                                  const tNum = parseFloat(totalVal);
-                                  if (!isNaN(tNum)) {
-                                    if (tNum > 0) {
-                                      totalBgColor = 'error.main';
-                                      totalTextColor = 'error.contrastText';
-                                      totalVal = String(Math.abs(tNum));
-                                    } else if (tNum < 0) {
-                                      totalBgColor = 'success.main';
-                                      totalTextColor = 'success.contrastText';
-                                      totalVal = String(Math.abs(tNum));
-                                    } else {
-                                      totalVal = '0';
-                                    }
-                                  }
-                                }
-                                return (
-                                  <TextField
-                                    size="small"
-                                    fullWidth
-                                    value={totalVal}
-                                    disabled
-                                    InputProps={{
-                                      sx: {
-                                        fontSize: 11.5,
-                                        bgcolor: totalBgColor,
-                                        height: 38,
-                                        '& .MuiInputBase-input': {
-                                          py: 0.5,
-                                          px: 0.5,
-                                          textAlign: 'center',
-                                          fontWeight: 800,
-                                          color: totalTextColor !== 'inherit' && st.toUpperCase() === 'QTY BALANCE/EXTRA' ? '#fff' : 'inherit',
-                                          WebkitTextFillColor: totalTextColor !== 'inherit' && st.toUpperCase() === 'QTY BALANCE/EXTRA' ? `#fff !important` : undefined,
-                                        },
-                                      },
-                                    }}
-                                  />
-                                );
-                              })()}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </SectionCard>
-
-            <SectionCard
-              title={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  Accessories Markings
-                  <Checkbox
-                    size="small"
-                    sx={{ p: 0 }} // minimize padding
-                    checked={ACCESSORY_UI_ROWS.every((row) => !!form.acc?.[row.accKey])}
-                    indeterminate={
-                      ACCESSORY_UI_ROWS.some((row) => !!form.acc?.[row.accKey]) &&
-                      !ACCESSORY_UI_ROWS.every((row) => !!form.acc?.[row.accKey])
-                    }
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setForm((prev) => {
-                        const newAcc = { ...prev.acc };
-                        ACCESSORY_UI_ROWS.forEach((row) => {
-                          newAcc[row.accKey] = checked;
-                        });
-                        return { ...prev, acc: newAcc };
-                      });
-                    }}
-                  />
-                </Box>
-              }
-            >
-              <Grid container spacing={2}>
-                {ACCESSORY_UI_ROWS.map((row) => {
-                  const dropKey = row.dropKey ?? row.accKey;
-                  const opts = row.options || YES_NO;
-                  const dropVal = form.accDrop?.[dropKey] ?? opts[0];
-                  return (
-                    <Grid key={row.accKey} xs={12} sm={6} md={4}>
-                      <Stack direction="column" spacing={0.5} alignItems="flex-start">
-                        {row.label || !row.noCheckbox ? (
-                          <FormControlLabel
-                            control={
-                              !row.noCheckbox ? (
-                                <Checkbox
-                                  size="small"
-                                  checked={!!form.acc?.[row.accKey]}
-                                  onChange={(e) => setAcc(row.accKey, e.target.checked)}
-                                />
-                              ) : (
-                                <Box sx={{ width: 38 }} /> 
-                              )
-                            }
-                            label={row.label}
-                            sx={{
-                              m: 0,
-                              '& .MuiFormControlLabel-label': {
-                                fontSize: 13,
-                                fontWeight: 600,
-                                color: 'text.primary',
-                                lineHeight: 1.2,
-                              },
-                            }}
-                          />
-                        ) : (
-                          <Box sx={{ height: 38 }} /> // Spacer to maintain vertical alignment
-                        )}
-                        {row.textMode ? (
-                          <BlurTextField
-                            size="small"
-                            fullWidth
-                            label="Remarks"
-                            value={form.accText?.[row.textKey] ?? ''}
-                            onChange={(e) => setAccText(row.textKey, e.target.value)}
-                            placeholder="—"
-                            InputLabelProps={{ shrink: true }}
-                            sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                          />
-                        ) : (
-                          <TextField
-                            select
-                            size="small"
-                            fullWidth
-                            label="Remarks"
-                            value={dropVal}
-                            onChange={(e) => setAccDrop(dropKey, e.target.value)}
-                            InputLabelProps={{ shrink: true }}
-                            sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                          >
-                            {opts.map((o) => (
-                              <MenuItem key={o} value={o}>
-                                {o}
-                              </MenuItem>
-                            ))}
-                          </TextField>
-                        )}
-                      </Stack>
-                    </Grid>
-                  );
-                })}
-              </Grid>
-            </SectionCard>
-
-            <SectionCard
-              title={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  Packing
-                  <Checkbox
-                    size="small"
-                    sx={{ p: 0 }} // minimize padding so it aligns precisely
-                    checked={PACKING_UI_ROWS.every((row) => !!form.pack?.[row.key])}
-                    indeterminate={
-                      PACKING_UI_ROWS.some((row) => !!form.pack?.[row.key]) &&
-                      !PACKING_UI_ROWS.every((row) => !!form.pack?.[row.key])
-                    }
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setForm((prev) => {
-                        const newPack = { ...prev.pack };
-                        PACKING_UI_ROWS.forEach((row) => {
-                          newPack[row.key] = checked;
-                        });
-                        return { ...prev, pack: newPack };
-                      });
-                    }}
-                  />
-                </Box>
-              }
-            >
-              <Grid container spacing={2}>
-                {PACKING_UI_ROWS.map((row) => (
-                  <Grid key={row.key} xs={12} sm={6} md={4}>
-                    <Stack direction="column" spacing={0.5} alignItems="flex-start">
-                      {row.label || row.key === 'otherM' ? (
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              size="small"
-                              checked={!!form.pack?.[row.key]}
-                              onChange={(e) => setPack(row.key, e.target.checked)}
-                            />
-                          }
-                          label={row.label}
-                          sx={{
-                            m: 0,
-                            '& .MuiFormControlLabel-label': {
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: 'text.primary',
-                              lineHeight: 1.2,
-                            },
-                          }}
-                        />
-                      ) : (
-                        <Box sx={{ height: 38 }} />
-                      )}
-
-                      {row.type === 'text' && (
-                        <BlurTextField
-                          size="small"
-                          fullWidth
-                          label="Remarks"
-                          value={form.packText?.[row.textKey] ?? ''}
-                          onChange={(e) => setPackText(row.textKey, e.target.value)}
-                          placeholder="—"
-                          InputLabelProps={{ shrink: true }}
-                          sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                        />
-                      )}
-                      {row.type === 'select' && (
-                        <TextField
-                          select
-                          size="small"
-                          fullWidth
-                          label="Remarks"
-                          value={form.packDrop?.[row.dropKey] ?? row.options[0]}
-                          onChange={(e) => setPackDrop(row.dropKey, e.target.value)}
-                          InputLabelProps={{ shrink: true }}
-                          sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                        >
-                          {row.options.map((o) => (
-                            <MenuItem key={o} value={o}>
-                              {o}
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                      )}
-                      {row.type === 'double-text' && (
-                        <Stack direction="row" spacing={1} sx={{ width: '100%' }}>
-                          <BlurTextField
-                            size="small"
-                            fullWidth
-                            value={form.packText?.[row.textKey1] ?? ''}
-                            onChange={(e) => setPackText(row.textKey1, e.target.value)}
-                            sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                          />
-                          <BlurTextField
-                            size="small"
-                            fullWidth
-                            value={form.packText?.[row.textKey2] ?? ''}
-                            onChange={(e) => setPackText(row.textKey2, e.target.value)}
-                            sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                          />
-                        </Stack>
-                      )}
-                    </Stack>
+                  <Grid xs={12} sm={6} md={3}>
+                    <TextField label="Style" fullWidth size="small" value={form.styleNo ?? ''} InputProps={{ readOnly: true }} />
                   </Grid>
-                ))}
-              </Grid>
-            </SectionCard>
 
-            <SectionCard title="Size Specs">
-              <Stack spacing={2}>
-                <TextField
-                  select
-                  size="small"
-                  label="Type"
-                  sx={{ maxWidth: 400 }}
-                  value={measurementTypeId}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setMeasurementTypeId(v);
-                    if (!v) setSpecRows([]);
-                  }}
-                >
-                  <MenuItem value="">Select</MenuItem>
-                  {measurementTypes.map((t) => {
-                    const id = t.measurementTypeID ?? t.MeasurementTypeID;
-                    const label = t.measurementType ?? t.MeasurementType;
-                    return (
-                      <MenuItem key={id} value={String(id)}>
-                        {label}
-                      </MenuItem>
-                    );
-                  })}
-                </TextField>
+                  <Grid xs={12}>
+                    <TextField
+                      label="Selected Carton No"
+                      fullWidth
+                      multiline
+                      minRows={2}
+                      size="small"
+                      value={form.selectedCartons ?? ''}
+                      onChange={(e) => setF('selectedCartons', e.target.value)}
+                    />
+                  </Grid>
 
-                {measurementTypeId ? (
-                  <Stack spacing={2}>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
-                      <Button variant="outlined" onClick={saveSpecs} disabled={!mstId || savingSpecs}>
-                        Save Specs
-                      </Button>
-                      <Button
-                        variant="text"
-                        onClick={() =>
-                          setSpecRows((prev) => [
-                            ...prev,
-                            {
-                              measurementPointId: '',
-                              measurementPoints: '',
-                              measurements: '',
-                              tolerance: '',
-                              header1: '',
-                              header2: '',
-                              header3: '',
-                              header4: '',
-                              q1: '',
-                              q2: '',
-                              q3: '',
-                              q4: '',
-                            },
-                          ])
+                  <Grid xs={12} sm={6} md={3}>
+                    <TextField label="Season" fullWidth size="small" value={form.season ?? ''} InputProps={{ readOnly: true }} />
+                  </Grid>
+                  <Grid xs={12} sm={6} md={3}>
+                    <TextField
+                      label={assortmentFieldMeta.label}
+                      fullWidth
+                      size="small"
+                      value={form.ratio ?? ''}
+                      onChange={(e) => setF('ratio', e.target.value)}
+                      InputProps={{ readOnly: assortmentFieldMeta.readOnly }}
+                      sx={assortmentFieldMeta.readOnly ? { '& .MuiInputBase-input': { color: 'text.secondary' } } : {}}
+                    />
+                  </Grid>
+                  <Grid xs={12} sm={6} md={3}>
+                    <TextField
+                      label="Offered Carton Qty"
+                      fullWidth
+                      size="small"
+                      value={form.offeredCtnQty ?? ''}
+                      onChange={(e) => setF('offeredCtnQty', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid xs={12} sm={6} md={3}>
+                    <TextField label="GSM" fullWidth size="small" value={form.gsm ?? ''} InputProps={{ readOnly: true }} />
+                  </Grid>
+
+                  <Grid xs={12} sm={6} md={4}>
+                    <TextField
+                      select
+                      SelectProps={{
+                        multiple: true,
+                        renderValue: (selected) => selected.join(', '),
+                      }}
+                      label="Color"
+                      fullWidth
+                      size="small"
+                      value={Array.isArray(form.color) ? form.color : []}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val.includes('all')) {
+                          const isAllSelected = form.color?.length === colorOptions.length && colorOptions.length > 0;
+                          setF('color', isAllSelected ? [] : [...colorOptions]);
+                        } else {
+                          setF('color', typeof val === 'string' ? val.split(',') : val);
                         }
-                      >
-                        Add Row
-                      </Button>
-                    </Stack>
-                    <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Measurement Point ID</TableCell>
-                            <TableCell>Measurement Point</TableCell>
-                            <TableCell>Measurement</TableCell>
-                            <TableCell>Tolerance</TableCell>
-                            <TableCell>H1</TableCell>
-                            <TableCell>H2</TableCell>
-                            <TableCell>H3</TableCell>
-                            <TableCell>H4</TableCell>
-                            <TableCell>Q1</TableCell>
-                            <TableCell>Q2</TableCell>
-                            <TableCell>Q3</TableCell>
-                            <TableCell>Q4</TableCell>
-                            <TableCell />
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {specRows.map((r, idx) => (
-                            <TableRow key={`${r.measurementPointId}-${idx}`} sx={{ height: 44 }}>
-                              <TableCell>
-                                <TextField
-                                  size="small"
-                                  value={r.measurementPointId}
-                                  onChange={(e) => setSpec(idx, 'measurementPointId', e.target.value)}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <TextField
-                                  size="small"
-                                  value={r.measurementPoints}
-                                  onChange={(e) => setSpec(idx, 'measurementPoints', e.target.value)}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <TextField
-                                  size="small"
-                                  value={r.measurements}
-                                  onChange={(e) => setSpec(idx, 'measurements', e.target.value)}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <BlurTextField
-                                  size="small"
-                                  value={r.tolerance}
-                                  onChange={(e) => setSpec(idx, 'tolerance', e.target.value)}
-                                />
-                              </TableCell>
-                              <TableCell align="center">
-                                <BlurTextField size="small" value={r.header1} onChange={(e) => setSpec(idx, 'header1', e.target.value)} />
-                              </TableCell>
-                              <TableCell align="center">
-                                <BlurTextField size="small" value={r.header2} onChange={(e) => setSpec(idx, 'header2', e.target.value)} />
-                              </TableCell>
-                              <TableCell align="center">
-                                <BlurTextField size="small" value={r.header3} onChange={(e) => setSpec(idx, 'header3', e.target.value)} />
-                              </TableCell>
-                              <TableCell align="center">
-                                <BlurTextField size="small" value={r.header4} onChange={(e) => setSpec(idx, 'header4', e.target.value)} />
-                              </TableCell>
-                              <TableCell align="center">
-                                <BlurTextField size="small" value={r.q1} onChange={(e) => setSpec(idx, 'q1', e.target.value)} />
-                              </TableCell>
-                              <TableCell align="center">
-                                <BlurTextField size="small" value={r.q2} onChange={(e) => setSpec(idx, 'q2', e.target.value)} />
-                              </TableCell>
-                              <TableCell align="center">
-                                <BlurTextField size="small" value={r.q3} onChange={(e) => setSpec(idx, 'q3', e.target.value)} />
-                              </TableCell>
-                              <TableCell align="center">
-                                <BlurTextField size="small" value={r.q4} onChange={(e) => setSpec(idx, 'q4', e.target.value)} />
-                              </TableCell>
-                              <TableCell>
-                                <IconButton size="small" onClick={() => setSpecRows((prev) => prev.filter((_, i) => i !== idx))}>
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          {!loadingSpecs && specRows.length === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={13} align="center">
-                                <Typography variant="body2" color="text.secondary">
-                                  No rows for selected measurement type.
-                                </Typography>
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Stack>
-                ) : null}
-              </Stack>
-            </SectionCard>
+                      }}
+                      helperText={colorOptions.length > 1 ? 'Select PO color(s)' : undefined}
+                    >
+                      <MenuItem value="all">
+                        <Checkbox
+                          size="small"
+                          checked={form.color?.length === colorOptions.length && colorOptions.length > 0}
+                          indeterminate={form.color?.length > 0 && form.color?.length < colorOptions.length}
+                        />
+                        <Typography variant="body2" fontWeight={600}>Select All</Typography>
+                      </MenuItem>
+                      {colorOptions.map((c) => (
+                        <MenuItem key={c} value={c}>
+                          <Checkbox size="small" checked={form.color?.includes(c)} />
+                          {c}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  <Grid xs={12} sm={6} md={4}>
+                    <TextField label="Design" fullWidth size="small" value={form.design ?? ''} InputProps={{ readOnly: true }} />
+                  </Grid>
+                  <Grid xs={12} sm={6} md={4}>
+                    <TextField
+                      select
+                      label="Shipment mode"
+                      fullWidth
+                      size="small"
+                      value={form.shipmentMode ?? '0'}
+                      onChange={(e) => setF('shipmentMode', e.target.value)}
+                    >
+                      <MenuItem value="0">By Sea</MenuItem>
+                      <MenuItem value="1">By Air</MenuItem>
+                    </TextField>
+                  </Grid>
 
-            <SectionCard title="DISCREPANCIES">
-              <Stack spacing={2}>
-                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 360 }}>
-                  <Table size="small" stickyHeader>
+                  <Grid xs={12}>
+                    <Divider sx={{ my: 1 }} />
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      Defects (Quantity / Conformity / Workmanship / Packing)
+                    </Typography>
+                  </Grid>
+                  
+                  {/* Row 1: Quantity, Conformity, Workmanship Selectors */}
+                  {[
+                    ['qtyD', 'Quantity', OK_NOT_OK],
+                    ['confD', 'Conformity', OK_NOT_OK],
+                    ['workD', 'Workmanship', OK_NOT_OK],
+                  ].map(([k, label, opts]) => (
+                    <Grid key={k} xs={12} sm={6} md={4}>
+                      <TextField
+                        select
+                        label={label}
+                        fullWidth
+                        size="small"
+                        value={form[k] ?? opts[0]}
+                        onChange={(e) => setF(k, e.target.value)}
+                      >
+                        {opts.map((o) => (
+                          <MenuItem key={o} value={o}>
+                            {o}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
+                  ))}
+
+                  {/* Row 2: Quantity, Conformity, Workmanship Remarks */}
+                  {[
+                    ['qtyDR', 'Quantity remarks'],
+                    ['confDR', 'Conformity remarks'],
+                    ['workDR', 'Workmanship remarks'],
+                  ].map(([k, ph]) => (
+                    <Grid key={k} xs={12} sm={6} md={4}>
+                      <TextField
+                        placeholder={ph}
+                        fullWidth
+                        size="small"
+                        value={form[k] ?? ''}
+                        onChange={(e) => setF(k, e.target.value)}
+                      />
+                    </Grid>
+                  ))}
+
+                  {/* Row 3: Packing, Marking, Measurement Selectors */}
+                  {[
+                    ['packD', 'Packing', OK_NOT_OK],
+                    ['markD', 'Marking', OK_NOT_OK],
+                    ['measD', 'Measurement', OK_NOT_OK],
+                  ].map(([k, label, opts]) => (
+                    <Grid key={k} xs={12} sm={6} md={4}>
+                      <TextField
+                        select
+                        label={label}
+                        fullWidth
+                        size="small"
+                        value={form[k] ?? opts[0]}
+                        onChange={(e) => setF(k, e.target.value)}
+                      >
+                        {opts.map((o) => (
+                          <MenuItem key={o} value={o}>
+                            {o}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
+                  ))}
+
+                  {/* Row 4: Packing, Marking, Measurement Remarks */}
+                  {[
+                    ['packDR', 'Packing remarks'],
+                    ['markDR', 'Marking remarks'],
+                    ['measDR', 'Measurement remarks'],
+                  ].map(([k, ph]) => (
+                    <Grid key={k} xs={12} sm={6} md={4}>
+                      <TextField
+                        placeholder={ph}
+                        fullWidth
+                        size="small"
+                        value={form[k] ?? ''}
+                        onChange={(e) => setF(k, e.target.value)}
+                      />
+                    </Grid>
+                  ))}
+                </Grid>
+              </SectionCard>
+            )}
+
+            {activeStep === 1 && (
+              <SectionCard
+                title="OVERALL CONCLUSION"
+              // subtitle="Size × quantity matrix (QDInspectionDtl + GetSizeQty): 12 size columns + TOTAL like legacy. If the API sends no matrix rows, they are built from sizeQtyBreakdown. Saves with the main Save button."
+              >
+                <Grid container spacing={2} sx={{ mb: 2 }}>
+                  <Grid xs={12} sm={4}>
+                    <TextField
+                      label="%"
+                      fullWidth
+                      size="small"
+                      placeholder="%"
+                      value={form.calPerc ?? ''}
+                      onChange={(e) => handlePercChange(e.target.value)}
+                    />
+                  </Grid>
+                </Grid>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
+                  Size matrix (legacy dgInspectionDtl)
+                </Typography>
+                <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto', mb: 3 }}>
+                  <Table size="small" sx={{ minWidth: 895, tableLayout: 'fixed' }}>
                     <TableHead>
                       <TableRow sx={tableHeadRowSx(theme)}>
-                        <TableCell sx={{ width: '5%', textAlign: 'center' }}>S.NO.</TableCell>
-                        <TableCell sx={{ width: '30%' }}>DURING INSPECTION FOUND FOLLOWING DISCREPANCIES</TableCell>
-                        <TableCell sx={{ width: '25%' }}>Remarks</TableCell>
-                        <TableCell sx={{ width: '13.3%' }} align="center">CRITICAL</TableCell>
-                        <TableCell sx={{ width: '13.3%' }} align="center">MAJOR</TableCell>
-                        <TableCell sx={{ width: '13.3%' }} align="center">MINOR</TableCell>
+                        <TableCell sx={{ width: 160, fontSize: 11, py: 1, px: 1.5, borderRight: 1, borderColor: 'divider' }}>SIZE</TableCell>
+                        {matrixColumns.map((col, i) => (
+                          <TableCell key={`h-${col.slot}-${i}`} align="center" sx={{ width: 55, fontSize: 11, py: 1, px: 0.5, borderRight: 1, borderColor: 'divider' }}>
+                            {col.label || ''}
+                          </TableCell>
+                        ))}
+                        <TableCell align="center" sx={{ width: 75, fontSize: 11, py: 1, px: 1 }}>
+                          TOTAL
+                        </TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {discRows.map((r, idx) => (
-                        <TableRow key={r.id} sx={{ height: 48 }}>
-                          <TableCell sx={{ textAlign: 'center', fontWeight: 600 }}>{idx + 1}</TableCell>
-                          <TableCell sx={{ py: 0.5, px: 1 }}>
-                            <Autocomplete
-                              freeSolo
-                              options={descHistory}
-                              filterOptions={(options, state) => {
-                                const input = state.inputValue.toLowerCase().trim();
-                                if (!input) return [];
-                                return options.filter(o => o.toLowerCase().startsWith(input));
-                              }}
-                              inputValue={r.discrepancy || ''}
-                              onInputChange={(e, newInputValue) => {
-                                setDisc(r.id, 'discrepancy', newInputValue || '');
-                              }}
-                              onChange={(e, newValue) => {
-                                setDisc(r.id, 'discrepancy', newValue || '');
-                                if (newValue) saveDiscHistory(newValue);
-                              }}
-                              onBlur={() => saveDiscHistory(r.discrepancy)}
-                              renderInput={(params) => (
-                                <TextField
-                                  {...params}
-                                  size="small"
-                                  fullWidth
-                                  placeholder="—"
-                                  sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                                  inputProps={{
-                                    ...params.inputProps,
-                                    autoComplete: 'off',
-                                  }}
-                                />
-                              )}
-                            />
-                          </TableCell>
-                          <TableCell sx={{ py: 0.5, px: 1 }}>
-                            <BlurTextField
-                              size="small"
-                              fullWidth
-                              value={r.remarks}
-                              onChange={(e) => setDisc(r.id, 'remarks', e.target.value)}
-                              placeholder="—"
-                              sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                            />
-                          </TableCell>
-                          <TableCell sx={{ py: 0.5, px: 1 }}>
-                            <BlurTextField
-                              size="small"
-                              fullWidth
-                              value={r.critical}
-                              onChange={(e) => setDisc(r.id, 'critical', e.target.value)}
-                              placeholder="0"
-                              sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                            />
-                          </TableCell>
-                          <TableCell sx={{ py: 0.5, px: 1 }}>
-                            <BlurTextField
-                              size="small"
-                              fullWidth
-                              value={r.major}
-                              onChange={(e) => setDisc(r.id, 'major', e.target.value)}
-                              placeholder="0"
-                              sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                            />
-                          </TableCell>
-                          <TableCell sx={{ py: 0.5, px: 1 }}>
-                            <BlurTextField
-                              size="small"
-                              fullWidth
-                              value={r.minor}
-                              onChange={(e) => setDisc(r.id, 'minor', e.target.value)}
-                              placeholder="0"
-                              sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                            />
+                      {dtlRows.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={numMatrixSlots + 2}>
+                            <Typography variant="body2" color="text.secondary">
+                              {loading ? 'Loading matrix…' : 'No matrix data.'}
+                            </Typography>
                           </TableCell>
                         </TableRow>
-                      ))}
-                      
-                      {/* Total and Allowed rows as per user screenshot */}
-                      <TableRow sx={{ height: 48, bgcolor: 'action.hover' }}>
-                        <TableCell colSpan={3} align="center" sx={{ fontWeight: 800, fontSize: 13 }}>TOTAL</TableCell>
-                        <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.criticalQty || 0}</TableCell>
-                        <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.majQty || 0}</TableCell>
-                        <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.minQty || 0}</TableCell>
-                      </TableRow>
-                      <TableRow sx={{ height: 48, bgcolor: 'action.hover' }}>
-                        <TableCell colSpan={3} align="center" sx={{ fontWeight: 800, fontSize: 13 }}>ALLOWED</TableCell>
-                        <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.allowCrit || 0}</TableCell>
-                        <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.allowMaj || 0}</TableCell>
-                        <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.allowMin || 0}</TableCell>
-                      </TableRow>
+                      ) : (
+                        dtlRows.map((row, rowIdx) => {
+                          const st = String(row.sizeType ?? row.SizeType ?? '').trim();
+                          if (st.toUpperCase() === 'SIZE') return null;
+
+                          const isStaticRow = ['ORDER QTY', 'QTY BALANCE/EXTRA'].includes(st.toUpperCase());
+
+                          return (
+                            <TableRow
+                              key={`${st}-${rowIdx}`}
+                              sx={{
+                                '&:nth-of-type(odd)': { bgcolor: 'action.hover' },
+                                ...(isStaticRow && { bgcolor: alpha(theme.palette.primary.main, 0.04) }),
+                                height: 44,
+                              }}
+                            >
+                              <TableCell sx={{ fontWeight: 600, fontSize: 11.5, whiteSpace: 'nowrap', py: 0.5, px: 1.5, borderRight: 1, borderColor: 'divider' }}>
+                                {st}
+                              </TableCell>
+                              {matrixColumns.map((col) => {
+                                const slot = col.slot;
+                                const isReadOnly = ['SIZE', 'ORDER QTY', 'QTY BALANCE/EXTRA'].includes(st.toUpperCase());
+
+                                let rawVal = getDtlCell(row, slot);
+                                let displayVal = rawVal;
+                                let cellBgColor = 'transparent';
+                                let cellTextColor = isReadOnly ? 'text.primary' : 'inherit';
+                                let isColored = false;
+
+                                if (st.toUpperCase() === 'QTY BALANCE/EXTRA' && rawVal !== '') {
+                                  const num = parseFloat(rawVal);
+                                  if (!isNaN(num)) {
+                                    if (num < 0) {
+                                      cellTextColor = 'error.main'; // Red text for negative
+                                      isColored = true;
+                                    } else if (num > 0) {
+                                      cellTextColor = 'success.main'; // Green text for positive
+                                      isColored = true;
+                                    } else {
+                                      displayVal = '0';
+                                    }
+                                  }
+                                }
+
+                                return (
+                                  <TableCell key={`${st}-${slot}`} align="center" sx={{ py: 0.5, px: 0, borderRight: 1, borderColor: 'divider' }}>
+                                    <TextField
+                                      size="small"
+                                      fullWidth
+                                      value={displayVal}
+                                      onChange={(e) => updateDtlCell(rowIdx, slot, e.target.value)}
+                                      inputProps={{ readOnly: isReadOnly }}
+                                      InputProps={{
+                                        sx: {
+                                          fontSize: 11.5,
+                                          bgcolor: cellBgColor,
+                                          height: 38,
+                                          '& .MuiInputBase-input': {
+                                            py: 0.5,
+                                            px: 0.5,
+                                            textAlign: 'center',
+                                            ...(isReadOnly && { fontWeight: 700 }),
+                                            color: isColored
+                                              ? (cellTextColor === 'error.main'
+                                                ? `${theme.palette.error.main} !important`
+                                                : `${theme.palette.success.main} !important`)
+                                              : cellTextColor,
+                                            WebkitTextFillColor: isColored
+                                              ? (cellTextColor === 'error.main'
+                                                ? `${theme.palette.error.main} !important`
+                                                : `${theme.palette.success.main} !important`)
+                                              : undefined,
+                                          },
+                                        },
+                                      }}
+                                    />
+                                  </TableCell>
+                                );
+                              })}
+                              <TableCell align="right" sx={{ py: 0.25, px: 0.25 }}>
+                                {(() => {
+                                  let totalVal = row.sizeTotal ?? row.SizeTotal ?? '';
+                                  let totalBgColor = alpha(theme.palette.primary.main, 0.08);
+                                  let totalTextColor = 'inherit';
+                                  let isTotalColored = false;
+                                  if (st.toUpperCase() === 'QTY BALANCE/EXTRA' && totalVal !== '') {
+                                    const tNum = parseFloat(totalVal);
+                                    if (!isNaN(tNum)) {
+                                      if (tNum < 0) {
+                                        totalTextColor = 'error.main';
+                                        isTotalColored = true;
+                                      } else if (tNum > 0) {
+                                        totalTextColor = 'success.main';
+                                        isTotalColored = true;
+                                      } else {
+                                        totalVal = '0';
+                                      }
+                                    }
+                                  }
+                                  return (
+                                    <TextField
+                                      size="small"
+                                      fullWidth
+                                      value={totalVal}
+                                      disabled
+                                      InputProps={{
+                                        sx: {
+                                          fontSize: 11.5,
+                                          bgcolor: totalBgColor,
+                                          height: 38,
+                                          '& .MuiInputBase-input': {
+                                            py: 0.5,
+                                            px: 0.5,
+                                            textAlign: 'center',
+                                            fontWeight: 800,
+                                            color: isTotalColored
+                                              ? (totalTextColor === 'error.main'
+                                                ? `${theme.palette.error.main} !important`
+                                                : `${theme.palette.success.main} !important`)
+                                              : totalTextColor,
+                                            WebkitTextFillColor: isTotalColored
+                                              ? (totalTextColor === 'error.main'
+                                                ? `${theme.palette.error.main} !important`
+                                                : `${theme.palette.success.main} !important`)
+                                              : undefined,
+                                          },
+                                        },
+                                      }}
+                                    />
+                                  );
+                                })()}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
                     </TableBody>
                   </Table>
                 </TableContainer>
+              </SectionCard>
+            )}
 
-                <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 3 }}>
+            {activeStep === 2 && (
+              <>
+                <SectionCard
+                  title={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      Accessories Markings
+                      <Checkbox
+                        size="small"
+                        sx={{ p: 0 }} // minimize padding
+                        checked={ACCESSORY_UI_ROWS.every((row) => !!form.acc?.[row.accKey])}
+                        indeterminate={
+                          ACCESSORY_UI_ROWS.some((row) => !!form.acc?.[row.accKey]) &&
+                          !ACCESSORY_UI_ROWS.every((row) => !!form.acc?.[row.accKey])
+                        }
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setForm((prev) => {
+                            const newAcc = { ...prev.acc };
+                            ACCESSORY_UI_ROWS.forEach((row) => {
+                              newAcc[row.accKey] = checked;
+                            });
+                            return { ...prev, acc: newAcc };
+                          });
+                        }}
+                      />
+                    </Box>
+                  }
+                >
                   <Grid container spacing={2}>
-                    {/* Left: Calculate + Total Labels - Roughly 33.3% (sm=4) */}
-                    <Grid xs={12} sm={4}>
-                      <Button
-                        variant="contained"
-                        color="success"
-                        onClick={handleCalculate}
-                        fullWidth
-                        sx={{ height: 48, fontSize: 16, fontWeight: 700 }}
+                    {ACCESSORY_UI_ROWS.map((row) => {
+                      const dropKey = row.dropKey ?? row.accKey;
+                      const opts = row.options || YES_NO;
+                      const dropVal = form.accDrop?.[dropKey] ?? opts[0];
+                      return (
+                        <Grid key={row.accKey} xs={12} sm={6} md={4}>
+                          <Stack direction="column" spacing={0.5} alignItems="flex-start">
+                            {row.label || !row.noCheckbox ? (
+                              <FormControlLabel
+                                control={
+                                  !row.noCheckbox ? (
+                                    <Checkbox
+                                      size="small"
+                                      checked={!!form.acc?.[row.accKey]}
+                                      onChange={(e) => setAcc(row.accKey, e.target.checked)}
+                                    />
+                                  ) : (
+                                    <Box sx={{ width: 38 }} /> 
+                                  )
+                                }
+                                label={row.label}
+                                sx={{
+                                  m: 0,
+                                  '& .MuiFormControlLabel-label': {
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    color: 'text.primary',
+                                    lineHeight: 1.2,
+                                  },
+                                }}
+                              />
+                            ) : (
+                              <Box sx={{ height: 38 }} /> // Spacer to maintain vertical alignment
+                            )}
+                            {row.textMode ? (
+                              <BlurTextField
+                                size="small"
+                                fullWidth
+                                label="Remarks"
+                                value={form.accText?.[row.textKey] ?? ''}
+                                onChange={(e) => setAccText(row.textKey, e.target.value)}
+                                placeholder="—"
+                                InputLabelProps={{ shrink: true }}
+                                sx={{ '& .MuiInputBase-root': { height: 40 } }}
+                              />
+                            ) : (
+                              <TextField
+                                select
+                                size="small"
+                                fullWidth
+                                label="Remarks"
+                                value={dropVal}
+                                onChange={(e) => setAccDrop(dropKey, e.target.value)}
+                                InputLabelProps={{ shrink: true }}
+                                sx={{ '& .MuiInputBase-root': { height: 40 } }}
+                              >
+                                {opts.map((o) => (
+                                  <MenuItem key={o} value={o}>
+                                    {o}
+                                  </MenuItem>
+                                ))}
+                              </TextField>
+                            )}
+                          </Stack>
+                        </Grid>
+                      );
+                    })}
+                  </Grid>
+                </SectionCard>
+
+                <SectionCard
+                  title={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      Packing
+                      <Checkbox
+                        size="small"
+                        sx={{ p: 0 }} // minimize padding so it aligns precisely
+                        checked={PACKING_UI_ROWS.every((row) => !!form.pack?.[row.key])}
+                        indeterminate={
+                          PACKING_UI_ROWS.some((row) => !!form.pack?.[row.key]) &&
+                          !PACKING_UI_ROWS.every((row) => !!form.pack?.[row.key])
+                        }
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setForm((prev) => {
+                            const newPack = { ...prev.pack };
+                            PACKING_UI_ROWS.forEach((row) => {
+                              newPack[row.key] = checked;
+                            });
+                            return { ...prev, pack: newPack };
+                          });
+                        }}
+                      />
+                    </Box>
+                  }
+                >
+                  <Grid container spacing={2}>
+                    {PACKING_UI_ROWS.map((row) => (
+                      <Grid key={row.key} xs={12} sm={6} md={4}>
+                        <Stack direction="column" spacing={0.5} alignItems="flex-start">
+                          {row.label || row.key === 'otherM' ? (
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  size="small"
+                                  checked={!!form.pack?.[row.key]}
+                                  onChange={(e) => setPack(row.key, e.target.checked)}
+                                />
+                              }
+                              label={row.label}
+                              sx={{
+                                m: 0,
+                                '& .MuiFormControlLabel-label': {
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  color: 'text.primary',
+                                  lineHeight: 1.2,
+                                },
+                              }}
+                            />
+                          ) : (
+                            <Box sx={{ height: 38 }} />
+                          )}
+
+                          {row.type === 'text' && (
+                            <BlurTextField
+                              size="small"
+                              fullWidth
+                              label="Remarks"
+                              value={form.packText?.[row.textKey] ?? ''}
+                              onChange={(e) => setPackText(row.textKey, e.target.value)}
+                              placeholder="—"
+                              InputLabelProps={{ shrink: true }}
+                              sx={{ '& .MuiInputBase-root': { height: 40 } }}
+                            />
+                          )}
+                          {row.type === 'select' && (
+                            <TextField
+                              select
+                              size="small"
+                              fullWidth
+                              label="Remarks"
+                              value={form.packDrop?.[row.dropKey] ?? row.options[0]}
+                              onChange={(e) => setPackDrop(row.dropKey, e.target.value)}
+                              InputLabelProps={{ shrink: true }}
+                              sx={{ '& .MuiInputBase-root': { height: 40 } }}
+                            >
+                              {row.options.map((o) => (
+                                <MenuItem key={o} value={o}>
+                                  {o}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          )}
+                          {row.type === 'double-text' && (
+                            <Stack direction="row" spacing={1} sx={{ width: '100%' }}>
+                              <BlurTextField
+                                size="small"
+                                fullWidth
+                                value={form.packText?.[row.textKey1] ?? ''}
+                                onChange={(e) => setPackText(row.textKey1, e.target.value)}
+                                sx={{ '& .MuiInputBase-root': { height: 40 } }}
+                              />
+                              <BlurTextField
+                                size="small"
+                                fullWidth
+                                value={form.packText?.[row.textKey2] ?? ''}
+                                onChange={(e) => setPackText(row.textKey2, e.target.value)}
+                                sx={{ '& .MuiInputBase-root': { height: 40 } }}
+                              />
+                            </Stack>
+                          )}
+                        </Stack>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </SectionCard>
+              </>
+            )}
+
+            {activeStep === 3 && (
+              <>
+                <SectionCard title="Size Specs">
+                  <Stack spacing={2}>
+                    <TextField
+                      select
+                      size="small"
+                      label="Type"
+                      sx={{ maxWidth: 400 }}
+                      value={measurementTypeId}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setMeasurementTypeId(v);
+                        if (!v) setSpecRows([]);
+                      }}
+                    >
+                      <MenuItem value="">Select</MenuItem>
+                      {measurementTypes.map((t) => {
+                        const id = t.measurementTypeID ?? t.MeasurementTypeID;
+                        const label = t.measurementType ?? t.MeasurementType;
+                        return (
+                          <MenuItem key={id} value={String(id)}>
+                            {label}
+                          </MenuItem>
+                        );
+                      })}
+                    </TextField>
+
+                    {measurementTypeId ? (
+                      <Stack spacing={2}>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+                          <Button variant="outlined" onClick={saveSpecs} disabled={!mstId || savingSpecs}>
+                            Save Specs
+                          </Button>
+                          <Button
+                            variant="text"
+                            onClick={() =>
+                              setSpecRows((prev) => [
+                                ...prev,
+                                {
+                                  measurementPointId: '',
+                                  measurementPoints: '',
+                                  measurements: '',
+                                  tolerance: '',
+                                  header1: '',
+                                  header2: '',
+                                  header3: '',
+                                  header4: '',
+                                  q1: '',
+                                  q2: '',
+                                  q3: '',
+                                  q4: '',
+                                },
+                              ])
+                            }
+                          >
+                            Add Row
+                          </Button>
+                        </Stack>
+                        <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Measurement Point ID</TableCell>
+                                <TableCell>Measurement Point</TableCell>
+                                <TableCell>Measurement</TableCell>
+                                <TableCell>Tolerance</TableCell>
+                                <TableCell>H1</TableCell>
+                                <TableCell>H2</TableCell>
+                                <TableCell>H3</TableCell>
+                                <TableCell>H4</TableCell>
+                                <TableCell>Q1</TableCell>
+                                <TableCell>Q2</TableCell>
+                                <TableCell>Q3</TableCell>
+                                <TableCell>Q4</TableCell>
+                                <TableCell />
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {specRows.map((r, idx) => (
+                                <TableRow key={`${r.measurementPointId}-${idx}`} sx={{ height: 44 }}>
+                                  <TableCell>
+                                    <TextField
+                                      size="small"
+                                      value={r.measurementPointId}
+                                      onChange={(e) => setSpec(idx, 'measurementPointId', e.target.value)}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <TextField
+                                      size="small"
+                                      value={r.measurementPoints}
+                                      onChange={(e) => setSpec(idx, 'measurementPoints', e.target.value)}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <TextField
+                                      size="small"
+                                      value={r.measurements}
+                                      onChange={(e) => setSpec(idx, 'measurements', e.target.value)}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <BlurTextField
+                                      size="small"
+                                      value={r.tolerance}
+                                      onChange={(e) => setSpec(idx, 'tolerance', e.target.value)}
+                                    />
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <BlurTextField size="small" value={r.header1} onChange={(e) => setSpec(idx, 'header1', e.target.value)} />
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <BlurTextField size="small" value={r.header2} onChange={(e) => setSpec(idx, 'header2', e.target.value)} />
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <BlurTextField size="small" value={r.header3} onChange={(e) => setSpec(idx, 'header3', e.target.value)} />
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <BlurTextField size="small" value={r.header4} onChange={(e) => setSpec(idx, 'header4', e.target.value)} />
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <BlurTextField size="small" value={r.q1} onChange={(e) => setSpec(idx, 'q1', e.target.value)} />
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <BlurTextField size="small" value={r.q2} onChange={(e) => setSpec(idx, 'q2', e.target.value)} />
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <BlurTextField size="small" value={r.q3} onChange={(e) => setSpec(idx, 'q3', e.target.value)} />
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <BlurTextField size="small" value={r.q4} onChange={(e) => setSpec(idx, 'q4', e.target.value)} />
+                                  </TableCell>
+                                  <TableCell>
+                                    <IconButton size="small" onClick={() => setSpecRows((prev) => prev.filter((_, i) => i !== idx))}>
+                                      <DeleteIcon fontSize="small" />
+                                    </IconButton>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              {!loadingSpecs && specRows.length === 0 && (
+                                <TableRow>
+                                  <TableCell colSpan={13} align="center">
+                                    <Typography variant="body2" color="text.secondary">
+                                      No rows for selected measurement type.
+                                    </Typography>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </Stack>
+                    ) : null}
+                  </Stack>
+                </SectionCard>
+
+                <SectionCard title="DISCREPANCIES">
+                  <Stack spacing={2}>
+                    <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 360 }}>
+                      <Table size="small" stickyHeader>
+                        <TableHead>
+                          <TableRow sx={tableHeadRowSx(theme)}>
+                            <TableCell sx={{ width: '5%', textAlign: 'center' }}>S.NO.</TableCell>
+                            <TableCell sx={{ width: '30%' }}>DURING INSPECTION FOUND FOLLOWING DISCREPANCIES</TableCell>
+                            <TableCell sx={{ width: '25%' }}>Remarks</TableCell>
+                            <TableCell sx={{ width: '13.3%' }} align="center">CRITICAL</TableCell>
+                            <TableCell sx={{ width: '13.3%' }} align="center">MAJOR</TableCell>
+                            <TableCell sx={{ width: '13.3%' }} align="center">MINOR</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {discRows.map((r, idx) => (
+                            <TableRow key={r.id} sx={{ height: 48 }}>
+                              <TableCell sx={{ textAlign: 'center', fontWeight: 600 }}>{idx + 1}</TableCell>
+                              <TableCell sx={{ py: 0.5, px: 1 }}>
+                                <Autocomplete
+                                  freeSolo
+                                  options={descHistory}
+                                  filterOptions={(options, state) => {
+                                    const input = state.inputValue.toLowerCase().trim();
+                                    if (!input) return [];
+                                    return options.filter(o => o.toLowerCase().startsWith(input));
+                                  }}
+                                  inputValue={r.discrepancy || ''}
+                                  onInputChange={(e, newInputValue) => {
+                                    setDisc(r.id, 'discrepancy', newInputValue || '');
+                                  }}
+                                  onChange={(e, newValue) => {
+                                    setDisc(r.id, 'discrepancy', newValue || '');
+                                    if (newValue) saveDiscHistory(newValue);
+                                  }}
+                                  onBlur={() => saveDiscHistory(r.discrepancy)}
+                                  renderInput={(params) => (
+                                    <TextField
+                                      {...params}
+                                      size="small"
+                                      fullWidth
+                                      placeholder="—"
+                                      sx={{ '& .MuiInputBase-root': { height: 40 } }}
+                                      inputProps={{
+                                        ...params.inputProps,
+                                        autoComplete: 'off',
+                                      }}
+                                    />
+                                  )}
+                                />
+                              </TableCell>
+                              <TableCell sx={{ py: 0.5, px: 1 }}>
+                                <BlurTextField
+                                  size="small"
+                                  fullWidth
+                                  value={r.remarks}
+                                  onChange={(e) => setDisc(r.id, 'remarks', e.target.value)}
+                                  placeholder="—"
+                                  sx={{ '& .MuiInputBase-root': { height: 40 } }}
+                                />
+                              </TableCell>
+                              <TableCell sx={{ py: 0.5, px: 1 }}>
+                                <BlurTextField
+                                  size="small"
+                                  fullWidth
+                                  value={r.critical}
+                                  onChange={(e) => setDisc(r.id, 'critical', e.target.value)}
+                                  placeholder="0"
+                                  sx={{ '& .MuiInputBase-root': { height: 40 } }}
+                                />
+                              </TableCell>
+                              <TableCell sx={{ py: 0.5, px: 1 }}>
+                                <BlurTextField
+                                  size="small"
+                                  fullWidth
+                                  value={r.major}
+                                  onChange={(e) => setDisc(r.id, 'major', e.target.value)}
+                                  placeholder="0"
+                                  sx={{ '& .MuiInputBase-root': { height: 40 } }}
+                                />
+                              </TableCell>
+                              <TableCell sx={{ py: 0.5, px: 1 }}>
+                                <BlurTextField
+                                  size="small"
+                                  fullWidth
+                                  value={r.minor}
+                                  onChange={(e) => setDisc(r.id, 'minor', e.target.value)}
+                                  placeholder="0"
+                                  sx={{ '& .MuiInputBase-root': { height: 40 } }}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          
+                          {/* Total and Allowed rows as per user screenshot */}
+                          <TableRow sx={{ height: 48, bgcolor: 'action.hover' }}>
+                            <TableCell colSpan={3} align="center" sx={{ fontWeight: 800, fontSize: 13 }}>TOTAL</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.criticalQty || 0}</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.majQty || 0}</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.minQty || 0}</TableCell>
+                          </TableRow>
+                          <TableRow sx={{ height: 48, bgcolor: 'action.hover' }}>
+                            <TableCell colSpan={3} align="center" sx={{ fontWeight: 800, fontSize: 13 }}>ALLOWED</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.allowCrit || 0}</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.allowMaj || 0}</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.allowMin || 0}</TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+
+                    <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 3 }}>
+                      <Box
+                        sx={{
+                          display: 'grid',
+                          gridTemplateColumns: {
+                            xs: '1fr',
+                            sm: '35fr 25fr 13.3fr 13.3fr 13.3fr',
+                          },
+                          gap: 1.5,
+                          alignItems: 'stretch',
+                        }}
                       >
-                        Calculate
-                      </Button>
-                    </Grid>
-
-                    {/* Matrix Columns: Sample Size, Critical, Major, Minor */}
-                    {[
-                      {
-                        key: 'sampleSize',
-                        label: 'Sample Size',
-                        value: form.sampleSize,
-                        subValueKey: 'reliability',
-                        subItems: RELIABILITY,
-                        isBlue: true,
-                        isAllowedLabel: true,
-                        sm: 3, // Roughly 25% (Matches Remarks)
-                      },
-                      {
-                        key: 'criticalQty',
-                        label: 'Critical',
-                        value: form.criticalQty,
-                        subValueKey: 'critAql',
-                        subItems: AQL_LEVEL_MENU_ITEMS,
-                        allowedKey: 'allowCrit',
-                        defVal: '0.0',
-                        sm: 1.66, // Roughly 13.9%
-                      },
-                      {
-                        key: 'majQty',
-                        label: 'Major',
-                        value: form.majQty,
-                        subValueKey: 'majAql',
-                        subItems: AQL_LEVEL_MENU_ITEMS,
-                        allowedKey: 'allowMaj',
-                        defVal: '2.5',
-                        sm: 1.66, // Roughly 13.9%
-                      },
-                      {
-                        key: 'minQty',
-                        label: 'Minor',
-                        value: form.minQty,
-                        subValueKey: 'minAql',
-                        subItems: AQL_LEVEL_MENU_ITEMS,
-                        allowedKey: 'allowMin',
-                        defVal: '4.0',
-                        sm: 1.66, // Roughly 13.9%
-                      },
-                    ].map((col) => (
-                      <Grid key={col.key} xs={6} sm={col.sm} sx={{ textAlign: 'center' }}>
-                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, color: 'text.secondary' }}>
-                          {col.label}
-                        </Typography>
-
-                        {/* Value Box */}
-                        <Box
-                          sx={{
-                            mb: 2,
-                            p: 1.5,
-                            borderRadius: 1,
-                            height: 48,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 700,
-                            fontSize: 16,
-                            bgcolor: col.isBlue ? alpha(theme.palette.primary.main, 0.45) : 'action.hover',
-                            color: col.isBlue ? 'primary.contrastText' : 'text.primary',
-                            border: col.isBlue ? 'none' : 1,
-                            borderColor: 'divider',
-                          }}
-                        >
-                          {col.value || '0'}
+                        {/* Calculate Column */}
+                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, color: 'text.secondary' }}>
+                            &nbsp;
+                          </Typography>
+                          <Button
+                            variant="contained"
+                            color="success"
+                            onClick={handleCalculate}
+                            fullWidth
+                            sx={{ height: 48, fontSize: 16, fontWeight: 700 }}
+                          >
+                            Calculate
+                          </Button>
                         </Box>
 
-                        {/* Dropdown / Sub-info */}
-                        <TextField
-                          select
-                          fullWidth
-                          size="small"
-                          value={
-                            col.subValueKey === 'reliability'
-                              ? form.reliability ?? 'II'
-                              : normalizeAqlFieldValue(form[col.subValueKey] != null && form[col.subValueKey] !== '' ? form[col.subValueKey] : col.defVal)
-                          }
-                          onChange={(e) => setF(col.subValueKey, e.target.value)}
-                          sx={{
-                            mb: col.isAllowedLabel || col.allowedKey ? 2 : 0,
-                            '& .MuiInputBase-root': {
-                              height: 48,
-                              bgcolor: 'action.selected',
-                              fontWeight: 700,
-                              fontSize: 16,
-                            },
-                            '& .MuiSelect-select': { py: 0 },
-                          }}
-                        >
-                          {(col.subItems || []).map((o) => (
-                            <MenuItem key={o.value} value={o.value}>
-                              {o.label}
-                            </MenuItem>
-                          ))}
-                        </TextField>
-
-                        {/* Allowed Row Label / Value */}
-                        {col.isAllowedLabel && (
-                          <Typography variant="subtitle2" sx={{ mt: 1.5, fontWeight: 700, color: 'text.secondary' }}>
-                            Allowed
+                        {/* Sample Size Column */}
+                        <Box sx={{ display: 'flex', flexDirection: 'column', textAlign: 'center' }}>
+                          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, color: 'text.secondary' }}>
+                            Sample Size
                           </Typography>
-                        )}
-
-                        {col.allowedKey && (
                           <Box
                             sx={{
-                              height: 48,
+                              mb: 2,
+                              p: 1.5,
                               borderRadius: 1,
+                              height: 48,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               fontWeight: 700,
                               fontSize: 16,
-                              bgcolor: 'background.paper',
-                              border: 1,
-                              borderColor: 'divider',
+                              bgcolor: alpha(theme.palette.primary.main, 0.45),
+                              color: 'primary.contrastText',
                             }}
                           >
-                            {form[col.allowedKey] || '0'}
+                            {form.sampleSize || '0'}
                           </Box>
-                        )}
+                          <TextField
+                            select
+                            fullWidth
+                            size="small"
+                            value={form.reliability ?? 'II'}
+                            onChange={(e) => setF('reliability', e.target.value)}
+                            sx={{
+                              mb: 2,
+                              '& .MuiInputBase-root': {
+                                height: 48,
+                                bgcolor: 'action.selected',
+                                fontWeight: 700,
+                                fontSize: 16,
+                              },
+                              '& .MuiSelect-select': { py: 0 },
+                            }}
+                          >
+                            {RELIABILITY.map((o) => (
+                              <MenuItem key={o.value} value={o.value}>
+                                {o.label}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+                          <Typography variant="subtitle2" sx={{ mt: 1.5, fontWeight: 700, color: 'text.secondary' }}>
+                            Allowed
+                          </Typography>
+                        </Box>
+
+                        {/* Matrix Columns: Critical, Major, Minor */}
+                        {[
+                          {
+                            key: 'criticalQty',
+                            label: 'Critical',
+                            value: form.criticalQty,
+                            subValueKey: 'critAql',
+                            subItems: AQL_LEVEL_MENU_ITEMS,
+                            allowedKey: 'allowCrit',
+                            defVal: '0.0',
+                          },
+                          {
+                            key: 'majQty',
+                            label: 'Major',
+                            value: form.majQty,
+                            subValueKey: 'majAql',
+                            subItems: AQL_LEVEL_MENU_ITEMS,
+                            allowedKey: 'allowMaj',
+                            defVal: '2.5',
+                          },
+                          {
+                            key: 'minQty',
+                            label: 'Minor',
+                            value: form.minQty,
+                            subValueKey: 'minAql',
+                            subItems: AQL_LEVEL_MENU_ITEMS,
+                            allowedKey: 'allowMin',
+                            defVal: '4.0',
+                          },
+                        ].map((col) => (
+                          <Box key={col.key} sx={{ textAlign: 'center', display: 'flex', flexDirection: 'column' }}>
+                            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, color: 'text.secondary' }}>
+                              {col.label}
+                            </Typography>
+
+                            {/* Value Box */}
+                            <Box
+                              sx={{
+                                mb: 2,
+                                p: 1.5,
+                                borderRadius: 1,
+                                height: 48,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: 700,
+                                fontSize: 16,
+                                bgcolor: 'action.hover',
+                                color: 'text.primary',
+                                border: 1,
+                                borderColor: 'divider',
+                              }}
+                            >
+                              {col.value || '0'}
+                            </Box>
+
+                            {/* Dropdown / Sub-info */}
+                            <TextField
+                              select
+                              fullWidth
+                              size="small"
+                              value={normalizeAqlFieldValue(form[col.subValueKey] != null && form[col.subValueKey] !== '' ? form[col.subValueKey] : col.defVal)}
+                              onChange={(e) => setF(col.subValueKey, e.target.value)}
+                              sx={{
+                                mb: col.allowedKey ? 2 : 0,
+                                '& .MuiInputBase-root': {
+                                  height: 48,
+                                  bgcolor: 'action.selected',
+                                  fontWeight: 700,
+                                  fontSize: 16,
+                                },
+                                '& .MuiSelect-select': { py: 0 },
+                              }}
+                            >
+                              {(col.subItems || []).map((o) => (
+                                <MenuItem key={o.value} value={o.value}>
+                                  {o.label}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+
+                            {/* Allowed Box */}
+                            {col.allowedKey && (
+                              <Box
+                                sx={{
+                                  height: 48,
+                                  borderRadius: 1,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontWeight: 700,
+                                  fontSize: 16,
+                                  bgcolor: 'background.paper',
+                                  border: 1,
+                                  borderColor: 'divider',
+                                }}
+                              >
+                                {form[col.allowedKey] || '0'}
+                              </Box>
+                            )}
+                          </Box>
+                        ))}
+                      </Box>
+                      <Grid container spacing={2} sx={{ mt: 3 }} alignItems="flex-end">
+                        <Grid xs={12} md={7.5}>
+                          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, color: 'text.secondary' }}>
+                            Remarks
+                          </Typography>
+                          <BlurTextField
+                            fullWidth
+                            multiline
+                            minRows={3}
+                            size="small"
+                            value={form.qaRemarks ?? ''}
+                            onChange={(e) => setF('qaRemarks', e.target.value)}
+                            placeholder="Write remarks here..."
+                          />
+                        </Grid>
+
+                        <Grid xs={12} md={4.5}>
+                          <Stack direction="row" spacing={1.5} justifyContent="flex-end">
+                            {[
+                              { type: 'QA', label: 'QA Sign', key: 'QA' },
+                              { type: 'Vendor', label: 'V Sign', key: 'Vendor' },
+                              { type: 'Control', label: 'M QA Sign', key: 'Control' },
+                            ].map((btn) => {
+                              const isSigned = signatureStatus[btn.key];
+                              return (
+                                <Button
+                                  key={btn.type}
+                                  variant="contained"
+                                  sx={{
+                                    bgcolor: isSigned ? '#211f4d' : alpha('#403d6d', 0.15),
+                                    color: isSigned ? 'white' : '#403d6d',
+                                    '&:hover': {
+                                      bgcolor: isSigned ? '#1a1840' : alpha('#403d6d', 0.25),
+                                    },
+                                    fontWeight: 700,
+                                    minWidth: 100,
+                                    border: isSigned ? 'none' : '1px solid',
+                                    borderColor: alpha('#403d6d', 0.3),
+                                  }}
+                                  onClick={() => handleOpenSignature(btn.type, btn.label)}
+                                >
+                                  {btn.label}
+                                </Button>
+                              );
+                            })}
+                          </Stack>
+                        </Grid>
+                      </Grid>
+
+                      {/* <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
+                        Default sample size band from PO qty: {bindDef?.defaultSampleSize ?? bindDef?.DefaultSampleSize ?? '—'} · Range label
+                        (first system, index {bindDef?.defaultRangeIndex ?? bindDef?.DefaultRangeIndex ?? '—'}): {defaultRangeLabel || '—'}
+                      </Typography> */}
+                    </Box>
+
+
+                  </Stack>
+                </SectionCard>
+              </>
+            )}
+
+            {activeStep === 4 && (
+              <>
+                <SectionCard
+                  title="FUNDAMENTAL IMAGES"
+
+                >
+                  <Grid container spacing={1.5}>
+                    {FUNDAMENTAL_IMAGE_SLOTS.map((slot) => (
+                      <Grid xs={12} sm={6} md={4} key={slot}>
+                        <ImageUploadBox
+                          title={slot}
+                          images={imageMap[slot] || []}
+                          onUpload={(file) => uploadSlotImage(slot, file)}
+                          onDelete={(digitalId) => deleteImage(slot, digitalId)}
+                          getImageUrl={(id) =>
+                            `${qdApi.defaults.baseURL}/MasterOrderForQDSheet/quality-department-inspection/image/${id}/file`
+                          }
+                        />
                       </Grid>
                     ))}
                   </Grid>
+                </SectionCard>
 
-                  <Grid container spacing={2} sx={{ mt: 3 }} alignItems="flex-end">
-                    <Grid xs={12} md={7.5}>
-                      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, color: 'text.secondary' }}>
-                        Remarks
-                      </Typography>
-                      <BlurTextField
-                        fullWidth
-                        multiline
-                        minRows={3}
-                        size="small"
-                        value={form.qaRemarks ?? ''}
-                        onChange={(e) => setF('qaRemarks', e.target.value)}
-                        placeholder="Write remarks here..."
-                      />
-                    </Grid>
+                <SectionCard
+                  title="COMPLIMENTARY IMAGES"
 
-                    <Grid xs={12} md={4.5}>
-                      <Stack direction="row" spacing={1.5} justifyContent="flex-end">
-                        {[
-                          { type: 'QA', label: 'QA Sign', key: 'QA' },
-                          { type: 'Vendor', label: 'V Sign', key: 'Vendor' },
-                          { type: 'Control', label: 'M QA Sign', key: 'Control' },
-                        ].map((btn) => {
-                          const isSigned = signatureStatus[btn.key];
-                          return (
-                            <Button
-                              key={btn.type}
-                              variant="contained"
-                              sx={{
-                                bgcolor: isSigned ? '#211f4d' : alpha('#403d6d', 0.15),
-                                color: isSigned ? 'white' : '#403d6d',
-                                '&:hover': {
-                                  bgcolor: isSigned ? '#1a1840' : alpha('#403d6d', 0.25),
-                                },
-                                fontWeight: 700,
-                                minWidth: 100,
-                                border: isSigned ? 'none' : '1px solid',
-                                borderColor: alpha('#403d6d', 0.3),
-                              }}
-                              onClick={() => handleOpenSignature(btn.type, btn.label)}
-                            >
-                              {btn.label}
-                            </Button>
-                          );
-                        })}
-                      </Stack>
-                    </Grid>
+                >
+                  <Grid container spacing={1.5}>
+                    {COMPLIMENTARY_IMAGE_SLOTS.map((slot) => (
+                      <Grid xs={12} sm={6} md={4} key={slot}>
+                        <ImageUploadBox
+                          title={slot}
+                          images={imageMap[slot] || []}
+                          onUpload={(file) => uploadSlotImage(slot, file)}
+                          onDelete={(digitalId) => deleteImage(slot, digitalId)}
+                          getImageUrl={(id) =>
+                            `${qdApi.defaults.baseURL}/MasterOrderForQDSheet/quality-department-inspection/image/${id}/file`
+                          }
+                        />
+                      </Grid>
+                    ))}
                   </Grid>
+                </SectionCard>
+              </>
+            )}
 
-                  {/* <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-                    Default sample size band from PO qty: {bindDef?.defaultSampleSize ?? bindDef?.DefaultSampleSize ?? '—'} · Range label
-                    (first system, index {bindDef?.defaultRangeIndex ?? bindDef?.DefaultRangeIndex ?? '—'}): {defaultRangeLabel || '—'}
-                  </Typography> */}
-                </Box>
-
-
-              </Stack>
-            </SectionCard>
-
-            <SectionCard
-              title="FUNDAMENTAL IMAGES"
-
+            {/* Step navigation buttons */}
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mt: 1,
+                mb: 1,
+              }}
             >
-              <Grid container spacing={1.5}>
-                {FUNDAMENTAL_IMAGE_SLOTS.map((slot) => (
-                  <Grid xs={12} sm={6} md={4} key={slot}>
-                    <ImageUploadBox
-                      title={slot}
-                      images={imageMap[slot] || []}
-                      onUpload={(file) => uploadSlotImage(slot, file)}
-                      onDelete={(digitalId) => deleteImage(slot, digitalId)}
-                      getImageUrl={(id) =>
-                        `${qdApi.defaults.baseURL}/MasterOrderForQDSheet/quality-department-inspection/image/${id}/file`
-                      }
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-            </SectionCard>
+              <Button
+                type="button"
+                variant="outlined"
+                color="primary"
+                disabled={activeStep === 0}
+                onClick={handlePrevStep}
+                sx={{ minWidth: 100, fontWeight: 700 }}
+              >
+                Back
+              </Button>
 
-            <SectionCard
-              title="COMPLIMENTARY IMAGES"
-
-            >
-              <Grid container spacing={1.5}>
-                {COMPLIMENTARY_IMAGE_SLOTS.map((slot) => (
-                  <Grid xs={12} sm={6} md={4} key={slot}>
-                    <ImageUploadBox
-                      title={slot}
-                      images={imageMap[slot] || []}
-                      onUpload={(file) => uploadSlotImage(slot, file)}
-                      onDelete={(digitalId) => deleteImage(slot, digitalId)}
-                      getImageUrl={(id) =>
-                        `${qdApi.defaults.baseURL}/MasterOrderForQDSheet/quality-department-inspection/image/${id}/file`
-                      }
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-            </SectionCard>
+              {activeStep < STEPS.length - 1 && (
+                <Button
+                  type="button"
+                  variant="contained"
+                  color="primary"
+                  onClick={handleNextStep}
+                  sx={{ minWidth: 100, fontWeight: 700 }}
+                >
+                  Next
+                </Button>
+              )}
+            </Box>
 
             <Stack direction="row" spacing={2} flexWrap="wrap">
               <Button variant="contained" disabled={saving} onClick={() => handleSave(true)}>

@@ -465,15 +465,34 @@ export default function QAInspectionPDF({ data }) {
                 </View>
                 {activeCols.map((c, i) => {
                   const val = typeof c === 'number' ? (row[`size${c}`] ?? row[`Size${c}`] ?? '') : '';
+                  const numVal = parseFloat(val);
+                  const hasNum = val !== '' && Number.isFinite(numVal) && numVal !== 0;
+                  const isNeg = hasNum && numVal < 0;
+                  const isPos = hasNum && numVal > 0;
+
+                  const cellColor = isBalance && isNeg ? C.red : isBalance && isPos ? C.green : C.black;
+
                   return (
                     <View key={i} style={[styles.td, styles.sizeMatrixCell, { flex: 1, alignItems: 'center' }]}>
-                      <Text>{fmt(val)}</Text>
+                      <Text style={{ color: cellColor, fontFamily: isBalance && hasNum ? 'Helvetica-Bold' : undefined }}>{fmt(val)}</Text>
                     </View>
                   );
                 })}
-                <View style={[styles.td, styles.sizeMatrixCell, { flex: 1.2, alignItems: 'center' }]}>
-                  <Text>{fmt(row.sizeTotal ?? row.SizeTotal)}</Text>
-                </View>
+                {(() => {
+                  const totalRaw = row.sizeTotal ?? row.SizeTotal ?? '';
+                  const totalNum = parseFloat(totalRaw);
+                  const hasTotalNum = totalRaw !== '' && Number.isFinite(totalNum) && totalNum !== 0;
+                  const isTotalNeg = hasTotalNum && totalNum < 0;
+                  const isTotalPos = hasTotalNum && totalNum > 0;
+
+                  const totalColor = isBalance && isTotalNeg ? C.red : isBalance && isTotalPos ? C.green : C.black;
+
+                  return (
+                    <View style={[styles.td, styles.sizeMatrixCell, { flex: 1.2, alignItems: 'center' }]}>
+                      <Text style={{ color: totalColor, fontFamily: isBalance && hasTotalNum ? 'Helvetica-Bold' : undefined }}>{fmt(totalRaw)}</Text>
+                    </View>
+                  );
+                })()}
               </View>
             );
           })}
