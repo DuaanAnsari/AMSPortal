@@ -21,10 +21,12 @@ import {
   TableRow,
   Autocomplete,
   CircularProgress,
+  IconButton,
 } from '@mui/material';
 
 import { fetchPoNumbers } from 'src/sections/reports/utils/pono-dropdown-api';
 
+import Iconify from 'src/components/iconify';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 import { useSnackbar } from 'src/components/snackbar';
 
@@ -1431,6 +1433,7 @@ export default function ShipmentEditView() {
                           { label: 'Carton#', width: 100 },
                           { label: 'Shipped Rate', width: 100 },
                           { label: 'Delivery Mode', width: 120 },
+                          { label: 'Action', width: 80 },
                         ].map((col) => (
                           <TableCell
                             key={col.label}
@@ -1516,11 +1519,22 @@ export default function ShipmentEditView() {
                             />
                           </TableCell>
                           <TableCell>{row.deliveryTypeName}</TableCell>
+                          <TableCell align="center">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              sx={{ p: 0.25 }}
+                              aria-label="Remove row"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Iconify icon="mdi:close-circle" width={22} height={22} />
+                            </IconButton>
+                          </TableCell>
                         </TableRow>
                       ))}
                       {articleRows.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={13} align="center">
+                          <TableCell colSpan={14} align="center">
                             No data available
                           </TableCell>
                         </TableRow>

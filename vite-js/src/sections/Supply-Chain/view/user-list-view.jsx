@@ -743,10 +743,11 @@ export default function ShipmentReleaseFilters() {
                         <TableCell>
                           <IconButton
                             size="small"
-                            sx={{ p: 0.5 }}
+                            color="error"
+                            sx={{ p: 0.25 }}
                             aria-label="Delete"
                           >
-                            <Iconify icon="mdi:delete-outline" color="#000000" width={20} height={20} />
+                            <Iconify icon="mdi:close-circle" width={22} height={22} />
                           </IconButton>
                         </TableCell>
                         <TableCell>

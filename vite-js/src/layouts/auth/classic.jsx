@@ -23,13 +23,13 @@ export default function AMSLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-
+ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
   const handleLogin = async () => {
     setLoading(true);
     setErrorMsg('');
 
     try {
-      const response = await axios.post(`${HOST_API}/api/Auth/login`, {
+      const response = await axios.post(`${API_BASE_URL}/api/Auth/login`, {
         username,
         password,
       });

@@ -7,6 +7,7 @@ import Grid from '@mui/material/Grid';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
 import MenuItem from '@mui/material/MenuItem';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
@@ -363,6 +364,10 @@ export default function ShipmentReleaseAddPage() {
     const updatedRows = [...articleRows];
     updatedRows[index] = { ...updatedRows[index], [field]: value };
     setArticleRows(updatedRows);
+  };
+
+  const handleRemoveArticleRow = (index) => {
+    setArticleRows((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleDialogGridChange = (index, field, value) => {
@@ -1215,6 +1220,7 @@ export default function ShipmentReleaseAddPage() {
                           'Carton#',
                           'Shipped Rate',
                           'Delivery Mode',
+                          'Action',
                         ].map((head) => (
                           <TableCell
                             key={head}
@@ -1308,19 +1314,32 @@ export default function ShipmentReleaseAddPage() {
                                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: 0 } }}
                               />
                             </TableCell>
-                            <TableCell>{row.deliveryTypeName}</TableCell>
+                            <TableCell sx={{ borderRight: '1px solid #eee' }}>
+                              {row.deliveryTypeName}
+                            </TableCell>
+                            <TableCell align="center" sx={{ borderRight: '1px solid #eee' }}>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                sx={{ p: 0.25 }}
+                                aria-label="Remove row"
+                                onClick={() => handleRemoveArticleRow(actualIndex)}
+                              >
+                                <Iconify icon="mdi:close-circle" width={22} height={22} />
+                              </IconButton>
+                            </TableCell>
                           </TableRow>
                         );
                       })}
                       {filteredRows.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={13} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                          <TableCell colSpan={14} align="center" sx={{ py: 3, color: 'text.secondary' }}>
                             No matching records found
                           </TableCell>
                         </TableRow>
                       )}
                       <TableRow>
-                        <TableCell colSpan={13} align="right" sx={{ fontWeight: 'bold', bgcolor: 'background.neutral' }}>
+                        <TableCell colSpan={14} align="right" sx={{ fontWeight: 'bold', bgcolor: 'background.neutral' }}>
                           Records 1 - {filteredRows.length} of {articleRows.length}
                         </TableCell>
                       </TableRow>
