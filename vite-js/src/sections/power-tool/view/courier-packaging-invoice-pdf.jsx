@@ -20,6 +20,13 @@ function pick(r, ...keys) {
   return '';
 }
 
+function cleanText(val) {
+  if (val == null) return '';
+  return String(val)
+    .replace(/Servies/g, 'Services')
+    .replace(/servies/g, 'services');
+}
+
 function formatInvoiceDate(value) {
   if (value == null || value === '') return '—';
   const s = typeof value === 'string' ? value.trim() : String(value);
@@ -267,13 +274,13 @@ function mapDetailLine(d, index) {
   if (!amount && qty && price) amount = Math.round(qty * price * 100) / 100;
   return {
     sr: index + 1,
-    postyle: String(pick(d, 'postyle', 'poStyle', 'Postyle', 'POStyle') || '—'),
-    gender: String(pick(d, 'gender', 'Gender') || ''),
-    item: String(pick(d, 'description', 'Description', 'item', 'Item') || '—'),
-    fabric: String(pick(d, 'fabriccontent', 'Fabriccontent', 'fabricContent', 'FabricContent') || ''),
-    purpose: String(pick(d, 'remarks', 'Remarks', 'sendingPurpose', 'SendingPurpose') || ''),
-    hsCode: String(pick(d, 'tendigithscode', 'Tendigithscode', 'tenDigitHsCode', 'TenDigitHsCode') || ''),
-    mfgCode: String(pick(d, 'manufacturecode', 'Manufacturecode', 'manufactureCode', 'ManufactureCode') || ''),
+    postyle: cleanText(pick(d, 'postyle', 'poStyle', 'Postyle', 'POStyle') || '—'),
+    gender: cleanText(pick(d, 'gender', 'Gender')),
+    item: cleanText(pick(d, 'description', 'Description', 'item', 'Item') || '—'),
+    fabric: cleanText(pick(d, 'fabriccontent', 'Fabriccontent', 'fabricContent', 'FabricContent')),
+    purpose: cleanText(pick(d, 'remarks', 'Remarks', 'sendingPurpose', 'SendingPurpose')),
+    hsCode: cleanText(pick(d, 'tendigithscode', 'Tendigithscode', 'tenDigitHsCode', 'TenDigitHsCode')),
+    mfgCode: cleanText(pick(d, 'manufacturecode', 'Manufacturecode', 'manufactureCode', 'ManufactureCode')),
     qty,
     price,
     amount,
@@ -285,20 +292,20 @@ function mapDetailLine(d, index) {
 export default function CourierPackagingInvoicePdf({ master, details, logoSrc }) {
   const m = master && typeof master === 'object' ? master : {};
   
-  const invoiceNo = String(pick(m, 'couriesNo', 'CouriesNo', 'invoiceNo', 'InvoiceNo') || '—');
+  const invoiceNo = cleanText(pick(m, 'couriesNo', 'CouriesNo', 'invoiceNo', 'InvoiceNo') || '—');
   const invDate = formatInvoiceDate(
     pick(m, 'creationDate', 'CreationDate', 'invoiceDate', 'InvoiceDate')
   );
 
-  const shipperName = String(pick(m, 'shipper', 'Shipper') || '—');
-  const shipperAddr = String(pick(m, 'shipperAddress', 'ShipperAddress') || 'A M S House 84,Kokan Housing Society Alamgir Road, Karachi 74800 - Pakistan');
-  const ntnNumber = String(pick(m, 'ntnNumber', 'NtnNumber', 'NTN') || '0265236-6');
+  const shipperName = cleanText(pick(m, 'shipper', 'Shipper') || '—');
+  const shipperAddr = cleanText(pick(m, 'shipperAddress', 'ShipperAddress') || 'A M S House 84,Kokan Housing Society Alamgir Road, Karachi 74800 - Pakistan');
+  const ntnNumber = cleanText(pick(m, 'ntnNumber', 'NtnNumber', 'NTN') || '0265236-6');
   
-  const companyName = String(pick(m, 'consignee', 'Consignee') || '—');
-  const attention = String(pick(m, 'attention', 'Attention') || '');
-  const address = String(pick(m, 'address', 'Address', 'consigneeAddress', 'ConsigneeAddress') || '');
-  const phone = String(pick(m, 'phone', 'Phone', 'phon', 'Phon') || '');
-  const taxId = String(pick(m, 'taxId', 'TaxId', 'TAX') || '');
+  const companyName = cleanText(pick(m, 'consignee', 'Consignee') || '—');
+  const attention = cleanText(pick(m, 'attention', 'Attention'));
+  const address = cleanText(pick(m, 'address', 'Address', 'consigneeAddress', 'ConsigneeAddress'));
+  const phone = cleanText(pick(m, 'phone', 'Phone', 'phon', 'Phon'));
+  const taxId = cleanText(pick(m, 'taxId', 'TaxId', 'TAX'));
 
   const lines = useMemo(() => (Array.isArray(details) ? details.map(mapDetailLine) : []), [details]);
   const totals = useMemo(() => {
@@ -319,7 +326,7 @@ export default function CourierPackagingInvoicePdf({ master, details, logoSrc })
             <Image src={imageSrc} style={styles.logo} />
           </View>
           <View style={styles.companyHeaderBox}>
-            <Text style={styles.companyNameTitle}>Apparel Merchandising Servies</Text>
+            <Text style={styles.companyNameTitle}>Apparel Merchandising Services</Text>
             <Text style={styles.headerSubText}>A M S House 84,Kokan Housing Society Alamgir Road</Text>
             <Text style={styles.headerSubText}>Karachi 74800 -Pakistan.</Text>
             <Text style={styles.headerSubText}>Tel : 02134967216 & 02134946005 Fax# (92213) 493-1944</Text>

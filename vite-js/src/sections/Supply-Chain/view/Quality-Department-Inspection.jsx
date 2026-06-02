@@ -3298,6 +3298,7 @@ export default function QualityDepartmentInspectionView() {
                           </Box>
                         ))}
                       </Box>
+
                       <Grid container spacing={2} sx={{ mt: 3 }} alignItems="flex-end">
                         <Grid xs={12} md={7.5}>
                           <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, color: 'text.secondary' }}>
@@ -3352,7 +3353,6 @@ export default function QualityDepartmentInspectionView() {
                         (first system, index {bindDef?.defaultRangeIndex ?? bindDef?.DefaultRangeIndex ?? '—'}): {defaultRangeLabel || '—'}
                       </Typography> */}
                     </Box>
-
 
                   </Stack>
                 </SectionCard>
