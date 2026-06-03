@@ -692,7 +692,7 @@ export default function ShipmentReleaseFilters() {
                             }}
                             onClick={() =>
                               navigate(
-                                `/dashboard/supply-chain/print-invoice/${encodeURIComponent(row.invoiceNo)}`,
+                                `/dashboard/supply-chain/print-invoice/${row.id}`,
                                 { state: { shipment: row } }
                               )
                             }
@@ -712,7 +712,7 @@ export default function ShipmentReleaseFilters() {
                             }}
                             onClick={() =>
                               navigate(
-                                `/dashboard/supply-chain/invoice-excel/${encodeURIComponent(row.invoiceNo)}`,
+                                `/dashboard/supply-chain/invoice-excel/${row.id}`,
                                 { state: { shipment: row } }
                               )
                             }
