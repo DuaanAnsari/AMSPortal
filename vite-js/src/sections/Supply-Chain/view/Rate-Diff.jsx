@@ -25,7 +25,8 @@ import jsPDF from 'jspdf';
 export default function RateDiffPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const shipment = state?.shipment || {};
+  const location = useLocation();
+  const shipment = location.state?.shipment || {};
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
   const [invoiceData, setInvoiceData] = useState(null);
   const [loading, setLoading] = useState(true);
