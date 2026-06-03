@@ -1162,6 +1162,20 @@ export default function CompletePurchaseOrderFormEdit() {
   const calculationField2 = watch('calculationField2');
   const selectedProductPortfolio = watch('productPortfolio');
   const selectedProductCategory = watch('productCategory');
+  const pcsPerCartonWatched = watch('pcsPerCarton');
+
+  // Recalculate cartonQty for all rows whenever pcsPerCarton changes
+  useEffect(() => {
+    const ppcVal = Number(pcsPerCartonWatched) || 0;
+    setSavedItemData((prev) => {
+      if (!prev || !prev.rows || prev.rows.length === 0) return prev;
+      const rows = prev.rows.map((row) => ({
+        ...row,
+        cartonQty: ppcVal > 0 ? Math.ceil((Number(row.quantity) || 0) / ppcVal) : 0,
+      }));
+      return { ...prev, rows };
+    });
+  }, [pcsPerCartonWatched]);
 
   // Fetch customers from API
   useEffect(() => {
@@ -1649,6 +1663,9 @@ export default function CompletePurchaseOrderFormEdit() {
         const value = quantity * itemPrice;
         const ldpValue = quantity * ldpPrice;
 
+        const currentPcsPerCarton = Number(getValues('pcsPerCarton')) || Number(apiData?.pcPerCarton) || 0;
+        const cartonQty = currentPcsPerCarton > 0 ? Math.ceil(quantity / currentPcsPerCarton) : Number(item.cartonPerPcs ?? 0);
+
         return {
           styleId: item.styleID || item.styleId || 0, // Map styleId for updates
           styleNo: item.styleNo || '',
@@ -1668,7 +1685,7 @@ export default function CompletePurchaseOrderFormEdit() {
           barcode: item.barCodeTF || '',
           ratio: item.ratioPOD || 0,
           vendorPrice: Number(item.vendorRate ?? 0),
-          cartonQty: Number(item.cartonPerPcs ?? 0),
+          cartonQty,
           grossWeight: Number(item.grossWeightD ?? 0),
           netWeight: Number(item.netWeightD ?? 0),
           remarks: item.remarks || '',
@@ -1742,12 +1759,18 @@ export default function CompletePurchaseOrderFormEdit() {
       return true;
     });
 
-    if (!rowsToAdd.length) {
+    const ppcVal = Number(getValues('pcsPerCarton')) || 0;
+    const rowsToAddCalculated = rowsToAdd.map((row) => ({
+      ...row,
+      cartonQty: ppcVal > 0 ? Math.ceil((Number(row.quantity) || 0) / ppcVal) : 0,
+    }));
+
+    if (!rowsToAddCalculated.length) {
       // All rows already present (e.g. user clicked Save then Save & Close)
       return;
     }
 
-    const mergedRows = [...existingRows, ...rowsToAdd];
+    const mergedRows = [...existingRows, ...rowsToAddCalculated];
     setSavedItemData({
       rows: mergedRows,
       totals: recalculateItemTotals(mergedRows),
@@ -1755,7 +1778,7 @@ export default function CompletePurchaseOrderFormEdit() {
 
     // Call AddPurchaseOrderDetails API only for truly new rows
     try {
-      const basePayload = mapItemRowsToDetailsPayload(rowsToAdd);
+      const basePayload = mapItemRowsToDetailsPayload(rowsToAddCalculated);
       // Backend sample expects styleID in each object; we also send purchaseOrderID
       const payload = basePayload.map((item) => ({
         styleID: 0,
@@ -1829,6 +1852,12 @@ export default function CompletePurchaseOrderFormEdit() {
         const ldpPrice = Number(updated.ldpPrice) || 0;
         updated.value = qty * itemPrice;
         updated.ldpValue = qty * ldpPrice;
+
+        // Auto-calculate cartonQty = quantity / pcsPerCarton
+        if (field === 'quantity') {
+          const pcsPerCartonVal = Number(getValues('pcsPerCarton')) || 0;
+          updated.cartonQty = pcsPerCartonVal > 0 ? Math.ceil(qty / pcsPerCartonVal) : 0;
+        }
 
         return updated;
       });
