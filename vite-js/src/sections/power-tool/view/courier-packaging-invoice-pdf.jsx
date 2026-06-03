@@ -27,6 +27,15 @@ function cleanText(val) {
     .replace(/servies/g, 'services');
 }
 
+function getFormattedPrintDate() {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const d = new Date();
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = months[d.getMonth()];
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
 function formatInvoiceDate(value) {
   if (value == null || value === '') return '—';
   const s = typeof value === 'string' ? value.trim() : String(value);
@@ -70,7 +79,8 @@ const LIGHT_GRAY = '#F2F2F2';
 const styles = StyleSheet.create({
   page: {
     paddingHorizontal: 25,
-    paddingVertical: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
     fontSize: 9,
     fontFamily: 'Helvetica',
     fontWeight: 'bold',
@@ -264,6 +274,39 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 9,
   },
+
+  // Footer section
+  footerContainer: {
+    position: 'absolute',
+    bottom: 15,
+    left: 25,
+    right: 25,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    fontSize: 7.5,
+    fontFamily: 'Helvetica',
+  },
+  footerLeft: {
+    width: '30%',
+    textAlign: 'left',
+  },
+  footerCenter: {
+    width: '40%',
+    textAlign: 'center',
+    flexDirection: 'column',
+    alignItems: 'center',
+  },
+  footerRight: {
+    width: '30%',
+    textAlign: 'right',
+  },
+  footerTextBold: {
+    fontWeight: 'bold',
+  },
+  footerTextNormal: {
+    fontWeight: 'normal',
+  },
 });
 
 
@@ -313,6 +356,8 @@ export default function CourierPackagingInvoicePdf({ master, details, logoSrc })
     const tAmt = lines.reduce((s, r) => s + r.amount, 0);
     return { qty: tQty, amount: tAmt };
   }, [lines]);
+
+  const printDate = useMemo(() => getFormattedPrintDate(), []);
 
   const imageSrc = logoSrc || amsLogoPdfSrc();
 
@@ -441,6 +486,27 @@ export default function CourierPackagingInvoicePdf({ master, details, logoSrc })
           {/* Declaration Row */}
           <View style={styles.declarationRow}>
             <Text>Declaration : All Samples are of NO COMMERCIAL VALUE</Text>
+          </View>
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footerContainer} fixed>
+          <View style={styles.footerLeft}>
+            <Text style={styles.footerTextBold}>
+              Print Date  <Text style={styles.footerTextNormal}>{printDate}</Text>
+            </Text>
+          </View>
+
+          <View style={styles.footerCenter}>
+            <Text style={styles.footerTextBold}>Powered by : INTEGRA ERP SYSTEM</Text>
+            <Text style={styles.footerTextBold}>Developed by: ITG (Pvt) Ltd. - Website: www.itg.net.pk</Text>
+          </View>
+
+          <View style={styles.footerRight}>
+            <Text
+              style={styles.footerTextBold}
+              render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}
+            />
           </View>
         </View>
 

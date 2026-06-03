@@ -290,23 +290,18 @@ export default function ConsigneeViewPage() {
                   aria-label="Delete consignee"
                   onClick={() => setDeleteTarget(params.row)}
                   sx={{
-                    p: 0.75,
-                    borderRadius: 1,
-                    color: 'error.main',
-                    bgcolor: (t) => (t.palette.mode === 'dark' ? 'error.dark' : 'error.lighter'),
-                    border: (t) => `1px solid ${t.palette.error.light}`,
-                    '&:hover': {
-                      bgcolor: (t) => (t.palette.mode === 'dark' ? 'error.main' : 'error.light'),
-                      color: (t) => t.palette.error.contrastText,
-                      borderColor: 'error.main',
-                    },
+                    bgcolor: 'error.main',
+                    color: 'error.contrastText',
+                    width: 28,
+                    height: 28,
+                    '&:hover': { bgcolor: 'error.dark', color: 'error.contrastText' },
                     '&.Mui-disabled': { opacity: 0.85 },
                   }}
                 >
                   {busy ? (
-                    <CircularProgress color="inherit" size={20} />
+                    <CircularProgress color="inherit" size={16} />
                   ) : (
-                    <Iconify icon="mdi:delete-outline" width={22} />
+                    <Iconify icon="eva:close-fill" width={16} />
                   )}
                 </IconButton>
               </span>
