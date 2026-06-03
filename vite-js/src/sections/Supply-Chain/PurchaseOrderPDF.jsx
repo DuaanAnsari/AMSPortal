@@ -30,6 +30,79 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { HOST_API } from 'src/config-global';
 
+const PO_IMAGE_PLACEHOLDER = '/assets/placeholder.svg';
+
+/** True when the API returned raw Base64 bytes without a `data:image/…;base64,` prefix. */
+function looksLikeRawBase64Image(raw) {
+  if (raw == null) return false;
+  const s = String(raw).trim();
+  if (s.length < 24) return false;
+  if (s.startsWith('data:')) return false;
+  if (s.startsWith('blob:')) return false;
+  if (/^https?:\/\//i.test(s)) return false;
+  // Magic prefixes BEFORE `/` path check — JPEG payloads start with `/9j/`.
+  if (s.startsWith('/9j/')) return true;
+  if (s.startsWith('iVBOR')) return true;
+  if (s.startsWith('R0lGOD')) return true;
+  if (s.startsWith('UklGR')) return true;
+  if (s.startsWith('Qk')) return true;
+  if (s.startsWith('/')) return false;
+  if (s.length < 80) return false;
+  return /^[A-Za-z0-9+/=\r\n\s_-]+$/.test(s.slice(0, 256));
+}
+
+function sniffBase64Mime(raw) {
+  const s = String(raw || '').trim();
+  if (s.startsWith('/9j/')) return 'image/jpeg';
+  if (s.startsWith('iVBOR')) return 'image/png';
+  if (s.startsWith('R0lGOD')) return 'image/gif';
+  if (s.startsWith('UklGR')) return 'image/webp';
+  if (s.startsWith('Qk')) return 'image/bmp';
+  return 'image/jpeg';
+}
+
+/**
+ * Normalize API `poImage` (raw Base64, data URL, absolute URL, or relative path)
+ * into a browser-safe `<img src>`.
+ */
+function resolvePoImageSrc(raw) {
+  if (raw == null || raw === '') return PO_IMAGE_PLACEHOLDER;
+
+  const s = typeof raw === 'string' ? raw.trim() : String(raw).trim();
+  if (!s || s === '0x') return PO_IMAGE_PLACEHOLDER;
+
+  if (/^data:image\//i.test(s)) return s;
+  if (s.startsWith('blob:')) return s;
+  if (/^https?:\/\//i.test(s)) return s;
+
+  if (looksLikeRawBase64Image(s)) {
+    const b64 = s.replace(/\s+/g, '');
+    return `data:${sniffBase64Mime(b64)};base64,${b64}`;
+  }
+
+  if (s.startsWith('/')) {
+    const base = String(HOST_API || '').replace(/\/+$/, '');
+    return base ? `${base}${s}` : s;
+  }
+
+  const base = String(HOST_API || '').replace(/\/+$/, '');
+  if (base && /\.(jpe?g|png|gif|webp|bmp)(\?|$)/i.test(s)) {
+    return `${base}/${s.replace(/^\/+/, '')}`;
+  }
+
+  const b64 = s.replace(/\s+/g, '');
+  if (b64.length >= 24 && /^[A-Za-z0-9+/=_-]+$/.test(b64)) {
+    return `data:${sniffBase64Mime(b64)};base64,${b64}`;
+  }
+
+  return PO_IMAGE_PLACEHOLDER;
+}
+
+function handlePoImageError(event) {
+  event.currentTarget.onerror = null;
+  event.currentTarget.src = PO_IMAGE_PLACEHOLDER;
+}
+
 // --- Helper Components ---
 const POCell = ({ children, header = false, sx = {} }) => {
   return (
@@ -457,7 +530,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
       "Before cutting fabric should be kept on table for atleast 24 hours.",
       "All garments should be 100% checked for sizes before carton packing"
     ],
-    productImage: poData.poImage || '',
+    productImage: resolvePoImageSrc(poData.poImage),
     shipMode: poData.deliveryTypeDisplayName || '',
     destination: poData.destination || '',
     shipmentTerms: poData.shipmentModeName || '',
@@ -755,15 +828,9 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               <Box sx={{ width: '30%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                 <Box sx={{ width: '130px', height: '140px', mb: 0.5 }}>
                   <img
-                    src={(() => {
-                      const imgStr = data.productImage;
-                      if (!imgStr || typeof imgStr !== 'string') return '/placeholder-product.png';
-                      const trimmed = imgStr.trim();
-                      if (trimmed === '0x' || trimmed.length < 50) return '/placeholder-product.png';
-                      if (trimmed.startsWith('data:') || trimmed.startsWith('http') || trimmed.startsWith('/')) return trimmed;
-                      return `data:image/jpeg;base64,${trimmed}`;
-                    })()}
+                    src={data.productImage}
                     alt="Product"
+                    onError={handlePoImageError}
                     style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                   />
                 </Box>
@@ -1280,31 +1347,23 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               </Typography>
 
               {/* Product Image */}
-              {data.productImage && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
-                  <img
-                    src={(() => {
-                      const imgStr = data.productImage;
-                      if (!imgStr || typeof imgStr !== 'string') return '/placeholder-product.png';
-                      const trimmed = imgStr.trim();
-                      if (trimmed === '0x' || trimmed.length < 50) return '/placeholder-product.png';
-                      if (trimmed.startsWith('data:') || trimmed.startsWith('http') || trimmed.startsWith('/')) return trimmed;
-                      return `data:image/jpeg;base64,${trimmed}`;
-                    })()}
-                    alt="Product"
-                    style={{
-                      maxWidth: '450px',
-                      maxHeight: '450px',
-                      width: 'auto',
-                      height: 'auto',
-                      objectFit: 'contain',
-                      border: '1px solid #eee',
-                      padding: '10px',
-                      borderRadius: '4px'
-                    }}
-                  />
-                </Box>
-              )}
+              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
+                <img
+                  src={data.productImage}
+                  alt="Product"
+                  onError={handlePoImageError}
+                  style={{
+                    maxWidth: '450px',
+                    maxHeight: '450px',
+                    width: 'auto',
+                    height: 'auto',
+                    objectFit: 'contain',
+                    border: '1px solid #eee',
+                    padding: '10px',
+                    borderRadius: '4px'
+                  }}
+                />
+              </Box>
 
               {/* Total Qty Section */}
               <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>

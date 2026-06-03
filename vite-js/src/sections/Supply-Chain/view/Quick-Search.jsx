@@ -26,17 +26,82 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Tooltip,
 } from '@mui/material';
 import { fetchPoNumbers } from 'src/sections/reports/utils/pono-dropdown-api';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import BuildIcon from '@mui/icons-material/Build';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
+import DirectionsBoatIcon from '@mui/icons-material/DirectionsBoat';
 import { format } from 'date-fns';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs'; // ✅ make sure this import path matches your project
 import { paths } from 'src/routes/paths';
+
+const PO_STATUS_TOOLTIP_SX = {
+  bgcolor: 'rgba(33, 43, 54, 0.92)',
+  color: '#fff',
+  fontSize: '0.75rem',
+  fontWeight: 500,
+  px: 1.25,
+  py: 0.75,
+  borderRadius: 1,
+  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+};
+
+function getPoRowStatus(row) {
+  return String(row?.status ?? row?.Status ?? '').trim();
+}
+
+function normalizePoStatusKey(status) {
+  const s = String(status || '').trim().toLowerCase();
+  if (!s) return null;
+  if (s === 'confirm' || s === 'confirmed') return 'confirmed';
+  if (s === 'cancel' || s === 'cancelled' || s === 'canceled') return 'cancelled';
+  if (s === 'close' || s === 'closed') return 'closed';
+  return null;
+}
+
+const PO_STATUS_ICON_MAP = {
+  confirmed: { Icon: CheckCircleIcon, color: '#2e7d32' },
+  cancelled: { Icon: CancelIcon, color: '#d32f2f' },
+  closed: { Icon: DirectionsBoatIcon, color: '#1565c0' },
+};
+
+function PoStatusCell({ row }) {
+  const statusText = getPoRowStatus(row);
+  const statusKey = normalizePoStatusKey(statusText);
+  if (!statusKey) return null;
+
+  const { Icon, color } = PO_STATUS_ICON_MAP[statusKey];
+
+  return (
+    <Tooltip
+      title={statusText}
+      arrow
+      placement="top"
+      slotProps={{
+        tooltip: { sx: PO_STATUS_TOOLTIP_SX },
+        arrow: { sx: { color: 'rgba(33, 43, 54, 0.92)' } },
+      }}
+    >
+      <Box
+        component="span"
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          lineHeight: 0,
+        }}
+      >
+        <Icon sx={{ fontSize: 20, color }} />
+      </Box>
+    </Tooltip>
+  );
+}
 
 export default function POSearchEngine({ settings, isDialog, onClose }) {
   const [buyer, setBuyer] = useState('');
@@ -287,7 +352,6 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
     },
     [enqueueSnackbar, navigate, onClose]
   );
-  const handleStatusClick = (row) => alert('Status clicked for ' + row.poNo);
   const handleWipClick = (row) => alert('WIP clicked for ' + row.poNo);
 
   /**
@@ -744,9 +808,7 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
                               </IconButton>
                             </TableCell>
                             <TableCell align="center">
-                              <IconButton size="small" onClick={() => handleStatusClick(row)}>
-                                <AssignmentTurnedInIcon fontSize="small" />
-                              </IconButton>
+                              <PoStatusCell row={row} />
                             </TableCell>
                             <TableCell align="center">
                               <IconButton size="small" onClick={() => handleWipClick(row)}>

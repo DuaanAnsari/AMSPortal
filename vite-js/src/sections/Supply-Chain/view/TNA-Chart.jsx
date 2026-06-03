@@ -127,6 +127,108 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Parse date coming from API (string) into JS Date for grid/editor
+const parseApiDateToDate = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+
+  if (typeof value === 'string') {
+    const ddmmyyyy = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    let match = value.match(ddmmyyyy);
+    if (match) {
+      const [, dd, mm, yyyy] = match;
+      return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+    }
+
+    const yyyymmdd = /^(\d{4})-(\d{2})-(\d{2})$/;
+    match = value.match(yyyymmdd);
+    if (match) {
+      const [, yyyy, mm, dd] = match;
+      return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+    }
+
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) {
+      return d;
+    }
+  }
+
+  return null;
+};
+
+// Format date value for grid display (dd/MM/yyyy)
+const formatGridDate = (value) => {
+  if (!value) return '';
+
+  const d = parseApiDateToDate(value);
+  if (!d) return '';
+
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+};
+
+const isTnaDateFieldKey = (fieldKey) =>
+  Boolean(fieldKey) && (
+    fieldKey.endsWith('_actualdate') ||
+    fieldKey.endsWith('_approvaldatee') ||
+    fieldKey.endsWith('_estimateddate') ||
+    fieldKey.endsWith('_idealdate') ||
+    fieldKey.endsWith('_date')
+  );
+
+const normalizeTnaDateCellValue = (newValue, fallback = '') => {
+  if (newValue == null || newValue === '') return fallback;
+  if (newValue instanceof Date && !Number.isNaN(newValue.getTime())) {
+    return formatGridDate(newValue);
+  }
+  if (typeof newValue === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(newValue)) {
+    return newValue;
+  }
+  const formatted = formatGridDate(parseApiDateToDate(newValue));
+  return formatted || fallback || newValue;
+};
+
+const TNA_DATE_COL_PROPS = {
+  cellEditor: 'agDateCellEditor',
+  singleClickEdit: true,
+  valueGetter: (params) => {
+    const field = params.colDef?.field;
+    if (!field || !params.data) return null;
+    return parseApiDateToDate(params.data[field]);
+  },
+  valueSetter: (params) => {
+    const field = params.colDef?.field;
+    if (!field || !params.data) return false;
+
+    const { newValue } = params;
+    let storedValue;
+
+    if (newValue == null || newValue === '') {
+      storedValue = params.data[field] ?? '';
+    } else if (newValue instanceof Date && !Number.isNaN(newValue.getTime())) {
+      storedValue = formatGridDate(newValue);
+    } else {
+      storedValue = normalizeTnaDateCellValue(newValue, params.data[field] ?? '');
+    }
+
+    if (params.data[field] === storedValue) return false;
+    params.data[field] = storedValue;
+    return true;
+  },
+  valueFormatter: (params) => {
+    const field = params.colDef?.field;
+    const raw = params.data?.[field] ?? params.value;
+    if (raw == null || raw === '') return '';
+    return normalizeTnaDateCellValue(raw, String(raw));
+  },
+};
+
+const TNA_DATE_DISPLAY_PROPS = {
+  valueFormatter: TNA_DATE_COL_PROPS.valueFormatter,
+};
+
 // Checkbox that blocks AG Grid's native range-selection mousedown via capture phase
 const SelectCheckbox = React.memo(({ isChecked, onToggle }) => {
   const ref = React.useRef(null);
@@ -441,53 +543,6 @@ export default function TNAChartPage() {
       return [];
     }
   }, []);
-
-  // Parse date coming from API (string) into JS Date for grid/editor
-  const parseApiDateToDate = (value) => {
-    if (!value) return null;
-    if (value instanceof Date) return value;
-
-    if (typeof value === 'string') {
-      // 1. Handle dd/MM/yyyy
-      const ddmmyyyy = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-      let match = value.match(ddmmyyyy);
-      if (match) {
-        const [, dd, mm, yyyy] = match;
-        return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
-      }
-
-      // 2. Handle pure yyyy-MM-dd (date-only from API)
-      // Parse manually only for pure date strings (no time/timezone part).
-      const yyyymmdd = /^(\d{4})-(\d{2})-(\d{2})$/;
-      match = value.match(yyyymmdd);
-      if (match) {
-        const [, yyyy, mm, dd] = match;
-        return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
-      }
-
-      // 3. Handle ISO date-time strings (with time/timezone) using native Date
-      // so local calendar day stays correct after timezone conversion.
-      const d = new Date(value);
-      if (!Number.isNaN(d.getTime())) {
-        return d;
-      }
-    }
-
-    return null;
-  };
-
-  // Format date value for grid display (dd/MM/yyyy)
-  const formatGridDate = (value) => {
-    if (!value) return '';
-
-    const d = parseApiDateToDate(value);
-    if (!d) return '';
-
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const yyyy = d.getFullYear();
-    return `${dd}/${mm}/${yyyy}`;
-  };
 
   // Fetch customers from API
   useEffect(() => {
@@ -831,6 +886,12 @@ export default function TNAChartPage() {
             if (!params.data?.[existsKey]) return '';
             return params.value ?? '';
           };
+          const tnaDateCellRenderer = (params) => {
+            if (!params.data?.[existsKey]) return '';
+            const raw = params.data?.[params.colDef?.field] ?? params.valueFormatted ?? params.value;
+            if (raw == null || raw === '') return '';
+            return normalizeTnaDateCellValue(raw, String(raw));
+          };
           const notEditableIfNoProcess = (params) => !!params.data?.[existsKey];
           const noProcessCellStyle = (params) => {
             const base = {};
@@ -862,7 +923,8 @@ export default function TNAChartPage() {
                 filter: false,
                 sortable: false,
                 suppressHeaderMenuButton: true,
-                cellRenderer: noProcessRenderer,
+                ...TNA_DATE_DISPLAY_PROPS,
+                cellRenderer: tnaDateCellRenderer,
                 cellStyle: noProcessCellStyle,
               },
               {
@@ -870,9 +932,10 @@ export default function TNAChartPage() {
                 field: safeKey('actualDate'),
                 minWidth: 130,
                 editable: notEditableIfNoProcess,
+                ...TNA_DATE_COL_PROPS,
                 filter: 'agDateColumnFilter',
                 filterParams: dateFilterParams,
-                cellRenderer: emptyIfNoProcess,
+                cellRenderer: tnaDateCellRenderer,
                 cellStyle: noProcessCellStyle,
               },
               {
@@ -880,9 +943,10 @@ export default function TNAChartPage() {
                 field: safeKey('approvalDatee'),
                 minWidth: 110,
                 editable: notEditableIfNoProcess,
+                ...TNA_DATE_COL_PROPS,
                 filter: 'agDateColumnFilter',
                 filterParams: dateFilterParams,
-                cellRenderer: emptyIfNoProcess,
+                cellRenderer: tnaDateCellRenderer,
                 cellStyle: noProcessCellStyle,
               },
               {
@@ -890,9 +954,10 @@ export default function TNAChartPage() {
                 field: safeKey('estimatedDate'),
                 minWidth: 110,
                 editable: notEditableIfNoProcess,
+                ...TNA_DATE_COL_PROPS,
                 filter: 'agDateColumnFilter',
                 filterParams: dateFilterParams,
-                cellRenderer: emptyIfNoProcess,
+                cellRenderer: tnaDateCellRenderer,
                 cellStyle: noProcessCellStyle,
               },
               {
@@ -1183,6 +1248,12 @@ export default function TNAChartPage() {
           if (!params.data?.[existsKey]) return '';
           return params.value ?? '';
         };
+        const tnaDateCellRenderer = (params) => {
+          if (!params.data?.[existsKey]) return '';
+          const raw = params.data?.[params.colDef?.field] ?? params.valueFormatted ?? params.value;
+          if (raw == null || raw === '') return '';
+          return normalizeTnaDateCellValue(raw, String(raw));
+        };
         const notEditableIfNoProcess = (params) => !!params.data?.[existsKey];
         const noProcessCellStyle = (params) => {
           const base = {};
@@ -1214,7 +1285,8 @@ export default function TNAChartPage() {
               filter: false,
               sortable: false,
               suppressHeaderMenuButton: true,
-              cellRenderer: noProcessRenderer,
+              ...TNA_DATE_DISPLAY_PROPS,
+              cellRenderer: tnaDateCellRenderer,
               cellStyle: noProcessCellStyle,
             },
             {
@@ -1222,9 +1294,10 @@ export default function TNAChartPage() {
               field: safeKey('actualDate'),
               minWidth: 130,
               editable: notEditableIfNoProcess,
+              ...TNA_DATE_COL_PROPS,
               filter: 'agDateColumnFilter',
               filterParams: dateFilterParams,
-              cellRenderer: emptyIfNoProcess,
+              cellRenderer: tnaDateCellRenderer,
               cellStyle: noProcessCellStyle,
             },
             {
@@ -1232,9 +1305,10 @@ export default function TNAChartPage() {
               field: safeKey('approvalDatee'),
               minWidth: 110,
               editable: notEditableIfNoProcess,
+              ...TNA_DATE_COL_PROPS,
               filter: 'agDateColumnFilter',
               filterParams: dateFilterParams,
-              cellRenderer: emptyIfNoProcess,
+              cellRenderer: tnaDateCellRenderer,
               cellStyle: noProcessCellStyle,
             },
             {
@@ -1242,9 +1316,10 @@ export default function TNAChartPage() {
               field: safeKey('estimatedDate'),
               minWidth: 110,
               editable: notEditableIfNoProcess,
+              ...TNA_DATE_COL_PROPS,
               filter: 'agDateColumnFilter',
               filterParams: dateFilterParams,
-              cellRenderer: emptyIfNoProcess,
+              cellRenderer: tnaDateCellRenderer,
               cellStyle: noProcessCellStyle,
             },
             {
@@ -1441,34 +1516,40 @@ export default function TNAChartPage() {
   // onFillOperation — copy source value directly (dates stored as strings, copy as-is)
   const onFillOperation = (params) => {
     const val = params.initialValues[0];
-    // If a Date object slips in (edge case), convert to display string
-    if (val instanceof Date) return formatGridDate(val) || null;
+    if (val instanceof Date) return formatGridDate(val) || params.initialValues[0];
+    if (typeof val === 'string') return normalizeTnaDateCellValue(val, val);
     return val;
   };
 
-  const onCellValueChanged = (params) => {
-    const { data, colDef, newValue, oldValue } = params;
-    if (newValue === oldValue) return;
+  const syncCellChangeToState = useCallback((params) => {
+    const { data, colDef, node, api, oldValue, newValue } = params;
+    const fieldKey = colDef?.field;
+    if (!fieldKey || fieldKey.endsWith('_select')) return;
 
     const rowKey = `${data.poid}_${data.color || ''}`;
-    const fieldKey = colDef.field;
+    const oldStored = isTnaDateFieldKey(fieldKey)
+      ? normalizeTnaDateCellValue(oldValue ?? data[fieldKey], data[fieldKey] ?? '')
+      : oldValue;
 
-    // _select is UI-only state — never send to API
-    if (fieldKey?.endsWith('_select')) return;
+    let normalizedValue = node?.data?.[fieldKey] ?? newValue;
+    if (isTnaDateFieldKey(fieldKey)) {
+      normalizedValue = normalizeTnaDateCellValue(normalizedValue, oldStored ?? data[fieldKey] ?? '');
+    }
+
+    if (normalizedValue === oldStored) return;
 
     // --- Quantity Completed validation based on unit (pcs or %) ---
-    if (fieldKey?.endsWith('_qtycompleted')) {
+    if (fieldKey.endsWith('_qtycompleted')) {
       const procName = fieldKey.slice(0, -'_qtycompleted'.length);
       const unitVal = String(data[`${procName}_units`] || '').toLowerCase().trim();
-      const numNew = parseFloat(newValue);
+      const numNew = parseFloat(normalizedValue);
 
-      if (!isNaN(numNew) && newValue !== '' && newValue !== null) {
-        // ✅ PCS validation: max = pcPerCarton (Total Qty) + 5%
+      if (!isNaN(numNew) && normalizedValue !== '' && normalizedValue !== null) {
         if (unitVal === 'pcs') {
           const totalQty = parseFloat(data.pcPerCarton) || 0;
           const maxAllowed = totalQty * 1.05;
           if (numNew > maxAllowed) {
-            params.node.setDataValue(fieldKey, oldValue);
+            node.setDataValue(fieldKey, oldStored);
             setSnackbar({
               open: true,
               message: `Quantity Completed cannot exceed ${maxAllowed.toFixed(0)} pcs (Total Qty ${totalQty} + 5%)`,
@@ -1478,10 +1559,9 @@ export default function TNAChartPage() {
           }
         }
 
-        // ✅ Percent validation: max = 100
         if (unitVal === '%' || unitVal === 'percent') {
           if (numNew > 100) {
-            params.node.setDataValue(fieldKey, oldValue);
+            node.setDataValue(fieldKey, oldStored);
             setSnackbar({
               open: true,
               message: `Quantity Completed cannot exceed 100 when unit is "${data[`${procName}_units`]}"`,
@@ -1494,19 +1574,14 @@ export default function TNAChartPage() {
     }
     // ---------------------------------------------------------------
 
-    // Build updated row merging new value into current data
-    const updatedRowData = { ...data, [fieldKey]: newValue };
-
-    // Directly update AG Grid row node — most reliable for immediate visual refresh
-    // (especially when destination cell field was previously absent/undefined)
+    const updatedRowData = { ...(node?.data || data), [fieldKey]: normalizedValue };
     gridRef.current?.api?.applyTransaction({ update: [updatedRowData] });
 
     const updateRow = (row) => {
       const currentRowKey = `${row.poid}_${row.color || ''}`;
-      return currentRowKey === rowKey ? { ...row, [fieldKey]: newValue } : row;
+      return currentRowKey === rowKey ? { ...row, [fieldKey]: normalizedValue } : row;
     };
 
-    // Keep fullData and tableData in sync for filtering and save operations
     setFullData((prev) => prev.map(updateRow));
     setTableData((prev) => prev.map(updateRow));
 
@@ -1518,21 +1593,36 @@ export default function TNAChartPage() {
         const changed = new Set(existing.__changedFields || []);
         changed.add(fieldKey);
 
-        const updated = {
+        newMap.set(rowKey, {
           ...existing,
-          [fieldKey]: newValue,
+          [fieldKey]: normalizedValue,
           __changedFields: Array.from(changed),
-        };
-        newMap.set(rowKey, updated);
+        });
       } else {
         newMap.set(rowKey, {
-          ...data,
-          [fieldKey]: newValue,
+          ...updatedRowData,
+          [fieldKey]: normalizedValue,
           __changedFields: [fieldKey],
         });
       }
       return newMap;
     });
+
+    if (node) {
+      api?.refreshCells({ rowNodes: [node], columns: [fieldKey], force: true });
+    } else {
+      api?.refreshCells({ force: true });
+    }
+  }, []);
+
+  const onCellValueChanged = (params) => {
+    syncCellChangeToState(params);
+  };
+
+  const onCellEditingStopped = (params) => {
+    const fieldKey = params.colDef?.field;
+    if (!fieldKey || !isTnaDateFieldKey(fieldKey)) return;
+    syncCellChangeToState(params);
   };
 
   // Handle save changes
@@ -2458,6 +2548,7 @@ export default function TNAChartPage() {
                 </div>
               )}
               onCellValueChanged={onCellValueChanged}
+              onCellEditingStopped={onCellEditingStopped}
               onFillOperation={onFillOperation}
               onColumnHeaderClicked={(e) => {
                 if (e.column?.getColId()?.endsWith('_idealdate')) {

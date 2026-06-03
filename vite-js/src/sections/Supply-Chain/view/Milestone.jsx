@@ -28,6 +28,7 @@ import {
   ListItemText,
 } from '@mui/material';
 import { History } from '@mui/icons-material';
+import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -334,9 +335,21 @@ export default function MilestoneView() {
     <LocalizationProvider dateAdapter={AdapterDayjs}>
       <Box sx={{ p: 3 }}>
         {/* 🔹 Page Heading */}
-        <Typography variant="h4" sx={{ mb: 0.5, fontWeight: 'bold' }}>
-          Milestone View
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+          <ArrowBackIosIcon
+            sx={{
+              cursor: 'pointer',
+              mr: 1,
+              fontSize: '1.2rem',
+              color: 'primary.main',
+              '&:hover': { color: 'primary.dark' },
+            }}
+            onClick={() => navigate(-1)}
+          />
+          <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+            Milestone View
+          </Typography>
+        </Box>
 
         {/* 🔹 Breadcrumb Path */}
         <Typography
