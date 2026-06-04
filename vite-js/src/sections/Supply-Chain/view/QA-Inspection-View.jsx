@@ -25,7 +25,7 @@ import { qdApi } from 'src/sections/Supply-Chain/utils/qd-api';
 import { useSnackbar } from 'src/components/snackbar';
 import { pdf } from '@react-pdf/renderer';
 
-import QAInspectionPDF from './QA-Inspection-PDF';
+// PDF template loaded on demand so each download uses the latest version
 
 // ----------------------------------------------------------------------
 
@@ -120,44 +120,7 @@ export default function QAInspectionView() {
         return;
       }
 
-      // Block PDF if any of the 6 defect fields are "Not OK"
-      const mst = data.savedInspection || data.SavedInspection || data.mst || data.Mst || data.inspectionMst || data.InspectionMst || data || {};
-      const statusFields = [
-        ['quantity_D', 'quantityD', 'Quantity_D', 'QuantityD'],
-        ['conformity_D', 'conformityD', 'Conformity_D', 'ConformityD'],
-        ['workmanship_D', 'workmanshipD', 'Workmanship_D', 'WorkmanshipD'],
-        ['packing_D', 'packingD', 'Packing_D', 'PackingD'],
-        ['marking_D', 'markingD', 'Marking_D', 'MarkingD'],
-        ['measurement_D', 'measurementD', 'Measurement_D', 'MeasurementD'],
-      ];
-
-      const invalidFields = statusFields
-        .map((keys) => {
-          const val = keys.map((k) => mst[k]).find((v) => v != null && v !== '');
-          if (String(val || '').trim().toUpperCase() === 'NOT OK') {
-            // Map keys[0] back to a human-readable name
-            const labelMap = {
-              quantity_D: 'Quantity',
-              conformity_D: 'Conformity',
-              workmanship_D: 'Workmanship',
-              packing_D: 'Packing',
-              marking_D: 'Marking',
-              measurement_D: 'Measurement',
-            };
-            return labelMap[keys[0]] || keys[0];
-          }
-          return null;
-        })
-        .filter(Boolean);
-
-      if (invalidFields.length > 0) {
-        enqueueSnackbar(`PDF cannot be generated because the following fields are "Not OK": ${invalidFields.join(', ')}.`, {
-          variant: 'error',
-          autoHideDuration: 5000,
-        });
-        return;
-      }
-
+      const { default: QAInspectionPDF } = await import('./QA-Inspection-PDF');
       const blob = await pdf(<QAInspectionPDF data={data} />).toBlob();
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');

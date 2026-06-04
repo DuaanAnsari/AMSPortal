@@ -70,6 +70,23 @@ const fmt = (v) => {
   return String(Math.round(n));
 };
 
+const fmtBalance = (v) => {
+  if (v == null || v === '') return '';
+  const raw = String(v).trim();
+  if (raw === '' || raw === '0' || raw === '0.0000') return '';
+  const n = parseFloat(raw);
+  if (Number.isFinite(n) && n !== 0) return String(Math.round(Math.abs(n)));
+  return raw.replace(/^[-−–—]+\s*/, '');
+};
+
+const isBalanceExtraRow = (label) =>
+  String(label ?? '').trim().toUpperCase().includes('BALANCE');
+
+const getBalanceValueStyle = (numVal) => {
+  if (!Number.isFinite(numVal) || numVal === 0) return styles.sizeLabelText;
+  return numVal < 0 ? styles.balanceValGreen : styles.balanceValRed;
+};
+
 const fmtDate = (v) => {
   if (!v) return '';
   if (typeof v === 'string' && v.length <= 12) return v;
@@ -91,6 +108,14 @@ const C = {
   gray: '#E0E0E0',
   darkGray: '#A0A0A0'
 };
+
+// A4 content width = 595.28 - (28 * 2) padding ≈ 539
+const PHOTO_COL_GAP = 10;
+const PHOTO_CARD_WIDTH = (539 - PHOTO_COL_GAP) / 2;
+const PHOTO_CARD_HEIGHT = 200;
+const PHOTO_CAPTION_HEIGHT = 26;
+const PHOTO_IMAGE_HEIGHT = PHOTO_CARD_HEIGHT - PHOTO_CAPTION_HEIGHT - 1;
+const PHOTO_ROWS_PER_PAGE = 3;
 
 const styles = StyleSheet.create({
   page: {
@@ -137,12 +162,17 @@ const styles = StyleSheet.create({
   sizeMatrixCell: { height: 22, paddingTop: 2, paddingBottom: 2, justifyContent: 'center' },
   sizeMatrixRow: { height: 22 },
   sizeLabelText: { fontSize: 6.8, lineHeight: 1.1 },
+  balanceWordGreen: { color: C.green },
+  balanceWordRed: { color: C.red },
+  balanceValGreen: { color: C.green, fontFamily: 'Helvetica-Bold', fontSize: 7 },
+  balanceValRed: { color: C.red, fontFamily: 'Helvetica-Bold', fontSize: 7 },
 
   // ─── conclusion ───────────────────────────────────────────────────────────
   conclusionWrap: { flexDirection: 'row', alignItems: 'center', marginVertical: 10, gap: 25 },
   overallText: { fontFamily: 'Helvetica-Bold', fontSize: 11 },
   passText: { fontFamily: 'Helvetica-Bold', fontSize: 11, color: C.green },
   failText: { fontFamily: 'Helvetica-Bold', fontSize: 11, color: C.red },
+  checklistNotOk: { fontFamily: 'Helvetica-Bold', fontSize: 7, color: C.red },
 
   // ─── sections ─────────────────────────────────────────────────────────────
   sectionBox: { border: '1px solid black', padding: '2 6', alignSelf: 'flex-start', marginBottom: 4 },
@@ -155,7 +185,55 @@ const styles = StyleSheet.create({
   signLine: { width: '100%', borderTop: '1.3px solid black', marginTop: 40, marginBottom: 4 },
   signLabel: { fontFamily: 'Helvetica-Bold', fontSize: 7 },
   signImg: { position: 'absolute', bottom: 10, width: 112, height: 52, objectFit: 'contain', opacity: 1 },
-  signImgBoost: { position: 'absolute', bottom: 10, width: 112, height: 52, objectFit: 'contain', opacity: 0.95 }
+  signImgBoost: { position: 'absolute', bottom: 10, width: 112, height: 52, objectFit: 'contain', opacity: 0.95 },
+
+  // ─── inspection photos ─────────────────────────────────────────────────────
+  photoSectionHeader: {
+    backgroundColor: C.gray,
+    border: '1px solid black',
+    width: '100%',
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    marginBottom: 6,
+  },
+  photoGrid: {
+    width: '100%',
+  },
+  photoRow: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+    marginBottom: PHOTO_COL_GAP,
+  },
+  photoCard: {
+    width: PHOTO_CARD_WIDTH,
+    height: PHOTO_CARD_HEIGHT,
+    border: '1px solid black',
+  },
+  photoImageArea: {
+    width: PHOTO_CARD_WIDTH,
+    height: PHOTO_IMAGE_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 4,
+  },
+  photoImage: {
+    width: PHOTO_CARD_WIDTH - 8,
+    height: PHOTO_IMAGE_HEIGHT - 8,
+    objectFit: 'contain',
+  },
+  photoCaption: {
+    width: PHOTO_CARD_WIDTH,
+    height: PHOTO_CAPTION_HEIGHT,
+    borderTop: '1px solid black',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  photoCaptionText: {
+    fontSize: 7,
+    textAlign: 'center',
+  },
 });
 
 // ─── Sub-Components ────────────────────────────────────────────────────────
@@ -200,6 +278,57 @@ const Footer = ({ qaName, qaSig, vendorSig, managerSig }) => (
     </View>
   </View>
 );
+
+const getPhotoCaption = (img) => {
+  if (!img) return '';
+  const hText = img.imgHeader ?? img.ImgHeader ?? '';
+  const pName = img.photoName ?? img.PhotoName ?? '';
+  const isDefect = /major defect|minor defect|critical defect/i.test(hText);
+  if (isDefect && pName && pName !== hText) {
+    return `${hText} (${pName})`;
+  }
+  return hText || pName || '';
+};
+
+const chunkPairs = (items) => {
+  const rows = [];
+  for (let i = 0; i < items.length; i += 2) {
+    rows.push(items.slice(i, i + 2));
+  }
+  return rows;
+};
+
+const chunkRows = (rows, size) => {
+  const chunks = [];
+  for (let i = 0; i < rows.length; i += size) {
+    chunks.push(rows.slice(i, i + size));
+  }
+  return chunks;
+};
+
+const hasPhotoImage = (img) => {
+  if (!img) return false;
+  const src = img.base64Content ?? img.Base64Content ?? '';
+  return String(src).trim() !== '';
+};
+
+const PhotoCard = ({ img }) => {
+  if (!hasPhotoImage(img)) return null;
+
+  return (
+    <View style={styles.photoCard}>
+      <View style={styles.photoImageArea}>
+        <Image
+          src={img.base64Content ?? img.Base64Content}
+          style={styles.photoImage}
+        />
+      </View>
+      <View style={styles.photoCaption}>
+        <Text style={styles.photoCaptionText}>{getPhotoCaption(img)}</Text>
+      </View>
+    </View>
+  );
+};
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function QAInspectionPDF({ data }) {
@@ -248,12 +377,16 @@ export default function QAInspectionPDF({ data }) {
   const managerSig = getSig('CONTROL');
 
   const images = data.images ?? [];
+  const validImages = images.filter(hasPhotoImage);
+  const photoRowPairs = chunkPairs(validImages);
+  const photoPages = photoRowPairs.length > 0 ? chunkRows(photoRowPairs, PHOTO_ROWS_PER_PAGE) : [];
 
   // Data helpers
   const checklistVal = (keys) => {
     const raw = getAnyVal(mst, keys);
     return raw == null || String(raw).trim() === '' ? 'OK' : String(raw);
   };
+  const isNotOk = (val) => String(val || '').trim().toUpperCase() === 'NOT OK';
   const checklistRemarks = (keys) => {
     const raw = getAnyVal(mst, keys);
     return raw == null ? '' : String(raw);
@@ -414,7 +547,7 @@ export default function QAInspectionPDF({ data }) {
             <View key={i} style={styles.tr}>
               <View style={[styles.td, { width: '24%' }]}><Text>{row.label}</Text></View>
               <View style={[styles.td, { width: '17%', alignItems: 'center' }]}>
-                <Text>{row.v || ''}</Text>
+                <Text style={isNotOk(row.v) ? styles.checklistNotOk : undefined}>{row.v || ''}</Text>
               </View>
               <View style={[styles.td, { width: '59%' }]}>
                 <Text>{row.r || ''}</Text>
@@ -448,16 +581,16 @@ export default function QAInspectionPDF({ data }) {
 
           {orderedRows.slice(1).map((row, ri) => {
             const label = row.sizeType ?? row.SizeType ?? '';
-            const isBalance = label.toUpperCase().includes('BALANCE');
+            const isBalance = isBalanceExtraRow(label);
             return (
               <View key={ri} style={[styles.tr, styles.sizeMatrixRow]}>
                 <View style={[styles.td, styles.sizeMatrixCell, { flex: 1.9 }]}>
                   {isBalance ? (
                     <Text style={styles.sizeLabelText} wrap={false}>
                       <Text style={{ color: C.black }}>QTY </Text>
-                      <Text style={{ color: C.red }}>BALANCE</Text>
+                      <Text style={styles.balanceWordGreen}>BALANCE</Text>
                       <Text style={{ color: C.black }}>/</Text>
-                      <Text style={{ color: C.green }}>EXTRA</Text>
+                      <Text style={styles.balanceWordRed}>EXTRA</Text>
                     </Text>
                   ) : (
                     <Text style={[styles.sizeLabelText, { color: C.black }]} wrap={false}>{label}</Text>
@@ -467,14 +600,13 @@ export default function QAInspectionPDF({ data }) {
                   const val = typeof c === 'number' ? (row[`size${c}`] ?? row[`Size${c}`] ?? '') : '';
                   const numVal = parseFloat(val);
                   const hasNum = val !== '' && Number.isFinite(numVal) && numVal !== 0;
-                  const isNeg = hasNum && numVal < 0;
-                  const isPos = hasNum && numVal > 0;
-
-                  const cellColor = isBalance && isNeg ? C.red : isBalance && isPos ? C.green : C.black;
+                  const valueStyle = isBalance ? getBalanceValueStyle(numVal) : styles.sizeLabelText;
 
                   return (
                     <View key={i} style={[styles.td, styles.sizeMatrixCell, { flex: 1, alignItems: 'center' }]}>
-                      <Text style={{ color: cellColor, fontFamily: isBalance && hasNum ? 'Helvetica-Bold' : undefined }}>{fmt(val)}</Text>
+                      <Text style={valueStyle}>
+                        {isBalance ? fmtBalance(val) : fmt(val)}
+                      </Text>
                     </View>
                   );
                 })}
@@ -482,14 +614,13 @@ export default function QAInspectionPDF({ data }) {
                   const totalRaw = row.sizeTotal ?? row.SizeTotal ?? '';
                   const totalNum = parseFloat(totalRaw);
                   const hasTotalNum = totalRaw !== '' && Number.isFinite(totalNum) && totalNum !== 0;
-                  const isTotalNeg = hasTotalNum && totalNum < 0;
-                  const isTotalPos = hasTotalNum && totalNum > 0;
-
-                  const totalColor = isBalance && isTotalNeg ? C.red : isBalance && isTotalPos ? C.green : C.black;
+                  const totalStyle = isBalance ? getBalanceValueStyle(totalNum) : styles.sizeLabelText;
 
                   return (
                     <View style={[styles.td, styles.sizeMatrixCell, { flex: 1.2, alignItems: 'center' }]}>
-                      <Text style={{ color: totalColor, fontFamily: isBalance && hasTotalNum ? 'Helvetica-Bold' : undefined }}>{fmt(totalRaw)}</Text>
+                      <Text style={totalStyle}>
+                        {isBalance ? fmtBalance(totalRaw) : fmt(totalRaw)}
+                      </Text>
                     </View>
                   );
                 })()}
@@ -638,41 +769,25 @@ export default function QAInspectionPDF({ data }) {
       ) : null}
 
 
-      <Page size="A4" style={styles.page}>
-        <View style={[styles.sectionBox, { backgroundColor: C.gray, border: '1px solid black', width: '100%', padding: '4 6' }]}>
-          <Text style={styles.sectionTitle}>Picture taken during inspection</Text>
-        </View>
+      {photoPages.length > 0 ? photoPages.map((pageRows, pageIdx) => (
+        <Page key={`photo-page-${pageIdx}`} size="A4" style={styles.page}>
+          <View style={styles.photoSectionHeader}>
+            <Text style={styles.sectionTitle}>Picture taken during inspection</Text>
+          </View>
 
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 }}>
-          {images.map((img, i) => (
-            <View key={i} style={{ width: '45%', border: '1px solid black', height: 195, marginBottom: 10, padding: 2 }}>
-              <Image
-                src={img.base64Content ?? img.Base64Content}
-                style={{ width: '100%', height: 168, objectFit: 'contain' }}
-              />
-              <View style={{ borderTop: '1px solid black', marginTop: 2, minHeight: 20, justifyContent: 'center', alignItems: 'center', padding: '2 4' }}>
-                <Text style={{ fontSize: 7 }}>
-                  {(() => {
-                    const hText = img.imgHeader ?? img.ImgHeader ?? '';
-                    const pName = img.photoName ?? img.PhotoName ?? '';
-                    const isDefect = /major defect|minor defect|critical defect/i.test(hText);
-                    if (isDefect && pName && pName !== hText) {
-                      return `${hText} (${pName})`;
-                    }
-                    return hText || pName || '';
-                  })()}
-                </Text>
+          <View style={styles.photoGrid}>
+            {pageRows.map((rowImages, rowIdx) => (
+              <View key={`photo-row-${pageIdx}-${rowIdx}`} style={styles.photoRow}>
+                {rowImages.map((img, colIdx) => (
+                  <PhotoCard key={`photo-${pageIdx}-${rowIdx}-${colIdx}`} img={img} />
+                ))}
               </View>
-            </View>
-          ))}
-          {/* If no images, draw an empty box like the sample */}
-          {images.length === 0 ? (
-            <View style={{ width: '45%', border: '1px solid black', height: 180, marginBottom: 10 }} />
-          ) : null}
-        </View>
+            ))}
+          </View>
 
-        <Footer qaName={qaName} qaSig={qaSig} vendorSig={vendorSig} managerSig={managerSig} />
-      </Page>
+          <Footer qaName={qaName} qaSig={qaSig} vendorSig={vendorSig} managerSig={managerSig} />
+        </Page>
+      )) : null}
 
     </Document>
   );

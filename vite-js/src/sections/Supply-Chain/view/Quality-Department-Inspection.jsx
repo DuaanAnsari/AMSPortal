@@ -469,6 +469,7 @@ const ACCESSORY_UI_ROWS = [
   { accKey: 'mainLabelPlacement', label: 'Main Label Placement', options: SIDE_SEAM_CB },
   { accKey: 'priceTicket', label: 'Price Ticket', options: YES_NO },
 
+  { accKey: 'careLabel', label: 'Care Label', textMode: true, textKey: 'careLabel' },
   { accKey: 'careLabelPlacement', label: 'Care Label Placement', options: SIDE_SEAM_CB },
   { accKey: 'contentLabel', label: 'Content Label', textMode: true, textKey: 'contentLabel' },
   { accKey: 'contentLabelPlacement', label: 'Content Label Placement', options: SIDE_SEAM_CB },
@@ -479,9 +480,8 @@ const ACCESSORY_UI_ROWS = [
 
   { accKey: 'interlining', label: 'Inner Lining', textMode: true, textKey: 'interlining' },
   { accKey: 'additionalLabel', label: 'Additional Label', options: YES_NO },
-  { accKey: 'other1', label: '', textMode: true, textKey: 'other1' },
-
-  { accKey: 'other2', label: '', textMode: true, textKey: 'other2' },
+  { accKey: 'other1', label: '', textMode: true, textKey: 'other1', hideRemarksLabel: true },
+  { accKey: 'other2', label: '', textMode: true, textKey: 'other2', noCheckbox: true, hideRemarksLabel: true },
 ];
 
 const DEFAULT_ACC_DROP = {
@@ -2707,11 +2707,10 @@ export default function QualityDepartmentInspectionView() {
                               <BlurTextField
                                 size="small"
                                 fullWidth
-                                label="Remarks"
+                                {...(row.hideRemarksLabel ? {} : { label: 'Remarks', InputLabelProps: { shrink: true } })}
                                 value={form.accText?.[row.textKey] ?? ''}
                                 onChange={(e) => setAccText(row.textKey, e.target.value)}
                                 placeholder="—"
-                                InputLabelProps={{ shrink: true }}
                                 sx={{ '& .MuiInputBase-root': { height: 40 } }}
                               />
                             ) : (
