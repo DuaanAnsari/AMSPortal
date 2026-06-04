@@ -42,7 +42,6 @@ import LoadingButton from '@mui/lab/LoadingButton';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
 import DeleteIcon from '@mui/icons-material/Delete';
-import CalculateIcon from '@mui/icons-material/Calculate';
 import CircularProgress from '@mui/material/CircularProgress';
 import CloseIcon from '@mui/icons-material/Close';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
@@ -1061,8 +1060,6 @@ export default function CompletePurchaseOrderFormEdit() {
       bankID: '',
       titleOfAccount: '',
       accountNo: '',
-      calculationField1: '',
-      calculationField2: '',
     },
   });
 
@@ -1082,7 +1079,6 @@ export default function CompletePurchaseOrderFormEdit() {
   const [openItemDialog, setOpenItemDialog] = useState(false);
   const [savedItemData, setSavedItemData] = useState(null);
   const [showSelections, setShowSelections] = useState(true);
-  const [showCalculationFields, setShowCalculationFields] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [loading, setLoading] = useState(true);
   const [apiData, setApiData] = useState(null);
@@ -1158,8 +1154,6 @@ export default function CompletePurchaseOrderFormEdit() {
     }));
 
   const customerPoValue = watch('customerPo');
-  const calculationField1 = watch('calculationField1');
-  const calculationField2 = watch('calculationField2');
   const selectedProductPortfolio = watch('productPortfolio');
   const selectedProductCategory = watch('productCategory');
   const pcsPerCartonWatched = watch('pcsPerCarton');
@@ -1618,8 +1612,6 @@ export default function CompletePurchaseOrderFormEdit() {
               orderData.bankID !== undefined && orderData.bankID !== null
                 ? String(orderData.bankID)
                 : '',
-            calculationField1: '',
-            calculationField2: '',
           });
         }
 
@@ -1811,10 +1803,6 @@ export default function CompletePurchaseOrderFormEdit() {
       setValue('style', styleNumbers);
     }
     setShowSelections(!showSelections);
-  };
-
-  const handleShowCalculationFields = () => {
-    setShowCalculationFields(!showCalculationFields);
   };
 
   const showSnackbar = (message, severity = 'success') => {
@@ -3344,52 +3332,6 @@ export default function CompletePurchaseOrderFormEdit() {
                           </Grid>
                         </Grid>
                       </Box>
-
-                      <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-                        <Button
-                          variant="contained"
-                          color="secondary"
-                          startIcon={<CalculateIcon />}
-                          onClick={handleShowCalculationFields}
-                        >
-                          Calculate
-                        </Button>
-                      </Box>
-
-                      {showCalculationFields && (
-                        <Grid container spacing={2} sx={{ mt: 2 }}>
-                          <Grid item xs={12} sm={6}>
-                            <Controller
-                              name="calculationField1"
-                              control={control}
-                              render={({ field }) => (
-                                <TextField
-                                  {...field}
-                                  fullWidth
-                                  label="Enter value for calculation"
-                                  type="number"
-                                  placeholder="0"
-                                />
-                              )}
-                            />
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                            <Controller
-                              name="calculationField2"
-                              control={control}
-                              render={({ field }) => (
-                                <TextField
-                                  {...field}
-                                  fullWidth
-                                  label="Enter value for calculation"
-                                  type="number"
-                                  placeholder="0"
-                                />
-                              )}
-                            />
-                          </Grid>
-                        </Grid>
-                      )}
                     </Box>
                   )}
                 </CardContent>
