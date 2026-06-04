@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { useLocation, useParams, useNavigate } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import {
     AppBar,
     Box,
@@ -14,7 +14,7 @@ import {
     Typography,
     CircularProgress,
 } from '@mui/material';
-import { ZoomIn, ZoomOut, Print, Download, ArrowBack } from '@mui/icons-material';
+import { ZoomIn, ZoomOut, Print, Download } from '@mui/icons-material';
 import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -66,8 +66,8 @@ function numberToWords(amount) {
 }
 
 export default function PrintInvoicePage() {
+    const { state } = useLocation();
     const { id } = useParams();
-    const navigate = useNavigate();
 
     const [invoiceData, setInvoiceData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -104,8 +104,8 @@ export default function PrintInvoicePage() {
                     throw new Error('No data found in API response');
                 }
 
-                const allDetails = Array.isArray(responseData) 
-                    ? responseData.flatMap(item => item.details || [item]) 
+                const allDetails = Array.isArray(responseData)
+                    ? responseData.flatMap(item => item.details || [item])
                     : (data.details || [data]);
 
                 const currentLdpForFilter = (invoiceNo || data.ldpInvoiceNo || '').toLowerCase().trim();
@@ -132,7 +132,7 @@ export default function PrintInvoicePage() {
 
                 const getValue = (key) => {
                     const currentLdp = (invoiceNo || data.ldpInvoiceNo || '').toLowerCase().trim();
-                    
+
                     // 1. First, search for a specific match in ALL subTotalDetails across ALL shipment items
                     if (Array.isArray(responseData)) {
                         for (const shipment of responseData) {
@@ -369,10 +369,10 @@ export default function PrintInvoicePage() {
     const labelStyle = { fontSize: '10px', color: '#000', fontWeight: 500, fontFamily: 'Arial Narrow, Arial' };
     const valueStyle = { fontSize: '10px', color: '#000', fontFamily: 'Arial Narrow, Arial' };
     const cellStyle = { fontSize: '9px', p: '2px 4px', border: '1px solid #000', color: '#000', fontFamily: 'Arial Narrow, Arial', lineHeight: 1.1 };
-    const headerCellStyle = { 
-        ...cellStyle, 
-        fontWeight: 600, 
-        backgroundColor: '#f5f5f5', 
+    const headerCellStyle = {
+        ...cellStyle,
+        fontWeight: 600,
+        backgroundColor: '#f5f5f5',
         textAlign: 'center',
         verticalAlign: 'bottom'
     };
@@ -424,7 +424,7 @@ export default function PrintInvoicePage() {
                         </TableCell>
                     </TableRow>
                 ))}
-                
+
                 {showTotals && (
                     <>
                         {/* Shipment Total Row */}
@@ -440,8 +440,8 @@ export default function PrintInvoicePage() {
                         <TableRow>
                             <TableCell sx={{ ...cellStyle, textAlign: 'right' }} colSpan={10}>{invoiceData.truckingChargesLabel || ''}</TableCell>
                             <TableCell sx={{ ...cellStyle, textAlign: 'right' }}>
-                                {(invoiceData.truckingCharges || 0).toLocaleString(undefined, { 
-                                    minimumFractionDigits: (invoiceData.truckingCharges % 1 === 0) ? 0 : 2 
+                                {(invoiceData.truckingCharges || 0).toLocaleString(undefined, {
+                                    minimumFractionDigits: (invoiceData.truckingCharges % 1 === 0) ? 0 : 2
                                 })} US$
                             </TableCell>
                         </TableRow>
@@ -449,8 +449,8 @@ export default function PrintInvoicePage() {
                         <TableRow>
                             <TableCell sx={{ ...cellStyle, textAlign: 'right' }} colSpan={10}>{invoiceData.deductionsLabel || ''}</TableCell>
                             <TableCell sx={{ ...cellStyle, textAlign: 'right' }}>
-                                {(invoiceData.deductions || 0).toLocaleString(undefined, { 
-                                    minimumFractionDigits: (invoiceData.deductions % 1 === 0) ? 0 : 2 
+                                {(invoiceData.deductions || 0).toLocaleString(undefined, {
+                                    minimumFractionDigits: (invoiceData.deductions % 1 === 0) ? 0 : 2
                                 })} US$
                             </TableCell>
                         </TableRow>
@@ -458,8 +458,8 @@ export default function PrintInvoicePage() {
                         <TableRow>
                             <TableCell sx={{ ...cellStyle, textAlign: 'right' }} colSpan={10}>{invoiceData.adjustmentsLabel || ''}</TableCell>
                             <TableCell sx={{ ...cellStyle, textAlign: 'right' }}>
-                                {(invoiceData.adjustments || 0).toLocaleString(undefined, { 
-                                    minimumFractionDigits: (invoiceData.adjustments % 1 === 0) ? 0 : 2 
+                                {(invoiceData.adjustments || 0).toLocaleString(undefined, {
+                                    minimumFractionDigits: (invoiceData.adjustments % 1 === 0) ? 0 : 2
                                 })} US$
                             </TableCell>
                         </TableRow>
@@ -483,20 +483,19 @@ export default function PrintInvoicePage() {
         </Box>
     );
 
+    // If no invoice data after loading (e.g., error), show a friendly message
+    if (!invoiceData) return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', gap: 2 }}>
+            <Typography color="error" variant="h6">No invoice data found.</Typography>
+        </Box>
+    );
+    
     return (
         <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f5f5f5' }}>
             {/* Toolbar */}
             <AppBar position="static" sx={{ backgroundColor: '#3C3C3C', color: '#fff', boxShadow: 'none' }}>
                 <Toolbar variant="dense" sx={{ minHeight: '48px !important' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-                        <IconButton
-                            size="small"
-                            onClick={() => navigate(-1)}
-                            sx={{ color: '#fff', mr: 1 }}
-                            title="Back"
-                        >
-                            <ArrowBack fontSize="small" />
-                        </IconButton>
                         <Typography variant="h6" sx={{ fontSize: '14px', fontWeight: 'bold' }}>
                             Print Invoice {invoiceData?.invoiceNo ? `- ${invoiceData.invoiceNo}` : ''}
                         </Typography>
@@ -516,7 +515,7 @@ export default function PrintInvoicePage() {
             {/* Content Area */}
             <Box sx={{ flex: 1, overflow: 'auto', p: 4, backgroundColor: '#282828', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <Box ref={contentRef} sx={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center', transition: 'transform 0.2s' }}>
-                    
+
                     {/* PAGE 1 */}
                     <Paper elevation={0} sx={{
                         width: '210mm', height: '297mm', p: '10mm', backgroundColor: '#fff', color: '#000',
@@ -525,9 +524,9 @@ export default function PrintInvoicePage() {
                     }}>
                         {/* Header Box */}
                         <Box sx={{ border: '1px solid #000', p: '10px', mb: '5px' }}>
-                            <Typography sx={{ fontSize: '24px', fontWeight: 'bold', lineHeight: 1 }}>{invoiceData.companyName}</Typography>
-                            <Typography sx={{ fontSize: '12px', mt: '4px' }}>{invoiceData.companyAddress}</Typography>
-                            <Typography sx={{ fontSize: '12px' }}>{invoiceData.country}</Typography>
+                            <Typography sx={{ fontSize: '24px', fontWeight: 'bold', lineHeight: 1 }}>{invoiceData?.companyName || ''}</Typography>
+                            <Typography sx={{ fontSize: '12px', mt: '4px' }}>{invoiceData?.companyAddress || ''}</Typography>
+                            <Typography sx={{ fontSize: '12px' }}>{invoiceData?.country || ''}</Typography>
                         </Box>
 
                         <Typography align="center" sx={{ fontSize: '22px', fontWeight: 'bold', mb: '5px', letterSpacing: '2px' }}>INVOICE</Typography>
@@ -536,16 +535,16 @@ export default function PrintInvoicePage() {
                             <Box sx={{ display: 'flex', gap: 3 }}>
                                 <Box sx={{ display: 'flex' }}>
                                     <Typography sx={{ ...labelStyle, fontWeight: 'bold' }}>Invoice # :</Typography>
-                                    <Typography sx={{ ...valueStyle, ml: 1 }}>{invoiceData.invoiceNo}</Typography>
+                                    <Typography sx={{ ...valueStyle, ml: 1 }}>{invoiceData?.invoiceNo || ''}</Typography>
                                 </Box>
                                 <Box sx={{ display: 'flex' }}>
                                     <Typography sx={{ ...labelStyle, fontWeight: 'bold' }}>Date :</Typography>
-                                    <Typography sx={{ ...valueStyle, ml: 1 }}>{invoiceData.invoiceDate}</Typography>
+                                    <Typography sx={{ ...valueStyle, ml: 1 }}>{invoiceData?.invoiceDate || ''}</Typography>
                                 </Box>
                             </Box>
                             <Box sx={{ textAlign: 'right' }}>
-                                <Typography sx={{ fontSize: '11px' }}>{invoiceData.dayDate}</Typography>
-                                <Typography sx={{ fontSize: '11px' }}>{invoiceData.time}</Typography>
+                                <Typography sx={{ fontSize: '11px' }}>{invoiceData?.dayDate || ''}</Typography>
+                                <Typography sx={{ fontSize: '11px' }}>{invoiceData?.time || ''}</Typography>
                             </Box>
                         </Box>
 
@@ -555,13 +554,13 @@ export default function PrintInvoicePage() {
                                 <Box key={i} sx={{ flex: 1, border: '1px solid #000', minHeight: '100px', p: '5px' }}>
                                     <Typography sx={{ fontSize: '11px', mb: '10px' }}>{title}</Typography>
                                     <Box sx={{ pl: '20px' }}>
-                                        <Typography sx={{ fontSize: '13px', fontWeight: 'bold' }}>{i === 0 ? invoiceData.billTo.company : invoiceData.shipTo.company}</Typography>
-                                        <Typography sx={{ fontSize: '11px' }}>{i === 0 ? invoiceData.billTo.name : invoiceData.shipTo.name}</Typography>
-                                        <Typography sx={{ fontSize: '11px', mt: '5px' }}>{i === 0 ? invoiceData.billTo.address : invoiceData.shipTo.address}</Typography>
-                                        <Typography sx={{ fontSize: '11px' }}>{i === 0 ? invoiceData.billTo.zip : invoiceData.shipTo.zip}</Typography>
+                                        <Typography sx={{ fontSize: '13px', fontWeight: 'bold' }}>{i === 0 ? invoiceData?.billTo?.company || '' : invoiceData?.shipTo?.company || ''}</Typography>
+                                        <Typography sx={{ fontSize: '11px' }}>{i === 0 ? invoiceData?.billTo?.name || '' : invoiceData?.shipTo?.name || ''}</Typography>
+                                        <Typography sx={{ fontSize: '11px', mt: '5px' }}>{i === 0 ? invoiceData?.billTo?.address || '' : invoiceData?.shipTo?.address || ''}</Typography>
+                                        <Typography sx={{ fontSize: '11px' }}>{i === 0 ? invoiceData?.billTo?.zip || '' : invoiceData?.shipTo?.zip || ''}</Typography>
                                         <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '80%', mt: '2px' }}>
-                                            <Typography sx={{ fontSize: '11px' }}>{i === 0 ? invoiceData.billTo.city : invoiceData.shipTo.city}</Typography>
-                                            <Typography sx={{ fontSize: '11px' }}>{i === 0 ? invoiceData.billTo.country : invoiceData.shipTo.country}</Typography>
+                                            <Typography sx={{ fontSize: '11px' }}>{i === 0 ? invoiceData?.billTo?.city || '' : invoiceData?.shipTo?.city || ''}</Typography>
+                                            <Typography sx={{ fontSize: '11px' }}>{i === 0 ? invoiceData?.billTo?.country || '' : invoiceData?.shipTo?.country || ''}</Typography>
                                         </Box>
                                     </Box>
                                 </Box>
@@ -573,19 +572,19 @@ export default function PrintInvoicePage() {
                             <Typography sx={{ fontSize: '12px', fontWeight: 'bold', borderBottom: '1px solid #000', mb: '5px' }}>Shipping Information</Typography>
                             <Box sx={{ display: 'flex', gap: '5%' }}>
                                 <Box sx={{ flex: 1 }}>
-                                    <ShippingRow label="Payment Terms" value={invoiceData.shipping.paymentTerms} />
-                                    <ShippingRow label="Shipment Mode" value={invoiceData.shipping.shipmentMode} />
-                                    <ShippingRow label="ETD - Karachi :" value={invoiceData.shipping.etdKarachi} />
-                                    <ShippingRow label="ETA - Destination :" value={invoiceData.shipping.etaDestination} />
-                                    <ShippingRow label="ETW :" value={invoiceData.shipping.etw} />
+                                    <ShippingRow label="Payment Terms" value={invoiceData?.shipping?.paymentTerms || ''} />
+                                    <ShippingRow label="Shipment Mode" value={invoiceData?.shipping?.shipmentMode || ''} />
+                                    <ShippingRow label="ETD - Karachi :" value={invoiceData?.shipping?.etdKarachi || ''} />
+                                    <ShippingRow label="ETA - Destination :" value={invoiceData?.shipping?.etaDestination || ''} />
+                                    <ShippingRow label="ETW :" value={invoiceData?.shipping?.etw || ''} />
                                 </Box>
                                 <Box sx={{ flex: 1 }}>
-                                    <ShippingRow label="BL - AWBL:" value={invoiceData.shipping.blAwbl} />
-                                    <ShippingRow label="Container #:" value={invoiceData.shipping.containerNo} />
+                                    <ShippingRow label="BL - AWBL:" value={invoiceData?.shipping?.blAwbl || ''} />
+                                    <ShippingRow label="Container #:" value={invoiceData?.shipping?.containerNo || ''} />
                                     <Box sx={{ display: 'flex', justifyContent: 'flex-end', pr: '40px', mt: '2px' }}>
                                         <Typography sx={{ fontSize: '11px', fontWeight: 'bold' }}>Marks & Nos</Typography>
                                     </Box>
-                                    <ShippingRow label="Destination :" value={invoiceData.shipping.destination} />
+                                    <ShippingRow label="Destination :" value={invoiceData?.shipping?.destination || ''} />
                                 </Box>
                             </Box>
                         </Box>
@@ -615,26 +614,26 @@ export default function PrintInvoicePage() {
                                     <Box sx={{ flex: 1, border: '1px solid #000', p: '5px', minHeight: '100px' }}>
                                         <Typography sx={{ fontSize: '11px', fontWeight: 'bold', mb: '5px' }}>For Wire Transfer Beneficiary :</Typography>
                                         <Box sx={{ pl: '2px' }}>
-                                            <Typography sx={{ fontSize: '11px' }}>{invoiceData.beneficiary.company}</Typography>
-                                            <Typography sx={{ fontSize: '11px' }}>{invoiceData.beneficiary.address}</Typography>
-                                            <Typography sx={{ fontSize: '11px' }}>{invoiceData.beneficiary.city}</Typography>
-                                            <Typography sx={{ fontSize: '11px' }}>{invoiceData.beneficiary.country}</Typography>
+                                            <Typography sx={{ fontSize: '11px' }}>{invoiceData?.beneficiary?.company || ''}</Typography>
+                                            <Typography sx={{ fontSize: '11px' }}>{invoiceData?.beneficiary?.address || ''}</Typography>
+                                            <Typography sx={{ fontSize: '11px' }}>{invoiceData?.beneficiary?.city || ''}</Typography>
+                                            <Typography sx={{ fontSize: '11px' }}>{invoiceData?.beneficiary?.country || ''}</Typography>
                                         </Box>
                                     </Box>
                                     <Box sx={{ flex: 1, border: '1px solid #000', p: '5px', minHeight: '100px' }}>
                                         <Typography sx={{ fontSize: '11px', fontWeight: 'bold', mb: '5px' }}>Beneficiary's Bank :</Typography>
                                         <Box sx={{ pl: '2px' }}>
-                                            <Typography sx={{ fontSize: '11px' }}>{invoiceData.bank.name}</Typography>
-                                            <Typography sx={{ fontSize: '11px' }}>{invoiceData.bank.address}</Typography>
-                                            <Typography sx={{ fontSize: '11px' }}>{invoiceData.bank.country}</Typography>
+                                            <Typography sx={{ fontSize: '11px' }}>{invoiceData?.bank?.name || ''}</Typography>
+                                            <Typography sx={{ fontSize: '11px' }}>{invoiceData?.bank?.address || ''}</Typography>
+                                            <Typography sx={{ fontSize: '11px' }}>{invoiceData?.bank?.country || ''}</Typography>
                                             <Box sx={{ mt: '5px' }}>
                                                 <Box sx={{ display: 'flex' }}>
                                                     <Typography sx={{ fontSize: '11px', minWidth: '85px' }}>Account No. :</Typography>
-                                                    <Typography sx={{ fontSize: '11px' }}>{invoiceData.bank.accountNo}</Typography>
+                                                    <Typography sx={{ fontSize: '11px' }}>{invoiceData?.bank?.accountNo || ''}</Typography>
                                                 </Box>
                                                 <Box sx={{ display: 'flex' }}>
                                                     <Typography sx={{ fontSize: '11px', minWidth: '85px' }}>Routing No. :</Typography>
-                                                    <Typography sx={{ fontSize: '11px' }}>{invoiceData.bank.routingNo}</Typography>
+                                                    <Typography sx={{ fontSize: '11px' }}>{invoiceData?.bank?.routingNo || ''}</Typography>
                                                 </Box>
                                             </Box>
                                         </Box>
@@ -659,7 +658,7 @@ export default function PrintInvoicePage() {
                             fontFamily: 'Arial, sans-serif', border: '1px solid #000', position: 'relative',
                             boxSizing: 'border-box'
                         }}>
-                             <Box sx={{ border: '1px solid #000', mb: '10px' }}>
+                            <Box sx={{ border: '1px solid #000', mb: '10px' }}>
                                 <Box sx={{ backgroundColor: '#fdfdfd', p: '2px 5px', borderBottom: '1px solid #000' }}>
                                     <Typography sx={{ fontSize: '11px', fontWeight: 'bold' }}>Product & Quantity Information (Continued)</Typography>
                                 </Box>
@@ -680,26 +679,26 @@ export default function PrintInvoicePage() {
                                 <Box sx={{ flex: 1, border: '1px solid #000', p: '5px', minHeight: '100px' }}>
                                     <Typography sx={{ fontSize: '11px', fontWeight: 'bold', mb: '5px' }}>For Wire Transfer Beneficiary :</Typography>
                                     <Box sx={{ pl: '2px' }}>
-                                        <Typography sx={{ fontSize: '11px' }}>{invoiceData.beneficiary.company}</Typography>
-                                        <Typography sx={{ fontSize: '11px' }}>{invoiceData.beneficiary.address}</Typography>
-                                        <Typography sx={{ fontSize: '11px' }}>{invoiceData.beneficiary.city}</Typography>
-                                        <Typography sx={{ fontSize: '11px' }}>{invoiceData.beneficiary.country}</Typography>
+                                        <Typography sx={{ fontSize: '11px' }}>{invoiceData?.beneficiary?.company || ''}</Typography>
+                                        <Typography sx={{ fontSize: '11px' }}>{invoiceData?.beneficiary?.address || ''}</Typography>
+                                        <Typography sx={{ fontSize: '11px' }}>{invoiceData?.beneficiary?.city || ''}</Typography>
+                                        <Typography sx={{ fontSize: '11px' }}>{invoiceData?.beneficiary?.country || ''}</Typography>
                                     </Box>
                                 </Box>
                                 <Box sx={{ flex: 1, border: '1px solid #000', p: '5px', minHeight: '100px' }}>
                                     <Typography sx={{ fontSize: '11px', fontWeight: 'bold', mb: '5px' }}>Beneficiary's Bank :</Typography>
                                     <Box sx={{ pl: '2px' }}>
-                                        <Typography sx={{ fontSize: '11px' }}>{invoiceData.bank.name}</Typography>
-                                        <Typography sx={{ fontSize: '11px' }}>{invoiceData.bank.address}</Typography>
-                                        <Typography sx={{ fontSize: '11px' }}>{invoiceData.bank.country}</Typography>
+                                        <Typography sx={{ fontSize: '11px' }}>{invoiceData?.bank?.name || ''}</Typography>
+                                        <Typography sx={{ fontSize: '11px' }}>{invoiceData?.bank?.address || ''}</Typography>
+                                        <Typography sx={{ fontSize: '11px' }}>{invoiceData?.bank?.country || ''}</Typography>
                                         <Box sx={{ mt: '5px' }}>
                                             <Box sx={{ display: 'flex' }}>
                                                 <Typography sx={{ fontSize: '11px', minWidth: '85px' }}>Account No. :</Typography>
-                                                <Typography sx={{ fontSize: '11px' }}>{invoiceData.bank.accountNo}</Typography>
+                                                <Typography sx={{ fontSize: '11px' }}>{invoiceData?.bank?.accountNo || ''}</Typography>
                                             </Box>
                                             <Box sx={{ display: 'flex' }}>
                                                 <Typography sx={{ fontSize: '11px', minWidth: '85px' }}>Routing No. :</Typography>
-                                                <Typography sx={{ fontSize: '11px' }}>{invoiceData.bank.routingNo}</Typography>
+                                                <Typography sx={{ fontSize: '11px' }}>{invoiceData?.bank?.routingNo || ''}</Typography>
                                             </Box>
                                         </Box>
                                     </Box>
@@ -728,4 +727,4 @@ function ShippingRow({ label, value }) {
         </Box>
     );
 }
-
+

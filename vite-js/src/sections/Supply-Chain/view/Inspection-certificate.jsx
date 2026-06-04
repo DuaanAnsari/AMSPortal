@@ -23,6 +23,7 @@ import jsPDF from 'jspdf';
 export default function InspectionCertificatePage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { state } = useLocation();
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
   const SHIPMENT_DETAIL_API = `${API_BASE_URL}/api/ShipmentRelease/GetShipment`;
