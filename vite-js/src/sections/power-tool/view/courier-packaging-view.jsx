@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import {
   Box,
   Card,
@@ -17,6 +17,9 @@ import { DataGrid } from '@mui/x-data-grid';
 import { pdf } from '@react-pdf/renderer';
 import { useNavigate } from 'react-router-dom';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import Iconify from 'src/components/iconify';
+
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 import { useSnackbar } from 'src/components/snackbar';
 import { paths } from 'src/routes/paths';
@@ -177,9 +180,12 @@ export default function CourierPackagingViewPage() {
   const defaults = useMemo(() => monthRangeDefaults(), []);
 
   const [rows, setRows] = useState([]);
+  const [reorderedRows, setReorderedRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [pdfRowId, setPdfRowId] = useState(null);
+  const dragRowId = useRef(null);
+  const dragOverRowId = useRef(null);
 
   const [draftFilters, setDraftFilters] = useState({
     orderNo: '',
@@ -267,7 +273,9 @@ export default function CourierPackagingViewPage() {
         });
         if (cancelled) return;
         const list = normalizeListResponse(data);
-        setRows(list.map((row, i) => mapMerchandisingRow(row, i)));
+        const mapped = list.map((row, i) => mapMerchandisingRow(row, i));
+        setRows(mapped);
+        setReorderedRows(mapped);
       } catch (e) {
         if (cancelled) return;
         const msg =
@@ -288,6 +296,37 @@ export default function CourierPackagingViewPage() {
       cancelled = true;
     };
   }, [orderNo, fromDate, toDate]);
+
+  // Keep reorderedRows in sync when base rows change (e.g. new search)
+  useEffect(() => {
+    setReorderedRows(filteredRows);
+  }, [filteredRows]);
+
+  // Drag-and-drop row reorder handlers
+  const handleDragStart = useCallback((id) => {
+    dragRowId.current = id;
+  }, []);
+
+  const handleDragEnter = useCallback((id) => {
+    dragOverRowId.current = id;
+  }, []);
+
+  const handleDrop = useCallback(() => {
+    const dragId = dragRowId.current;
+    const overId = dragOverRowId.current;
+    if (!dragId || !overId || dragId === overId) return;
+    setReorderedRows((prev) => {
+      const next = [...prev];
+      const fromIndex = next.findIndex((r) => r.id === dragId);
+      const toIndex = next.findIndex((r) => r.id === overId);
+      if (fromIndex === -1 || toIndex === -1) return prev;
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+    dragRowId.current = null;
+    dragOverRowId.current = null;
+  }, []);
 
   const handleEditNavigate = useCallback(
     (raw) => {
@@ -381,6 +420,35 @@ export default function CourierPackagingViewPage() {
 
   const columns = useMemo(
     () => [
+      {
+        field: '__drag',
+        headerName: '',
+        width: 40,
+        sortable: false,
+        filterable: false,
+        disableColumnMenu: true,
+        align: 'center',
+        headerAlign: 'center',
+        renderCell: (params) => (
+          <Box
+            draggable
+            onDragStart={() => handleDragStart(params.row.id)}
+            onDragEnter={() => handleDragEnter(params.row.id)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleDrop}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'grab',
+              color: 'text.disabled',
+              '&:active': { cursor: 'grabbing' },
+            }}
+          >
+            <DragIndicatorIcon sx={{ fontSize: 18 }} />
+          </Box>
+        ),
+      },
       { field: 'invoiceNo', headerName: 'Invoice #', flex: 1, minWidth: 110 },
       { field: 'creationDate', headerName: 'Creation Date', flex: 1, minWidth: 130 },
       { field: 'shipperName', headerName: 'Shipper Name', flex: 1.2, minWidth: 130 },
@@ -391,6 +459,31 @@ export default function CourierPackagingViewPage() {
       { field: 'courierName', headerName: 'Courier Name', flex: 1, minWidth: 110 },
       { field: 'account', headerName: 'Account', flex: 0.8, minWidth: 80 },
       { field: 'awbl', headerName: 'AWBL #', flex: 1, minWidth: 100 },
+      {
+        field: 'delete',
+        headerName: 'Delete',
+        width: 80,
+        sortable: false,
+        filterable: false,
+        align: 'center',
+        headerAlign: 'center',
+        renderCell: () => (
+          <Tooltip title="Delete" arrow>
+            <IconButton
+              size="small"
+              aria-label="Delete"
+              sx={{
+                p: 0.6,
+                color: 'error.main',
+                borderRadius: 1,
+                '&:hover': { bgcolor: 'error.lighter' },
+              }}
+            >
+              <Iconify icon="solar:trash-bin-trash-bold" width={22} height={22} />
+            </IconButton>
+          </Tooltip>
+        ),
+      },
       {
         field: 'edit',
         headerName: 'Edit',
@@ -458,7 +551,7 @@ export default function CourierPackagingViewPage() {
         },
       },
     ],
-    [handleEditNavigate, handlePdfView, pdfRowId]
+    [handleEditNavigate, handlePdfView, handleDragStart, handleDragEnter, handleDrop, pdfRowId]
   );
 
   return (
@@ -618,9 +711,10 @@ export default function CourierPackagingViewPage() {
           }}
         >
           <DataGrid
-            rows={filteredRows}
+            rows={reorderedRows}
             columns={columns}
             getRowId={(row) => row.id}
+            experimentalFeatures={{ columnReordering: true }}
             initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
             pageSizeOptions={[10, 25, 50]}
             disableRowSelectionOnClick

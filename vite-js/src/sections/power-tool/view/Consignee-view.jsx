@@ -279,35 +279,23 @@ export default function ConsigneeViewPage() {
         align: 'center',
         sortable: false,
         filterable: false,
-        renderCell: (params) => {
-          const busy = deletingId === params.row.id;
-          return (
-            <Tooltip title="Delete" arrow>
-              <span>
-                <IconButton
-                  size="small"
-                  disabled={busy}
-                  aria-label="Delete consignee"
-                  onClick={() => setDeleteTarget(params.row)}
-                  sx={{
-                    bgcolor: 'error.main',
-                    color: 'error.contrastText',
-                    width: 28,
-                    height: 28,
-                    '&:hover': { bgcolor: 'error.dark', color: 'error.contrastText' },
-                    '&.Mui-disabled': { opacity: 0.85 },
-                  }}
-                >
-                  {busy ? (
-                    <CircularProgress color="inherit" size={16} />
-                  ) : (
-                    <Iconify icon="eva:close-fill" width={16} />
-                  )}
-                </IconButton>
-              </span>
-            </Tooltip>
-          );
-        },
+        renderCell: (params) => (
+          <Tooltip title="Delete" arrow>
+            <IconButton
+              size="small"
+              aria-label="Delete"
+              sx={{
+                color: 'error.main',
+                width: 32,
+                height: 32,
+                '&:hover': { bgcolor: 'transparent' },
+              }}
+              onClick={() => setDeleteTarget(params.row)}
+            >
+              <Iconify icon="solar:trash-bin-trash-bold" width={32} height={32} />
+            </IconButton>
+          </Tooltip>
+        ),
       },
     ],
     [handleEdit, deletingId]

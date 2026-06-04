@@ -207,6 +207,13 @@ export default function PrintInvoicePage() {
                     dayDate: new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
                     time: new Date().toLocaleTimeString('en-US', { hour12: false }),
                     dateCode: (data.etwDate && !data.etwDate.startsWith('1900-01-01')) ? new Date(data.etwDate).toLocaleDateString('en-US') : '',
+                    companyAddress: '1441 BROADWAY, SUITE # 6162 NEW YORK , NY 10018',
+                    country: 'NY USA',
+                    invoiceNo: invoiceNo || data.ldpInvoiceNo || '',
+                    invoiceDate: data.invoiceDate ? new Date(data.invoiceDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '09-30-2025',
+                    dayDate: new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+                    time: new Date().toLocaleTimeString('en-US', { hour12: false }),
+                    dateCode: (data.etwDate && !data.etwDate.startsWith('1900-01-01')) ? new Date(data.etwDate).toLocaleDateString('en-US') : '',
 
                     billTo: {
                         company: data.customerName || 'LONE ROCK',
@@ -489,7 +496,7 @@ export default function PrintInvoicePage() {
             <Typography color="error" variant="h6">No invoice data found.</Typography>
         </Box>
     );
-    
+
     return (
         <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f5f5f5' }}>
             {/* Toolbar */}

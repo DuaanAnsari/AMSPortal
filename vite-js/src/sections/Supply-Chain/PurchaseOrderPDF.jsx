@@ -493,76 +493,78 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
   };
 
   const data = {
-    ref: poData.amsRefNo || '',
-    receivedDate: (poData.creationDate && !poData.creationDate.startsWith('1900-01-01'))
-      ? new Date(poData.creationDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-      : '',
-    attn: poData.contactPersonVendor || '',
-    addressLeft: poData.venderAddress || '',
-    trackingCode: poData.venderCode || '',
-    brand: poData.brand || '',
-    division: poData.ecpDivistion || '',
-    rn: poData.rnNo || '',
-    shipTo: poData.consigneeAddress1 || '',
-    itemDescription: poData.itemDescriptionShippingInvoice || '',
-    exFactory: (poData.shipmentDate && !poData.shipmentDate.startsWith('1900-01-01')) ? new Date(poData.shipmentDate).toLocaleDateString('en-US') : '',
-    finalInspection: (poData.finalInspDate && !poData.finalInspDate.startsWith('1900-01-01')) ? new Date(poData.finalInspDate).toLocaleDateString('en-US') : '',
-    leadtime: poData.leadtime ? `${poData.leadtime} Days` : '',
-    fabric: {
-      description: 'Body',
-      fabric: poData.fabric || '',
-      content: poData.quality || '',
-      weight: poData.gms ? `${poData.gms} gsm` : ''
-    },
-    packingInstructions: poData.packingList || '',
-    cartonMarking: poData.cartonMarking || '',
-    pcsPerCarton: poData.pcPerCarton || '',
-    ration: poData.ration || '',
-    orderRows: buildOrderRowsFromReport(reportRows),
-    get totalQtyNum() {
-      return this.orderRows.reduce((sum, row) => sum + (row.totalQtyNum || 0), 0);
-    },
-    get totalAmountNum() {
-      return this.orderRows.reduce((sum, row) => sum + (row.amountNum || 0), 0);
-    },
-    importantNotes: poData.importantNote ? [poData.importantNote] : [
-      "Fabric should be heat set and lock properly to avoid shrinkage problem.",
-      "Before cutting fabric should be kept on table for atleast 24 hours.",
-      "All garments should be 100% checked for sizes before carton packing"
-    ],
-    productImage: resolvePoImageSrc(poData.poImage),
-    shipMode: poData.deliveryTypeDisplayName || '',
-    destination: poData.destination || '',
-    shipmentTerms: poData.shipmentModeName || '',
-    paymentTerms: poData.paymentModeName || '',
-    amsTeam: poData.userName || 'MUHAMMAD SHAHZAIB',
-    cpoNumber: poData.pono || '',
-    styleNumber: poData.style || '',
-    productCategory: poData.productCategoriesName || '',
-    specialInstructions: poData.pO_Special_Instructions || '',
-    source: poData.styleSource || 'Local',
-    embellishment: poData.embAndEmbellishment || 'Not Required',
-    trimsAccessories: poData.trimsAccessories || '',
-    specialOperation: poData.pO_Special_Operation || '',
-    samplingReq: poData.samplingReq || 'N/A',
-    otherFabric: poData.otherFabric || '',
-    construction: poData.construction || '',
-    gsmOF: poData.ribGSM || poData.ribGsm || poData.RibGSM || '',
-    beneficiaryBank: poData.bankNameBank || '',
-    accountNo: poData.accountNoBank || '',
-    routingNo: poData.ibanBank || '',
-    washingInstructions: poData.washingCareLabelInstructions || 'Machine Wash Cold With Like Colors, Gentle Cycle. Use Only Non Chlorine Bleach when needed, Line Dry, Cool Iron.',
-    poTotalDetails:
-      poData.poTotalDetails ||
-      poData.poTotalDetail ||
-      poData.poTotalDetailText ||
-      poData.poTotalDetailsText ||
-      '',
-    fmtQty,
-    fmtMoney,
-    fmtInt,
-    fmtDz,
-    fmtSmart,
+  ref: poData.amsRefNo || '',
+  receivedDate: (poData.creationDate && !poData.creationDate.startsWith('1900-01-01'))
+    ? new Date(poData.creationDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    : '',
+  attn: poData.contactPersonVendor || '',
+  addressLeft: poData.venderAddress || '',
+  trackingCode: poData.venderCode || '',
+  brand: poData.brand || '',
+  division: poData.ecpDivistion || '',
+  rn: poData.rnNo || '',
+  shipTo: poData.consigneeAddress1 || '',
+  itemDescription: poData.itemDescriptionShippingInvoice || '',
+  exFactory: (poData.shipmentDate && !poData.shipmentDate.startsWith('1900-01-01')) ? new Date(poData.shipmentDate).toLocaleDateString('en-US') : '',
+  finalInspection: (poData.finalInspDate && !poData.finalInspDate.startsWith('1900-01-01')) ? new Date(poData.finalInspDate).toLocaleDateString('en-US') : '',
+  leadtime: poData.leadtime ? `${poData.leadtime} Days` : '',
+  fabric: {
+    description: 'Body',
+    fabric: poData.fabric || '',
+    content: poData.quality || '',
+    weight: poData.gms ? `${poData.gms} gsm` : ''
+  },
+  packingInstructions: poData.packingList || '',
+  cartonMarking: poData.cartonMarking || '',
+  pcsPerCarton: poData.pcPerCarton || '',
+  ration: poData.ration || '',
+  ratio: poData.ratio || poData.ration || '',
+  assortment: poData.assortment || '',
+  orderRows: buildOrderRowsFromReport(reportRows),
+  get totalQtyNum() {
+    return this.orderRows.reduce((sum, row) => sum + (row.totalQtyNum || 0), 0);
+  },
+  get totalAmountNum() {
+    return this.orderRows.reduce((sum, row) => sum + (row.amountNum || 0), 0);
+  },
+  importantNotes: poData.importantNote ? [poData.importantNote] : [
+    "Fabric should be heat set and lock properly to avoid shrinkage problem.",
+    "Before cutting fabric should be kept on table for atleast 24 hours.",
+    "All garments should be 100% checked for sizes before carton packing"
+  ],
+  productImage: resolvePoImageSrc(poData.poImage),
+  shipMode: poData.deliveryTypeDisplayName || '',
+  destination: poData.destination || '',
+  shipmentTerms: poData.shipmentModeName || '',
+  paymentTerms: poData.paymentModeName || '',
+  amsTeam: poData.userName || 'MUHAMMAD SHAHZAIB',
+  cpoNumber: poData.pono || '',
+  styleNumber: poData.style || '',
+  productCategory: poData.productCategoriesName || '',
+  specialInstructions: poData.pO_Special_Instructions || '',
+  source: poData.styleSource || 'Local',
+  embellishment: poData.embAndEmbellishment || 'Not Required',
+  trimsAccessories: poData.trimsAccessories || '',
+  specialOperation: poData.pO_Special_Operation || '',
+  samplingReq: poData.samplingReq || 'N/A',
+  otherFabric: poData.otherFabric || '',
+  construction: poData.construction || '',
+  gsmOF: poData.ribGSM || poData.ribGsm || poData.RibGSM || '',
+  beneficiaryBank: poData.bankNameBank || '',
+  accountNo: poData.accountNoBank || '',
+  routingNo: poData.ibanBank || '',
+  washingInstructions: poData.washingCareLabelInstructions || 'Machine Wash Cold With Like Colors, Gentle Cycle, Non Chlorine Bleach when needed, Line Dry, Cool Iron.',
+  poTotalDetails:
+    poData.poTotalDetails ||
+    poData.poTotalDetail ||
+    poData.poTotalDetailText ||
+    poData.poTotalDetailsText ||
+    '',
+  fmtQty,
+  fmtMoney,
+  fmtInt,
+  fmtDz,
+  fmtSmart,
   };
 
   // Second page data
@@ -974,7 +976,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.fabric.content}</TableCell>
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.fabric.weight}</TableCell>
                     <TableCell sx={{ borderRight: '1px solid #000', fontSize: '9.5px', p: '4px 8px', verticalAlign: 'middle', lineHeight: 1.2 }}>{data.packingInstructions}</TableCell>
-                    <TableCell sx={{ fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.ration}</TableCell>
+                                            <TableCell sx={{ fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.assortment?.toLowerCase() === 'solid' ? 'Solid' : data.ratio}</TableCell>
                   </TableRow>
                   {/* Other Row */}
                   <TableRow sx={{ borderBottom: '1px solid black' }} debug>

@@ -65,7 +65,7 @@ export default function ContainerHandlingViewPage() {
       filterable: false,
       renderCell: () => (
         <IconButton size="small" sx={{ color: 'error.main' }}>
-          <Iconify icon="mdi:close-circle" />
+          <Iconify icon="solar:trash-bin-trash-bold" />
         </IconButton>
       ),
     },

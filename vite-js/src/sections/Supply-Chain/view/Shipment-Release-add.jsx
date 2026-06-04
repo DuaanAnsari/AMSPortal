@@ -1325,7 +1325,7 @@ export default function ShipmentReleaseAddPage() {
                                 aria-label="Remove row"
                                 onClick={() => handleRemoveArticleRow(actualIndex)}
                               >
-                                <Iconify icon="mdi:close-circle" width={22} height={22} />
+                                <Iconify icon="solar:trash-bin-trash-bold" width={22} height={22} />
                               </IconButton>
                             </TableCell>
                           </TableRow>

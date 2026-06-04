@@ -1527,7 +1527,7 @@ export default function ShipmentEditView() {
                               aria-label="Remove row"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <Iconify icon="mdi:close-circle" width={22} height={22} />
+                              <Iconify icon="solar:trash-bin-trash-bold" width={22} height={22} />
                             </IconButton>
                           </TableCell>
                         </TableRow>

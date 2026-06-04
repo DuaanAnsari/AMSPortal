@@ -3010,7 +3010,7 @@ export default function CompletePurchaseOrderFormEdit() {
                     />
                   </Grid>
                   <Grid item xs={12} sm={4}>
-                    <Controller name="ratio" render={({ field }) => <TextField {...field} fullWidth label="Ratio" />} />
+                    <Controller name="ratio" render={({ field }) => <TextField {...field} fullWidth label="Ratio" disabled={watch('assortment') === 'Solid'} />} />
                   </Grid>
                   <Grid item xs={12} sm={4}>
                     <Controller name="cartonMarking" render={({ field }) => <TextField {...field} fullWidth label="Carton Marking" />} />

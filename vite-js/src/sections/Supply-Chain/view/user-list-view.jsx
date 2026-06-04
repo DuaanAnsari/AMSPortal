@@ -747,7 +747,7 @@ export default function ShipmentReleaseFilters() {
                             sx={{ p: 0.25 }}
                             aria-label="Delete"
                           >
-                            <Iconify icon="mdi:close-circle" width={22} height={22} />
+                            <Iconify icon="solar:trash-bin-trash-bold" width={22} height={22} />
                           </IconButton>
                         </TableCell>
                         <TableCell>

@@ -107,7 +107,7 @@ export default function CostSheetEntryPage() {
             headerAlign: 'center',
             renderCell: (params) => (
                 <IconButton color="error" size="small" onClick={() => handleDeleteRow(params.id)}>
-                    <Iconify icon="mdi:close-circle" />
+                    <Iconify icon="solar:trash-bin-trash-bold" />
                 </IconButton>
             ),
         },

@@ -63,7 +63,7 @@ export default function CostSheetViewPage() {
             headerAlign: 'center',
             renderCell: (params) => (
                 <IconButton color="error" size="small">
-                    <Iconify icon="mdi:close-circle" />
+                    <Iconify icon="solar:trash-bin-trash-bold" />
                 </IconButton>
             ),
         },
