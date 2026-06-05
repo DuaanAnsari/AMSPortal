@@ -3089,19 +3089,6 @@ export default function QualityDepartmentInspectionView() {
                             </TableRow>
                           ))}
                           
-                          {/* Total and Allowed rows as per user screenshot */}
-                          <TableRow sx={{ height: 48, bgcolor: 'action.hover' }}>
-                            <TableCell colSpan={3} align="center" sx={{ fontWeight: 800, fontSize: 13 }}>TOTAL</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.criticalQty || 0}</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.majQty || 0}</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.minQty || 0}</TableCell>
-                          </TableRow>
-                          <TableRow sx={{ height: 48, bgcolor: 'action.hover' }}>
-                            <TableCell colSpan={3} align="center" sx={{ fontWeight: 800, fontSize: 13 }}>ALLOWED</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.allowCrit || 0}</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.allowMaj || 0}</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 800, fontSize: 14 }}>{form.allowMin || 0}</TableCell>
-                          </TableRow>
                         </TableBody>
                       </Table>
                     </TableContainer>
