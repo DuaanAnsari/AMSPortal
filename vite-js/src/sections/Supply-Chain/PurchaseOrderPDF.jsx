@@ -181,6 +181,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               otherFabric: r.otherFabric || orderData.otherFabric || '',
               construction: r.construction || orderData.construction || '',
               ribGSM: r.ribGSM || orderData.ribGSM || r.ribGsm || orderData.ribGsm || r.RibGSM || orderData.RibGSM || '',
+              assortment: r.assortment || orderData.assortment || '',
             }));
           }
           setFetchedData(reportData);
@@ -207,6 +208,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               cartonMarking: order.cartonMarking || '',
               pcPerCarton: order.pcPerCarton || '',
               ration: order.ration || '',
+              assortment: order.assortment || '',
               destination: order.destination || '',
               paymentModeName: order.paymentModeName || order.paymentMode || '',
               deliveryTypeDisplayName: order.deliveryTypeDisplayName || order.deliveryType || '',
@@ -566,6 +568,8 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
   fmtDz,
   fmtSmart,
   };
+
+  const isSolid = String(data.assortment || '').toLowerCase() === 'solid' || String(data.ratio || '').toLowerCase() === 'solid';
 
   // Second page data
   const secondPageData = {
@@ -965,7 +969,9 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontWeight: 'bold', fontSize: '9px', p: '2px 6px', textAlign: 'center' }}>Content</TableCell>
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontWeight: 'bold', fontSize: '9px', p: '2px 6px', textAlign: 'center' }}>Weight</TableCell>
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontWeight: 'bold', fontSize: '9px', p: '2px 6px', textAlign: 'center' }}>Packing Instructions</TableCell>
-                    <TableCell sx={{ borderBottom: '1px solid #000', fontWeight: 'bold', fontSize: '9px', p: '2px 6px', textAlign: 'center' }}>Ratio:</TableCell>
+                    <TableCell sx={{ borderBottom: '1px solid #000', fontWeight: 'bold', fontSize: '9px', p: '2px 6px', textAlign: 'center' }}>
+                      {isSolid ? 'Solid:' : 'Assortment:'}
+                    </TableCell>
                   </TableRow>
                   {/* Body Row */}
                   <TableRow>
@@ -976,7 +982,9 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.fabric.content}</TableCell>
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.fabric.weight}</TableCell>
                     <TableCell sx={{ borderRight: '1px solid #000', fontSize: '9.5px', p: '4px 8px', verticalAlign: 'middle', lineHeight: 1.2 }}>{data.packingInstructions}</TableCell>
-                                            <TableCell sx={{ fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.assortment?.toLowerCase() === 'solid' ? 'Solid' : data.ratio}</TableCell>
+                                            <TableCell sx={{ fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>
+                                              {isSolid ? 'Solid' : (data.ratio ? (String(data.ratio).toLowerCase().startsWith('ratio') ? data.ratio : `Ratio: ${data.ratio}`) : '')}
+                                            </TableCell>
                   </TableRow>
                   {/* Other Row */}
                   <TableRow sx={{ borderBottom: '1px solid black' }} debug>

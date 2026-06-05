@@ -599,6 +599,7 @@ function buildQdSavePayload(form, discRows, mstId, isMainSave, dtlRows) {
     hangerCom: accDrop.hanger || null,
     crtnStickerCom: null,
     careLblCom: accText.careLabel || null,
+    careLblPlacementCom: accDrop.careLabelPlacement || null,
     hangerStickerSizerCom: null,
     noOfPcsInnerPackCom: packText.noOfPcsInnerPack || null,
     contentLblCom: accText.contentLabel || null,
@@ -1600,27 +1601,6 @@ export default function QualityDepartmentInspectionView() {
       return;
     }
 
-    // Validation: Prevent report if any defect dropdown is "Not OK"
-    const defectFields = {
-      qtyD: 'Quantity',
-      confD: 'Conformity',
-      workD: 'Workmanship',
-      packD: 'Packing',
-      markD: 'Marking',
-      measD: 'Measurement',
-    };
-
-    const invalidFields = Object.keys(defectFields)
-      .filter((k) => String(form[k] || '').trim().toLowerCase() === 'not ok')
-      .map((k) => defectFields[k]);
-
-    if (invalidFields.length > 0) {
-      enqueueSnackbar(`PDF cannot be generated because the following fields are "Not OK": ${invalidFields.join(', ')}.`, {
-        variant: 'error',
-        autoHideDuration: 5000,
-      });
-      return;
-    }
 
     setPdfLoading(true);
     try {
@@ -2515,7 +2495,13 @@ export default function QualityDepartmentInspectionView() {
                               }}
                             >
                               <TableCell sx={{ fontWeight: 600, fontSize: 11.5, whiteSpace: 'nowrap', py: 0.5, px: 1.5, borderRight: 1, borderColor: 'divider' }}>
-                                {st}
+                                {st.toUpperCase() === 'QTY BALANCE/EXTRA' ? (
+                                  <Box component="span">
+                                    QTY <Box component="span" sx={{ color: 'success.main' }}>BALANCE</Box>/<Box component="span" sx={{ color: 'error.main' }}>EXTRA</Box>
+                                  </Box>
+                                ) : (
+                                  st
+                                )}
                               </TableCell>
                               {matrixColumns.map((col) => {
                                 const slot = col.slot;
@@ -2531,11 +2517,13 @@ export default function QualityDepartmentInspectionView() {
                                   const num = parseFloat(rawVal);
                                   if (!isNaN(num)) {
                                     if (num < 0) {
-                                      cellTextColor = 'error.main'; // Red text for negative
+                                      cellTextColor = 'success.main'; // Green text for negative
                                       isColored = true;
+                                      displayVal = Math.abs(num).toString();
                                     } else if (num > 0) {
-                                      cellTextColor = 'success.main'; // Green text for positive
+                                      cellTextColor = 'error.main'; // Red text for positive
                                       isColored = true;
+                                      displayVal = Math.abs(num).toString();
                                     } else {
                                       displayVal = '0';
                                     }
@@ -2587,11 +2575,13 @@ export default function QualityDepartmentInspectionView() {
                                     const tNum = parseFloat(totalVal);
                                     if (!isNaN(tNum)) {
                                       if (tNum < 0) {
-                                        totalTextColor = 'error.main';
-                                        isTotalColored = true;
-                                      } else if (tNum > 0) {
                                         totalTextColor = 'success.main';
                                         isTotalColored = true;
+                                        totalVal = Math.abs(tNum).toString();
+                                      } else if (tNum > 0) {
+                                        totalTextColor = 'error.main';
+                                        isTotalColored = true;
+                                        totalVal = Math.abs(tNum).toString();
                                       } else {
                                         totalVal = '0';
                                       }

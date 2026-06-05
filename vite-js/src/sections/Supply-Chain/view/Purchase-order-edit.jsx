@@ -1157,6 +1157,7 @@ export default function CompletePurchaseOrderFormEdit() {
   const selectedProductPortfolio = watch('productPortfolio');
   const selectedProductCategory = watch('productCategory');
   const pcsPerCartonWatched = watch('pcsPerCarton');
+  const assortmentValue = watch('assortment');
 
   // Recalculate cartonQty for all rows whenever pcsPerCarton changes
   useEffect(() => {
@@ -1170,6 +1171,13 @@ export default function CompletePurchaseOrderFormEdit() {
       return { ...prev, rows };
     });
   }, [pcsPerCartonWatched]);
+
+  // Clear ratio field when assortment is set to Solid
+  useEffect(() => {
+    if (assortmentValue === 'Solid') {
+      setValue('ratio', '');
+    }
+  }, [assortmentValue, setValue]);
 
   // Fetch customers from API
   useEffect(() => {
@@ -2998,7 +3006,7 @@ export default function CompletePurchaseOrderFormEdit() {
                     />
                   </Grid>
                   <Grid item xs={12} sm={4}>
-                    <Controller name="ratio" render={({ field }) => <TextField {...field} fullWidth label="Ratio" disabled={watch('assortment') === 'Solid'} />} />
+                    <Controller name="ratio" render={({ field }) => <TextField {...field} fullWidth label="Ratio" disabled={assortmentValue === 'Solid'} />} />
                   </Grid>
                   <Grid item xs={12} sm={4}>
                     <Controller name="cartonMarking" render={({ field }) => <TextField {...field} fullWidth label="Carton Marking" />} />

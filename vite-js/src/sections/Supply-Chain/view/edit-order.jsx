@@ -842,6 +842,13 @@ const EditOrderPage = () => {
         autoHeaderHeight: true,
     }), []);
 
+    // When assortment is changed to Solid, clear the ratio field
+    const onCellValueChanged = useCallback((params) => {
+        if (params.column.getColId() === 'assortment' && params.newValue === 'Solid') {
+            params.node.setDataValue('ratio', '');
+        }
+    }, []);
+
     // Handle Save/Update all POs
     const handleSaveAll = async () => {
         console.log('=== SAVE ALL STARTED ===');
@@ -1013,6 +1020,7 @@ const EditOrderPage = () => {
                                 pagination={true}
                                 paginationPageSize={10}
                                 paginationPageSizeSelector={[10, 20, 30,]}
+                                onCellValueChanged={onCellValueChanged}
                             />
                         </div>
                     </div>

@@ -458,6 +458,7 @@ export default function QAInspectionPDF({ data }) {
     { label: 'BUTTONS', checked: isCheckedByKeys(mst, ['buttonAccessory', 'ButtonAccessory', 'button', 'Button'], ['buttonsCom', 'ButtonsCom']), c: getAnyVal(mst, ['buttonsCom', 'ButtonsCom']) },
     { label: 'ZIPPER', checked: isCheckedByKeys(mst, ['zipper', 'Zipper'], ['zipperCom', 'ZipperCom']), c: getAnyVal(mst, ['zipperCom', 'ZipperCom']) },
     { label: 'DRAWSTRING', checked: isCheckedByKeys(mst, ['drawingString', 'DrawingString'], ['drawingStrCom', 'DrawingStrCom']), c: getAnyVal(mst, ['drawingStrCom', 'DrawingStrCom']) },
+    { label: '', checked: isCheckedByKeys(mst, ['otherBit', 'OtherBit']), c: getAnyVal(mst, ['otherCom1', 'OtherCom1']), showCheckbox: true }
   ];
   const accRight = [
     { label: 'CARE LABEL PLACEMENT', checked: isCheckedByKeys(mst, ['careLabelPlacement', 'CareLabelPlacement'], ['careLblPlacementCom', 'CareLblPlacementCom']), c: getAnyVal(mst, ['careLblPlacementCom', 'CareLblPlacementCom']) },
@@ -468,7 +469,8 @@ export default function QAInspectionPDF({ data }) {
     { label: 'HANGER', checked: isCheckedByKeys(mst, ['hanger', 'Hanger'], ['hangerCom', 'HangerCom']), c: getAnyVal(mst, ['hangerCom', 'HangerCom']) },
     { label: 'FOLD METHOD', checked: isCheckedByKeys(mst, ['foldMethod', 'FoldMethod'], ['foldMethodCom', 'FoldMethodCom']), c: getAnyVal(mst, ['foldMethodCom', 'FoldMethodCom']) },
     { label: 'INTERLINING', checked: isCheckedByKeys(mst, ['interlining', 'Interlining'], ['interLiningCom', 'InterLiningCom']), c: getAnyVal(mst, ['interLiningCom', 'InterLiningCom']) },
-    { label: 'ADDITIONAL LABEL', checked: isCheckedByKeys(mst, ['additionalLbl', 'AdditionalLbl'], ['additionalLblComm', 'AdditionalLblComm']), c: getAnyVal(mst, ['additionalLblComm', 'AdditionalLblComm']) }
+    { label: 'ADDITIONAL LABEL', checked: isCheckedByKeys(mst, ['additionalLbl', 'AdditionalLbl'], ['additionalLblComm', 'AdditionalLblComm']), c: getAnyVal(mst, ['additionalLblComm', 'AdditionalLblComm']) },
+    { label: '', checked: false, c: getAnyVal(mst, ['otherCom2', 'OtherCom2']), showCheckbox: false }
   ];
 
   const packLeft = [
@@ -476,14 +478,16 @@ export default function QAInspectionPDF({ data }) {
     { label: 'CARTON THICKNESS', checked: isCheckedByKeys(mst, ['cartonThickness', 'CartonThickness'], ['crtnThicknessCom', 'CrtnThicknessCom']), c: getAnyVal(mst, ['crtnThicknessCom', 'CrtnThicknessCom']) },
     { label: 'GROSS WT', checked: isCheckedByKeys(mst, ['grossWT', 'GrossWT'], ['grossWTCom', 'GrossWTCom']), c: getAnyVal(mst, ['grossWTCom', 'GrossWTCom']) },
     { label: 'NO. OF PCS/INNER PACK', checked: isCheckedByKeys(mst, ['noOfPcsInnerPack', 'NoOfPcsInnerPack'], ['noOfPcsInnerPackCom', 'NoOfPcsInnerPackCom']), c: getAnyVal(mst, ['noOfPcsInnerPackCom', 'NoOfPcsInnerPackCom']) },
-    { label: '', checked: false, c: '' }
+    { label: '', checked: false, c: '' },
+    { label: '', checked: isCheckedByKeys(mst, ['otherBitM', 'OtherBitM']), c: getAnyVal(mst, ['otherCom1M', 'OtherCom1M']), showCheckbox: true }
   ];
   const packRight = [
     { label: 'CARTON MARKING', checked: isCheckedByKeys(mst, ['cartonMarking', 'CartonMarking'], ['cartonMarkingCom', 'CartonMarkingCom']), c: getAnyVal(mst, ['cartonMarkingCom', 'CartonMarkingCom']) },
     { label: 'NET WT', checked: isCheckedByKeys(mst, ['netWT', 'NetWT'], ['netWTCom', 'NetWTCom']), c: getAnyVal(mst, ['netWTCom', 'NetWTCom']) },
     { label: 'NO. OF PCS/CARTON', checked: isCheckedByKeys(mst, ['noOfPcsCarton', 'NoOfPcsCarton'], ['noOfPcsCrtnCom', 'NoOfPcsCrtnCom']), c: getAnyVal(mst, ['noOfPcsCrtnCom', 'NoOfPcsCrtnCom']) },
     { label: 'POLYBAG/BLISTER BAG', checked: isCheckedByKeys(mst, ['polyBag', 'PolyBag'], ['polyBagBlisterBagCom', 'PolyBagBlisterBagCom']), c: getAnyVal(mst, ['polyBagBlisterBagCom', 'PolyBagBlisterBagCom']) },
-    { label: 'U.P.C.', checked: isCheckedByKeys(mst, ['ups', 'UPS'], ['uPCCom', 'UPCCom', 'upcCom']), c: getAnyVal(mst, ['uPCCom', 'UPCCom', 'upcCom']) }
+    { label: 'U.P.C.', checked: isCheckedByKeys(mst, ['ups', 'UPS'], ['uPCCom', 'UPCCom', 'upcCom']), c: getAnyVal(mst, ['uPCCom', 'UPCCom', 'upcCom']) },
+    { label: '', checked: false, c: getAnyVal(mst, ['otherCom2M', 'OtherCom2M']), showCheckbox: false }
   ];
 
   return (
@@ -638,20 +642,20 @@ export default function QAInspectionPDF({ data }) {
 
         <View style={styles.sectionBox}><Text style={styles.sectionTitle}>ACCESSORIES MARKINGS</Text></View>
         <View style={styles.table}>
-          {Array(9).fill(0).map((_, i) => {
+          {accLeft.map((_, i) => {
             const L = accLeft[i] || {};
             const R = accRight[i] || {};
             return (
               <View key={i} style={styles.tr}>
 
                 <View style={[styles.td, styles.inspectLabelCell]}>
-                  {L.label ? <CheckBoxLabel label={L.label} checked={L.checked} /> : null}
+                  {(L.label || L.showCheckbox) ? <CheckBoxLabel label={L.label} checked={L.checked} /> : null}
                 </View>
                 <View style={[styles.td, styles.inspectValueCell]}><Text style={styles.singleLineText} wrap={false}>{L.c || ''}</Text></View>
 
 
                 <View style={[styles.td, styles.inspectLabelCell]}>
-                  {R.label ? <CheckBoxLabel label={R.label} checked={R.checked} /> : null}
+                  {(R.label || R.showCheckbox) ? <CheckBoxLabel label={R.label} checked={R.checked} /> : null}
                 </View>
                 <View style={[styles.td, styles.inspectValueCell]}><Text style={styles.singleLineText} wrap={false}>{R.c || ''}</Text></View>
               </View>
@@ -662,20 +666,20 @@ export default function QAInspectionPDF({ data }) {
 
         <View style={styles.sectionBox}><Text style={styles.sectionTitle}>PACKING</Text></View>
         <View style={styles.table}>
-          {Array(5).fill(0).map((_, i) => {
+          {packLeft.map((_, i) => {
             const L = packLeft[i] || {};
             const R = packRight[i] || {};
             return (
               <View key={i} style={styles.tr}>
 
                 <View style={[styles.td, styles.inspectLabelCell]}>
-                  {L.label ? <CheckBoxLabel label={L.label} checked={L.checked} /> : null}
+                  {(L.label || L.showCheckbox) ? <CheckBoxLabel label={L.label} checked={L.checked} /> : null}
                 </View>
                 <View style={[styles.td, styles.inspectValueCell]}><Text style={styles.singleLineText} wrap={false}>{L.c || ''}</Text></View>
 
 
                 <View style={[styles.td, styles.inspectLabelCell]}>
-                  {R.label ? <CheckBoxLabel label={R.label} checked={R.checked} /> : null}
+                  {(R.label || R.showCheckbox) ? <CheckBoxLabel label={R.label} checked={R.checked} /> : null}
                 </View>
                 <View style={[styles.td, styles.inspectValueCell]}><Text style={styles.singleLineText} wrap={false}>{R.c || ''}</Text></View>
               </View>
