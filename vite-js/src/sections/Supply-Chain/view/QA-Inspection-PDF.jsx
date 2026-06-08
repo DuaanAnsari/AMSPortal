@@ -437,9 +437,8 @@ export default function QAInspectionPDF({ data }) {
     const v = sizeRow?.[`size${i}`] ?? sizeRow?.[`Size${i}`] ?? '';
     return v && v !== '0' && v !== '0.0000';
   });
-  // Keep fixed 12 size slots so grid always matches printed format.
+  // Keep only active slots. We don't pad to 12 anymore to match the dynamic width of the actual inspection grid.
   const activeCols = numCols.length > 0 ? [...numCols] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-  while (activeCols.length < 12) activeCols.push(`empty-${activeCols.length + 1}`);
 
   const discs = data.discrepancies ?? [];
   // Force exactly 12 rows for Discrepancies as per user request
