@@ -1,6 +1,7 @@
 import { pdf } from '@react-pdf/renderer';
 import { useNavigate } from 'react-router-dom';
 import { useMemo, useState, useCallback, useEffect } from 'react';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 
 import axios from 'axios';
 import Autocomplete from '@mui/material/Autocomplete';
@@ -331,10 +332,7 @@ export default function SampleInspectionReportView() {
                   {busy ? (
                     <CircularProgress size={14} thickness={5} color="inherit" />
                   ) : (
-                    <SvgColor
-                      src="/assets/icons/files/ic_pdf.svg"
-                      sx={{ width: 16, height: 16, color: 'error.main' }}
-                    />
+                    <PictureAsPdfIcon fontSize="small" />
                   )}
                 </IconButton>
               </span>

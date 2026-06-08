@@ -1,6 +1,7 @@
 import { pdf } from '@react-pdf/renderer';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMemo, useState, useCallback, useEffect } from 'react';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 
 import Autocomplete from '@mui/material/Autocomplete';
 import Button from '@mui/material/Button';
@@ -139,7 +140,7 @@ export default function SizeSpecsViewList() {
         const poid = raw.POID || raw.poid;
         const pdfUrl = `${HOST_API}/api/SelfSizeSpecs/GetPDFData?poid=${poid}&poDetailId=${poDetailId}`;
         console.log('📡 Fetching PDF Data from:', pdfUrl);
-        
+
         const pdfResponse = await fetch(pdfUrl, {
           headers: {
             'Content-Type': 'application/json',
@@ -257,7 +258,7 @@ export default function SizeSpecsViewList() {
                   {busy ? (
                     <CircularProgress size={14} thickness={5} color="inherit" />
                   ) : (
-                    <SvgColor src="/assets/icons/files/ic_pdf.svg" sx={{ width: 16, height: 16, color: 'error.main' }} />
+                    <PictureAsPdfIcon fontSize="small" />
                   )}
                 </IconButton>
               </span>
