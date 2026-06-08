@@ -331,7 +331,7 @@ const PurchaseOrderSSPDF = ({ poData: propPoData, onClose }) => {
                                     A M S House 84,Kokan Housing Society Alamgir Road - Postal Code: 74800
                                 </Typography>
                                 <Typography sx={{ fontSize: '10px', color: '#1976d2', mb: 1 }}>
-                                    Telephone # : (+92213) 485-3935 & 36 &nbsp;&nbsp;&nbsp;&nbsp; Karachi - Pakistan.
+                                Telephone # : 02134937216 & 02134946005 &nbsp;&nbsp;&nbsp;&nbsp; Karachi - Pakistan.
                                 </Typography>
                                 <Typography sx={{ fontSize: '14px', fontWeight: 'bold', color: '#E65100' }}>
                                     PO SIZE SPECS REPORT

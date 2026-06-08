@@ -1183,19 +1183,17 @@ export default function CourierPackagingEntryPage() {
         headerAlign: 'center',
         renderCell: (params) => (
           <IconButton
-            size="small"
-            aria-label="Delete row"
-            onClick={() => handleDeleteRow(params.id)}
-            sx={{
-              bgcolor: 'error.main',
-              color: 'error.contrastText',
-              width: 28,
-              height: 28,
-              '&:hover': { bgcolor: 'error.dark', color: 'error.contrastText' },
-            }}
-          >
-            <Iconify icon="eva:close-fill" width={16} />
-          </IconButton>
+          size="small"
+          aria-label="Delete"
+          sx={{
+            p: 0.6,
+            color: 'error.main',
+            borderRadius: 1,
+            '&:hover': { bgcolor: 'error.lighter' },
+          }}
+        >
+          <Iconify icon="solar:trash-bin-trash-bold" width={22} height={22} />
+        </IconButton>
         ),
       },
     ],
