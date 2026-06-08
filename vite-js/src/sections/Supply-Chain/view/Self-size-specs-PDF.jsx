@@ -197,7 +197,7 @@ export default function SelfSizeSpecsPDF({ data }) {
           A M S House 84, Kokan Housing Society Alamgir Road - Postal Code: 74800
         </Text>
         <Text style={styles.address}>
-          Telephone # : (+92213) 485-3935 & 36 Karachi - Pakistan.
+        Telephone # : 02134937216 & 02134946005 Karachi - Pakistan.
         </Text>
 
         <Text style={styles.reportTitle}>SIZE SPECS REPORT</Text>

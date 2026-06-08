@@ -500,7 +500,7 @@ export default function QAInspectionPDF({ data }) {
           <View style={styles.headerCenter}>
             <Text style={styles.companyTitle}>Apparel Merchandising Services</Text>
             <Text style={styles.companySub}>A M S House 84,Kokan Housing Society Alamgir Road - Postal Code: 74800</Text>
-            <Text style={styles.companySub}>Telephone # : [+92213] 485-3935 & 36   Karachi - Pakistan.</Text>
+            <Text style={styles.companySub}>Telephone # : 02134937216 & 02134946005   Karachi - Pakistan.</Text>
             <Text style={styles.reportTitle}>INSPECTION REPORT</Text>
           </View>
         </View>
