@@ -87,30 +87,40 @@ const fmtBalance = (v) => {
   return raw.replace(/^[-−–—]+\s*/, '');
 };
 
-/** True when cell has a real qty (same rules as fmt — 0 / empty = no value). */
-const hasDtlQtyPdf = (row, col) => {
-  if (!row || typeof col !== 'number') return false;
-  const v = row[`size${col}`] ?? row[`Size${col}`];
-  return fmt(v) !== '';
-};
+/** Same cell rules as Edit screen `getDtlCell` — `'0'` / `0` are valid entered values. */
+function getPdfDtlCell(row, col) {
+  if (!row || typeof col !== 'number') return '';
+  const k = `size${col}`;
+  const pascal = `Size${col}`;
+  for (const key of [k, pascal]) {
+    const v = row[key];
+    if (v === 0 || v === '0') return '0';
+    if (v != null && String(v).trim() !== '') return String(v).trim();
+  }
+  return '';
+}
 
-const getDtlQtyNumPdf = (row, col) => {
-  if (!hasDtlQtyPdf(row, col)) return 0;
-  const v = row[`size${col}`] ?? row[`Size${col}`];
-  const n = parseFloat(String(v).replace(',', '.'));
+function getPdfDtlQtyNum(row, col) {
+  const raw = getPdfDtlCell(row, col);
+  if (raw === '') return 0;
+  const n = parseFloat(String(raw).replace(',', '.'));
   return Number.isFinite(n) ? Math.round(n) : 0;
-};
+}
 
-const computeBalanceCellPdf = (orderRow, offerRow, col) => {
-  const hasOrder = hasDtlQtyPdf(orderRow, col);
-  const hasOffer = hasDtlQtyPdf(offerRow, col);
-  // No order & no offer for this size → blank
-  if (!hasOrder && !hasOffer) return '';
-  // Offer not entered → blank
-  if (!hasOffer) return '';
-  const diff = getDtlQtyNumPdf(orderRow, col) - getDtlQtyNumPdf(offerRow, col);
+/**
+ * Match Edit screen QTY BALANCE/EXTRA: use saved balance cell, else ORDER − OFFER
+ * when offer qty was entered for that size (including explicit `0`).
+ */
+function resolveBalanceCellPdf(orderRow, offerRow, balanceRow, col) {
+  const stored = balanceRow ? getPdfDtlCell(balanceRow, col) : '';
+  if (stored !== '') return stored;
+
+  const offerCell = getPdfDtlCell(offerRow, col);
+  if (offerCell === '') return '';
+
+  const diff = getPdfDtlQtyNum(orderRow, col) - getPdfDtlQtyNum(offerRow, col);
   return String(diff);
-};
+}
 
 const isBalanceExtraRow = (label) =>
   String(label ?? '').trim().toUpperCase().includes('BALANCE');
@@ -463,6 +473,7 @@ export default function QAInspectionPDF({ data }) {
   const sizeRow = orderedRows.find((r) => (r.sizeType ?? r.SizeType ?? '').toUpperCase() === 'SIZE') ?? orderedRows[0];
   const orderRow = orderedRows.find((r) => (r.sizeType ?? r.SizeType ?? '').toUpperCase() === 'ORDER QTY');
   const offerRow = orderedRows.find((r) => (r.sizeType ?? r.SizeType ?? '').toUpperCase() === 'OFFER QTY');
+  const balanceRow = orderedRows.find((r) => (r.sizeType ?? r.SizeType ?? '').toUpperCase() === 'QTY BALANCE/EXTRA');
   const sizeQtyBreakdown = sortSizeQtyBreakdown(data.sizeQtyBreakdown ?? data.SizeQtyBreakdown ?? []);
   const matrixColumns = buildInspectionDtlMatrixColumns(sizeRow, sizeQtyBreakdown);
   const activeCols = matrixColumns.length > 0 ? matrixColumns.map((c) => c.slot) : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
@@ -625,7 +636,7 @@ export default function QAInspectionPDF({ data }) {
                 </View>
                 {activeCols.map((c, i) => {
                   const val = isBalance
-                    ? computeBalanceCellPdf(orderRow, offerRow, c)
+                    ? resolveBalanceCellPdf(orderRow, offerRow, balanceRow, c)
                     : (typeof c === 'number' ? (row[`size${c}`] ?? row[`Size${c}`] ?? '') : '');
                   const numVal = parseFloat(val);
                   const valueStyle = isBalance ? getBalanceValueStyle(numVal) : styles.sizeLabelText;
@@ -641,14 +652,19 @@ export default function QAInspectionPDF({ data }) {
                 {(() => {
                   let totalRaw = '';
                   if (isBalance) {
-                    const computed = activeCols
-                      .filter((c) => typeof c === 'number')
-                      .map((c) => computeBalanceCellPdf(orderRow, offerRow, c))
-                      .filter((v) => v !== '');
-                    if (computed.length > 0) {
-                      totalRaw = String(
-                        computed.reduce((sum, v) => sum + (parseFloat(v) || 0), 0)
-                      );
+                    const storedTotal = row.sizeTotal ?? row.SizeTotal ?? '';
+                    if (storedTotal !== '' && storedTotal != null && String(storedTotal).trim() !== '') {
+                      totalRaw = String(storedTotal).trim();
+                    } else {
+                      const computed = activeCols
+                        .filter((c) => typeof c === 'number')
+                        .map((c) => resolveBalanceCellPdf(orderRow, offerRow, balanceRow, c))
+                        .filter((v) => v !== '');
+                      if (computed.length > 0) {
+                        totalRaw = String(
+                          computed.reduce((sum, v) => sum + (parseFloat(v) || 0), 0)
+                        );
+                      }
                     }
                   } else {
                     totalRaw = row.sizeTotal ?? row.SizeTotal ?? '';

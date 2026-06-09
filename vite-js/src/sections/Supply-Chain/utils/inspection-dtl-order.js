@@ -1,3 +1,8 @@
+import {
+  sortGarmentSizeMatrixColumns,
+  sortItemsByGarmentSizeLabel,
+} from './garment-size-order';
+
 /** Legacy grid always has 12 size slots (Size1…Size12) + Total — must match API QDInspectionDtl. */
 export const INSPECTION_DTL_SIZE_SLOTS = 12;
 
@@ -155,15 +160,15 @@ export function orderInspectionDtlRowsForDisplay(apiRows, rowTypeOrder) {
   });
 }
 
-/** Size columns follow Size1…Size12 slot order (user / DB entry order), not label sorting. */
+/** Size columns in standard garment sequence (YS→YL, XXS→5XL), not alphabetical / DB slot order. */
 export function buildInspectionDtlMatrixColumns(sizeRow, sizeQtyBreakdown = [], slotCount = INSPECTION_DTL_SIZE_SLOTS) {
-  const breakdown = sortSizeQtyBreakdown(sizeQtyBreakdown);
+  const rawBreakdown = Array.isArray(sizeQtyBreakdown) ? sizeQtyBreakdown : [];
   const cols = [];
 
   for (let slot = 1; slot <= slotCount; slot += 1) {
     let label = sizeRow ? getInspectionDtlCellValue(sizeRow, slot) : '';
-    if (isEmptySizeLabel(label) && breakdown[slot - 1]) {
-      const b = breakdown[slot - 1];
+    if (isEmptySizeLabel(label) && rawBreakdown[slot - 1]) {
+      const b = rawBreakdown[slot - 1];
       label = String(b?.size ?? b?.Size ?? '').trim();
     }
     if (!isEmptySizeLabel(label)) {
@@ -171,9 +176,14 @@ export function buildInspectionDtlMatrixColumns(sizeRow, sizeQtyBreakdown = [], 
     }
   }
 
-  return cols;
+  return sortGarmentSizeMatrixColumns(cols);
 }
 
+/** Size breakdown rows sorted by garment size label (same order as matrix columns). */
 export function sortSizeQtyBreakdown(breakdown) {
-  return sortRecordsBySequence(Array.isArray(breakdown) ? breakdown : []);
+  return sortItemsByGarmentSizeLabel(Array.isArray(breakdown) ? breakdown : [], (row) =>
+    String(row?.size ?? row?.Size ?? '').trim()
+  );
 }
+
+export { compareGarmentSizeLabels, sortGarmentSizeLabels, sortItemsByGarmentSizeLabel } from './garment-size-order';
