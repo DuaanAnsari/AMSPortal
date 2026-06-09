@@ -73,10 +73,37 @@ const fmt = (v) => {
 const fmtBalance = (v) => {
   if (v == null || v === '') return '';
   const raw = String(v).trim();
-  if (raw === '' || raw === '0' || raw === '0.0000') return '';
   const n = parseFloat(raw);
-  if (Number.isFinite(n) && n !== 0) return String(Math.round(Math.abs(n)));
+  if (Number.isFinite(n)) {
+    if (n === 0) return '0';
+    return String(Math.round(Math.abs(n)));
+  }
   return raw.replace(/^[-−–—]+\s*/, '');
+};
+
+/** True when cell has a real qty (same rules as fmt — 0 / empty = no value). */
+const hasDtlQtyPdf = (row, col) => {
+  if (!row || typeof col !== 'number') return false;
+  const v = row[`size${col}`] ?? row[`Size${col}`];
+  return fmt(v) !== '';
+};
+
+const getDtlQtyNumPdf = (row, col) => {
+  if (!hasDtlQtyPdf(row, col)) return 0;
+  const v = row[`size${col}`] ?? row[`Size${col}`];
+  const n = parseFloat(String(v).replace(',', '.'));
+  return Number.isFinite(n) ? Math.round(n) : 0;
+};
+
+const computeBalanceCellPdf = (orderRow, offerRow, col) => {
+  const hasOrder = hasDtlQtyPdf(orderRow, col);
+  const hasOffer = hasDtlQtyPdf(offerRow, col);
+  // No order & no offer for this size → blank
+  if (!hasOrder && !hasOffer) return '';
+  // Offer not entered → blank
+  if (!hasOffer) return '';
+  const diff = getDtlQtyNumPdf(orderRow, col) - getDtlQtyNumPdf(offerRow, col);
+  return String(diff);
 };
 
 const isBalanceExtraRow = (label) =>
@@ -99,6 +126,48 @@ const dec2 = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n.toFixed(2) : '';
 };
+
+const SIZE_ORDER_TOKENS = [
+  'XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', 'XXXL', '3XL', '4XL', '5XL', '6XL',
+];
+
+function normalizeSizeToken(sizeLabel) {
+  const s = String(sizeLabel ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!s) return '';
+  if (/^\d+X$/.test(s)) return `${s.slice(0, -1)}XL`;
+  if (/^\d+XL$/.test(s)) return s;
+  if (s === 'XXXL') return '3XL';
+  if (s === 'XXXXL') return '4XL';
+  return s;
+}
+
+function sizeSortRank(sizeLabel) {
+  const token = normalizeSizeToken(sizeLabel);
+  if (!token) return Number.POSITIVE_INFINITY;
+  const idx = SIZE_ORDER_TOKENS.indexOf(token);
+  if (idx >= 0) return idx;
+  return 1000;
+}
+
+function sortSizeSlots(sizeRow) {
+  const slots = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].filter((i) => {
+    const v = sizeRow?.[`size${i}`] ?? sizeRow?.[`Size${i}`] ?? '';
+    const label = String(v).trim();
+    return label && label !== '0' && label !== '0.0000';
+  });
+  const withLabels = (slots.length > 0 ? slots : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]).map((slot) => {
+    const v = sizeRow?.[`size${slot}`] ?? sizeRow?.[`Size${slot}`] ?? '';
+    return { slot, label: String(v).trim() || String(slot) };
+  });
+  withLabels.sort((a, b) => {
+    const rankDiff = sizeSortRank(a.label) - sizeSortRank(b.label);
+    if (rankDiff !== 0) return rankDiff;
+    const labelCmp = a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' });
+    if (labelCmp !== 0) return labelCmp;
+    return a.slot - b.slot;
+  });
+  return withLabels.map((x) => x.slot);
+}
 
 // ─── styles ──────────────────────────────────────────────────────────────────
 const C = {
@@ -433,12 +502,10 @@ export default function QAInspectionPDF({ data }) {
   const dtlRows = data.inspectionDtlRows ?? [];
   const orderedRows = ROW_ORDER.map(rt => dtlRows.find(r => (r.sizeType ?? r.SizeType ?? '').toUpperCase() === rt.toUpperCase()) ?? { sizeType: rt });
   const sizeRow = orderedRows[0];
-  const numCols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].filter(i => {
-    const v = sizeRow?.[`size${i}`] ?? sizeRow?.[`Size${i}`] ?? '';
-    return v && v !== '0' && v !== '0.0000';
-  });
-  // Keep only active slots. We don't pad to 12 anymore to match the dynamic width of the actual inspection grid.
-  const activeCols = numCols.length > 0 ? [...numCols] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  const orderRow = orderedRows.find((r) => (r.sizeType ?? r.SizeType ?? '').toUpperCase() === 'ORDER QTY');
+  const offerRow = orderedRows.find((r) => (r.sizeType ?? r.SizeType ?? '').toUpperCase() === 'OFFER QTY');
+  const numCols = sortSizeSlots(sizeRow);
+  const activeCols = numCols.length > 0 ? numCols : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
   const discs = data.discrepancies ?? [];
   // Force exactly 12 rows for Discrepancies as per user request
@@ -457,7 +524,7 @@ export default function QAInspectionPDF({ data }) {
     { label: 'BUTTONS', checked: isCheckedByKeys(mst, ['buttonAccessory', 'ButtonAccessory', 'button', 'Button'], ['buttonsCom', 'ButtonsCom']), c: getAnyVal(mst, ['buttonsCom', 'ButtonsCom']) },
     { label: 'ZIPPER', checked: isCheckedByKeys(mst, ['zipper', 'Zipper'], ['zipperCom', 'ZipperCom']), c: getAnyVal(mst, ['zipperCom', 'ZipperCom']) },
     { label: 'DRAWSTRING', checked: isCheckedByKeys(mst, ['drawingString', 'DrawingString'], ['drawingStrCom', 'DrawingStrCom']), c: getAnyVal(mst, ['drawingStrCom', 'DrawingStrCom']) },
-    { label: '', checked: isCheckedByKeys(mst, ['otherBit', 'OtherBit']), c: getAnyVal(mst, ['otherCom1', 'OtherCom1']), showCheckbox: true }
+    { label: getAnyVal(mst, ['otherCom1', 'OtherCom1']), checked: isCheckedByKeys(mst, ['otherBit', 'OtherBit']), c: getAnyVal(mst, ['otherCom2', 'OtherCom2']), showCheckbox: true }
   ];
   const accRight = [
     { label: 'CARE LABEL PLACEMENT', checked: isCheckedByKeys(mst, ['careLabelPlacement', 'CareLabelPlacement'], ['careLblPlacementCom', 'CareLblPlacementCom']), c: getAnyVal(mst, ['careLblPlacementCom', 'CareLblPlacementCom']) },
@@ -469,7 +536,7 @@ export default function QAInspectionPDF({ data }) {
     { label: 'FOLD METHOD', checked: isCheckedByKeys(mst, ['foldMethod', 'FoldMethod'], ['foldMethodCom', 'FoldMethodCom']), c: getAnyVal(mst, ['foldMethodCom', 'FoldMethodCom']) },
     { label: 'INTERLINING', checked: isCheckedByKeys(mst, ['interlining', 'Interlining'], ['interLiningCom', 'InterLiningCom']), c: getAnyVal(mst, ['interLiningCom', 'InterLiningCom']) },
     { label: 'ADDITIONAL LABEL', checked: isCheckedByKeys(mst, ['additionalLbl', 'AdditionalLbl'], ['additionalLblComm', 'AdditionalLblComm']), c: getAnyVal(mst, ['additionalLblComm', 'AdditionalLblComm']) },
-    { label: '', checked: false, c: getAnyVal(mst, ['otherCom2', 'OtherCom2']), showCheckbox: false }
+    { label: '', checked: false, c: '' }
   ];
 
   const packLeft = [
@@ -477,8 +544,7 @@ export default function QAInspectionPDF({ data }) {
     { label: 'CARTON THICKNESS', checked: isCheckedByKeys(mst, ['cartonThickness', 'CartonThickness'], ['crtnThicknessCom', 'CrtnThicknessCom']), c: getAnyVal(mst, ['crtnThicknessCom', 'CrtnThicknessCom']) },
     { label: 'GROSS WT', checked: isCheckedByKeys(mst, ['grossWT', 'GrossWT'], ['grossWTCom', 'GrossWTCom']), c: getAnyVal(mst, ['grossWTCom', 'GrossWTCom']) },
     { label: 'NO. OF PCS/INNER PACK', checked: isCheckedByKeys(mst, ['noOfPcsInnerPack', 'NoOfPcsInnerPack'], ['noOfPcsInnerPackCom', 'NoOfPcsInnerPackCom']), c: getAnyVal(mst, ['noOfPcsInnerPackCom', 'NoOfPcsInnerPackCom']) },
-    { label: '', checked: false, c: '' },
-    { label: '', checked: isCheckedByKeys(mst, ['otherBitM', 'OtherBitM']), c: getAnyVal(mst, ['otherCom1M', 'OtherCom1M']), showCheckbox: true }
+    { label: getAnyVal(mst, ['otherCom1M', 'OtherCom1M']), checked: isCheckedByKeys(mst, ['otherBitM', 'OtherBitM']), c: getAnyVal(mst, ['otherCom2M', 'OtherCom2M']), showCheckbox: true }
   ];
   const packRight = [
     { label: 'CARTON MARKING', checked: isCheckedByKeys(mst, ['cartonMarking', 'CartonMarking'], ['cartonMarkingCom', 'CartonMarkingCom']), c: getAnyVal(mst, ['cartonMarkingCom', 'CartonMarkingCom']) },
@@ -486,7 +552,6 @@ export default function QAInspectionPDF({ data }) {
     { label: 'NO. OF PCS/CARTON', checked: isCheckedByKeys(mst, ['noOfPcsCarton', 'NoOfPcsCarton'], ['noOfPcsCrtnCom', 'NoOfPcsCrtnCom']), c: getAnyVal(mst, ['noOfPcsCrtnCom', 'NoOfPcsCrtnCom']) },
     { label: 'POLYBAG/BLISTER BAG', checked: isCheckedByKeys(mst, ['polyBag', 'PolyBag'], ['polyBagBlisterBagCom', 'PolyBagBlisterBagCom']), c: getAnyVal(mst, ['polyBagBlisterBagCom', 'PolyBagBlisterBagCom']) },
     { label: 'U.P.C.', checked: isCheckedByKeys(mst, ['ups', 'UPS'], ['uPCCom', 'UPCCom', 'upcCom']), c: getAnyVal(mst, ['uPCCom', 'UPCCom', 'upcCom']) },
-    { label: '', checked: false, c: getAnyVal(mst, ['otherCom2M', 'OtherCom2M']), showCheckbox: false }
   ];
 
   return (
@@ -591,18 +656,19 @@ export default function QAInspectionPDF({ data }) {
                   {isBalance ? (
                     <Text style={styles.sizeLabelText} wrap={false}>
                       <Text style={{ color: C.black }}>QTY </Text>
-                      <Text style={styles.balanceWordGreen}>BALANCE</Text>
+                      <Text style={styles.balanceWordRed}>BALANCE</Text>
                       <Text style={{ color: C.black }}>/</Text>
-                      <Text style={styles.balanceWordRed}>EXTRA</Text>
+                      <Text style={styles.balanceWordGreen}>EXTRA</Text>
                     </Text>
                   ) : (
                     <Text style={[styles.sizeLabelText, { color: C.black }]} wrap={false}>{label}</Text>
                   )}
                 </View>
                 {activeCols.map((c, i) => {
-                  const val = typeof c === 'number' ? (row[`size${c}`] ?? row[`Size${c}`] ?? '') : '';
+                  const val = isBalance
+                    ? computeBalanceCellPdf(orderRow, offerRow, c)
+                    : (typeof c === 'number' ? (row[`size${c}`] ?? row[`Size${c}`] ?? '') : '');
                   const numVal = parseFloat(val);
-                  const hasNum = val !== '' && Number.isFinite(numVal) && numVal !== 0;
                   const valueStyle = isBalance ? getBalanceValueStyle(numVal) : styles.sizeLabelText;
 
                   return (
@@ -614,9 +680,21 @@ export default function QAInspectionPDF({ data }) {
                   );
                 })}
                 {(() => {
-                  const totalRaw = row.sizeTotal ?? row.SizeTotal ?? '';
+                  let totalRaw = '';
+                  if (isBalance) {
+                    const computed = activeCols
+                      .filter((c) => typeof c === 'number')
+                      .map((c) => computeBalanceCellPdf(orderRow, offerRow, c))
+                      .filter((v) => v !== '');
+                    if (computed.length > 0) {
+                      totalRaw = String(
+                        computed.reduce((sum, v) => sum + (parseFloat(v) || 0), 0)
+                      );
+                    }
+                  } else {
+                    totalRaw = row.sizeTotal ?? row.SizeTotal ?? '';
+                  }
                   const totalNum = parseFloat(totalRaw);
-                  const hasTotalNum = totalRaw !== '' && Number.isFinite(totalNum) && totalNum !== 0;
                   const totalStyle = isBalance ? getBalanceValueStyle(totalNum) : styles.sizeLabelText;
 
                   return (

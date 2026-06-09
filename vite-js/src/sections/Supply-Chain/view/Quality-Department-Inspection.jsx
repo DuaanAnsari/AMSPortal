@@ -226,6 +226,8 @@ function padInspectionDtlRowToSlots(row) {
     if (v != null && v !== '' && st !== 'SIZE') {
       const n = Number(String(v).replace(',', '.'));
       out[k] = Number.isFinite(n) ? String(Math.round(n)) : String(v);
+    } else if (v === 0 || v === '0') {
+      out[k] = '0';
     } else {
       out[k] = v == null ? '' : String(v);
     }
@@ -236,6 +238,8 @@ function padInspectionDtlRowToSlots(row) {
     if (t != null && t !== '') {
       const n = Number(String(t).replace(',', '.'));
       out.sizeTotal = Number.isFinite(n) ? String(Math.round(n)) : String(t);
+    } else if (t === 0 || t === '0') {
+      out.sizeTotal = '0';
     }
   }
 
@@ -246,8 +250,11 @@ function padInspectionDtlRowToSlots(row) {
 function getDtlCell(row, col1To12) {
   const k = `size${col1To12}`;
   const pascal = `Size${col1To12}`;
-  if (row[k] != null && row[k] !== '') return String(row[k]);
-  if (row[pascal] != null && row[pascal] !== '') return String(row[pascal]);
+  for (const key of [k, pascal]) {
+    const v = row[key];
+    if (v === 0 || v === '0') return '0';
+    if (v != null && String(v).trim() !== '') return String(v);
+  }
   return '';
 }
 
@@ -263,7 +270,8 @@ function sumDtlRowSlots(row, numSlots) {
       any = true;
     }
   }
-  return any ? String(Math.round(s)) : '';
+  if (!any) return '';
+  return String(Math.round(s));
 }
 
 function buildInspectionDtlPayload(rows) {
@@ -1065,8 +1073,6 @@ export default function QualityDepartmentInspectionView() {
       }
     });
 
-    setDtlRows(finalRows);
-
     // Conditional initial calculation: ONLY if Offer Qty has data
     const orderR = finalRows.find((r) => r.sizeType.trim().toUpperCase() === 'ORDER QTY');
     const offerR = finalRows.find((r) => r.sizeType.trim().toUpperCase() === 'OFFER QTY');
@@ -1075,7 +1081,8 @@ export default function QualityDepartmentInspectionView() {
     if (orderR && offerR && balanceR) {
       let hasOffer = false;
       for (let i = 1; i <= INSPECTION_DTL_SIZE_SLOTS; i += 1) {
-        if (offerR[`size${i}`] !== '') {
+        const offerCell = getDtlCell(offerR, i);
+        if (offerCell !== '') {
           hasOffer = true;
           break;
         }
@@ -1084,13 +1091,15 @@ export default function QualityDepartmentInspectionView() {
       if (hasOffer) {
         for (let i = 1; i <= INSPECTION_DTL_SIZE_SLOTS; i += 1) {
           const k = `size${i}`;
-          const ord = parseFloat(orderR[k] || 0);
-          const off = parseFloat(offerR[k] || 0);
-          balanceR[k] = Math.round(ord - off).toString();
+          const ord = parseFloat(getDtlCell(orderR, i) || 0);
+          const off = parseFloat(getDtlCell(offerR, i) || 0);
+          balanceR[k] = String(Math.round(ord - off));
         }
         balanceR.sizeTotal = sumDtlRowSlots(balanceR, INSPECTION_DTL_SIZE_SLOTS);
       }
     }
+
+    setDtlRows(finalRows);
   }, [data, isExplicitEditMode]);
 
   // Recalculate ORDER QTY dynamically when colors change
@@ -1154,9 +1163,9 @@ export default function QualityDepartmentInspectionView() {
           const balanceR = { ...newRows[balanceIdx] };
           for (let i = 1; i <= INSPECTION_DTL_SIZE_SLOTS; i += 1) {
             const k = `size${i}`;
-            const ord = parseFloat(orderR[k] || 0);
-            const off = parseFloat(offerR[k] || 0);
-            balanceR[k] = Math.round(ord - off).toString();
+            const ord = parseFloat(getDtlCell(orderR, i) || 0);
+            const off = parseFloat(getDtlCell(offerR, i) || 0);
+            balanceR[k] = String(Math.round(ord - off));
           }
           balanceR.sizeTotal = sumDtlRowSlots(balanceR, INSPECTION_DTL_SIZE_SLOTS);
           newRows[balanceIdx] = balanceR;
@@ -1532,9 +1541,9 @@ export default function QualityDepartmentInspectionView() {
         const balanceRow = next.find((r) => (r.sizeType ?? r.SizeType ?? '').trim().toUpperCase() === 'QTY BALANCE/EXTRA');
 
         if (orderRow && offerRow && balanceRow) {
-          const orderVal = parseFloat(orderRow[key] || 0);
-          const offerVal = parseFloat(offerRow[key] || 0);
-          balanceRow[key] = Math.round(orderVal - offerVal).toString();
+          const orderVal = parseFloat(getDtlCell(orderRow, slot1To12) || 0);
+          const offerVal = parseFloat(getDtlCell(offerRow, slot1To12) || 0);
+          balanceRow[key] = String(Math.round(orderVal - offerVal));
           balanceRow.sizeTotal = sumDtlRowSlots(balanceRow, INSPECTION_DTL_SIZE_SLOTS);
         }
       }
@@ -1573,9 +1582,9 @@ export default function QualityDepartmentInspectionView() {
       if (offerRow && balanceRow) {
         for (let slot = 1; slot <= INSPECTION_DTL_SIZE_SLOTS; slot += 1) {
           const key = `size${slot}`;
-          const orderVal = parseFloat(orderRow[key] || 0);
-          const offerVal = parseFloat(offerRow[key] || 0);
-          balanceRow[key] = Math.round(orderVal - offerVal).toString();
+          const orderVal = parseFloat(getDtlCell(orderRow, slot) || 0);
+          const offerVal = parseFloat(getDtlCell(offerRow, slot) || 0);
+          balanceRow[key] = String(Math.round(orderVal - offerVal));
         }
         balanceRow.sizeTotal = sumDtlRowSlots(balanceRow, INSPECTION_DTL_SIZE_SLOTS);
       }
@@ -2497,7 +2506,7 @@ export default function QualityDepartmentInspectionView() {
                               <TableCell sx={{ fontWeight: 600, fontSize: 11.5, whiteSpace: 'nowrap', py: 0.5, px: 1.5, borderRight: 1, borderColor: 'divider' }}>
                                 {st.toUpperCase() === 'QTY BALANCE/EXTRA' ? (
                                   <Box component="span">
-                                    QTY <Box component="span" sx={{ color: 'success.main' }}>BALANCE</Box>/<Box component="span" sx={{ color: 'error.main' }}>EXTRA</Box>
+                                    QTY <Box component="span" sx={{ color: 'error.main' }}>BALANCE</Box>/<Box component="span" sx={{ color: 'success.main' }}>EXTRA</Box>
                                   </Box>
                                 ) : (
                                   st
@@ -2513,15 +2522,29 @@ export default function QualityDepartmentInspectionView() {
                                 let cellTextColor = isReadOnly ? 'text.primary' : 'inherit';
                                 let isColored = false;
 
-                                if (st.toUpperCase() === 'QTY BALANCE/EXTRA' && rawVal !== '') {
-                                  const num = parseFloat(rawVal);
+                                if (st.toUpperCase() === 'QTY BALANCE/EXTRA') {
+                                  let num = rawVal === '' ? NaN : parseFloat(rawVal);
+                                  if (isNaN(num)) {
+                                    const orderRow = dtlRows.find(
+                                      (r) => (r.sizeType ?? r.SizeType ?? '').trim().toUpperCase() === 'ORDER QTY'
+                                    );
+                                    const offerRow = dtlRows.find(
+                                      (r) => (r.sizeType ?? r.SizeType ?? '').trim().toUpperCase() === 'OFFER QTY'
+                                    );
+                                    const offerCell = offerRow ? getDtlCell(offerRow, slot) : '';
+                                    if (orderRow && offerCell !== '') {
+                                      const ord = parseFloat(getDtlCell(orderRow, slot) || 0);
+                                      const off = parseFloat(offerCell || 0);
+                                      num = Math.round(ord - off);
+                                    }
+                                  }
                                   if (!isNaN(num)) {
                                     if (num < 0) {
-                                      cellTextColor = 'success.main'; // Green text for negative
+                                      cellTextColor = 'success.main'; // Green = EXTRA
                                       isColored = true;
                                       displayVal = Math.abs(num).toString();
                                     } else if (num > 0) {
-                                      cellTextColor = 'error.main'; // Red text for positive
+                                      cellTextColor = 'error.main'; // Red = BALANCE
                                       isColored = true;
                                       displayVal = Math.abs(num).toString();
                                     } else {
@@ -2568,11 +2591,21 @@ export default function QualityDepartmentInspectionView() {
                               <TableCell align="right" sx={{ py: 0.25, px: 0.25 }}>
                                 {(() => {
                                   let totalVal = row.sizeTotal ?? row.SizeTotal ?? '';
+                                  if (totalVal === 0 || totalVal === '0') totalVal = '0';
                                   let totalBgColor = alpha(theme.palette.primary.main, 0.08);
                                   let totalTextColor = 'inherit';
                                   let isTotalColored = false;
-                                  if (st.toUpperCase() === 'QTY BALANCE/EXTRA' && totalVal !== '') {
-                                    const tNum = parseFloat(totalVal);
+                                  if (st.toUpperCase() === 'QTY BALANCE/EXTRA') {
+                                    let tNum = totalVal === '' ? NaN : parseFloat(totalVal);
+                                    if (isNaN(tNum)) {
+                                      const slotNums = matrixColumns.map((col) => {
+                                        const cell = getDtlCell(row, col.slot);
+                                        return cell === '' ? NaN : parseFloat(cell);
+                                      }).filter((n) => !isNaN(n));
+                                      if (slotNums.length > 0) {
+                                        tNum = slotNums.reduce((a, b) => a + b, 0);
+                                      }
+                                    }
                                     if (!isNaN(tNum)) {
                                       if (tNum < 0) {
                                         totalTextColor = 'success.main';
