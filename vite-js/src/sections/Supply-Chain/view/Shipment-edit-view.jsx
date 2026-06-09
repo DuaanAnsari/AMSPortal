@@ -164,6 +164,30 @@ export default function ShipmentEditView() {
   const [loadingPoOptions, setLoadingPoOptions] = useState(false);
   const [subTotalsByLdp, setSubTotalsByLdp] = useState({});
   const [subTotalSeed, setSubTotalSeed] = useState({});
+  const [customers, setCustomers] = useState([]);
+
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const response = await fetch(`${API_BASE_URL}/api/MyOrders/GetCustomer`, { headers });
+        if (response.ok) {
+          const data = await response.json();
+          setCustomers(Array.isArray(data) ? data : data ? [data] : []);
+        }
+      } catch (err) {
+        console.error('Failed to load customers', err);
+      }
+    };
+    fetchCustomers();
+  }, []);
+
+  const getCustomerName = (customerId, fallbackName = '') => {
+    if (!customerId || !customers.length) return fallbackName;
+    const match = customers.find(c => String(c.customerID) === String(customerId) || String(c.customerId) === String(customerId));
+    return match ? match.customerName : fallbackName;
+  };
   const ldpInvoiceNumbers = articleRows
     .map((row) => row.ldpInvoiceNo)
     .filter((value) => value && String(value).trim().length > 0);
@@ -1467,7 +1491,7 @@ export default function ShipmentEditView() {
                               onChange={(e) => handleGridChange(index, 'ldpInvoiceNo', e.target.value)}
                             />
                           </TableCell>
-                          <TableCell>{row.customerName}</TableCell>
+                          <TableCell>{getCustomerName(row.customerID, row.customerName)}</TableCell>
                           <TableCell sx={{ p: 0.5 }}>
                             <TextField
                               size="small"
@@ -1917,7 +1941,7 @@ export default function ShipmentEditView() {
                               }
                             >
                               <TableCell>{row.pono}</TableCell>
-                              <TableCell>{row.customerName}</TableCell>
+                              <TableCell>{getCustomerName(row.customerID, row.customerName)}</TableCell>
                               <TableCell>{row.styleNo}</TableCell>
                               <TableCell>{row.size}</TableCell>
                               <TableCell>{row.quantity ?? '-'}</TableCell>
