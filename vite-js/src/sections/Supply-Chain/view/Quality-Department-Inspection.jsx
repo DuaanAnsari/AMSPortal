@@ -50,6 +50,14 @@ import { pdf } from '@react-pdf/renderer';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import SignaturePopup from './SignaturePopup';
 import QAInspectionPDF from './QA-Inspection-PDF';
+import {
+  buildInspectionDtlMatrixColumns,
+  INSPECTION_DTL_SIZE_SLOTS,
+  QD_INSPECTION_DTL_ROW_TYPES_FALLBACK,
+  resolveInspectionDtlRowTypeOrder,
+  sortRecordsBySequence,
+  sortSizeQtyBreakdown,
+} from 'src/sections/Supply-Chain/utils/inspection-dtl-order';
 
 const LEGACY_WEB_BASE = (import.meta.env.VITE_LEGACY_WEB_BASE || '').trim();
 
@@ -121,47 +129,6 @@ function tableHeadRowSx(theme) {
 }
 
 const DISCREPANCY_ROWS = 10;
-/** Legacy grid always has 12 size slots (Size1…Size12) + Total — must match API QDInspectionDtl. */
-const INSPECTION_DTL_SIZE_SLOTS = 12;
-
-/**
- * Same order as API `QdQualityDeptInspectionDtlSchema.RowTypeOrder` — only used when API omits `inspectionDtlRowTypes`.
- */
-const QD_INSPECTION_DTL_ROW_TYPES_FALLBACK = [
-  'SIZE',
-  'ORDER QTY',
-  'OFFER QTY',
-  'FABRIC IN HOUSE',
-  'CUT QTY',
-  'IN-LINE',
-  'OFF-LINE',
-  'QTY PACKED PCS / SET',
-  'QTY PACKED CARTON',
-  'QTY INSPECTED CARTON',
-  'QTY BALANCE/EXTRA',
-];
-
-const SIZE_ORDER_TOKENS = [
-  'XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', 'XXXL', '3XL', '4XL', '5XL', '6XL',
-];
-
-function normalizeSizeToken(sizeLabel) {
-  const s = String(sizeLabel ?? '').trim().toUpperCase().replace(/\s+/g, '');
-  if (!s) return '';
-  if (/^\d+X$/.test(s)) return `${s.slice(0, -1)}XL`; // 2X -> 2XL
-  if (/^\d+XL$/.test(s)) return s;
-  if (s === 'XXXL') return '3XL';
-  if (s === 'XXXXL') return '4XL';
-  return s;
-}
-
-function sizeSortRank(sizeLabel) {
-  const token = normalizeSizeToken(sizeLabel);
-  if (!token) return Number.POSITIVE_INFINITY;
-  const idx = SIZE_ORDER_TOKENS.indexOf(token);
-  if (idx >= 0) return idx;
-  return 1000; // unknown sizes come after known sequence
-}
 
 function uniqueCaseInsensitive(values) {
   const out = [];
@@ -982,27 +949,13 @@ export default function QualityDepartmentInspectionView() {
   const [signatureStatus, setSignatureStatus] = useState({ QA: false, Vendor: false, Control: false });
 
   const sizeQtyBreakdown = useMemo(
-    () => data?.sizeQtyBreakdown ?? data?.SizeQtyBreakdown ?? [],
+    () => sortSizeQtyBreakdown(data?.sizeQtyBreakdown ?? data?.SizeQtyBreakdown ?? []),
     [data]
   );
 
   const matrixColumns = useMemo(() => {
     const sizeRow = dtlRows.find((r) => String(r.sizeType ?? r.SizeType ?? '').trim() === 'SIZE');
-    const raw = Array.from({ length: INSPECTION_DTL_SIZE_SLOTS }, (_, i) => {
-      if (sizeRow) return getDtlCell(sizeRow, i + 1) || '';
-      const b = sizeQtyBreakdown[i];
-      return (b?.size ?? b?.Size ?? '').trim() || '';
-    });
-    const withSlot = raw.map((label, i) => ({ slot: i + 1, label: String(label ?? '').trim() }));
-    const nonEmpty = withSlot.filter((x) => !!x.label);
-
-    nonEmpty.sort((a, b) => {
-      const rankDiff = sizeSortRank(a.label) - sizeSortRank(b.label);
-      if (rankDiff !== 0) return rankDiff;
-      return a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' });
-    });
-    // Show only sizes received from API; no synthetic/empty columns.
-    return nonEmpty;
+    return buildInspectionDtlMatrixColumns(sizeRow, sizeQtyBreakdown, INSPECTION_DTL_SIZE_SLOTS);
   }, [dtlRows, sizeQtyBreakdown]);
 
   /** Legacy: always 12 intermediate columns (+ TOTAL), like dgInspectionDtl. */
@@ -1010,18 +963,19 @@ export default function QualityDepartmentInspectionView() {
 
   useEffect(() => {
     if (!data) return;
-    const bd = data.sizeQtyBreakdown ?? data.SizeQtyBreakdown ?? [];
+    const bd = sortSizeQtyBreakdown(data.sizeQtyBreakdown ?? data.SizeQtyBreakdown ?? []);
     let rows = isExplicitEditMode
-      ? (data.inspectionDtlRows ?? data.InspectionDtlRows ?? []).map((r) =>
-          padInspectionDtlRowToSlots({ ...r })
+      ? sortRecordsBySequence(
+          (data.inspectionDtlRows ?? data.InspectionDtlRows ?? []).map((r) =>
+            padInspectionDtlRowToSlots({ ...r })
+          )
         )
       : [];
 
     // Normalize existing rows to ensure they have sizeType
     rows = rows.map(r => ({ ...r, sizeType: (r.sizeType ?? r.SizeType ?? '').trim() }));
 
-    // masterList: the set of types we MUST have, in this order.
-    const masterList = QD_INSPECTION_DTL_ROW_TYPES_FALLBACK;
+    const masterList = resolveInspectionDtlRowTypeOrder(data, QD_INSPECTION_DTL_ROW_TYPES_FALLBACK);
     const finalRows = [];
 
     // For each mandatory type, find if it exists in API rows (case-insensitive)
@@ -1105,7 +1059,7 @@ export default function QualityDepartmentInspectionView() {
   // Recalculate ORDER QTY dynamically when colors change
   useEffect(() => {
     if (!data || !form.color) return;
-    const bd = data.sizeQtyBreakdown ?? data.SizeQtyBreakdown ?? [];
+    const bd = sortSizeQtyBreakdown(data.sizeQtyBreakdown ?? data.SizeQtyBreakdown ?? []);
     const poLines = data.poLines ?? data.PoLines ?? [];
     const selectedColors = Array.isArray(form.color) ? form.color : (form.color ? [form.color] : []);
 
