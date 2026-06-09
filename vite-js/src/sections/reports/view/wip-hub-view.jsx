@@ -629,7 +629,7 @@ MilestoneSummaryReportActions.propTypes = {
 
 /** Factory WIP — server PDF if `Accept: application/pdf` returns bytes; else client jsPDF from mapped rows. */
 async function runFactoryWipPdfFromFilters(enqueueSnackbar, filters, mode, opts = {}) {
-  const { previewWindow, pdfRows = [], dropdowns = {} } = opts;
+  const { previewWindow, dropdowns = {} } = opts;
   const fromDate = filters.fromDate;
   const toDate = filters.toDate;
   if (!fromDate || !toDate) {
@@ -675,6 +675,28 @@ async function runFactoryWipPdfFromFilters(enqueueSnackbar, filters, mode, opts 
           return row ? milestoneSupplierLabel(row) : String(filters.supplier);
         })();
 
+  const customerLabelForFilter =
+    filters.customer !== ALL
+      ? (() => {
+          const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+          return row ? milestoneCustomerLabel(row) : '';
+        })()
+      : '';
+  const supplierLabelForFilter =
+    filters.supplier !== ALL
+      ? (() => {
+          const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
+          return row ? milestoneSupplierLabel(row) : '';
+        })()
+      : '';
+  const merchandiserLabelForFilter =
+    filters.merchandiser !== ALL
+      ? (() => {
+          const row = merchants.find((r) => milestoneMerchantKey(r) === filters.merchandiser);
+          return row ? milestoneMerchantLabel(row) : '';
+        })()
+      : '';
+
   const meta = {
     customerLabel,
     supplierLabel,
@@ -718,6 +740,14 @@ async function runFactoryWipPdfFromFilters(enqueueSnackbar, filters, mode, opts 
       );
       return;
     }
+
+    const raw = await fetchFactoryWipReportRows({ fromDate, toDate }, headers);
+    const filtered = filterFactoryWipRowsByUiFilters(raw, filters, {
+      customerLabel: customerLabelForFilter,
+      supplierLabel: supplierLabelForFilter,
+      merchandiserLabel: merchandiserLabelForFilter,
+    });
+    const pdfRows = filtered.map((r, idx) => mapApiRowToFactoryWipPdfRow(r, idx));
 
     const pdf = await buildFactoryWipPdfBlobFromRows(pdfRows, meta);
     await assertValidMilestonePdfBlob(pdf);
@@ -1237,7 +1267,7 @@ async function runCustomisedCustomerWipPdfFromFilters(
   }
 }
 
-function FactoryWipReportActions({ filters, dropdowns, pdfRows }) {
+function FactoryWipReportActions({ filters, dropdowns }) {
   const { enqueueSnackbar } = useSnackbar();
   const [busyMode, setBusyMode] = useState(null);
 
@@ -1246,14 +1276,13 @@ function FactoryWipReportActions({ filters, dropdowns, pdfRows }) {
       setBusyMode(m);
       try {
         await runFactoryWipPdfFromFilters(enqueueSnackbar, filters, m, {
-          pdfRows,
           dropdowns,
         });
       } finally {
         setBusyMode(null);
       }
     },
-    [enqueueSnackbar, filters, dropdowns, pdfRows]
+    [enqueueSnackbar, filters, dropdowns]
   );
 
   const handleViewReport = useCallback(() => {
@@ -1283,14 +1312,13 @@ function FactoryWipReportActions({ filters, dropdowns, pdfRows }) {
       try {
         await runFactoryWipPdfFromFilters(enqueueSnackbar, filters, 'view', {
           previewWindow,
-          pdfRows,
           dropdowns,
         });
       } finally {
         setBusyMode(null);
       }
     })();
-  }, [enqueueSnackbar, filters, dropdowns, pdfRows]);
+  }, [enqueueSnackbar, filters, dropdowns]);
 
   const busy = busyMode !== null;
 
@@ -1327,7 +1355,6 @@ FactoryWipReportActions.propTypes = {
     suppliers: PropTypes.array,
     merchants: PropTypes.array,
   }),
-  pdfRows: PropTypes.arrayOf(PropTypes.object),
 };
 
 function CustomerWipReportActions({ filters, dropdowns = {} }) {
@@ -1857,92 +1884,6 @@ function FactoryWipReportForm({ pageTitle }) {
     [customers, suppliers, merchants]
   );
 
-  const factoryFilterLabelBundle = useMemo(() => {
-    const customerLabel =
-      filters.customer === ALL
-        ? ''
-        : (() => {
-            const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
-            return row ? milestoneCustomerLabel(row) : '';
-          })();
-    const supplierLabel =
-      filters.supplier === ALL
-        ? ''
-        : (() => {
-            const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
-            return row ? milestoneSupplierLabel(row) : '';
-          })();
-    const merchandiserLabel =
-      filters.merchandiser === ALL
-        ? ''
-        : (() => {
-            const row = merchants.find((r) => milestoneMerchantKey(r) === filters.merchandiser);
-            return row ? milestoneMerchantLabel(row) : '';
-          })();
-    return { customerLabel, supplierLabel, merchandiserLabel };
-  }, [filters.customer, filters.supplier, filters.merchandiser, customers, suppliers, merchants]);
-
-  const [factoryApiRows, setFactoryApiRows] = useState([]);
-
-  const factoryFilteredRaw = useMemo(
-    () => filterFactoryWipRowsByUiFilters(factoryApiRows, filters, factoryFilterLabelBundle),
-    [factoryApiRows, filters, factoryFilterLabelBundle]
-  );
-
-  const factoryPdfRows = useMemo(
-    () => factoryFilteredRaw.map((r, idx) => mapApiRowToFactoryWipPdfRow(r, idx)),
-    [factoryFilteredRaw]
-  );
-
-  useEffect(() => {
-    const controller = new AbortController();
-    let cancelled = false;
-
-    const base = getMilestoneSummaryDropdownApiBase();
-    if (!base) {
-      setFactoryApiRows([]);
-      return undefined;
-    }
-
-    const fromDate = filters.fromDate;
-    const toDate = filters.toDate;
-    if (!fromDate || !toDate || !WIP_LDP_FOB_ISO_DATE.test(fromDate) || !WIP_LDP_FOB_ISO_DATE.test(toDate)) {
-      return undefined;
-    }
-
-    (async () => {
-      try {
-        const rows = await fetchFactoryWipReportRows(
-          { fromDate, toDate },
-          wipLdpFobAuthHeaders(),
-          { signal: controller.signal }
-        );
-        if (cancelled) return;
-        setFactoryApiRows(Array.isArray(rows) ? rows : []);
-      } catch (err) {
-        if (axios.isCancel?.(err) || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') {
-          return;
-        }
-        if (!cancelled) {
-          setFactoryApiRows([]);
-          const msg =
-            err?.response?.data?.Message ||
-            err?.response?.data?.message ||
-            (typeof err?.response?.data === 'string' ? err.response.data : null) ||
-            (typeof err === 'string' ? err : null) ||
-            err?.message ||
-            'Could not load Factory WIP data';
-          enqueueSnackbar(msg, { variant: 'error' });
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [filters.fromDate, filters.toDate, enqueueSnackbar]);
-
   return (
     <Card variant="outlined" sx={cardSx}>
       <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary', mb: 3 }}>
@@ -2139,7 +2080,6 @@ function FactoryWipReportForm({ pageTitle }) {
             <FactoryWipReportActions
               filters={filters}
               dropdowns={factoryDropdownBundle}
-              pdfRows={factoryPdfRows}
             />
             <Button
               variant="contained"

@@ -8,6 +8,12 @@ import {
   Image,
   Font
 } from '@react-pdf/renderer';
+import {
+  buildInspectionDtlMatrixColumns,
+  orderInspectionDtlRowsForDisplay,
+  resolveInspectionDtlRowTypeOrder,
+  sortSizeQtyBreakdown,
+} from 'src/sections/Supply-Chain/utils/inspection-dtl-order';
 
 // ─── fonts ──────────────────────────────────────────────────────────────────
 Font.register({
@@ -126,48 +132,6 @@ const dec2 = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n.toFixed(2) : '';
 };
-
-const SIZE_ORDER_TOKENS = [
-  'XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', 'XXXL', '3XL', '4XL', '5XL', '6XL',
-];
-
-function normalizeSizeToken(sizeLabel) {
-  const s = String(sizeLabel ?? '').trim().toUpperCase().replace(/\s+/g, '');
-  if (!s) return '';
-  if (/^\d+X$/.test(s)) return `${s.slice(0, -1)}XL`;
-  if (/^\d+XL$/.test(s)) return s;
-  if (s === 'XXXL') return '3XL';
-  if (s === 'XXXXL') return '4XL';
-  return s;
-}
-
-function sizeSortRank(sizeLabel) {
-  const token = normalizeSizeToken(sizeLabel);
-  if (!token) return Number.POSITIVE_INFINITY;
-  const idx = SIZE_ORDER_TOKENS.indexOf(token);
-  if (idx >= 0) return idx;
-  return 1000;
-}
-
-function sortSizeSlots(sizeRow) {
-  const slots = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].filter((i) => {
-    const v = sizeRow?.[`size${i}`] ?? sizeRow?.[`Size${i}`] ?? '';
-    const label = String(v).trim();
-    return label && label !== '0' && label !== '0.0000';
-  });
-  const withLabels = (slots.length > 0 ? slots : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]).map((slot) => {
-    const v = sizeRow?.[`size${slot}`] ?? sizeRow?.[`Size${slot}`] ?? '';
-    return { slot, label: String(v).trim() || String(slot) };
-  });
-  withLabels.sort((a, b) => {
-    const rankDiff = sizeSortRank(a.label) - sizeSortRank(b.label);
-    if (rankDiff !== 0) return rankDiff;
-    const labelCmp = a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' });
-    if (labelCmp !== 0) return labelCmp;
-    return a.slot - b.slot;
-  });
-  return withLabels.map((x) => x.slot);
-}
 
 // ─── styles ──────────────────────────────────────────────────────────────────
 const C = {
@@ -493,19 +457,15 @@ export default function QAInspectionPDF({ data }) {
     },
   ];
 
-  const ROW_ORDER = [
-    'SIZE', 'ORDER QTY', 'OFFER QTY', 'FABRIC IN HOUSE', 'CUT QTY',
-    'IN-LINE', 'OFF-LINE', 'QTY PACKED PCS / SET',
-    'QTY PACKED CARTON', 'QTY INSPECTED CARTON', 'QTY BALANCE/EXTRA',
-  ];
-
-  const dtlRows = data.inspectionDtlRows ?? [];
-  const orderedRows = ROW_ORDER.map(rt => dtlRows.find(r => (r.sizeType ?? r.SizeType ?? '').toUpperCase() === rt.toUpperCase()) ?? { sizeType: rt });
-  const sizeRow = orderedRows[0];
+  const dtlRowsRaw = data.inspectionDtlRows ?? data.InspectionDtlRows ?? [];
+  const rowTypeOrder = resolveInspectionDtlRowTypeOrder(data);
+  const orderedRows = orderInspectionDtlRowsForDisplay(dtlRowsRaw, rowTypeOrder);
+  const sizeRow = orderedRows.find((r) => (r.sizeType ?? r.SizeType ?? '').toUpperCase() === 'SIZE') ?? orderedRows[0];
   const orderRow = orderedRows.find((r) => (r.sizeType ?? r.SizeType ?? '').toUpperCase() === 'ORDER QTY');
   const offerRow = orderedRows.find((r) => (r.sizeType ?? r.SizeType ?? '').toUpperCase() === 'OFFER QTY');
-  const numCols = sortSizeSlots(sizeRow);
-  const activeCols = numCols.length > 0 ? numCols : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  const sizeQtyBreakdown = sortSizeQtyBreakdown(data.sizeQtyBreakdown ?? data.SizeQtyBreakdown ?? []);
+  const matrixColumns = buildInspectionDtlMatrixColumns(sizeRow, sizeQtyBreakdown);
+  const activeCols = matrixColumns.length > 0 ? matrixColumns.map((c) => c.slot) : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
   const discs = data.discrepancies ?? [];
   // Force exactly 12 rows for Discrepancies as per user request
@@ -636,18 +596,17 @@ export default function QAInspectionPDF({ data }) {
         <View style={styles.table}>
           <View style={[styles.tr, styles.sizeMatrixRow]}>
             <View style={[styles.tdBold, styles.sizeMatrixCell, { flex: 1.9, alignItems: 'center' }]}><Text>Size</Text></View>
-            {activeCols.map((c, i) => {
-              const val = typeof c === 'number' ? (sizeRow?.[`size${c}`] ?? sizeRow?.[`Size${c}`] ?? '') : '';
-              return (
-                <View key={i} style={[styles.tdBold, styles.sizeMatrixCell, { flex: 1, alignItems: 'center' }]}>
-                  <Text>{val}</Text>
-                </View>
-              );
-            })}
+            {matrixColumns.map((col, i) => (
+              <View key={i} style={[styles.tdBold, styles.sizeMatrixCell, { flex: 1, alignItems: 'center' }]}>
+                <Text>{col.label || ''}</Text>
+              </View>
+            ))}
             <View style={[styles.tdBold, styles.sizeMatrixCell, { flex: 1.2, alignItems: 'center' }]}><Text>TOTAL</Text></View>
           </View>
 
-          {orderedRows.slice(1).map((row, ri) => {
+          {orderedRows
+            .filter((row) => String(row.sizeType ?? row.SizeType ?? '').trim().toUpperCase() !== 'SIZE')
+            .map((row, ri) => {
             const label = row.sizeType ?? row.SizeType ?? '';
             const isBalance = isBalanceExtraRow(label);
             return (
