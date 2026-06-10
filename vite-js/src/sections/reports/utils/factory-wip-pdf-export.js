@@ -1,5 +1,11 @@
 import jsPDF from 'jspdf';
 
+import {
+  WIP_PDF_FONT_COLOR_QTY,
+  WIP_PDF_FONT_FABRIC_CONTENT_GSM,
+  WIP_PDF_FONT_ITEM_DESCRIPTION,
+} from './wip-pdf-readable-columns';
+
 const LOGO_PATH = `${import.meta.env.BASE_URL}logo/AMSlogo.png`;
 
 const V_MARGIN = 10;
@@ -601,11 +607,11 @@ function drawDataRow(doc, y, x0, widths, row) {
     vertical: 'top',
   });
   i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.fabricLines, 'left', 5.2, rgb);
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.fabricLines, 'left', WIP_PDF_FONT_FABRIC_CONTENT_GSM, rgb);
   i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.itemLines, 'left', 5.6, rgb);
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.itemLines, 'left', WIP_PDF_FONT_ITEM_DESCRIPTION, rgb);
   i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, [row.colorQty], 'left', 5.4, rgb);
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, [row.colorQty], 'left', WIP_PDF_FONT_COLOR_QTY, rgb);
   i += 1;
   const nums = row.statusNums || [];
   for (let k = 0; k < 12; k += 1) {

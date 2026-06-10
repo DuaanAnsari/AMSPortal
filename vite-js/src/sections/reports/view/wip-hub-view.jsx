@@ -47,12 +47,15 @@ import {
   buildCustomerWipPdfBlobFromRows,
   openCustomerWipPdf,
 } from 'src/sections/reports/utils/customer-wip-pdf-export';
-import { fetchCustomerWipReportRows } from 'src/sections/reports/utils/customer-wip-report-api';
 import {
   filterCustomerWipRowsByUiFilters,
   mapApiRowToCustomerWipPdfRow,
 } from 'src/sections/reports/utils/customer-wip-report-map';
 import { buildAmsWipPdfBlobFromRows, openAmsWipPdf } from 'src/sections/reports/utils/ams-wip-pdf-export';
+import {
+  filterAmsWipRowsByUiFilters,
+  mapApiRowToAmsWipPdfRow,
+} from 'src/sections/reports/utils/ams-wip-report-map';
 import { buildSaltWipPdfBlobFromRows, openSaltWipPdf } from 'src/sections/reports/utils/salt-wip-pdf-export';
 import {
   buildCustomisedCustomerWipPdfBlobFromRows,
@@ -811,8 +814,159 @@ async function runFactoryWipPdfFromFilters(enqueueSnackbar, filters, mode, opts 
   }
 }
 
-/** Customer WIP PDF — GET `/api/Report/GetCustomerWIPReport`, client jsPDF + autotable. */
+/** Customer WIP PDF — same Factory WIP API; PDF grid uses Total Qty column instead of PO/Ship/Bal. */
 async function runCustomerWipPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns = {}, opts = {}) {
+  const fromDate = filters.fromDate;
+  const toDate = filters.toDate;
+  if (!fromDate || !toDate) {
+    enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+    return;
+  }
+  if (!WIP_LDP_FOB_ISO_DATE.test(fromDate) || !WIP_LDP_FOB_ISO_DATE.test(toDate)) {
+    enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+    return;
+  }
+
+  if (mode === 'view' && !opts.previewWindow) {
+    enqueueSnackbar('Open the report using the View Report button.', { variant: 'warning' });
+    return;
+  }
+
+  const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+  if (!base) {
+    enqueueSnackbar('API URL missing: set VITE_API_BASE_URL', { variant: 'error' });
+    return;
+  }
+
+  const merchants = dropdowns.merchants || [];
+  const customers = dropdowns.customers || [];
+  const suppliers = dropdowns.suppliers || [];
+
+  const merchantLabel =
+    filters.merchandiser === ALL
+      ? 'All'
+      : (() => {
+          const row = merchants.find((r) => milestoneMerchantKey(r) === filters.merchandiser);
+          return row ? milestoneMerchantLabel(row) : String(filters.merchandiser);
+        })();
+
+  const customerLabel =
+    filters.customer === ALL
+      ? 'All'
+      : (() => {
+          const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+          return row ? milestoneCustomerLabel(row) : String(filters.customer);
+        })();
+
+  const supplierLabel =
+    filters.supplier === ALL
+      ? 'All'
+      : (() => {
+          const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
+          return row ? milestoneSupplierLabel(row) : String(filters.supplier);
+        })();
+
+  const customerLabelForFilter =
+    filters.customer !== ALL
+      ? (() => {
+          const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+          return row ? milestoneCustomerLabel(row) : '';
+        })()
+      : '';
+  const supplierLabelForFilter =
+    filters.supplier !== ALL
+      ? (() => {
+          const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
+          return row ? milestoneSupplierLabel(row) : '';
+        })()
+      : '';
+  const merchandiserLabelForFilter =
+    filters.merchandiser !== ALL
+      ? (() => {
+          const row = merchants.find((r) => milestoneMerchantKey(r) === filters.merchandiser);
+          return row ? milestoneMerchantLabel(row) : '';
+        })()
+      : '';
+
+  const meta = {
+    customerLabel,
+    supplierLabel,
+    merchantLabel,
+    fromDate,
+    toDate,
+  };
+
+  const headers = wipLdpFobAuthHeaders();
+
+  try {
+    const raw = await fetchFactoryWipReportRows({ fromDate, toDate }, headers);
+    const filtered = filterCustomerWipRowsByUiFilters(raw, filters, {
+      customerLabel: customerLabelForFilter,
+      supplierLabel: supplierLabelForFilter,
+      merchandiserLabel: merchandiserLabelForFilter,
+    });
+    const pdfRows = filtered.map((r, idx) => mapApiRowToCustomerWipPdfRow(r, idx));
+    const blob = await buildCustomerWipPdfBlobFromRows(pdfRows, meta);
+    await assertValidMilestonePdfBlob(blob);
+
+    if (mode === 'view') {
+      const { previewWindow } = opts;
+      if (previewWindow.closed) {
+        enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
+          variant: 'warning',
+        });
+        return;
+      }
+      const blobUrl = URL.createObjectURL(blob);
+      try {
+        previewWindow.location.replace(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`);
+      } catch (navErr) {
+        URL.revokeObjectURL(blobUrl);
+        throw navErr;
+      }
+      previewWindow.focus?.();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
+    } else {
+      openCustomerWipPdf(mode, blob);
+    }
+
+    enqueueSnackbar(
+      mode === 'view'
+        ? pdfRows.length
+          ? 'Customer WIP PDF opened in a new tab'
+          : 'Customer WIP PDF opened (no rows)'
+        : pdfRows.length
+          ? 'Customer WIP PDF downloaded'
+          : 'Downloaded PDF (no rows)',
+      { variant: pdfRows.length ? 'success' : 'warning' }
+    );
+  } catch (err) {
+    console.error('[WIP] Customer WIP PDF', err);
+    const msg =
+      err?.response?.data?.message ||
+      err?.response?.data?.Message ||
+      (typeof err?.response?.data === 'string' ? err.response.data : null) ||
+      err?.message ||
+      'Customer WIP PDF failed';
+    enqueueSnackbar(msg, { variant: 'error' });
+
+    if (mode === 'view' && opts.previewWindow && !opts.previewWindow.closed) {
+      try {
+        const doc = opts.previewWindow.document;
+        doc.open();
+        doc.write(
+          `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${escapeHtmlMilestonePreview(msg)}</p></body></html>`
+        );
+        doc.close();
+      } catch (writeErr) {
+        console.warn('[Customer WIP] preview error page', writeErr);
+      }
+    }
+  }
+}
+
+/** AMS WIP PDF — Factory WIP API; mapped to existing AMS grid layout (`buildAmsWipPdfBlobFromRows`). */
+async function runAmsWipPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns = {}, opts = {}) {
   const fromDate = filters.fromDate;
   const toDate = filters.toDate;
   if (!fromDate || !toDate) {
@@ -887,133 +1041,21 @@ async function runCustomerWipPdfFromFilters(enqueueSnackbar, filters, mode, drop
     toDate,
   };
 
-  try {
-    const raw = await fetchCustomerWipReportRows(
-      {
-        reportType: filters.reportType,
-        productPortfolio: filters.productPortfolio,
-        reportSubType: filters.reportSubType || 'general',
-        fromDate,
-        toDate,
-        portfolios: dropdowns.portfolios || [],
-      },
-      wipLdpFobAuthHeaders()
-    );
+  const headers = wipLdpFobAuthHeaders();
 
-    const filtered = filterCustomerWipRowsByUiFilters(raw, filters, dropdowns, {
+  try {
+    const raw = await fetchFactoryWipReportRows({ fromDate, toDate }, headers);
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log('[AMS WIP] API rows fetched:', raw.length, raw[0] ? { sampleKeys: Object.keys(raw[0]) } : null);
+    }
+    const filtered = filterAmsWipRowsByUiFilters(raw, filters, {
       customerLabel: customerLabelForFilter,
       supplierLabel: supplierLabelForFilter,
       merchandiserLabel: merchandiserLabelForFilter,
     });
-
-    const pdfRows = filtered.map((row) => mapApiRowToCustomerWipPdfRow(row));
-    const blob = await buildCustomerWipPdfBlobFromRows(pdfRows, meta);
-    await assertValidMilestonePdfBlob(blob);
-
-    if (mode === 'view') {
-      const { previewWindow } = opts;
-      if (previewWindow.closed) {
-        enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
-          variant: 'warning',
-        });
-        return;
-      }
-      const blobUrl = URL.createObjectURL(blob);
-      try {
-        previewWindow.location.replace(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`);
-      } catch (navErr) {
-        URL.revokeObjectURL(blobUrl);
-        throw navErr;
-      }
-      previewWindow.focus?.();
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
-    } else {
-      openCustomerWipPdf(mode, blob);
-    }
-
-    enqueueSnackbar(
-      filtered.length
-        ? mode === 'view'
-          ? 'Customer WIP PDF opened in a new tab'
-          : 'Customer WIP PDF downloaded'
-        : 'No Data Found — PDF generated with empty message',
-      { variant: filtered.length ? 'success' : 'warning' }
-    );
-  } catch (err) {
-    console.error('[WIP] Customer WIP PDF', err);
-    const msg =
-      err?.response?.data?.message ||
-      err?.response?.data?.Message ||
-      (typeof err?.response?.data === 'string' ? err.response.data : null) ||
-      err?.message ||
-      'Customer WIP PDF failed';
-    enqueueSnackbar(msg, { variant: 'error' });
-
-    if (mode === 'view' && opts.previewWindow && !opts.previewWindow.closed) {
-      try {
-        const doc = opts.previewWindow.document;
-        doc.open();
-        doc.write(
-          `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${escapeHtmlMilestonePreview(msg)}</p></body></html>`
-        );
-        doc.close();
-      } catch (writeErr) {
-        console.warn('[Customer WIP] preview error page', writeErr);
-      }
-    }
-  }
-}
-
-/** AMS WIP PDF — demo grid until API rows are wired (`buildAmsWipPdfBlobFromRows(rows, meta)`). */
-async function runAmsWipPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns = {}, opts = {}) {
-  const fromDate = filters.fromDate;
-  const toDate = filters.toDate;
-  if (!fromDate || !toDate) {
-    enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
-    return;
-  }
-  if (!WIP_LDP_FOB_ISO_DATE.test(fromDate) || !WIP_LDP_FOB_ISO_DATE.test(toDate)) {
-    enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
-    return;
-  }
-
-  if (mode === 'view' && !opts.previewWindow) {
-    enqueueSnackbar('Open the report using the View Report button.', { variant: 'warning' });
-    return;
-  }
-
-  const merchants = dropdowns.merchants || [];
-  const customers = dropdowns.customers || [];
-  const suppliers = dropdowns.suppliers || [];
-
-  const resolveMerchantLabel = () => {
-    if (filters.merchandiser === ALL) return 'MUHAMMAD SHAHZAIB';
-    const row = merchants.find((r) => milestoneMerchantKey(r) === filters.merchandiser);
-    return row ? milestoneMerchantLabel(row) : String(filters.merchandiser);
-  };
-
-  const resolveCustomerLabel = () => {
-    if (filters.customer === ALL) return 'All';
-    const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
-    return row ? milestoneCustomerLabel(row) : String(filters.customer);
-  };
-
-  const resolveSupplierLabel = () => {
-    if (filters.supplier === ALL) return 'All';
-    const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
-    return row ? milestoneSupplierLabel(row) : String(filters.supplier);
-  };
-
-  const meta = {
-    customerLabel: resolveCustomerLabel(),
-    supplierLabel: resolveSupplierLabel(),
-    merchantLabel: resolveMerchantLabel(),
-    fromDate,
-    toDate,
-  };
-
-  try {
-    const blob = await buildAmsWipPdfBlobFromRows([], meta);
+    const pdfRows = filtered.map((r, idx) => mapApiRowToAmsWipPdfRow(r, idx));
+    const blob = await buildAmsWipPdfBlobFromRows(pdfRows, meta);
     await assertValidMilestonePdfBlob(blob);
 
     if (mode === 'view') {
@@ -1038,8 +1080,14 @@ async function runAmsWipPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns
     }
 
     enqueueSnackbar(
-      mode === 'view' ? 'AMS WIP PDF opened in a new tab' : 'AMS WIP PDF downloaded',
-      { variant: 'success' }
+      mode === 'view'
+        ? pdfRows.length
+          ? 'AMS WIP PDF opened in a new tab'
+          : 'AMS WIP PDF opened (no rows)'
+        : pdfRows.length
+          ? 'AMS WIP PDF downloaded'
+          : 'Downloaded PDF (no rows)',
+      { variant: pdfRows.length ? 'success' : 'warning' }
     );
   } catch (err) {
     console.error('[WIP] AMS WIP PDF', err);

@@ -384,17 +384,51 @@ function linesPoStyleProd(row) {
   return [String(po || '—'), String(style || 'NA'), String(prod || 'NA')];
 }
 
-function linesFabricContentGsm(row) {
-  const a = pickField(row, 'Fabric', 'fabric', 'FabricName');
-  const b = pickField(row, 'Content', 'content', 'FabricContent', 'fabricContent');
-  const c = pickField(row, 'GSM', 'gsm', 'Gsm');
-  return [String(a || '—'), String(b || '—'), String(c || '—')];
+/** Fabric / Content / GSM — API: `Fabric`, `OtherFabric`, `RibGSM` (legacy aliases as fallbacks). */
+function fabricContentGsmLine(raw, ...keys) {
+  const v = pickField(raw, ...keys);
+  if (v == null || v === '') return '—';
+  const s = String(v).trim();
+  return s || '—';
 }
 
+function linesFabricContentGsm(row) {
+  return [
+    fabricContentGsmLine(row, 'Fabric', 'fabric', 'FabricName', 'fabricName'),
+    fabricContentGsmLine(row, 'OtherFabric', 'otherFabric', 'Content', 'content', 'FabricContent', 'fabricContent'),
+    fabricContentGsmLine(row, 'RibGSM', 'ribGSM', 'ribGsm', 'RibGsm', 'GSM', 'gsm', 'Gsm'),
+  ];
+}
+
+function itemDescriptionLine(raw, ...keys) {
+  const v = pickField(raw, ...keys);
+  if (v == null || v === '') return null;
+  const s = String(v).trim();
+  return s || null;
+}
+
+/** Item Description cell — API: `ItemDescription`, `ItemDescriptionShippingInvoice` (stacked lines). */
 function linesItemDesc(row) {
-  const a = pickField(row, 'ItemCategory', 'itemCategory', 'Gender', 'gender');
-  const b = pickField(row, 'ItemDescription', 'itemDescription', 'Description', 'description');
-  return [String(a || '—'), String(b || '—')];
+  const lines = [];
+  const desc = itemDescriptionLine(
+    row,
+    'ItemDescription',
+    'itemDescription',
+    'Description',
+    'description'
+  );
+  const shippingInvoice = itemDescriptionLine(
+    row,
+    'ItemDescriptionShippingInvoice',
+    'itemDescriptionShippingInvoice',
+    'ItemDescription_ShippingInvoice',
+    'ShippingInvoiceItemDescription',
+    'shippingInvoiceItemDescription'
+  );
+  if (desc) lines.push(desc);
+  if (shippingInvoice) lines.push(shippingInvoice);
+  if (lines.length === 0) return ['—'];
+  return lines;
 }
 
 function colorQtyLine(row) {
@@ -450,6 +484,8 @@ export function mapApiRowToFactoryWipPdfRow(raw, rowIndex = 0) {
   );
   const mosRaw = pickField(
     raw,
+    'ShipmentModeName',
+    'shipmentModeName',
     'MOS',
     'Mos',
     'mos',
