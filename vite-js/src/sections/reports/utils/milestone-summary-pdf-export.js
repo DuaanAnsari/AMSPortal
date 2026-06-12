@@ -1219,34 +1219,60 @@ function embedRowImageInBox(doc, x, y, w, h, raw) {
   drawImagePlaceholder(doc, x, y, w, h);
 }
 
+/** Milestone status line in PDF — show digit only (strip `%`). */
+function displayMilestoneStatusValue(raw) {
+  const s = String(raw ?? '').trim();
+  if (!s) return '0';
+  const withoutPct = s.replace(/%/g, '').trim();
+  return withoutPct || '0';
+}
+
 /**
- * Parse FRI combined string e.g. `"0% ES: 31 Jan 2026"` → `{ top: '0%', bottom: '31-Jan-2026' }`.
+ * Parse combined milestone values e.g. `"0% ES: 31 Jan 2026"` → status + date only.
+ * Strips `0% ES:` / `90% ES` prefix so PDF shows clean dates.
+ * @returns {{ status: string; date: string }}
+ */
+function parseMilestoneCombinedDateString(raw) {
+  if (raw == null || raw === '' || raw === 0 || raw === '0') return { status: '', date: '' };
+  const s = String(raw).trim();
+  if (!s) return { status: '', date: '' };
+
+  const m = /^(\d+\s*%)\s*(?:ES\s*[:\-]?\s*)?(.*)$/i.exec(s);
+  if (m) {
+    const status = m[1].replace(/\s+/g, '').replace(/%/g, '');
+    let datePart = (m[2] || '').trim().replace(/^ES\s*[:\-]?\s*/i, '').trim();
+    if (datePart) {
+      const dm = /^(\d{1,2})[\s\-/]+([A-Za-z]+)[\s\-/]+(\d{2,4})$/.exec(datePart);
+      if (dm) {
+        const yyyy = dm[3].length === 2 ? `20${dm[3]}` : dm[3];
+        datePart = `${dm[1].padStart(2, '0')} ${dm[2].slice(0, 3)} ${yyyy}`;
+      } else {
+        const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(datePart);
+        if (iso) datePart = formatMilestoneDate(`${iso[1]}-${iso[2]}-${iso[3]}`) || datePart;
+        else datePart = formatMilestoneDate(datePart) || datePart;
+      }
+    }
+    return { status, date: datePart };
+  }
+
+  const formatted = formatMilestoneDate(s);
+  if (formatted) return { status: '', date: formatted };
+  if (/^\d+\s*%/i.test(s)) {
+    return {
+      status: s.replace(/\s*(?:ES\s*[:\-]?\s*)?.*$/i, '').replace(/\s+/g, '').replace(/%/g, ''),
+      date: '',
+    };
+  }
+  return { status: '', date: s };
+}
+
+/**
+ * Parse FRI combined string e.g. `"0% ES: 31 Jan 2026"` → `{ top: '0%', bottom: '31 Jan 2026' }`.
  * Tolerates variants like `"100% 15-Jan-2026"`, `"0%"` (no date), or empty.
  */
 function parseFriCombined(raw) {
-  if (raw == null || raw === '' || raw === 0 || raw === '0') return { top: '0%', bottom: '' };
-  const s = String(raw).trim();
-  if (!s) return { top: '0%', bottom: '' };
-  const m = /^(\d+\s*%)\s*(?:ES\s*[:\-]?\s*)?(.*)$/i.exec(s);
-  let top = '';
-  let bottom = '';
-  if (m) {
-    top = m[1].replace(/\s+/g, '');
-    bottom = (m[2] || '').trim();
-  } else {
-    bottom = s;
-  }
-  if (bottom) {
-    const dm = /^(\d{1,2})[\s\-/]+([A-Za-z]+)[\s\-/]+(\d{2,4})$/.exec(bottom);
-    if (dm) {
-      const yyyy = dm[3].length === 2 ? `20${dm[3]}` : dm[3];
-      bottom = `${dm[1].padStart(2, '0')}-${dm[2].slice(0, 3)}-${yyyy}`;
-    } else {
-      const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(bottom);
-      if (iso) bottom = formatMilestoneDate(`${iso[1]}-${iso[2]}-${iso[3]}`);
-    }
-  }
-  return { top: top || '0%', bottom };
+  const { status, date } = parseMilestoneCombinedDateString(raw);
+  return { top: status || '0', bottom: date };
 }
 
 /** Same two lines as PDF `drawFriCombinedCell` — used by Excel exporter. */
@@ -1258,15 +1284,17 @@ export function milestoneSummaryFriCombinedExcelText(raw, spec) {
 
 function milestoneTopStatus(raw, spec) {
   const s = pickField(raw, ...(spec.statusKeys || []));
-  if (s !== '' && s != null) return String(s);
+  if (s !== '' && s != null) return displayMilestoneStatusValue(s);
+  const v = pickField(raw, ...(spec.keys || []));
+  const { status } = parseMilestoneCombinedDateString(v);
+  if (status) return displayMilestoneStatusValue(status);
   return '0';
 }
 
 function milestoneBottomDate(raw, spec) {
   const v = pickField(raw, ...(spec.keys || []));
-  const d = formatMilestoneDate(v);
-  if (d) return d;
-  if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+  const { date } = parseMilestoneCombinedDateString(v);
+  if (date) return date;
   return '—';
 }
 
@@ -1301,7 +1329,7 @@ function drawMilestoneCell(doc, x, y, w, h, raw, spec) {
   const cy = y + h / 2;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(5.5);
-  doc.text(String(top), cx, cy - 6.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
+  doc.text(displayMilestoneStatusValue(top), cx, cy - 6.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
   doc.setFontSize(5.85);
   doc.text(String(bottom), cx, cy + 6.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
 }
@@ -1314,7 +1342,7 @@ function drawFriCombinedCell(doc, x, y, w, h, raw, spec) {
   const cy = y + h / 2;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(5.5);
-  doc.text(String(top || '0%'), cx, cy - 6.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
+  doc.text(displayMilestoneStatusValue(top || '0'), cx, cy - 6.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
   doc.setFontSize(5.85);
   doc.text(String(bottom || '—'), cx, cy + 6.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
 }
