@@ -1,6 +1,10 @@
 import jsPDF from 'jspdf';
 
 import { attachFactoryWipPoImageDimensions } from './factory-wip-pdf-export';
+import { getWipColorQtyDisplayLines } from './wip-color-qty-normalize';
+import { drawWipPdfMilestoneAndProdTail } from './wip-pdf-milestone-tail';
+import { normalizeWipPdfRowGroups } from './wip-pdf-color-row-groups';
+import { drawWipPdfDataRowGroup, paginateWipPdfGroupedRows } from './wip-pdf-data-row-group';
 import {
   WIP_PDF_FONT_COLOR_QTY,
   WIP_PDF_FONT_FABRIC_CONTENT_GSM,
@@ -148,7 +152,8 @@ function drawBlueBoldUnderline(doc, text, x, y, maxW) {
   return yy;
 }
 
-function drawCellBorder(doc, x, y, w, h) {
+function drawCellBorder(doc, x, y, w, h, skipBorder = false) {
+  if (skipBorder) return;
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.25);
   doc.rect(x, y, w, h);
@@ -194,10 +199,11 @@ function drawHeaderCell(doc, x, y, w, h, headerText) {
   });
 }
 
-function drawMultilineCell(doc, x, y, w, h, lines, align = 'left', fontSize = 5.6) {
-  drawCellBorder(doc, x, y, w, h);
+function drawMultilineCell(doc, x, y, w, h, lines, align = 'left', fontSize = 5.6, textRgb = RED, opts = {}) {
+  const { skipBorder = false } = opts;
+  drawCellBorder(doc, x, y, w, h, skipBorder);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(RED[0], RED[1], RED[2]);
+  doc.setTextColor(textRgb[0], textRgb[1], textRgb[2]);
   doc.setFontSize(fontSize);
   const maxW = Math.max(4, w - 4);
   const flat = [];
@@ -243,8 +249,9 @@ function fitImageInCell(x, y, w, h, naturalW, naturalH, pad = 2) {
   return { ix, iy, iw, ih };
 }
 
-function drawImageCell(doc, x, y, w, h, row) {
-  drawCellBorder(doc, x, y, w, h);
+function drawImageCell(doc, x, y, w, h, row, opts = {}) {
+  const { skipBorder = false } = opts;
+  drawCellBorder(doc, x, y, w, h, skipBorder);
   if (row.imageKind === 'swatch' && row.swatch?.fill) {
     const [r, g, b] = row.swatch.fill;
     doc.setFillColor(r, g, b);
@@ -293,8 +300,9 @@ function drawImageCell(doc, x, y, w, h, row) {
   doc.setTextColor(0, 0, 0);
 }
 
-function drawQtyStackCell(doc, x, y, w, h, row) {
-  drawCellBorder(doc, x, y, w, h);
+function drawQtyStackCell(doc, x, y, w, h, row, opts = {}) {
+  const { skipBorder = false } = opts;
+  drawCellBorder(doc, x, y, w, h, skipBorder);
   const splitY = y + h * 0.42;
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.25);
@@ -317,8 +325,9 @@ function drawQtyStackCell(doc, x, y, w, h, row) {
 }
 
 /** Three horizontal bands: customer ship date / label / factory date (reference PDF). */
-function drawShipmentTripleCell(doc, x, y, w, h, lines) {
-  drawCellBorder(doc, x, y, w, h);
+function drawShipmentTripleCell(doc, x, y, w, h, lines, opts = {}) {
+  const { skipBorder = false } = opts;
+  drawCellBorder(doc, x, y, w, h, skipBorder);
   const a = Array.isArray(lines) && lines.length >= 3 ? lines : ['', '', ''];
   const y1 = y + h / 3;
   const y2 = y + (2 * h) / 3;
@@ -341,10 +350,11 @@ function drawShipmentTripleCell(doc, x, y, w, h, lines) {
   doc.setTextColor(0, 0, 0);
 }
 
-function drawCenterTextCell(doc, x, y, w, h, text, fontSize = 6) {
-  drawCellBorder(doc, x, y, w, h);
+function drawCenterTextCell(doc, x, y, w, h, text, fontSize = 6, textRgb = RED, opts = {}) {
+  const { skipBorder = false } = opts;
+  drawCellBorder(doc, x, y, w, h, skipBorder);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(RED[0], RED[1], RED[2]);
+  doc.setTextColor(textRgb[0], textRgb[1], textRgb[2]);
   doc.setFontSize(fontSize);
   doc.text(String(text ?? ''), x + w / 2, y + h / 2, {
     align: 'center',
@@ -478,50 +488,66 @@ function normalizeRow(row) {
   return { ...row, shipmentLines };
 }
 
+function drawMilestoneAndProdTail(doc, xs, y, widths, row, startIndex, rowH) {
+  const rgb = getRowPdfTextRgb(row);
+  drawWipPdfMilestoneAndProdTail({
+    doc,
+    xs,
+    y,
+    widths,
+    row,
+    startIndex,
+    rowH,
+    rgb,
+    drawMilestoneDataCell,
+    drawMultilineCell,
+  });
+}
+
+function drawMergedLeadCellsAms(doc, xs, y, widths, h, rowRaw) {
+  const row = normalizeRow(rowRaw);
+  const rgb = getRowPdfTextRgb(row);
+  const skip = { skipBorder: true };
+  let i = 0;
+  drawImageCell(doc, xs[i], y, widths[i], h, row, skip);
+  i += 1;
+  drawMultilineCell(doc, xs[i], y, widths[i], h, row.poLines, 'left', 5.5, rgb, skip);
+  i += 1;
+  drawQtyStackCell(doc, xs[i], y, widths[i], h, row, skip);
+  i += 1;
+  drawShipmentTripleCell(doc, xs[i], y, widths[i], h, row.shipmentLines, skip);
+  i += 1;
+  drawCenterTextCell(doc, xs[i], y, widths[i], h, row.mos, 5.8, rgb, skip);
+  i += 1;
+  drawMultilineCell(doc, xs[i], y, widths[i], h, row.itemLines, 'left', WIP_PDF_FONT_ITEM_DESCRIPTION, rgb, skip);
+  i += 1;
+  drawMultilineCell(doc, xs[i], y, widths[i], h, row.fabricLines, 'left', WIP_PDF_FONT_FABRIC_CONTENT_GSM, rgb, skip);
+}
+
+function drawColorTailRowAms(doc, xs, yRow, widths, rowRaw, mergeCount, rowH) {
+  const row = normalizeRow(rowRaw);
+  const colorLine = getWipColorQtyDisplayLines(row)[0] || '—';
+  drawMultilineCell(doc, xs[mergeCount], yRow, widths[mergeCount], rowH, [colorLine], 'left', WIP_PDF_FONT_COLOR_QTY);
+  drawMilestoneAndProdTail(doc, xs, yRow, widths, row, mergeCount + 1, rowH);
+}
+
+function drawDataRowGroup(doc, y, x0, widths, chunkRows, displayRow) {
+  return drawWipPdfDataRowGroup({
+    doc,
+    y,
+    x0,
+    widths,
+    rowH: DATA_ROW_H,
+    chunkRows,
+    displayRow,
+    drawMergedLeadCells: drawMergedLeadCellsAms,
+    drawColorTailRow: drawColorTailRowAms,
+  });
+}
+
 function drawDataRow(doc, y, x0, widths, rowRaw) {
   const row = normalizeRow(rowRaw);
-  const xs = colXs(x0, widths);
-  const rgb = getRowPdfTextRgb(row);
-  let i = 0;
-  drawImageCell(doc, xs[i], y, widths[i], DATA_ROW_H, row);
-  i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.poLines, 'left', 5.5);
-  i += 1;
-  drawQtyStackCell(doc, xs[i], y, widths[i], DATA_ROW_H, row);
-  i += 1;
-  drawShipmentTripleCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.shipmentLines);
-  i += 1;
-  drawCenterTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.mos, 5.8);
-  i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.itemLines, 'left', WIP_PDF_FONT_ITEM_DESCRIPTION);
-  i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.fabricLines, 'left', WIP_PDF_FONT_FABRIC_CONTENT_GSM);
-  i += 1;
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, [row.colorQty], 'left', WIP_PDF_FONT_COLOR_QTY);
-  i += 1;
-
-  const nums = row.statusNums || [];
-  for (let k = 0; k < 12; k += 1) {
-    const mLines = row.statusCellLines?.[k];
-    const fallback =
-      (nums[k] ?? 0) !== 0
-        ? ['Target Date', 'N/A', 'Submission', 'N/A', 'Approval', 'N/A', String(nums[k])]
-        : ['Not Required'];
-    const cellLines = Array.isArray(mLines) && mLines.length > 0 ? mLines : fallback;
-    drawMilestoneDataCell(doc, xs[i], y, widths[i], DATA_ROW_H, cellLines, rgb);
-    i += 1;
-  }
-
-  const prodLines =
-    Array.isArray(row.productionStatusLines) && row.productionStatusLines.length > 0
-      ? row.productionStatusLines
-      : [
-          row.productionStatus != null && String(row.productionStatus).trim() !== ''
-            ? String(row.productionStatus).trim()
-            : 'N/A',
-        ];
-  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, prodLines, 'center', 4.25);
-  return y + DATA_ROW_H;
+  return drawDataRowGroup(doc, y, x0, widths, [row], row);
 }
 
 function drawOuterTableFrame(doc, x, y, w, h) {
@@ -597,7 +623,7 @@ function drawFooter(doc, pageIndex, totalPages) {
 }
 
 /**
- * @param {object[]} [rows] — from {@link mapApiRowToAmsWipPdfRow}; empty → header-only PDF
+ * @param {object[] | { displayRow: object; colorRows: object[] }[]} [rows]
  * @param {{
  *   customerLabel?: string;
  *   supplierLabel?: string;
@@ -607,8 +633,9 @@ function drawFooter(doc, pageIndex, totalPages) {
  * }} [meta]
  */
 export async function buildAmsWipPdfBlobFromRows(rows, meta = {}) {
-  const data = Array.isArray(rows) ? rows : [];
-  await attachFactoryWipPoImageDimensions(data);
+  const groups = normalizeWipPdfRowGroups(Array.isArray(rows) ? rows : []);
+  const flatForImages = groups.flatMap((g) => [g.displayRow, ...g.colorRows]);
+  await attachFactoryWipPoImageDimensions(flatForImages);
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
   const logoDataUrl = await loadLogoDataUrl().catch(() => null);
 
@@ -635,13 +662,20 @@ export async function buildAmsWipPdfBlobFromRows(rows, meta = {}) {
 
   startPage();
 
-  data.forEach((row) => {
-    if (y + DATA_ROW_H > pageBodyBottom) {
-      flushSegmentFrame();
-      doc.addPage([PAGE_W, PAGE_H], 'l');
-      startPage();
-    }
-    y = drawDataRow(doc, y, innerLeft, widths, row);
+  paginateWipPdfGroupedRows({
+    doc,
+    groups,
+    rowH: DATA_ROW_H,
+    pageBodyBottom,
+    getY: () => y,
+    setY: (ny) => {
+      y = ny;
+    },
+    startPage,
+    flushSegmentFrame,
+    pageSize: [PAGE_W, PAGE_H],
+    drawRowGroup: (cy, chunkRows, displayRow) =>
+      drawDataRowGroup(doc, cy, innerLeft, widths, chunkRows, displayRow),
   });
 
   flushSegmentFrame();

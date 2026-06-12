@@ -133,6 +133,7 @@ export function mapApiRowToAmsWipPdfRow(raw, rowIndex = 0) {
     mos: base.mos,
     itemLines: base.itemLines,
     fabricLines: base.fabricLines,
+    colorQtyLines: base.colorQtyLines,
     colorQty: base.colorQty,
     statusNums: base.statusNums,
     statusCellLines: base.statusCellLines,

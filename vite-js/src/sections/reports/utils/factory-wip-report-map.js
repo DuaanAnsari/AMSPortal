@@ -1,3 +1,5 @@
+import { buildWipColorQtyLines } from './wip-color-qty-normalize';
+
 /** @typedef {Record<string, unknown>} FactoryWipApiRow */
 
 const ALL = 'all';
@@ -268,10 +270,33 @@ const MILESTONE_PDF_FIELD_SPECS = [
     qty: ['CuttingQtyCompleted', 'CuttingPCSQtyCompleted', 'CuttingCompletedQty'],
   },
   {
-    target: ['PrintEmbPCSTargetDate', 'PrintEmbPcsTargetDate', 'PrintEmbPCS_TargetDate'],
-    submission: ['PrintEmbPCSSubmissionDate', 'PrintEmbPcsSubmissionDate'],
-    approval: ['PrintEmbPCSApprovalDate', 'PrintEmbPcsApprovalDate'],
-    status: ['PrintEmbPCSStatus', 'PrintEmbPcsStatus', 'PrintEmbPCS', 'PrintEmbPcs'],
+    target: [
+      'PrintEmbPCSTargetDate',
+      'PrintEmbPcsTargetDate',
+      'PrintEmbPCS_TargetDate',
+      'PrintEmbStrikeOffTargetDate',
+      'PrintEmbStrikeoffTargetDate',
+    ],
+    submission: [
+      'PrintEmbPCSSubmissionDate',
+      'PrintEmbPcsSubmissionDate',
+      'PrintEmbStrikeOffSubmissionDate',
+      'PrintEmbStrikeoffSubmissionDate',
+    ],
+    approval: [
+      'PrintEmbPCSApprovalDate',
+      'PrintEmbPcsApprovalDate',
+      'PrintEmbStrikeOffApprovalDate',
+      'PrintEmbStrikeoffApprovalDate',
+    ],
+    status: [
+      'PrintEmbPCSStatus',
+      'PrintEmbPcsStatus',
+      'PrintEmbPCS',
+      'PrintEmbPcs',
+      'PrintEmbStrikeOffStatus',
+      'PrintEmbStrikeoffStatus',
+    ],
     remarks: ['PrintEmbPCSRemarks', 'PrintEmbPcsRemarks'],
     qty: ['PrintEmbPCSQtyCompleted', 'PrintEmbPcsQtyCompleted', 'PrintEmbPCSCompletedQty'],
   },
@@ -344,6 +369,9 @@ function buildMilestoneCellLines(raw, colIndex, numFallback) {
   lines.push(stTrim || 'Done');
   return lines;
 }
+
+/** Combined milestone PDF columns (Lab Dip … Packing PCS). */
+export const WIP_MILESTONE_PDF_COLUMN_COUNT = 12;
 
 /** Production status column: FRI + remarks + generic status (multi-line). */
 function productionStatusLinesFromRow(raw) {
@@ -432,12 +460,7 @@ function linesItemDesc(row) {
 }
 
 function colorQtyLine(row) {
-  const c = pickField(row, 'Color', 'color', 'Colorway', 'colorway', 'ColorQty', 'Color_QTY');
-  const q = pickField(row, 'ColorQTY', 'ColorQty', 'colorQty', 'Qty', 'qty');
-  if (c && q) return `${c} (${q})`;
-  if (c) return String(c);
-  if (q) return String(q);
-  return '—';
+  return buildWipColorQtyLines(row, pickField);
 }
 
 /**
@@ -542,7 +565,8 @@ export function mapApiRowToFactoryWipPdfRow(raw, rowIndex = 0) {
     mos: mos || '—',
     fabricLines: linesFabricContentGsm(raw),
     itemLines: linesItemDesc(raw),
-    colorQty: colorQtyLine(raw),
+    colorQtyLines: colorQtyLine(raw),
+    colorQty: colorQtyLine(raw).join('\n'),
     statusNums,
     statusCellLines,
     productionStatusLines,

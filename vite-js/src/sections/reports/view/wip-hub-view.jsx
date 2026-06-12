@@ -56,7 +56,9 @@ import {
   filterAmsWipRowsByUiFilters,
   mapApiRowToAmsWipPdfRow,
 } from 'src/sections/reports/utils/ams-wip-report-map';
-import { buildSaltWipPdfBlobFromRows, openSaltWipPdf } from 'src/sections/reports/utils/salt-wip-pdf-export';
+import {
+  mapWipPdfRowGroupsFromRaw,
+} from 'src/sections/reports/utils/wip-pdf-color-row-groups';
 import {
   buildCustomisedCustomerWipPdfBlobFromRows,
   openCustomisedCustomerWipPdf,
@@ -750,9 +752,10 @@ async function runFactoryWipPdfFromFilters(enqueueSnackbar, filters, mode, opts 
       supplierLabel: supplierLabelForFilter,
       merchandiserLabel: merchandiserLabelForFilter,
     });
-    const pdfRows = filtered.map((r, idx) => mapApiRowToFactoryWipPdfRow(r, idx));
+    const pdfGroups = mapWipPdfRowGroupsFromRaw(filtered, mapApiRowToFactoryWipPdfRow);
+    const pdfRowCount = pdfGroups.reduce((n, g) => n + (g.colorRows?.length || 0), 0);
 
-    const pdf = await buildFactoryWipPdfBlobFromRows(pdfRows, meta);
+    const pdf = await buildFactoryWipPdfBlobFromRows(pdfGroups, meta);
     await assertValidMilestonePdfBlob(pdf);
 
     if (mode === 'view') {
@@ -781,10 +784,10 @@ async function runFactoryWipPdfFromFilters(enqueueSnackbar, filters, mode, opts 
 
     enqueueSnackbar(
       mode === 'view'
-        ? pdfRows.length
+        ? pdfRowCount
           ? 'Factory WIP PDF opened in a new tab'
           : 'Factory WIP PDF opened (no rows)'
-        : pdfRows.length
+        : pdfRowCount
           ? 'Factory WIP PDF downloaded'
           : 'Downloaded PDF (no rows)',
       { variant: 'success' }
@@ -905,8 +908,9 @@ async function runCustomerWipPdfFromFilters(enqueueSnackbar, filters, mode, drop
       supplierLabel: supplierLabelForFilter,
       merchandiserLabel: merchandiserLabelForFilter,
     });
-    const pdfRows = filtered.map((r, idx) => mapApiRowToCustomerWipPdfRow(r, idx));
-    const blob = await buildCustomerWipPdfBlobFromRows(pdfRows, meta);
+    const pdfGroups = mapWipPdfRowGroupsFromRaw(filtered, mapApiRowToCustomerWipPdfRow);
+    const pdfRowCount = pdfGroups.reduce((n, g) => n + (g.colorRows?.length || 0), 0);
+    const blob = await buildCustomerWipPdfBlobFromRows(pdfGroups, meta);
     await assertValidMilestonePdfBlob(blob);
 
     if (mode === 'view') {
@@ -932,13 +936,13 @@ async function runCustomerWipPdfFromFilters(enqueueSnackbar, filters, mode, drop
 
     enqueueSnackbar(
       mode === 'view'
-        ? pdfRows.length
+        ? pdfRowCount
           ? 'Customer WIP PDF opened in a new tab'
           : 'Customer WIP PDF opened (no rows)'
-        : pdfRows.length
+        : pdfRowCount
           ? 'Customer WIP PDF downloaded'
           : 'Downloaded PDF (no rows)',
-      { variant: pdfRows.length ? 'success' : 'warning' }
+      { variant: pdfRowCount ? 'success' : 'warning' }
     );
   } catch (err) {
     console.error('[WIP] Customer WIP PDF', err);
@@ -1054,8 +1058,9 @@ async function runAmsWipPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns
       supplierLabel: supplierLabelForFilter,
       merchandiserLabel: merchandiserLabelForFilter,
     });
-    const pdfRows = filtered.map((r, idx) => mapApiRowToAmsWipPdfRow(r, idx));
-    const blob = await buildAmsWipPdfBlobFromRows(pdfRows, meta);
+    const pdfGroups = mapWipPdfRowGroupsFromRaw(filtered, mapApiRowToAmsWipPdfRow);
+    const pdfRowCount = pdfGroups.reduce((n, g) => n + (g.colorRows?.length || 0), 0);
+    const blob = await buildAmsWipPdfBlobFromRows(pdfGroups, meta);
     await assertValidMilestonePdfBlob(blob);
 
     if (mode === 'view') {
@@ -1081,13 +1086,13 @@ async function runAmsWipPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns
 
     enqueueSnackbar(
       mode === 'view'
-        ? pdfRows.length
+        ? pdfRowCount
           ? 'AMS WIP PDF opened in a new tab'
           : 'AMS WIP PDF opened (no rows)'
-        : pdfRows.length
+        : pdfRowCount
           ? 'AMS WIP PDF downloaded'
           : 'Downloaded PDF (no rows)',
-      { variant: pdfRows.length ? 'success' : 'warning' }
+      { variant: pdfRowCount ? 'success' : 'warning' }
     );
   } catch (err) {
     console.error('[WIP] AMS WIP PDF', err);
