@@ -27,6 +27,7 @@ import {
   DialogContent,
   DialogActions,
   Tooltip,
+  Alert,
 } from '@mui/material';
 import { fetchPoNumbers } from 'src/sections/reports/utils/pono-dropdown-api';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -37,9 +38,12 @@ import BuildIcon from '@mui/icons-material/Build';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import DirectionsBoatIcon from '@mui/icons-material/DirectionsBoat';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { format } from 'date-fns';
+import { pdf } from '@react-pdf/renderer';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs'; // ✅ make sure this import path matches your project
 import { paths } from 'src/routes/paths';
+import { qdApi } from 'src/sections/Supply-Chain/utils/qd-api';
 
 const PO_STATUS_TOOLTIP_SX = {
   bgcolor: 'rgba(33, 43, 54, 0.92)',
@@ -51,6 +55,134 @@ const PO_STATUS_TOOLTIP_SX = {
   borderRadius: 1,
   boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
 };
+
+function displayInspectionDash(value) {
+  if (value == null || String(value).trim() === '') return '-';
+  return String(value).trim();
+}
+
+function pickInspectionField(row, ...keys) {
+  if (!row || typeof row !== 'object') return '';
+  for (const k of keys) {
+    if (Object.prototype.hasOwnProperty.call(row, k)) {
+      const v = row[k];
+      if (v != null && String(v).trim() !== '') return v;
+    }
+  }
+  const lower = {};
+  Object.keys(row).forEach((key) => {
+    lower[key.toLowerCase()] = row[key];
+  });
+  for (const k of keys) {
+    const v = lower[String(k).toLowerCase()];
+    if (v != null && String(v).trim() !== '') return v;
+  }
+  return '';
+}
+
+function formatQaInspectionDisplayDate(value) {
+  if (value == null || String(value).trim() === '') return '-';
+  try {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return displayInspectionDash(value);
+    return date.toLocaleDateString('en-GB');
+  } catch {
+    return '-';
+  }
+}
+
+function mapInspectionPopupRow(apiRow) {
+  const mstId = pickInspectionField(
+    apiRow,
+    'qdInspectionMstID',
+    'QdInspectionMstID',
+    'qdInspectionMstId'
+  );
+  const rawDate = pickInspectionField(apiRow, 'mstInspectionDate', 'MstInspectionDate');
+
+  return {
+    qdInspectionMstID: mstId,
+    statusKey: resolveInspectionStatusKey(apiRow),
+    inspectionDate: formatQaInspectionDisplayDate(rawDate),
+    inspectionNo: displayInspectionDash(pickInspectionField(apiRow, 'inspNo', 'InspNo')),
+    aqlSystem: displayInspectionDash(
+      pickInspectionField(
+        apiRow,
+        'aqlSystem',
+        'AQLSystem',
+        'aqlSystemName',
+        'AQLSystemName',
+        'aqlSysytem',
+        'AQLSysytem'
+      )
+    ),
+    aqlRange: displayInspectionDash(pickInspectionField(apiRow, 'aqlRange', 'AQLRange')),
+  };
+}
+
+function resolveInspectionStatusKey(apiRow) {
+  const passFailRaw = pickInspectionField(apiRow, 'passFail', 'PassFail');
+  if (passFailRaw !== '') {
+    if (passFailRaw === true || passFailRaw === 'true' || passFailRaw === 1 || passFailRaw === '1') {
+      return 'pass';
+    }
+    if (passFailRaw === false || passFailRaw === 'false' || passFailRaw === 0 || passFailRaw === '0') {
+      return 'fail';
+    }
+  }
+
+  const rawStatus = pickInspectionField(
+    apiRow,
+    'status',
+    'Status',
+    'inspectionStatus',
+    'InspectionStatus',
+    'inspStatus',
+    'InspStatus',
+    'passFailStatus',
+    'PassFailStatus'
+  );
+  if (rawStatus === '') return null;
+
+  const normalized = String(rawStatus).trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === 'pass' || normalized === 'passed') return 'pass';
+  if (normalized === 'fail' || normalized === 'failed') return 'fail';
+  return null;
+}
+
+function InspectionStatusCell({ statusKey }) {
+  if (!statusKey) return '-';
+
+  const isPass = statusKey === 'pass';
+  const label = isPass ? 'Pass' : 'Fail';
+  const Icon = isPass ? CheckCircleIcon : CancelIcon;
+  const color = isPass ? '#2e7d32' : '#d32f2f';
+
+  return (
+    <Tooltip
+      title={label}
+      arrow
+      placement="top"
+      slotProps={{
+        tooltip: { sx: PO_STATUS_TOOLTIP_SX },
+        arrow: { sx: { color: 'rgba(33, 43, 54, 0.92)' } },
+      }}
+    >
+      <Box
+        component="span"
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          lineHeight: 0,
+        }}
+      >
+        <Icon sx={{ fontSize: 20, color }} />
+      </Box>
+    </Tooltip>
+  );
+}
 
 function getPoRowStatus(row) {
   return String(row?.status ?? row?.Status ?? '').trim();
@@ -122,8 +254,10 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
   /** Inspection dialog state — mirrors My Orders' Inspection popup so users see the same screen. */
   const [inspectionOpen, setInspectionOpen] = useState(false);
   const [inspectionLoading, setInspectionLoading] = useState(false);
+  const [inspectionError, setInspectionError] = useState(null);
   const [inspectionRows, setInspectionRows] = useState([]);
   const [inspectionPoNo, setInspectionPoNo] = useState('');
+  const [inspectionPdfLoadingId, setInspectionPdfLoadingId] = useState(null);
 
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -355,17 +489,74 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
   const handleWipClick = (row) => alert('WIP clicked for ' + row.poNo);
 
   /**
-   * Inspection → opens the same dialog popup as My Orders. Backend hook is a
-   * placeholder for now (no API yet) so the list shows "No records to display"
-   * once the loading flicker clears — matching My Orders exactly.
+   * Inspection → loads QA Inspection list for the selected PO (same API as QA Inspection View).
    */
-  const handleInspectionClick = useCallback((row) => {
-    if (!row) return;
-    setInspectionPoNo(row.poNo || '');
-    setInspectionOpen(true);
-    setInspectionLoading(true);
-    setInspectionRows([]);
-    setTimeout(() => setInspectionLoading(false), 300);
+  const handleInspectionClick = useCallback(
+    async (row) => {
+      if (!row) return;
+      const po = row.poNo || '';
+      setInspectionPoNo(po);
+      setInspectionOpen(true);
+      setInspectionLoading(true);
+      setInspectionError(null);
+      setInspectionRows([]);
+
+      try {
+        const { data } = await qdApi.get('/QAInspection', {
+          params: {
+            poNo: po,
+            customerId: 0,
+            supplierId: 0,
+            inspType: 'ALL',
+          },
+        });
+        setInspectionRows(
+          (Array.isArray(data) ? data : []).map((apiRow) => mapInspectionPopupRow(apiRow))
+        );
+      } catch (e) {
+        const message = e?.response?.data?.message || e?.message || 'Failed to load inspection data';
+        setInspectionError(message);
+        setInspectionRows([]);
+        enqueueSnackbar(message, { variant: 'error' });
+      } finally {
+        setInspectionLoading(false);
+      }
+    },
+    [enqueueSnackbar]
+  );
+
+  const handleInspectionPdfClick = useCallback(
+    async (mstId) => {
+      if (!mstId) return;
+      setInspectionPdfLoadingId(mstId);
+      try {
+        const { data } = await qdApi.get('/QAInspection/inspection-report-data', {
+          params: { qdMstId: mstId },
+        });
+        if (!data) {
+          enqueueSnackbar('No data found for this report', { variant: 'warning' });
+          return;
+        }
+
+        const { default: QAInspectionPDF } = await import('./QA-Inspection-PDF');
+        const blob = await pdf(<QAInspectionPDF data={data} />).toBlob();
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      } catch (e) {
+        console.error('PDF Generation failed', e);
+        const msg = e?.response?.data?.message || 'Failed to generate PDF';
+        enqueueSnackbar(msg, { variant: 'error' });
+      } finally {
+        setInspectionPdfLoadingId(null);
+      }
+    },
+    [enqueueSnackbar]
+  );
+
+  const handleInspectionDialogClose = useCallback(() => {
+    setInspectionOpen(false);
+    setInspectionError(null);
+    setInspectionPdfLoadingId(null);
   }, []);
 
   /**
@@ -907,7 +1098,7 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
       {/* Inspection Popup — same shape as My Orders' Inspection dialog. */}
       <Dialog
         open={inspectionOpen}
-        onClose={() => setInspectionOpen(false)}
+        onClose={handleInspectionDialogClose}
         fullWidth
         maxWidth="md"
       >
@@ -918,38 +1109,72 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
               PO No: {inspectionPoNo}
             </Typography>
           )}
+          {inspectionError && (
+            <Alert severity="error" sx={{ mb: 1 }}>
+              {inspectionError}
+            </Alert>
+          )}
           <TableContainer>
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold' }}>PDF</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Inspection Date</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Insp No.</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>AQL System</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>AQL Range</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }} align="center">
+                    PDF
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }} align="center">
+                    Status
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {inspectionLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5} align="center">
+                    <TableCell colSpan={6} align="center">
                       <CircularProgress size={20} />
                     </TableCell>
                   </TableRow>
                 ) : inspectionRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} align="center">
+                    <TableCell colSpan={6} align="center">
                       No records to display
                     </TableCell>
                   </TableRow>
                 ) : (
-                  inspectionRows.map((row, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{row.pdf || ''}</TableCell>
-                      <TableCell>{row.inspectionDate || ''}</TableCell>
-                      <TableCell>{row.inspectionNo || ''}</TableCell>
-                      <TableCell>{row.aqlSystem || ''}</TableCell>
-                      <TableCell>{row.aqlRange || ''}</TableCell>
+                  inspectionRows.map((row) => (
+                    <TableRow key={row.qdInspectionMstID || `${row.inspectionNo}-${row.inspectionDate}`}>
+                      <TableCell>{row.inspectionDate}</TableCell>
+                      <TableCell>{row.inspectionNo}</TableCell>
+                      <TableCell>{row.aqlSystem}</TableCell>
+                      <TableCell>{row.aqlRange}</TableCell>
+                      <TableCell align="center">
+                        {row.qdInspectionMstID ? (
+                          <Tooltip title="View PDF">
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                disabled={inspectionPdfLoadingId === row.qdInspectionMstID}
+                                onClick={() => handleInspectionPdfClick(row.qdInspectionMstID)}
+                              >
+                                {inspectionPdfLoadingId === row.qdInspectionMstID ? (
+                                  <CircularProgress size={18} />
+                                ) : (
+                                  <PictureAsPdfIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        ) : (
+                          '-'
+                        )}
+                      </TableCell>
+                      <TableCell align="center">
+                        <InspectionStatusCell statusKey={row.statusKey} />
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -958,7 +1183,7 @@ export default function POSearchEngine({ settings, isDialog, onClose }) {
           </TableContainer>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setInspectionOpen(false)}>Close</Button>
+          <Button onClick={handleInspectionDialogClose}>Close</Button>
         </DialogActions>
       </Dialog>
     </Container>

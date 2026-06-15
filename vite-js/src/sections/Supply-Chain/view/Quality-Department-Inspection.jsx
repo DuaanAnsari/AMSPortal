@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useSearchParams, Link as RouterLink, useNavigate } from 'react-router-dom';
 
@@ -37,6 +37,7 @@ import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Tooltip from '@mui/material/Tooltip';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import CloseIcon from '@mui/icons-material/Close';
 import Stepper from '@mui/material/Stepper';
 import Step from '@mui/material/Step';
 import StepLabel from '@mui/material/StepLabel';
@@ -283,6 +284,39 @@ function field(obj, ...keys) {
   if (!obj) return '';
   const match = keys.find((k) => obj[k] != null && obj[k] !== '');
   return match ? obj[match] : '';
+}
+
+function resolveInspectionEmailInfo(data, header, snap, mstId) {
+  const qaEmail =
+    field(data, 'qaEmail', 'QAEmail') ||
+    field(snap, 'qaEmail', 'QAEmail') ||
+    field(data?.emailAlert, 'qaEmail', 'QAEmail') ||
+    field(data?.EmailAlert, 'qaEmail', 'QAEmail');
+  const qaEmailOnEdit =
+    field(data, 'qaEmailOnEdit', 'QAEmailOnEdit') ||
+    field(snap, 'qaEmailOnEdit', 'QAEmailOnEdit') ||
+    field(data?.emailAlert, 'qaEmailOnEdit', 'QAEmailOnEdit') ||
+    field(data?.EmailAlert, 'qaEmailOnEdit', 'QAEmailOnEdit');
+  const merchandiserEmail =
+    field(data, 'merchandiserEmail', 'MerchandiserEmail') ||
+    field(header, 'merchandiserEmail', 'MerchandiserEmail') ||
+    field(snap, 'merchandiserEmail', 'MerchandiserEmail') ||
+    field(data?.emailAlert, 'merchandiserEmail', 'MerchandiserEmail') ||
+    field(data?.EmailAlert, 'merchandiserEmail', 'MerchandiserEmail');
+
+  const hasMst = mstId != null && Number(mstId) > 0;
+  const resolvedQa = hasMst ? qaEmailOnEdit || qaEmail : qaEmail;
+
+  return {
+    qaEmail: resolvedQa || '',
+    merchandiserEmail: merchandiserEmail || '',
+    otherEmail:
+      field(snap, 'otherEmail', 'OtherEmail') ||
+      field(data, 'otherEmail', 'OtherEmail') ||
+      field(data?.savedInspection, 'otherEmail', 'OtherEmail') ||
+      field(data?.SavedInspection, 'otherEmail', 'OtherEmail') ||
+      '',
+  };
 }
 
 /**
@@ -947,6 +981,9 @@ export default function QualityDepartmentInspectionView() {
   const [loadingSign, setLoadingSign] = useState(false);
   const [existingSignUrl, setExistingSignUrl] = useState(null);
   const [signatureStatus, setSignatureStatus] = useState({ QA: false, Vendor: false, Control: false });
+  const [emailInfoOpen, setEmailInfoOpen] = useState(false);
+  const [otherEmail, setOtherEmail] = useState('');
+  const otherEmailSeededRef = useRef(false);
 
   const sizeQtyBreakdown = useMemo(
     () => sortSizeQtyBreakdown(data?.sizeQtyBreakdown ?? data?.SizeQtyBreakdown ?? []),
@@ -1169,6 +1206,19 @@ export default function QualityDepartmentInspectionView() {
   const bindDef = data?.bindGridDefaults ?? data?.BindGridDefaults;
   const mstId = isExplicitEditMode ? (data?.qdInspectionMstId ?? data?.QdInspectionMstId) : null;
   const snap = isExplicitEditMode ? (data?.savedInspection ?? data?.SavedInspection) : null;
+
+  const inspectionEmailInfo = useMemo(
+    () => resolveInspectionEmailInfo(data, h, snap, mstId),
+    [data, h, snap, mstId]
+  );
+
+  useEffect(() => {
+    if (!data || otherEmailSeededRef.current) return;
+    const seeded = resolveInspectionEmailInfo(data, h, snap, mstId).otherEmail;
+    if (seeded) setOtherEmail(String(seeded));
+    otherEmailSeededRef.current = true;
+  }, [data, h, snap, mstId]);
+
   const colorOptions = useMemo(() => {
     const poLines = data?.poLines ?? data?.PoLines ?? [];
     const raw = [];
@@ -3402,10 +3452,17 @@ export default function QualityDepartmentInspectionView() {
               )}
             </Box>
 
-            <Stack direction="row" spacing={2} flexWrap="wrap">
-              <Button variant="contained" disabled={saving} onClick={() => handleSave(true)}>
-                {saving ? 'Saving…' : 'Save'}
-              </Button>
+            <Stack direction="row" spacing={2} flexWrap="wrap" alignItems="center">
+              {activeStep === STEPS.length - 1 && (
+                <>
+                  <Button variant="contained" color="success" onClick={() => setEmailInfoOpen(true)}>
+                    Show / Add Email Info
+                  </Button>
+                  <Button variant="contained" disabled={saving} onClick={() => handleSave(true)}>
+                    {saving ? 'Saving…' : 'Save'}
+                  </Button>
+                </>
+              )}
               <Button variant="outlined" disabled={saving} onClick={() => handleSave(false)}>
                 {saving ? 'Saving…' : 'Draft'}
               </Button>
@@ -3422,6 +3479,56 @@ export default function QualityDepartmentInspectionView() {
           </Stack>
         )}
       </Container>
+      <Dialog open={emailInfoOpen} onClose={() => setEmailInfoOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle
+          sx={{
+            m: 0,
+            p: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            minHeight: 48,
+          }}
+        >
+          <IconButton aria-label="Close email info" onClick={() => setEmailInfoOpen(false)} edge="end" size="small">
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 0, pb: 3 }}>
+          <Grid container spacing={2}>
+            <Grid xs={12} sm={6}>
+              <TextField
+                label="QA Email"
+                fullWidth
+                size="small"
+                value={inspectionEmailInfo.qaEmail}
+                InputProps={{ readOnly: true }}
+                inputProps={{ style: { textTransform: 'none' } }}
+              />
+            </Grid>
+            <Grid xs={12} sm={6}>
+              <TextField
+                label="Merchandiser Email"
+                fullWidth
+                size="small"
+                value={inspectionEmailInfo.merchandiserEmail}
+                InputProps={{ readOnly: true }}
+                inputProps={{ style: { textTransform: 'none' } }}
+              />
+            </Grid>
+            <Grid xs={12}>
+              <TextField
+                label="Other Email"
+                fullWidth
+                size="small"
+                value={otherEmail}
+                onChange={(e) => setOtherEmail(e.target.value)}
+                inputProps={{ style: { textTransform: 'lowercase' } }}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+      </Dialog>
       <SignaturePopup
         open={sigPopup.open}
         title={sigPopup.title}

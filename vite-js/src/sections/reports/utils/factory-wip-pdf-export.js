@@ -15,9 +15,9 @@ const LOGO_PATH = `${import.meta.env.BASE_URL}logo/AMSlogo.png`;
 const V_MARGIN = 10;
 const H_MARGIN = 14;
 const HEADER_BLOCK_H = 102;
-const TABLE_HEADER_ROW_H = 40;
+const TABLE_HEADER_ROW_H = 52;
 /** Body row height — milestone cells use spaced label/value rows (no repeat of column titles). */
-const DATA_ROW_H = 78;
+const DATA_ROW_H = 96;
 const FOOTER_H = 26;
 const TITLE_BLUE = [0, 51, 153];
 const RED = [200, 0, 0];
@@ -108,9 +108,11 @@ const HEADERS = [
   'Production\nStatus',
 ];
 
-/** Relative weights → scaled to inner table width. */
+/** Relative weights → scaled to inner table width (milestone cols widened; lead cols trimmed). */
 const COL_WEIGHTS = [
-  38, 52, 40, 34, 26, 68, 36, 40, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 44,
+  30, 46, 34, 28, 20, 50, 30, 32,
+  34, 34, 34, 34, 34, 36, 32, 34, 36, 34, 34, 34,
+  36,
 ];
 
 function colWidths(innerW) {

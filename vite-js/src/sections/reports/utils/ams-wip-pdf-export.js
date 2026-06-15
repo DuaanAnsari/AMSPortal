@@ -16,9 +16,9 @@ const LOGO_PATH = `${import.meta.env.BASE_URL}logo/AMSlogo.png`;
 const V_MARGIN = 10;
 const H_MARGIN = 14;
 const HEADER_BLOCK_H = 102;
-const TABLE_HEADER_ROW_H = 40;
+const TABLE_HEADER_ROW_H = 52;
 /** Match Factory WIP milestone cell height (Target / Submission / Approval stack). */
-const DATA_ROW_H = 78;
+const DATA_ROW_H = 96;
 const FOOTER_H = 26;
 const TITLE_BLUE = [0, 51, 153];
 const RED = [200, 0, 0];
@@ -87,7 +87,9 @@ const HEADERS = [
 ];
 
 const COL_WEIGHTS = [
-  38, 52, 40, 38, 26, 42, 64, 38, 20, 20, 20, 20, 20, 22, 20, 22, 22, 22, 22, 22, 44,
+  30, 46, 34, 28, 20, 30, 50, 32,
+  34, 34, 34, 34, 34, 36, 32, 34, 36, 34, 34, 34,
+  36,
 ];
 
 function colWidths(innerW) {

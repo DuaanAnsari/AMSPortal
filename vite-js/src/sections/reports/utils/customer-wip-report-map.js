@@ -41,9 +41,11 @@ export const CUSTOMER_WIP_PDF_HEADERS = [
   'Production\nStatus',
 ];
 
-/** Relative column weights for Customer WIP landscape PDF. */
+/** Relative column weights for Customer WIP landscape PDF (milestone cols widened; lead cols trimmed). */
 export const CUSTOMER_WIP_PDF_COL_WEIGHTS = [
-  38, 52, 32, 36, 26, 42, 64, 38, 20, 20, 20, 20, 20, 22, 20, 22, 22, 22, 22, 22, 44,
+  30, 46, 28, 28, 20, 50, 30, 32,
+  34, 34, 34, 34, 34, 36, 32, 34, 36, 34, 34, 34,
+  36,
 ];
 
 function toNum(v) {

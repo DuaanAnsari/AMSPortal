@@ -189,11 +189,101 @@ const STATUS_NUM_KEY_GROUPS = [
   ['PackingPCS', 'Packing', 'Packing_PCS', 'PackingPcs'],
 ];
 
-/** MM/DD/YYYY for PDF milestone cells (reference layout). */
+/** True when milestone PDF date input should render blank (null / empty / status-only). */
+function isBlankWipMilestonePdfDateInput(value) {
+  if (value == null || value === undefined) return true;
+  if (typeof value === 'number' && value === 0) return true;
+  const s = String(value).trim();
+  if (!s) return true;
+  const lower = s.toLowerCase();
+  if (
+    lower === 'null' ||
+    lower === 'undefined' ||
+    lower === 'n/a' ||
+    lower === 'na' ||
+    lower === '-' ||
+    lower === '—' ||
+    lower === '0' ||
+    lower === 'not required'
+  ) {
+    return true;
+  }
+  if (/^\d+\s*%\s*(?:ES\s*)?[:\-]?\s*$/i.test(s)) return true;
+  return false;
+}
+
+/**
+ * Strip combined milestone status prefix (`0% ES: 12/06/2026`) — date token only.
+ * @returns {string | null} date token or null when status-only / blank
+ */
+function extractWipMilestoneDateToken(value) {
+  if (isBlankWipMilestonePdfDateInput(value)) return null;
+  const s = String(value).trim();
+  const combined = /^(\d+\s*%)\s*(?:ES\s*[:\-]?\s*)?(.*)$/i.exec(s);
+  if (combined) {
+    const datePart = (combined[2] || '').trim().replace(/^ES\s*[:\-]?\s*/i, '').trim();
+    if (!datePart || isBlankWipMilestonePdfDateInput(datePart)) return null;
+    return datePart;
+  }
+  return s;
+}
+
+/**
+ * Strict milestone PDF date parse — no loose `new Date(string)` (avoids partial dates → today).
+ * @returns {Date | null}
+ */
+function parseWipMilestonePdfDate(value) {
+  const token = extractWipMilestoneDateToken(value);
+  if (token == null) return null;
+
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime()) || d.getUTCFullYear() < 1901) return null;
+    return d;
+  }
+
+  const s = String(token).trim();
+
+  const iso = /^(\d{4})-(\d{2})-(\d{2})(?:[T\s]|$)/.exec(s);
+  if (iso) {
+    const d = new Date(`${iso[1]}-${iso[2]}-${iso[3]}T12:00:00Z`);
+    if (Number.isNaN(d.getTime()) || d.getUTCFullYear() < 1901) return null;
+    return d;
+  }
+
+  const us = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(s);
+  if (us) {
+    let y = Number(us[3]);
+    if (y < 100) y += 2000;
+    if (y < 1901) return null;
+    const mm = Number(us[1]);
+    const dd = Number(us[2]);
+    const d = new Date(Date.UTC(y, mm - 1, dd, 12, 0, 0));
+    if (Number.isNaN(d.getTime())) return null;
+    return d;
+  }
+
+  const dmy = /^(\d{1,2})[\s\-/]+([A-Za-z]{3,9})[\s\-/]+(\d{2,4})$/.exec(s);
+  if (dmy) {
+    const monIdx = MONTHS.findIndex((m) => m.toLowerCase() === dmy[2].slice(0, 3).toLowerCase());
+    if (monIdx < 0) return null;
+    let y = Number(dmy[3]);
+    if (y < 100) y += 2000;
+    if (y < 1901) return null;
+    const dd = Number(dmy[1]);
+    const d = new Date(Date.UTC(y, monIdx, dd, 12, 0, 0));
+    if (Number.isNaN(d.getTime())) return null;
+    return d;
+  }
+
+  return null;
+}
+
+/** MM/DD/YYYY for PDF milestone cells — blank when API date is null / empty / unparseable. */
 function formatPdfMilestoneDate(value) {
-  if (value == null || value === '') return 'N/A';
-  const d = parseFactoryWipDate(value);
-  if (!d) return String(value).trim() || 'N/A';
+  if (isBlankWipMilestonePdfDateInput(value)) return '';
+  const d = parseWipMilestonePdfDate(value);
+  if (!d) return '';
   const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(d.getUTCDate()).padStart(2, '0');
   const yyyy = d.getUTCFullYear();

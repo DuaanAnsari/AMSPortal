@@ -6,6 +6,7 @@ import {
   View,
   StyleSheet,
   Image,
+  Link,
   Font
 } from '@react-pdf/renderer';
 import {
@@ -355,16 +356,98 @@ const hasPhotoImage = (img) => {
   return String(src).trim() !== '';
 };
 
+const PHOTO_PREVIEW_STORAGE_PREFIX = 'qd-insp-photo:';
+const PHOTO_PREVIEW_TTL_MS = 60 * 60 * 1000;
+const photoPreviewCache = new WeakMap();
+
+const normalizePhotoDataUri = (src) => {
+  const trimmed = String(src ?? '').trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('data:')) return trimmed;
+  return `data:image/jpeg;base64,${trimmed}`;
+};
+
+const getInspectionPhotoPreviewPageUrl = (id) => {
+  if (typeof window === 'undefined' || !id) return null;
+  const base = import.meta.env.BASE_URL || '/';
+  const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+  return `${window.location.origin}${normalizedBase}inspection-photo-preview.html?id=${encodeURIComponent(id)}`;
+};
+
+const isHttpPhotoPreviewUrl = (url) => {
+  if (!url || typeof url !== 'string') return false;
+  return /^https?:\/\//i.test(url.trim());
+};
+
+const tryRegisterPhotoPreviewInStorage = (caption, dataUri) => {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return null;
+
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const payload = JSON.stringify({
+    caption,
+    dataUri,
+    expiresAt: Date.now() + PHOTO_PREVIEW_TTL_MS,
+  });
+
+  try {
+    localStorage.setItem(`${PHOTO_PREVIEW_STORAGE_PREFIX}${id}`, payload);
+  } catch {
+    return null;
+  }
+
+  return getInspectionPhotoPreviewPageUrl(id);
+};
+
+/** Chrome PDF viewer compatible preview URLs for photo section links. */
+export const prepareInspectionPdfPhotoPreviews = (data) => {
+  if (!data || typeof data !== 'object') return data;
+  if (photoPreviewCache.has(data)) return photoPreviewCache.get(data);
+
+  const images = Array.isArray(data.images) ? data.images : [];
+  if (images.length === 0) {
+    photoPreviewCache.set(data, data);
+    return data;
+  }
+
+  let changed = false;
+  const enrichedImages = images.map((img) => {
+    if (!hasPhotoImage(img)) return img;
+    if (img.photoPreviewUrl || img.PhotoPreviewUrl) return img;
+
+    const dataUri = normalizePhotoDataUri(img.base64Content ?? img.Base64Content);
+    if (!dataUri) return img;
+
+    const caption = getPhotoCaption(img);
+    const previewUrl = tryRegisterPhotoPreviewInStorage(caption, dataUri);
+
+    if (!previewUrl || !isHttpPhotoPreviewUrl(previewUrl)) return img;
+
+    changed = true;
+    return { ...img, photoPreviewUrl: previewUrl };
+  });
+
+  const enriched = changed ? { ...data, images: enrichedImages } : data;
+  photoPreviewCache.set(data, enriched);
+  return enriched;
+};
+
 const PhotoCard = ({ img }) => {
   if (!hasPhotoImage(img)) return null;
+
+  const imageSrc = img.base64Content ?? img.Base64Content;
+  const rawPreviewHref = img.photoPreviewUrl ?? img.PhotoPreviewUrl ?? null;
+  const previewHref = isHttpPhotoPreviewUrl(rawPreviewHref) ? rawPreviewHref : null;
 
   return (
     <View style={styles.photoCard}>
       <View style={styles.photoImageArea}>
-        <Image
-          src={img.base64Content ?? img.Base64Content}
-          style={styles.photoImage}
-        />
+        {previewHref ? (
+          <Link src={previewHref}>
+            <Image src={imageSrc} style={styles.photoImage} />
+          </Link>
+        ) : (
+          <Image src={imageSrc} style={styles.photoImage} />
+        )}
       </View>
       <View style={styles.photoCaption}>
         <Text style={styles.photoCaptionText}>{getPhotoCaption(img)}</Text>
@@ -374,8 +457,10 @@ const PhotoCard = ({ img }) => {
 };
 
 // ─── Main Component ──────────────────────────────────────────────────────────
-export default function QAInspectionPDF({ data }) {
-  if (!data) return null;
+export default function QAInspectionPDF({ data: inputData }) {
+  if (!inputData) return null;
+
+  const data = prepareInspectionPdfPhotoPreviews(inputData);
 
   const mst = data.savedInspection || data.SavedInspection || data.mst || data.Mst || data.inspectionMst || data.InspectionMst || data || {};
   const hdr = data.header || data.Header || {};

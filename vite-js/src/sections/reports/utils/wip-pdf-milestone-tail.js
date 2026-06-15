@@ -26,7 +26,7 @@ export function drawWipPdfMilestoneAndProdTail(ctx) {
     const mLines = statusCellLines[k];
     const fallback =
       (nums[k] ?? 0) !== 0
-        ? ['Target Date', 'N/A', 'Submission', 'N/A', 'Approval', 'N/A', String(nums[k])]
+        ? ['Target Date', '', 'Submission', '', 'Approval', '', String(nums[k])]
         : ['Not Required'];
     const cellLines = Array.isArray(mLines) && mLines.length > 0 ? mLines : fallback;
     drawMilestoneDataCell(doc, xs[i], y, widths[i], rowH, cellLines, rgb);
