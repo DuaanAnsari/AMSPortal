@@ -80,7 +80,7 @@ const hasActivity = (proc, data) =>
     const hasActual = isRealDate(row[getSafeKey(proc, 'actualDate')]);
     const qty = row[getSafeKey(proc, 'qtyCompleted')];
     const hasQty = qty != null && qty !== 0 && qty !== '' && String(qty) !== '0';
-    
+
     const status = row[getSafeKey(proc, 'status')];
     const hasStatusProgress =
       status && !['Created', 'Pending', 'No Activity', ''].includes(status);
@@ -586,7 +586,7 @@ export default function TNAChartPage() {
       // Clear the state so it doesn't trigger again on re-render
       navigate(location.pathname, { replace: true, state: {} });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
 
   // When returning from History/TNA-View via back, state is restored from session cache
@@ -633,7 +633,7 @@ export default function TNAChartPage() {
     } catch (_) {
       sessionStorage.removeItem('tna_back_from_view');
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Recompute dropdown options and visible rows whenever selections or data change
@@ -940,7 +940,7 @@ export default function TNAChartPage() {
               },
               {
                 headerName: 'Submission Date',
-                field: safeKey('approvalDatee'),
+                field: safeKey('estimatedDate'),
                 minWidth: 110,
                 editable: notEditableIfNoProcess,
                 ...TNA_DATE_COL_PROPS,
@@ -951,7 +951,7 @@ export default function TNAChartPage() {
               },
               {
                 headerName: 'Approval Date',
-                field: safeKey('estimatedDate'),
+                field: safeKey('approvalDatee'),
                 minWidth: 110,
                 editable: notEditableIfNoProcess,
                 ...TNA_DATE_COL_PROPS,
@@ -1107,7 +1107,7 @@ export default function TNAChartPage() {
       const finalData = rawFinalData.map(row => {
         processList.forEach(proc => {
           const safeProc = getSafeKey(proc);
-          const tnaID = row[`${safeProc}_tnachartid`]; 
+          const tnaID = row[`${safeProc}_tnachartid`];
           row[`_processExists_${safeProc}`] = !!tnaID;
         });
         return row;
@@ -1119,7 +1119,7 @@ export default function TNAChartPage() {
       setColumnDefs(filteredColDefs);
 
       setFullData(finalData);
-      
+
       // eslint-disable-next-line no-console
       if (finalData.length > 0) {
         console.log('[TNA Chart] VERIFY KEYS FOR FIRST ROW:', Object.keys(finalData[0]).filter(k => k.includes('Washing') || k.includes('Specs Approval')));
@@ -1194,259 +1194,259 @@ export default function TNAChartPage() {
         processKeyToNameRef.current = m;
       }
 
-    // Column defs
-    const newColDefs = [
-      {
-        headerName: '',
-        field: '__assignDot',
-        pinned: 'left',
-        maxWidth: 48,
-        minWidth: 48,
-        sortable: false,
-        filter: false,
-        suppressHeaderMenuButton: true,
-        cellRenderer: (params) => (
-          <IconButton
-            size="small"
-            sx={{ p: 0 }}
-            title="Assign Team"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleOpenAssignTeamForPo(params.data?.poid);
-            }}
-          >
-            <Box component="span" sx={{ fontSize: 20, lineHeight: 1, color: '#1976d2' }}>
-              •
-            </Box>
-          </IconButton>
-        ),
-      },
-      { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
-      { headerName: 'Customer', field: 'customer', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
-      {
-        headerName: 'PCS',
-        field: 'pcPerCarton',
-        pinned: 'left',
-        maxWidth: 100,
-        editable: true,
-        suppressHeaderMenuButton: true,
-        valueFormatter: (params) => {
-          const v = params.value;
-          if (v === null || v === undefined || v === '') return '';
-          return String(v);
+      // Column defs
+      const newColDefs = [
+        {
+          headerName: '',
+          field: '__assignDot',
+          pinned: 'left',
+          maxWidth: 48,
+          minWidth: 48,
+          sortable: false,
+          filter: false,
+          suppressHeaderMenuButton: true,
+          cellRenderer: (params) => (
+            <IconButton
+              size="small"
+              sx={{ p: 0 }}
+              title="Assign Team"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenAssignTeamForPo(params.data?.poid);
+              }}
+            >
+              <Box component="span" sx={{ fontSize: 20, lineHeight: 1, color: '#1976d2' }}>
+                •
+              </Box>
+            </IconButton>
+          ),
         },
-      },
-      { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true, cellStyle: { borderRight: '2px solid #999' } },
-      ...processList.map((proc) => {
-        const safeKey = (suffix) => getSafeKey(proc, suffix);
-        const existsKey = `_processExists_${getSafeKey(proc)}`;
-        const noProcessRenderer = (params) => {
-          if (!params.data?.[existsKey]) return '';
-          return params.value ?? '';
-        };
-        const emptyIfNoProcess = (params) => {
-          if (!params.data?.[existsKey]) return '';
-          return params.value ?? '';
-        };
-        const tnaDateCellRenderer = (params) => {
-          if (!params.data?.[existsKey]) return '';
-          const raw = params.data?.[params.colDef?.field] ?? params.valueFormatted ?? params.value;
-          if (raw == null || raw === '') return '';
-          return normalizeTnaDateCellValue(raw, String(raw));
-        };
-        const notEditableIfNoProcess = (params) => !!params.data?.[existsKey];
-        const noProcessCellStyle = (params) => {
-          const base = {};
-          if (!params.data?.[existsKey]) {
-            return { ...base, backgroundColor: '#f5f5f5', color: '#bbb' };
-          }
-          return base;
-        };
-        const dateFilterParams = {
-          comparator: (filterDate, cellValue) => {
-            if (!cellValue) return -1;
-            const cellDate = parseApiDateToDate(cellValue);
-            if (!cellDate) return -1;
-            if (cellDate < filterDate) return -1;
-            if (cellDate > filterDate) return 1;
-            return 0;
+        { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
+        { headerName: 'Customer', field: 'customer', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
+        {
+          headerName: 'PCS',
+          field: 'pcPerCarton',
+          pinned: 'left',
+          maxWidth: 100,
+          editable: true,
+          suppressHeaderMenuButton: true,
+          valueFormatter: (params) => {
+            const v = params.value;
+            if (v === null || v === undefined || v === '') return '';
+            return String(v);
           },
-        };
-        return {
-          headerName: proc,
-          headerGroupComponent: ProcessGroupHeader,
-          headerGroupComponentParams: { onSelectAll: handleSelectAllForProcess },
-          children: [
-            {
-              headerName: 'Target Date',
-              field: safeKey('idealDate'),
-              minWidth: 110,
-              editable: false,
-              filter: false,
-              sortable: false,
-              suppressHeaderMenuButton: true,
-              ...TNA_DATE_DISPLAY_PROPS,
-              cellRenderer: tnaDateCellRenderer,
-              cellStyle: noProcessCellStyle,
+        },
+        { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true, cellStyle: { borderRight: '2px solid #999' } },
+        ...processList.map((proc) => {
+          const safeKey = (suffix) => getSafeKey(proc, suffix);
+          const existsKey = `_processExists_${getSafeKey(proc)}`;
+          const noProcessRenderer = (params) => {
+            if (!params.data?.[existsKey]) return '';
+            return params.value ?? '';
+          };
+          const emptyIfNoProcess = (params) => {
+            if (!params.data?.[existsKey]) return '';
+            return params.value ?? '';
+          };
+          const tnaDateCellRenderer = (params) => {
+            if (!params.data?.[existsKey]) return '';
+            const raw = params.data?.[params.colDef?.field] ?? params.valueFormatted ?? params.value;
+            if (raw == null || raw === '') return '';
+            return normalizeTnaDateCellValue(raw, String(raw));
+          };
+          const notEditableIfNoProcess = (params) => !!params.data?.[existsKey];
+          const noProcessCellStyle = (params) => {
+            const base = {};
+            if (!params.data?.[existsKey]) {
+              return { ...base, backgroundColor: '#f5f5f5', color: '#bbb' };
+            }
+            return base;
+          };
+          const dateFilterParams = {
+            comparator: (filterDate, cellValue) => {
+              if (!cellValue) return -1;
+              const cellDate = parseApiDateToDate(cellValue);
+              if (!cellDate) return -1;
+              if (cellDate < filterDate) return -1;
+              if (cellDate > filterDate) return 1;
+              return 0;
             },
-            {
-              headerName: 'Factory Commitment Date',
-              field: safeKey('actualDate'),
-              minWidth: 130,
-              editable: notEditableIfNoProcess,
-              ...TNA_DATE_COL_PROPS,
-              filter: 'agDateColumnFilter',
-              filterParams: dateFilterParams,
-              cellRenderer: tnaDateCellRenderer,
-              cellStyle: noProcessCellStyle,
-            },
-            {
-              headerName: 'Submission Date',
-              field: safeKey('approvalDatee'),
-              minWidth: 110,
-              editable: notEditableIfNoProcess,
-              ...TNA_DATE_COL_PROPS,
-              filter: 'agDateColumnFilter',
-              filterParams: dateFilterParams,
-              cellRenderer: tnaDateCellRenderer,
-              cellStyle: noProcessCellStyle,
-            },
-            {
-              headerName: 'Approval Date',
-              field: safeKey('estimatedDate'),
-              minWidth: 110,
-              editable: notEditableIfNoProcess,
-              ...TNA_DATE_COL_PROPS,
-              filter: 'agDateColumnFilter',
-              filterParams: dateFilterParams,
-              cellRenderer: tnaDateCellRenderer,
-              cellStyle: noProcessCellStyle,
-            },
-            {
-              headerName: 'Quantity Completed',
-              field: safeKey('qtyCompleted'),
-              minWidth: 120,
-              editable: notEditableIfNoProcess,
-              cellRenderer: emptyIfNoProcess,
-              cellStyle: noProcessCellStyle,
-            },
-            { headerName: 'Unit', field: safeKey('units'), minWidth: 70, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
-            { headerName: 'Status', field: safeKey('status'), minWidth: 110, editable: notEditableIfNoProcess, cellEditor: 'agSelectCellEditor', cellEditorParams: (p) => { const base = ['Pending', 'Completed', 'No Activity']; const cur = p.value; return { values: cur && !base.includes(cur) ? [cur, ...base] : base }; }, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
-            { headerName: 'Remarks', field: safeKey('preFilledRemarks'), minWidth: 140, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
-            {
-              headerName: 'History',
-              field: safeKey('history'),
-              minWidth: 70,
-              maxWidth: 70,
-              editable: false,
-              sortable: false,
-              filter: false,
-              cellRenderer: (params) => {
-                if (!params.data?.[existsKey]) return '';
-                const tnaChartID = params.data[safeKey('tnaChartID')];
-                return (
-                  <IconButton
-                    size="small"
-                    color="primary"
-                    sx={{ p: 0 }}
-                    onClick={() => navigate('/dashboard/supply-chain/tna-history', {
-                      state: { tnaChartID, processName: proc, portfolioName: params.data.customer || '' },
-                    })}
-                  >
-                    <History fontSize="small" />
-                  </IconButton>
-                );
+          };
+          return {
+            headerName: proc,
+            headerGroupComponent: ProcessGroupHeader,
+            headerGroupComponentParams: { onSelectAll: handleSelectAllForProcess },
+            children: [
+              {
+                headerName: 'Target Date',
+                field: safeKey('idealDate'),
+                minWidth: 110,
+                editable: false,
+                filter: false,
+                sortable: false,
+                suppressHeaderMenuButton: true,
+                ...TNA_DATE_DISPLAY_PROPS,
+                cellRenderer: tnaDateCellRenderer,
+                cellStyle: noProcessCellStyle,
               },
-              cellStyle: (params) => {
-                const base = { borderRight: '2px solid #999' };
-                if (!params.data?.[existsKey]) {
-                  return { ...base, backgroundColor: '#f5f5f5', color: '#bbb' };
-                }
-                return base;
+              {
+                headerName: 'Factory Commitment Date',
+                field: safeKey('actualDate'),
+                minWidth: 130,
+                editable: notEditableIfNoProcess,
+                ...TNA_DATE_COL_PROPS,
+                filter: 'agDateColumnFilter',
+                filterParams: dateFilterParams,
+                cellRenderer: tnaDateCellRenderer,
+                cellStyle: noProcessCellStyle,
               },
-              headerClass: 'ag-group-last-header',
-            },
-          ],
-        };
-      }),
-    ];
+              {
+                headerName: 'Submission Date',
+                field: safeKey('approvalDatee'),
+                minWidth: 110,
+                editable: notEditableIfNoProcess,
+                ...TNA_DATE_COL_PROPS,
+                filter: 'agDateColumnFilter',
+                filterParams: dateFilterParams,
+                cellRenderer: tnaDateCellRenderer,
+                cellStyle: noProcessCellStyle,
+              },
+              {
+                headerName: 'Approval Date',
+                field: safeKey('estimatedDate'),
+                minWidth: 110,
+                editable: notEditableIfNoProcess,
+                ...TNA_DATE_COL_PROPS,
+                filter: 'agDateColumnFilter',
+                filterParams: dateFilterParams,
+                cellRenderer: tnaDateCellRenderer,
+                cellStyle: noProcessCellStyle,
+              },
+              {
+                headerName: 'Quantity Completed',
+                field: safeKey('qtyCompleted'),
+                minWidth: 120,
+                editable: notEditableIfNoProcess,
+                cellRenderer: emptyIfNoProcess,
+                cellStyle: noProcessCellStyle,
+              },
+              { headerName: 'Unit', field: safeKey('units'), minWidth: 70, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
+              { headerName: 'Status', field: safeKey('status'), minWidth: 110, editable: notEditableIfNoProcess, cellEditor: 'agSelectCellEditor', cellEditorParams: (p) => { const base = ['Pending', 'Completed', 'No Activity']; const cur = p.value; return { values: cur && !base.includes(cur) ? [cur, ...base] : base }; }, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
+              { headerName: 'Remarks', field: safeKey('preFilledRemarks'), minWidth: 140, editable: notEditableIfNoProcess, cellRenderer: emptyIfNoProcess, cellStyle: noProcessCellStyle },
+              {
+                headerName: 'History',
+                field: safeKey('history'),
+                minWidth: 70,
+                maxWidth: 70,
+                editable: false,
+                sortable: false,
+                filter: false,
+                cellRenderer: (params) => {
+                  if (!params.data?.[existsKey]) return '';
+                  const tnaChartID = params.data[safeKey('tnaChartID')];
+                  return (
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      sx={{ p: 0 }}
+                      onClick={() => navigate('/dashboard/supply-chain/tna-history', {
+                        state: { tnaChartID, processName: proc, portfolioName: params.data.customer || '' },
+                      })}
+                    >
+                      <History fontSize="small" />
+                    </IconButton>
+                  );
+                },
+                cellStyle: (params) => {
+                  const base = { borderRight: '2px solid #999' };
+                  if (!params.data?.[existsKey]) {
+                    return { ...base, backgroundColor: '#f5f5f5', color: '#bbb' };
+                  }
+                  return base;
+                },
+                headerClass: 'ag-group-last-header',
+              },
+            ],
+          };
+        }),
+      ];
 
-    // NOTE: setColumnDefs will be called below after filtering active processes only
+      // NOTE: setColumnDefs will be called below after filtering active processes only
 
-    // Pivot rows
-    const rowMap = new Map();
-    allTnaData.forEach((item) => {
-      if (!item.poid) return;
-      const colorValue = item.colourway || item.Colourway || item.colorway || item.Colorway || item.color || item.Color || '';
-      const key = `${item.poid}_${colorValue || ''}`;
-      const pcVal = item.pcPerCarton ?? item.PcPerCarton ?? item.PCPerCarton ?? item.pcsPerCarton ?? item.PcsPerCarton ?? '';
-      if (!rowMap.has(key)) {
-        rowMap.set(key, {
-          poid: item.poid,
-          poNo: item.poNo,
-          customer: item.customer || item.customerName || '',
-          pcPerCarton: pcVal,
-          color: colorValue,
-          status: item.status,
-          qtyCompleted: item.qtyCompleted,
-          freezeCondPPSample: item.freezeCondPPSample,
-        });
-      }
-      const row = rowMap.get(key);
-      if (pcVal !== '' && pcVal != null) row.pcPerCarton = pcVal;
-      if (item.process) {
-        const proc = item.process;
-        const safe = (suffix) => getSafeKey(proc, suffix);
-        const formattedIdealDate = formatGridDate(parseApiDateToDate(item.idealDate)) || null;
-        const formattedActualDate = formatGridDate(parseApiDateToDate(item.actualDate)) || null;
-        const formattedApprovalDatee = formatGridDate(parseApiDateToDate(item.approvalDatee)) || null;
-        const formattedEstimatedDate = formatGridDate(parseApiDateToDate(item.estimatedDate)) || null;
-        const missingOrInvalidDateFields = [
-          ['idealDate', formattedIdealDate],
-          ['actualDate', formattedActualDate],
-          ['approvalDatee', formattedApprovalDatee],
-          ['estimatedDate', formattedEstimatedDate],
-        ]
-          .filter(([, value]) => !value)
-          .map(([field]) => field);
+      // Pivot rows
+      const rowMap = new Map();
+      allTnaData.forEach((item) => {
+        if (!item.poid) return;
+        const colorValue = item.colourway || item.Colourway || item.colorway || item.Colorway || item.color || item.Color || '';
+        const key = `${item.poid}_${colorValue || ''}`;
+        const pcVal = item.pcPerCarton ?? item.PcPerCarton ?? item.PCPerCarton ?? item.pcsPerCarton ?? item.PcsPerCarton ?? '';
+        if (!rowMap.has(key)) {
+          rowMap.set(key, {
+            poid: item.poid,
+            poNo: item.poNo,
+            customer: item.customer || item.customerName || '',
+            pcPerCarton: pcVal,
+            color: colorValue,
+            status: item.status,
+            qtyCompleted: item.qtyCompleted,
+            freezeCondPPSample: item.freezeCondPPSample,
+          });
+        }
+        const row = rowMap.get(key);
+        if (pcVal !== '' && pcVal != null) row.pcPerCarton = pcVal;
+        if (item.process) {
+          const proc = item.process;
+          const safe = (suffix) => getSafeKey(proc, suffix);
+          const formattedIdealDate = formatGridDate(parseApiDateToDate(item.idealDate)) || null;
+          const formattedActualDate = formatGridDate(parseApiDateToDate(item.actualDate)) || null;
+          const formattedApprovalDatee = formatGridDate(parseApiDateToDate(item.approvalDatee)) || null;
+          const formattedEstimatedDate = formatGridDate(parseApiDateToDate(item.estimatedDate)) || null;
+          const missingOrInvalidDateFields = [
+            ['idealDate', formattedIdealDate],
+            ['actualDate', formattedActualDate],
+            ['approvalDatee', formattedApprovalDatee],
+            ['estimatedDate', formattedEstimatedDate],
+          ]
+            .filter(([, value]) => !value)
+            .map(([field]) => field);
 
-        row[safe('date')] = formatGridDate(parseApiDateToDate(item.date)) || null;
-        row[safe('idealDate')] = formattedIdealDate;
-        row[safe('actualDate')] = formattedActualDate;
-        row[safe('approvalDatee')] = formattedApprovalDatee;
-        row[safe('estimatedDate')] = formattedEstimatedDate;
-        row[safe('dateSpan')] = item.dateSpan;
-        row[safe('units')] = item.units || item.Units || '';
-        row[safe('status')] = item.status || '';
-        row[safe('preFilledRemarks')] = item.preFilledRemarks || item.PreFilledRemarks || item.prefilledRemarks || '';
-        row[safe('qtyCompleted')] = item.qtyCompleted ?? item.QtyCompleted ?? '';
-        row[safe('freezeCondPPSample')] = formatGridDate(parseApiDateToDate(item.freezeCondPPSample)) || null;
-        row[safe('tnaChartID')] = item.tnaChartID ?? item.tnaChartId ?? 0;
-        row[safe('sequence')] = item.sequence ?? 0;
-      }
-    });
-
-    const rawFinalData = Array.from(rowMap.values()).sort((a, b) => b.poid - a.poid);
-
-    const finalData = rawFinalData.map(row => {
-      processList.forEach(proc => {
-        const safeProc = getSafeKey(proc);
-        row[`_processExists_${safeProc}`] = !!row[`${safeProc}_tnachartid`];
+          row[safe('date')] = formatGridDate(parseApiDateToDate(item.date)) || null;
+          row[safe('idealDate')] = formattedIdealDate;
+          row[safe('actualDate')] = formattedActualDate;
+          row[safe('approvalDatee')] = formattedApprovalDatee;
+          row[safe('estimatedDate')] = formattedEstimatedDate;
+          row[safe('dateSpan')] = item.dateSpan;
+          row[safe('units')] = item.units || item.Units || '';
+          row[safe('status')] = item.status || '';
+          row[safe('preFilledRemarks')] = item.preFilledRemarks || item.PreFilledRemarks || item.prefilledRemarks || '';
+          row[safe('qtyCompleted')] = item.qtyCompleted ?? item.QtyCompleted ?? '';
+          row[safe('freezeCondPPSample')] = formatGridDate(parseApiDateToDate(item.freezeCondPPSample)) || null;
+          row[safe('tnaChartID')] = item.tnaChartID ?? item.tnaChartId ?? 0;
+          row[safe('sequence')] = item.sequence ?? 0;
+        }
       });
-      return row;
-    });
 
-    // Apply unified filtering
-    const filteredColDefs = getFilteredColumnDefs(newColDefs, finalData, processList);
-    fullColDefsRef.current = filteredColDefs;
-    setColumnDefs(filteredColDefs);
+      const rawFinalData = Array.from(rowMap.values()).sort((a, b) => b.poid - a.poid);
 
-    setFullData(finalData);
-    setModifiedRows(new Map());
+      const finalData = rawFinalData.map(row => {
+        processList.forEach(proc => {
+          const safeProc = getSafeKey(proc);
+          row[`_processExists_${safeProc}`] = !!row[`${safeProc}_tnachartid`];
+        });
+        return row;
+      });
+
+      // Apply unified filtering
+      const filteredColDefs = getFilteredColumnDefs(newColDefs, finalData, processList);
+      fullColDefsRef.current = filteredColDefs;
+      setColumnDefs(filteredColDefs);
+
+      setFullData(finalData);
+      setModifiedRows(new Map());
     };
 
     run();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productPortfolios, fetchProcessListByPortfolio, navigate]);
 
   const handlePortfolioChange = (event) => {
@@ -1470,15 +1470,15 @@ export default function TNAChartPage() {
     // Get the portfolio IDs of all selected POs
     const selectedPortfolioData = newValue.map(poNo => {
       const poOption = allPoOptions.find(opt => opt.poNo === poNo);
-      return { 
+      return {
         portfolioID: poOption?.portfolioID,
-        portfolioName: poOption?.portfolioName 
+        portfolioName: poOption?.portfolioName
       };
     });
 
     // Check if all selected POs belong to the same portfolio
     const uniquePortfolios = [...new Set(selectedPortfolioData.map(p => p.portfolioID))];
-    
+
     if (uniquePortfolios.length > 1) {
       const portfolioNames = [...new Set(selectedPortfolioData.map(p => p.portfolioName))];
       setSnackbar({
@@ -2222,7 +2222,7 @@ export default function TNAChartPage() {
                     placeholder={selectedPoNumbers.length === 0 ? 'Search or select PO...' : ''}
                     size="small"
                     helperText={
-                      selectedPortfolioId 
+                      selectedPortfolioId
                         ? `${allPoOptions.find(opt => opt.portfolioID === selectedPortfolioId)?.portfolioName || 'Other'} selected`
                         : ''
                     }
@@ -2503,14 +2503,14 @@ export default function TNAChartPage() {
                   const f = params.colDef.field;
                   if (!f || !params.data) return undefined;
                   const res = params.data[f];
-                  
+
                   // Targeted Debug for identified problematic processes
                   const debugProcesses = ['Specs Approval', 'Testing Samples to LAB', 'Bulk Accessories Submission', 'Washing', 'Factories Internal Audit Date'];
                   if (debugProcesses.some(proc => f.startsWith(proc))) {
-                     // eslint-disable-next-line no-console
-                     console.log(`[GRID RENDER ATTEMPT] PO=${params.data.poNo} | Field="${f}" | ValueFound="${res}"`);
+                    // eslint-disable-next-line no-console
+                    console.log(`[GRID RENDER ATTEMPT] PO=${params.data.poNo} | Field="${f}" | ValueFound="${res}"`);
                   }
-                  
+
                   return res;
                 },
                 editable: (params) => {
