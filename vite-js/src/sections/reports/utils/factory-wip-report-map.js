@@ -417,6 +417,25 @@ const MILESTONE_PDF_FIELD_SPECS = [
 ];
 
 /**
+ * Units field aliases per milestone PDF column (same order / prefix convention as
+ * `MILESTONE_PDF_FIELD_SPECS`). Resolved case-insensitively by `pickField`.
+ */
+const MILESTONE_PDF_UNIT_FIELD_GROUPS = [
+  ['LabDipUnits', 'LabDipUnit', 'LabDipQtyUnit', 'LabDipUOM'],
+  ['FitUnits', 'ProtoFITUnits', 'FITUnits', 'ProtoFITUnit', 'FitUnit'],
+  ['DyeLotUnits', 'DyeLotBlanketUnits', 'DyeLotUnit'],
+  ['PrintEmbUnits', 'PrintEmbStrikeoffUnits', 'PrintStrikeOffUnits', 'PrintEmbUnit'],
+  ['PPUnits', 'PPSampleUnits', 'PPUnit'],
+  ['KnittingUnits', 'KnittingFabricUnits', 'FabricInhouseUnits', 'KnittingUnit'],
+  ['DyingUnits', 'DyeingUnits', 'DyingUnit'],
+  ['CuttingUnits', 'CuttingPCSUnits', 'CuttingUnit'],
+  ['PrintEmbPCSUnits', 'PrintEmbPcsUnits', 'PrintEmbPCSUnit'],
+  ['StitchingUnits', 'StitchingPCSUnits', 'StitchingUnit'],
+  ['GarmentWashUnits', 'GarmentWashPCSUnits', 'WashingUnits', 'GarmentWashUnit'],
+  ['PackingUnits', 'PackingPCSUnits', 'PackingUnit'],
+];
+
+/**
  * @param {FactoryWipApiRow} raw
  * @param {number} colIndex 0..11
  * @param {number} numFallback qty from legacy numeric column when no QtyCompleted text
@@ -431,8 +450,12 @@ function buildMilestoneCellLines(raw, colIndex, numFallback) {
   const st = pickField(raw, ...spec.status);
   const rem = pickField(raw, ...spec.remarks);
   const qtyRaw = pickField(raw, ...spec.qty);
+  const unitsRaw = pickField(raw, ...(MILESTONE_PDF_UNIT_FIELD_GROUPS[colIndex] || []));
+  const unitStr = unitsRaw != null && String(unitsRaw).trim() !== '' ? String(unitsRaw).trim() : '';
 
-  const hasDetail = [tgt, sub, app, st, rem, qtyRaw].some((v) => v != null && String(v).trim() !== '');
+  const hasDetail = [tgt, sub, app, st, rem, qtyRaw, unitsRaw].some(
+    (v) => v != null && String(v).trim() !== ''
+  );
   const hasNum = Number.isFinite(numFallback) && numFallback !== 0;
   if (!hasDetail && !hasNum) return ['Not Required'];
 
@@ -449,11 +472,12 @@ function buildMilestoneCellLines(raw, colIndex, numFallback) {
     lines.push(String(rem).trim());
   }
   if (qtyRaw != null && String(qtyRaw).trim() !== '') {
+    const qtyVal = String(qtyRaw).trim();
     lines.push('Qty');
-    lines.push(String(qtyRaw).trim());
+    lines.push(unitStr ? `${qtyVal} ${unitStr}` : qtyVal);
   } else if (hasNum) {
     lines.push('Qty');
-    lines.push(String(numFallback));
+    lines.push(unitStr ? `${numFallback} ${unitStr}` : String(numFallback));
   }
   const stTrim = st != null ? String(st).trim() : '';
   lines.push(stTrim || 'Done');
@@ -463,29 +487,15 @@ function buildMilestoneCellLines(raw, colIndex, numFallback) {
 /** Combined milestone PDF columns (Lab Dip … Packing PCS). */
 export const WIP_MILESTONE_PDF_COLUMN_COUNT = 12;
 
-/** Production status column: FRI + remarks + generic status (multi-line). */
+/** Production status column: always the `remarksmaster` value (multi-line); never the Status field. */
 function productionStatusLinesFromRow(raw) {
-  const out = [];
-  const fri = pickField(raw, 'FRIStatus', 'friStatus', 'FRI_STATUS');
-  if (fri != null && String(fri).trim() !== '') out.push(String(fri).trim());
-  const friRem = pickField(raw, 'FRIRemarks', 'friRemarks', 'FRI_Remarks');
-  if (friRem != null && String(friRem).trim() !== '') {
-    String(friRem)
-      .split(/\r\n|\n/)
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .forEach((l) => out.push(l));
-  }
-  const prod = pickField(raw, 'ProductionStatus', 'productionStatus', 'ProdStatus', 'Status');
-  if (prod != null && String(prod).trim() !== '' && !out.includes(String(prod).trim())) {
-    String(prod)
-      .split(/\r\n|\n/)
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .forEach((l) => out.push(l));
-  }
-  if (out.length === 0) return ['N/A'];
-  return out;
+  const rm = pickField(raw, 'remarksmaster', 'RemarksMaster', 'remarksMaster', 'remarks_master');
+  if (rm == null || String(rm).trim() === '') return ['N/A'];
+  const out = String(rm)
+    .split(/\r\n|\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  return out.length > 0 ? out : ['N/A'];
 }
 
 function statusNumsFromRow(row) {

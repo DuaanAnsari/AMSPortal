@@ -46,6 +46,12 @@ import {
 
 import Iconify from 'src/components/iconify';
 import Scrollbar from 'src/components/scrollbar';
+import { qdApi } from 'src/sections/Supply-Chain/utils/qd-api';
+import { pdf } from '@react-pdf/renderer';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
+import Alert from '@mui/material/Alert';
 
 // ----------------------------------------------------------------------
 
@@ -177,6 +183,132 @@ const getMonthFromDate = (dateString) => {
   }
 };
 
+function displayInspectionDash(value) {
+  if (value == null || String(value).trim() === '') return '-';
+  return String(value).trim();
+}
+
+function pickInspectionField(row, ...keys) {
+  if (!row || typeof row !== 'object') return '';
+  for (const k of keys) {
+    if (Object.prototype.hasOwnProperty.call(row, k)) {
+      const v = row[k];
+      if (v != null && String(v).trim() !== '') return v;
+    }
+  }
+  const lower = {};
+  Object.keys(row).forEach((key) => {
+    lower[key.toLowerCase()] = row[key];
+  });
+  for (const k of keys) {
+    const v = lower[String(k).toLowerCase()];
+    if (v != null && String(v).trim() !== '') return v;
+  }
+  return '';
+}
+
+function formatQaInspectionDisplayDate(value) {
+  if (value == null || String(value).trim() === '') return '-';
+  try {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return displayInspectionDash(value);
+    return date.toLocaleDateString('en-GB');
+  } catch {
+    return '-';
+  }
+}
+
+function mapInspectionPopupRow(apiRow) {
+  const mstId = pickInspectionField(apiRow, 'qdInspectionMstID', 'QdInspectionMstID', 'qdInspectionMstId');
+  const rawDate = pickInspectionField(apiRow, 'mstInspectionDate', 'MstInspectionDate');
+
+  return {
+    qdInspectionMstID: mstId,
+    statusKey: resolveInspectionStatusKey(apiRow),
+    inspectionDate: formatQaInspectionDisplayDate(rawDate),
+    inspectionNo: displayInspectionDash(pickInspectionField(apiRow, 'inspNo', 'InspNo')),
+    aqlSystem: displayInspectionDash(
+      pickInspectionField(apiRow, 'aqlSystem', 'AQLSystem', 'aqlSystemName', 'AQLSystemName', 'aqlSysytem', 'AQLSysytem')
+    ),
+    aqlRange: displayInspectionDash(pickInspectionField(apiRow, 'aqlRange', 'AQLRange')),
+  };
+}
+
+function resolveInspectionStatusKey(apiRow) {
+  const passFailRaw = pickInspectionField(apiRow, 'passFail', 'PassFail');
+  if (passFailRaw !== '') {
+    if (passFailRaw === true || passFailRaw === 'true' || passFailRaw === 1 || passFailRaw === '1') {
+      return 'pass';
+    }
+    if (passFailRaw === false || passFailRaw === 'false' || passFailRaw === 0 || passFailRaw === '0') {
+      return 'fail';
+    }
+  }
+
+  const rawStatus = pickInspectionField(
+    apiRow,
+    'status',
+    'Status',
+    'inspectionStatus',
+    'InspectionStatus',
+    'inspStatus',
+    'InspStatus',
+    'passFailStatus',
+    'PassFailStatus'
+  );
+  if (rawStatus === '') return null;
+
+  const normalized = String(rawStatus).trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === 'pass' || normalized === 'passed') return 'pass';
+  if (normalized === 'fail' || normalized === 'failed') return 'fail';
+  return null;
+}
+
+const PO_STATUS_TOOLTIP_SX = {
+  bgcolor: 'rgba(33, 43, 54, 0.92)',
+  color: '#fff',
+  fontSize: '0.75rem',
+  fontWeight: 500,
+  px: 1.25,
+  py: 0.75,
+  borderRadius: 1,
+  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+};
+
+function InspectionStatusCell({ statusKey }) {
+  if (!statusKey) return '-';
+
+  const isPass = statusKey === 'pass';
+  const label = isPass ? 'Pass' : 'Fail';
+  const Icon = isPass ? CheckCircleIcon : CancelIcon;
+  const color = isPass ? '#2e7d32' : '#d32f2f';
+
+  return (
+    <Tooltip
+      title={label}
+      arrow
+      placement="top"
+      slotProps={{
+        tooltip: { sx: PO_STATUS_TOOLTIP_SX },
+        arrow: { sx: { color: 'rgba(33, 43, 54, 0.92)' } },
+      }}
+    >
+      <Box
+        component="span"
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          lineHeight: 0,
+        }}
+      >
+        <Icon sx={{ fontSize: 20, color }} />
+      </Box>
+    </Tooltip>
+  );
+}
+
 export default function PurchaseOrderView() {
   const { enqueueSnackbar } = useSnackbar();
   const table = useTable({ defaultRowsPerPage: 10 });
@@ -225,8 +357,10 @@ export default function PurchaseOrderView() {
   // Inspection dialog state
   const [inspectionOpen, setInspectionOpen] = useState(false);
   const [inspectionLoading, setInspectionLoading] = useState(false);
+  const [inspectionError, setInspectionError] = useState(null);
   const [inspectionRows, setInspectionRows] = useState([]);
   const [inspectionPoNo, setInspectionPoNo] = useState('');
+  const [inspectionPdfLoadingId, setInspectionPdfLoadingId] = useState(null);
 
   // Revised Shipment popup state
   const [revisedOpen, setRevisedOpen] = useState(false);
@@ -470,20 +604,72 @@ export default function PurchaseOrderView() {
 
   // Open Inspection popup for selected PO
   const handleInspectionClick = useCallback(
-    (row) => {
-      setInspectionPoNo(row.poNo || '');
+    async (row) => {
+      if (!row) return;
+      const po = row.poNo || '';
+      setInspectionPoNo(po);
       setInspectionOpen(true);
-
-      // Placeholder: when backend API is available, fetch inspection data here.
-      // For now, we simply clear and show "No records to display".
       setInspectionLoading(true);
+      setInspectionError(null);
       setInspectionRows([]);
-      setTimeout(() => {
+
+      try {
+        const { data } = await qdApi.get('/QAInspection', {
+          params: {
+            poNo: po,
+            customerId: 0,
+            supplierId: 0,
+            inspType: 'ALL',
+          },
+        });
+        setInspectionRows(
+          (Array.isArray(data) ? data : []).map((apiRow) => mapInspectionPopupRow(apiRow))
+        );
+      } catch (e) {
+        const message = e?.response?.data?.message || e?.message || 'Failed to load inspection data';
+        setInspectionError(message);
+        setInspectionRows([]);
+        enqueueSnackbar(message, { variant: 'error' });
+      } finally {
         setInspectionLoading(false);
-      }, 300);
+      }
     },
-    []
+    [enqueueSnackbar]
   );
+
+  const handleInspectionPdfClick = useCallback(
+    async (mstId) => {
+      if (!mstId) return;
+      setInspectionPdfLoadingId(mstId);
+      try {
+        const { data } = await qdApi.get('/QAInspection/inspection-report-data', {
+          params: { qdMstId: mstId },
+        });
+        if (!data) {
+          enqueueSnackbar('No data found for this report', { variant: 'warning' });
+          return;
+        }
+
+        const { default: QAInspectionPDF } = await import('./QA-Inspection-PDF');
+        const blob = await pdf(<QAInspectionPDF data={data} />).toBlob();
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      } catch (e) {
+        console.error('PDF Generation failed', e);
+        const msg = e?.response?.data?.message || 'Failed to generate PDF';
+        enqueueSnackbar(msg, { variant: 'error' });
+      } finally {
+        setInspectionPdfLoadingId(null);
+      }
+    },
+    [enqueueSnackbar]
+  );
+
+  const handleInspectionDialogClose = useCallback(() => {
+    setInspectionOpen(false);
+    setInspectionError(null);
+    setInspectionPdfLoadingId(null);
+  }, []);
 
   const handleAddOrder = useCallback(() => {
     navigate('/BusinessProcess/PurchaseOrderAdd');
@@ -1156,65 +1342,7 @@ export default function PurchaseOrderView() {
         </Card>
       )}
 
-      {/* Inspection Popup */}
-      <Dialog
-        open={inspectionOpen}
-        onClose={() => setInspectionOpen(false)}
-        fullWidth
-        maxWidth="md"
-      >
-        <DialogTitle>Inspection</DialogTitle>
-        <DialogContent sx={{ mt: 1 }}>
-          {inspectionPoNo && (
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>
-              PO No: {inspectionPoNo}
-            </Typography>
-          )}
 
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold' }}>PDF</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Inspection Date</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Insp No.</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>AQL System</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>AQL Range</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {inspectionLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center">
-                      <CircularProgress size={20} sx={{ mr: 1 }} />
-                      Loading...
-                    </TableCell>
-                  </TableRow>
-                ) : inspectionRows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center">
-                      No records to display
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  inspectionRows.map((row, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{row.pdf || ''}</TableCell>
-                      <TableCell>{row.inspectionDate || ''}</TableCell>
-                      <TableCell>{row.inspectionNo || ''}</TableCell>
-                      <TableCell>{row.aqlSystem || ''}</TableCell>
-                      <TableCell>{row.aqlRange || ''}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setInspectionOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Revised Shipment Popup */}
       <Dialog
@@ -1561,6 +1689,98 @@ export default function PurchaseOrderView() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setRevisedOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Inspection Popup */}
+      <Dialog
+        open={inspectionOpen}
+        onClose={handleInspectionDialogClose}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Inspection</DialogTitle>
+        <DialogContent sx={{ mt: 1 }}>
+          {inspectionPoNo && (
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              PO No: {inspectionPoNo}
+            </Typography>
+          )}
+          {inspectionError && (
+            <Alert severity="error" sx={{ mb: 1 }}>
+              {inspectionError}
+            </Alert>
+          )}
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Inspection Date</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Insp No.</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>AQL System</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>AQL Range</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }} align="center">
+                    PDF
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }} align="center">
+                    Status
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {inspectionLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center">
+                      <CircularProgress size={20} />
+                    </TableCell>
+                  </TableRow>
+                ) : inspectionRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center">
+                      No records to display
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  inspectionRows.map((row) => (
+                    <TableRow key={row.qdInspectionMstID || `${row.inspectionNo}-${row.inspectionDate}`}>
+                      <TableCell>{row.inspectionDate}</TableCell>
+                      <TableCell>{row.inspectionNo}</TableCell>
+                      <TableCell>{row.aqlSystem}</TableCell>
+                      <TableCell>{row.aqlRange}</TableCell>
+                      <TableCell align="center">
+                        {row.qdInspectionMstID ? (
+                          <Tooltip title="View PDF">
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                disabled={inspectionPdfLoadingId === row.qdInspectionMstID}
+                                onClick={() => handleInspectionPdfClick(row.qdInspectionMstID)}
+                              >
+                                {inspectionPdfLoadingId === row.qdInspectionMstID ? (
+                                  <CircularProgress size={18} />
+                                ) : (
+                                  <PictureAsPdfIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        ) : (
+                          '-'
+                        )}
+                      </TableCell>
+                      <TableCell align="center">
+                        <InspectionStatusCell statusKey={row.statusKey} />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleInspectionDialogClose}>Close</Button>
         </DialogActions>
       </Dialog>
     </Container>
