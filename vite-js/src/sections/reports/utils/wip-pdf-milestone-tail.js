@@ -24,10 +24,10 @@ export function drawWipPdfMilestoneAndProdTail(ctx) {
 
   for (let k = 0; k < WIP_MILESTONE_PDF_COLUMN_COUNT; k += 1) {
     const mLines = statusCellLines[k];
+    // No hardcoded/placeholder dates: when only a legacy numeric qty exists,
+    // show just that qty (status empty); otherwise mark the cell not required.
     const fallback =
-      (nums[k] ?? 0) !== 0
-        ? ['Target Date', '', 'Submission', '', 'Approval', '', String(nums[k])]
-        : ['Not Required'];
+      (nums[k] ?? 0) !== 0 ? ['Qty', String(nums[k]), ''] : ['Not Required'];
     const cellLines = Array.isArray(mLines) && mLines.length > 0 ? mLines : fallback;
     drawMilestoneDataCell(doc, xs[i], y, widths[i], rowH, cellLines, rgb);
     i += 1;

@@ -367,6 +367,9 @@ const normalizePhotoDataUri = (src) => {
   return `data:image/jpeg;base64,${trimmed}`;
 };
 
+const PHOTO_PREVIEW_DB_NAME = 'qd-insp-photo-db';
+const PHOTO_PREVIEW_DB_STORE = 'previews';
+
 const getInspectionPhotoPreviewPageUrl = (id) => {
   if (typeof window === 'undefined' || !id) return null;
   const base = import.meta.env.BASE_URL || '/';
@@ -379,20 +382,52 @@ const isHttpPhotoPreviewUrl = (url) => {
   return /^https?:\/\//i.test(url.trim());
 };
 
-const tryRegisterPhotoPreviewInStorage = (caption, dataUri) => {
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return null;
+/**
+ * Store the preview payload in IndexedDB (large quota — handles many/big images)
+ * as the primary store, falling back to localStorage. Both keep the same id so
+ * the preview page can resolve the image regardless of which store has it.
+ * Fire-and-forget: the http page URL only needs the id, which is created here.
+ */
+const savePhotoPreviewToIdb = (id, payload) => {
+  if (typeof indexedDB === 'undefined') return;
+  try {
+    const req = indexedDB.open(PHOTO_PREVIEW_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(PHOTO_PREVIEW_DB_STORE)) {
+        db.createObjectStore(PHOTO_PREVIEW_DB_STORE);
+      }
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      try {
+        const tx = db.transaction(PHOTO_PREVIEW_DB_STORE, 'readwrite');
+        tx.objectStore(PHOTO_PREVIEW_DB_STORE).put(payload, id);
+        tx.oncomplete = () => db.close();
+        tx.onerror = () => db.close();
+      } catch {
+        db.close();
+      }
+    };
+  } catch {
+    /* ignore — localStorage fallback below still applies */
+  }
+};
+
+const registerPhotoPreview = (caption, dataUri) => {
+  if (typeof window === 'undefined' || !dataUri) return null;
 
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  const payload = JSON.stringify({
-    caption,
-    dataUri,
-    expiresAt: Date.now() + PHOTO_PREVIEW_TTL_MS,
-  });
+  const payload = { caption, dataUri, expiresAt: Date.now() + PHOTO_PREVIEW_TTL_MS };
+
+  savePhotoPreviewToIdb(id, payload);
 
   try {
-    localStorage.setItem(`${PHOTO_PREVIEW_STORAGE_PREFIX}${id}`, payload);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(`${PHOTO_PREVIEW_STORAGE_PREFIX}${id}`, JSON.stringify(payload));
+    }
   } catch {
-    return null;
+    /* localStorage quota — IndexedDB still holds the payload */
   }
 
   return getInspectionPhotoPreviewPageUrl(id);
@@ -417,8 +452,11 @@ export const prepareInspectionPdfPhotoPreviews = (data) => {
     const dataUri = normalizePhotoDataUri(img.base64Content ?? img.Base64Content);
     if (!dataUri) return img;
 
+    // Use the http(s) preview-page URL — Chrome's PDF viewer can navigate to it
+    // (it blocks blob:/data: links). The image is stashed by id in IndexedDB
+    // (localStorage fallback) so the link stays valid for large / many photos.
     const caption = getPhotoCaption(img);
-    const previewUrl = tryRegisterPhotoPreviewInStorage(caption, dataUri);
+    const previewUrl = registerPhotoPreview(caption, dataUri);
 
     if (!previewUrl || !isHttpPhotoPreviewUrl(previewUrl)) return img;
 
@@ -437,6 +475,11 @@ const PhotoCard = ({ img }) => {
   const imageSrc = img.base64Content ?? img.Base64Content;
   const rawPreviewHref = img.photoPreviewUrl ?? img.PhotoPreviewUrl ?? null;
   const previewHref = isHttpPhotoPreviewUrl(rawPreviewHref) ? rawPreviewHref : null;
+
+  if (typeof window !== 'undefined' && rawPreviewHref) {
+    // eslint-disable-next-line no-console
+    console.debug('[QA-PDF] photoPreviewUrl ->', rawPreviewHref);
+  }
 
   return (
     <View style={styles.photoCard}>

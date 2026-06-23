@@ -414,9 +414,9 @@ function drawMilestoneDataCell(doc, x, y, w, h, lines, rowRgb) {
 
   const parsed = parseMilestonePdfLines(lines ?? []);
   const padTopBody = 5;
-  const LABEL_FS = 4.05;
-  const VALUE_FS = 5.05;
-  const STATUS_FS = 5.1;
+  const LABEL_FS = 4.5;
+  const VALUE_FS = 5.55;
+  const STATUS_FS = 5.55;
   const labelLead = LABEL_FS * 1.22;
   const valueLead = VALUE_FS * 1.22;
   const pairGap = 3.15;

@@ -24,10 +24,45 @@
         width: 100%;
         max-width: 100%;
         padding: 24px;
+        padding-top: 64px;
         margin: 0 auto;
         display: flex;
         flex-direction: column;
         align-items: center;
+      }
+      .back-bar {
+        position: fixed;
+        top: 14px;
+        left: 14px;
+        z-index: 1000;
+      }
+      .back-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 16px;
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1;
+        color: #ffffff;
+        background: #1565c0;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(33, 43, 54, 0.2);
+        transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+      }
+      .back-btn:hover {
+        background: #0d47a1;
+        box-shadow: 0 3px 10px rgba(33, 43, 54, 0.28);
+      }
+      .back-btn:active {
+        transform: translateY(1px);
+      }
+      .back-btn:focus-visible {
+        outline: 2px solid #90caf9;
+        outline-offset: 2px;
       }
       h1 {
         width: 100%;
@@ -70,22 +105,109 @@
         img {
           max-width: min(70vw, 100%);
         }
+        .back-bar {
+          top: 10px;
+          left: 10px;
+        }
+        .back-btn {
+          padding: 8px 13px;
+          font-size: 13px;
+        }
       }
     </style>
   </head>
   <body>
+    <div class="back-bar">
+      <button type="button" class="back-btn" id="backToReport">
+        <span aria-hidden="true">&#8592;</span> Back to Report
+      </button>
+    </div>
     <div class="page" id="root">
       <p class="message">Loading image preview…</p>
     </div>
     <script>
       (function () {
         var STORAGE_PREFIX = 'qd-insp-photo:';
+        var IDB_NAME = 'qd-insp-photo-db';
+        var IDB_STORE = 'previews';
         var params = new URLSearchParams(window.location.search);
         var id = params.get('id');
+        // 'np=1' marks the dedicated preview tab so it does not re-promote itself.
+        var alreadyInPreviewTab = params.get('np') === '1';
         var root = document.getElementById('root');
+
+        var backBtn = document.getElementById('backToReport');
+        if (backBtn) {
+          backBtn.addEventListener('click', function () {
+            if (window.history.length > 1) {
+              window.history.back();
+              return;
+            }
+            // Preview opened in a new tab from the PDF link — close to reveal the report.
+            window.close();
+            // Fallback when the browser blocks window.close().
+            if (document.referrer) {
+              window.location.href = document.referrer;
+            }
+          });
+        }
 
         function showMessage(text) {
           root.innerHTML = '<p class="message">' + text + '</p>';
+        }
+
+        function readFromIdb(key, cb) {
+          try {
+            if (typeof indexedDB === 'undefined') {
+              cb(null);
+              return;
+            }
+            var req = indexedDB.open(IDB_NAME, 1);
+            req.onupgradeneeded = function () {
+              var db = req.result;
+              if (!db.objectStoreNames.contains(IDB_STORE)) {
+                db.createObjectStore(IDB_STORE);
+              }
+            };
+            req.onsuccess = function () {
+              var db = req.result;
+              try {
+                if (!db.objectStoreNames.contains(IDB_STORE)) {
+                  cb(null);
+                  db.close();
+                  return;
+                }
+                var tx = db.transaction(IDB_STORE, 'readonly');
+                var getReq = tx.objectStore(IDB_STORE).get(key);
+                getReq.onsuccess = function () {
+                  cb(getReq.result || null);
+                  db.close();
+                };
+                getReq.onerror = function () {
+                  cb(null);
+                  db.close();
+                };
+              } catch (e) {
+                cb(null);
+                db.close();
+              }
+            };
+            req.onerror = function () {
+              cb(null);
+            };
+          } catch (e) {
+            cb(null);
+          }
+        }
+
+        function readFromLocalStorage(key) {
+          try {
+            var raw = localStorage.getItem(STORAGE_PREFIX + key);
+            if (!raw) return null;
+            return JSON.parse(raw);
+          } catch (e) {
+            return null;
+          }
         }
 
         function cleanupExpiredPreviews() {
@@ -119,67 +241,75 @@
           return;
         }
 
-        var storageKey = STORAGE_PREFIX + id;
-        var raw = null;
-        try {
-          raw = localStorage.getItem(storageKey);
-        } catch (e) {
-          showMessage('Unable to load image preview.');
-          return;
-        }
-
-        if (!raw) {
-          showMessage('Image preview expired or is not available. Please reopen the PDF report.');
-          return;
-        }
-
-        var payload;
-        try {
-          payload = JSON.parse(raw);
-        } catch (e) {
-          showMessage('Image preview data is invalid.');
-          return;
-        }
-
-        if (payload.expiresAt && Date.now() > payload.expiresAt) {
+        // Chrome's PDF viewer opens link annotations in the SAME tab and offers
+        // no way to force a new tab from inside the PDF. So when the PDF link
+        // lands here in the report tab, open the preview in a dedicated new tab
+        // and send this tab back to the report. If the popup is blocked we fall
+        // through and render the image inline (nothing breaks).
+        if (!alreadyInPreviewTab && window.history.length > 1) {
           try {
-            localStorage.removeItem(storageKey);
+            var sep = window.location.href.indexOf('?') === -1 ? '?' : '&';
+            var previewTab = window.open(window.location.href + sep + 'np=1', '_blank');
+            if (previewTab) {
+              window.history.back();
+              return;
+            }
           } catch (e) {
-            /* ignore */
+            /* popup blocked / unavailable — render inline below */
           }
-          showMessage('Image preview has expired. Please reopen the PDF report.');
-          return;
         }
 
-        var caption = typeof payload.caption === 'string' ? payload.caption.trim() : '';
-        var src = typeof payload.dataUri === 'string' ? payload.dataUri.trim() : '';
+        function renderPayload(payload) {
+          if (!payload) {
+            showMessage('Image preview expired or is not available. Please reopen the PDF report.');
+            return;
+          }
 
-        if (!src) {
-          showMessage('Image preview is not available.');
-          return;
+          if (payload.expiresAt && Date.now() > payload.expiresAt) {
+            try {
+              localStorage.removeItem(STORAGE_PREFIX + id);
+            } catch (e) {
+              /* ignore */
+            }
+            showMessage('Image preview has expired. Please reopen the PDF report.');
+            return;
+          }
+
+          var caption = typeof payload.caption === 'string' ? payload.caption.trim() : '';
+          var src = typeof payload.dataUri === 'string' ? payload.dataUri.trim() : '';
+
+          if (!src) {
+            showMessage('Image preview is not available.');
+            return;
+          }
+
+          document.title = caption || 'Inspection Image';
+          root.innerHTML = '';
+
+          if (caption) {
+            var heading = document.createElement('h1');
+            heading.textContent = caption;
+            root.appendChild(heading);
+          }
+
+          var imageWrap = document.createElement('div');
+          imageWrap.className = 'image-wrap';
+
+          var img = document.createElement('img');
+          img.alt = caption || 'Inspection Image';
+          img.src = src;
+          img.onerror = function () {
+            showMessage('Unable to display this image.');
+          };
+
+          imageWrap.appendChild(img);
+          root.appendChild(imageWrap);
         }
 
-        document.title = caption || 'Inspection Image';
-        root.innerHTML = '';
-
-        if (caption) {
-          var heading = document.createElement('h1');
-          heading.textContent = caption;
-          root.appendChild(heading);
-        }
-
-        var imageWrap = document.createElement('div');
-        imageWrap.className = 'image-wrap';
-
-        var img = document.createElement('img');
-        img.alt = caption || 'Inspection Image';
-        img.src = src;
-        img.onerror = function () {
-          showMessage('Unable to display this image.');
-        };
-
-        imageWrap.appendChild(img);
-        root.appendChild(imageWrap);
+        // IndexedDB is the primary store (quota-safe); localStorage is fallback.
+        readFromIdb(id, function (idbPayload) {
+          renderPayload(idbPayload || readFromLocalStorage(id));
+        });
       })();
     </script>
   </body>

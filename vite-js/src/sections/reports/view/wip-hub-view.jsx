@@ -52,6 +52,7 @@ import {
   mapApiRowToCustomerWipPdfRow,
 } from 'src/sections/reports/utils/customer-wip-report-map';
 import { buildAmsWipPdfBlobFromRows, openAmsWipPdf } from 'src/sections/reports/utils/ams-wip-pdf-export';
+import { buildSaltWipPdfBlobFromRows, openSaltWipPdf } from 'src/sections/reports/utils/salt-wip-pdf-export';
 import {
   filterAmsWipRowsByUiFilters,
   mapApiRowToAmsWipPdfRow,

@@ -459,28 +459,41 @@ function buildMilestoneCellLines(raw, colIndex, numFallback) {
   const hasNum = Number.isFinite(numFallback) && numFallback !== 0;
   if (!hasDetail && !hasNum) return ['Not Required'];
 
-  const lines = [
-    'Target Date',
-    formatPdfMilestoneDate(tgt),
-    'Submission',
-    formatPdfMilestoneDate(sub),
-    'Approval',
-    formatPdfMilestoneDate(app),
-  ];
+  // Only emit a date line (with its label) when the API actually returned that
+  // date. No hardcoded/placeholder labels or repeated default dates.
+  const lines = [];
+  const tDate = formatPdfMilestoneDate(tgt);
+  if (tDate) {
+    lines.push('Target Date');
+    lines.push(tDate);
+  }
+  const sDate = formatPdfMilestoneDate(sub);
+  if (sDate) {
+    lines.push('Submission');
+    lines.push(sDate);
+  }
+  const aDate = formatPdfMilestoneDate(app);
+  if (aDate) {
+    lines.push('Approval');
+    lines.push(aDate);
+  }
   if (rem != null && String(rem).trim() !== '') {
     lines.push('Remarks');
     lines.push(String(rem).trim());
   }
+  // Qty: actual API value when present, otherwise 0.
+  lines.push('Qty');
   if (qtyRaw != null && String(qtyRaw).trim() !== '') {
     const qtyVal = String(qtyRaw).trim();
-    lines.push('Qty');
     lines.push(unitStr ? `${qtyVal} ${unitStr}` : qtyVal);
   } else if (hasNum) {
-    lines.push('Qty');
     lines.push(unitStr ? `${numFallback} ${unitStr}` : String(numFallback));
+  } else {
+    lines.push('0');
   }
+  // Status: actual API value when present, otherwise empty (no default).
   const stTrim = st != null ? String(st).trim() : '';
-  lines.push(stTrim || 'Done');
+  lines.push(stTrim);
   return lines;
 }
 

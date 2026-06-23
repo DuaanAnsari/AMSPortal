@@ -16,39 +16,53 @@ const DATA_ROW_H = 70;
 const MERGED_LEAD_IMAGE_BOX_MAX_PT = { w: 40, h: 48 };
 const TITLE_BLUE = [0, 51, 153];
 
-/** A4 landscape width / height (pt) — fixed size for paging + browser PDF viewer. */
-const PAGE_WIDTH_PT = 842;
+/**
+ * Page width / height (pt) — fixed size for paging + browser PDF viewer.
+ * Width widened beyond A4 landscape (842) so all columns — especially the 16
+ * milestone date columns — get enough room for the status value + full date
+ * (e.g. `31 May 2026`) on a single line at the normal font. Height kept at A4
+ * landscape so rows-per-page (pagination) is unchanged.
+ */
+const PAGE_WIDTH_PT = 1000;
 const PAGE_HEIGHT_PT = 595;
 
 /** Default zoom when opening PDF in browser (Chrome/Edge) */
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
 
 /**
+ * Width weight for every milestone date column. Bumped from 36 → 46 so the
+ * status value + full date (e.g. `31 Jan 2026`) sit comfortably inside the
+ * cell instead of looking cramped / clipping at the border. Only the milestone
+ * columns use this; all other columns keep their original weights.
+ */
+const MILESTONE_COL_WEIGHT = 46;
+
+/**
  * Milestone columns — API field names per `/api/Report/GetMilestoneReport` mapping (with common casing fallbacks).
  * @type {Array<{ weight: number; header: string; kind: string; keys?: string[]; statusKeys?: string[]; k1?: string[]; k2?: string[]; align?: string }>}
  */
 const MILESTONE_API_TAIL = [
-  { weight: 36, header: 'Lab Dip', kind: 'milestone', keys: ['Lab Dip', 'LabDip', 'labDip'] },
-  { weight: 36, header: 'Proto /\nFIT', kind: 'milestone', keys: ['FIT', 'ProtoFIT', 'ProtoFit', 'Proto'] },
-  { weight: 36, header: 'Dye Lot /\nBlanket', kind: 'milestone', keys: ['Dye Lot/Blanket', 'DyeLotBlanket', 'dyeLotBlanket'] },
-  { weight: 36, header: 'Size Set\nto TD', kind: 'milestone', keys: ['Size set', 'SizeSetTD', 'SizesetTD', 'SizeSetToTD'] },
-  { weight: 36, header: 'Size set\nto Buyer', kind: 'milestone', keys: ['Size set to Buyer', 'SizesettoBuyer', 'SizeSetBuyer', 'sizesettoBuyer'] },
+  { weight: MILESTONE_COL_WEIGHT, header: 'Lab Dip', kind: 'milestone', keys: ['Lab Dip', 'LabDip', 'labDip'] },
+  { weight: MILESTONE_COL_WEIGHT, header: 'Proto /\nFIT', kind: 'milestone', keys: ['FIT', 'ProtoFIT', 'ProtoFit', 'Proto'] },
+  { weight: MILESTONE_COL_WEIGHT, header: 'Dye Lot /\nBlanket', kind: 'milestone', keys: ['Dye Lot/Blanket', 'DyeLotBlanket', 'dyeLotBlanket'] },
+  { weight: MILESTONE_COL_WEIGHT, header: 'Size Set\nto TD', kind: 'milestone', keys: ['Size set', 'SizeSetTD', 'SizesetTD', 'SizeSetToTD'] },
+  { weight: MILESTONE_COL_WEIGHT, header: 'Size set\nto Buyer', kind: 'milestone', keys: ['Size set to Buyer', 'SizesettoBuyer', 'SizeSetBuyer', 'sizesettoBuyer'] },
   {
-    weight: 36,
+    weight: MILESTONE_COL_WEIGHT,
     header: 'Print Mockup /\nStrike off',
     kind: 'milestone',
     keys: ['Print / Emb/ Strike off', 'PrintMockupStrikeoff', 'PrintEmbStrikeoff', 'printEmbStrikeoff'],
   },
-  { weight: 36, header: 'PP Sample\nto Buyer', kind: 'milestone', keys: ['PP', 'PPSample', 'pp'] },
-  { weight: 36, header: 'Testing\nLocal', kind: 'milestone', keys: ['Testing', 'TestingLocal', 'testing'] },
-  { weight: 36, header: 'Testing\nnominated', kind: 'milestone', keys: ['Testing Nominated', 'TestingNominated', 'testingNominated'] },
-  { weight: 36, header: 'Knitting /\nFabric in house', kind: 'milestone', keys: ['Knitting', 'knitting'] },
-  { weight: 36, header: 'Dying', kind: 'milestone', keys: ['Dying', 'dying', 'Dyeing'] },
-  { weight: 36, header: 'Cutting', kind: 'milestone', keys: ['Cutting', 'cutting'] },
-  { weight: 36, header: 'Print /\nEmb.', kind: 'milestone', keys: ['Print / Emb.', 'PrintEmb', 'printEmb', 'PrintEmbroidery'] },
-  { weight: 36, header: 'Stitching', kind: 'milestone', keys: ['Stitching', 'Stiching', 'stitching'] },
-  { weight: 36, header: 'Washing', kind: 'milestone', keys: ['Washing', 'washing'] },
-  { weight: 36, header: 'Packing', kind: 'milestone', keys: ['Packing', 'packing'] },
+  { weight: MILESTONE_COL_WEIGHT, header: 'PP Sample\nto Buyer', kind: 'milestone', keys: ['PP', 'PPSample', 'pp'] },
+  { weight: MILESTONE_COL_WEIGHT, header: 'Testing\nLocal', kind: 'milestone', keys: ['Testing', 'TestingLocal', 'testing'] },
+  { weight: MILESTONE_COL_WEIGHT, header: 'Testing\nnominated', kind: 'milestone', keys: ['Testing Nominated', 'TestingNominated', 'testingNominated'] },
+  { weight: MILESTONE_COL_WEIGHT, header: 'Knitting /\nFabric in house', kind: 'milestone', keys: ['Knitting', 'knitting'] },
+  { weight: MILESTONE_COL_WEIGHT, header: 'Dying', kind: 'milestone', keys: ['Dying', 'dying', 'Dyeing'] },
+  { weight: MILESTONE_COL_WEIGHT, header: 'Cutting', kind: 'milestone', keys: ['Cutting', 'cutting'] },
+  { weight: MILESTONE_COL_WEIGHT, header: 'Print /\nEmb.', kind: 'milestone', keys: ['Print / Emb.', 'PrintEmb', 'printEmb', 'PrintEmbroidery'] },
+  { weight: MILESTONE_COL_WEIGHT, header: 'Stitching', kind: 'milestone', keys: ['Stitching', 'Stiching', 'stitching'] },
+  { weight: MILESTONE_COL_WEIGHT, header: 'Washing', kind: 'milestone', keys: ['Washing', 'washing'] },
+  { weight: MILESTONE_COL_WEIGHT, header: 'Packing', kind: 'milestone', keys: ['Packing', 'packing'] },
   {
     weight: 46,
     header: 'FRI',
@@ -1331,7 +1345,9 @@ function drawMilestoneCell(doc, x, y, w, h, raw, spec) {
   doc.setFontSize(5.5);
   doc.text(displayMilestoneStatusValue(top), cx, cy - 6.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
   doc.setFontSize(5.85);
-  doc.text(String(bottom), cx, cy + 6.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
+  // Display-only: bottom line placeholder "—" renders as "N/A".
+  const dateShown = String(bottom) === '—' ? 'N/A' : String(bottom);
+  doc.text(dateShown, cx, cy + 6.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
 }
 
 function drawFriCombinedCell(doc, x, y, w, h, raw, spec) {
