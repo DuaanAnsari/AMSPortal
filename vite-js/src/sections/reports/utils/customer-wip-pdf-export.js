@@ -31,7 +31,7 @@ const PAGE_W = 842;
 const PAGE_H = 595;
 
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
-const PDF_FILENAME = 'Customer_WIP_Report.pdf';
+const PDF_FILENAME = 'Customer_Report.pdf';
 
 const HEADERS = CUSTOMER_WIP_PDF_HEADERS;
 const COL_WEIGHTS = CUSTOMER_WIP_PDF_COL_WEIGHTS;
@@ -599,6 +599,17 @@ export async function buildCustomerWipPdfBlobFromRows(rows, meta = {}) {
   const flatForImages = groups.flatMap((g) => [g.displayRow, ...g.colorRows]);
   await attachFactoryWipPoImageDimensions(flatForImages);
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
+
+  /**
+   * PDF document title — Chrome/Edge's built-in PDF viewer uses this for the
+   * browser tab title, so the preview tab reads "Customer Report" instead of
+   * the raw `blob:` URL.
+   */
+  try {
+    doc.setProperties({ title: 'Customer Report' });
+  } catch {
+    /* setProperties unavailable — non-fatal, preview still works */
+  }
   const logoDataUrl = await loadLogoDataUrl().catch(() => null);
 
   const innerLeft = H_MARGIN;

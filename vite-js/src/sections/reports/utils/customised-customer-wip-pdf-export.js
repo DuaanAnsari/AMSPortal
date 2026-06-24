@@ -530,6 +530,17 @@ function drawFooter(doc, pageIndex, totalPages) {
 export async function buildCustomisedCustomerWipPdfBlobFromRows(rows, meta = {}) {
   const data = Array.isArray(rows) && rows.length > 0 ? rows : CUSTOMISED_CUSTOMER_WIP_DEMO_ROWS;
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
+
+  /**
+   * PDF document title — Chrome/Edge's built-in PDF viewer uses this for the
+   * browser tab title, so the preview tab reads "Customised Customer WIP
+   * Report" instead of the raw `blob:` URL.
+   */
+  try {
+    doc.setProperties({ title: 'Customised Customer WIP Report' });
+  } catch {
+    /* setProperties unavailable — non-fatal, preview still works */
+  }
   const logoDataUrl = await loadLogoDataUrl().catch(() => null);
 
   const innerLeft = H_MARGIN;
@@ -591,7 +602,7 @@ export function openCustomisedCustomerWipPdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Customised-Customer-WIP-Report.pdf';
+  a.download = 'Customised_Customer_WIP_Report.pdf';
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

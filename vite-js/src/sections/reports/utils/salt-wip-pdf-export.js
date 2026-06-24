@@ -381,6 +381,17 @@ function drawFooter(doc, pageIndex, totalPages) {
 export async function buildSaltWipPdfBlobFromRows(rows, meta = {}) {
   const data = Array.isArray(rows) && rows.length > 0 ? rows : SALT_WIP_DEMO_ROWS;
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
+
+  /**
+   * PDF document title — Chrome/Edge's built-in PDF viewer uses this for the
+   * browser tab title, so the preview tab reads "Salt WIP Report" instead of
+   * the raw `blob:` URL.
+   */
+  try {
+    doc.setProperties({ title: 'Salt WIP Report' });
+  } catch {
+    /* setProperties unavailable — non-fatal, preview still works */
+  }
   const logoDataUrl = await loadLogoDataUrl().catch(() => null);
 
   const innerLeft = H_MARGIN;
@@ -442,7 +453,7 @@ export function openSaltWipPdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Salt-WIP-Report.pdf';
+  a.download = 'Salt_WIP_Report.pdf';
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

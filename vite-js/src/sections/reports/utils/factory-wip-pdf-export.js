@@ -754,6 +754,17 @@ export async function buildFactoryWipPdfBlobFromRows(rows, meta = {}) {
   await attachFactoryWipPoImageDimensions(flatForImages);
   // eslint-disable-next-line new-cap -- jsPDF default export constructor
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
+
+  /**
+   * PDF document title — Chrome/Edge's built-in PDF viewer uses this for the
+   * browser tab title, so the preview tab reads "Factory Report" instead of
+   * the raw `blob:` URL.
+   */
+  try {
+    doc.setProperties({ title: 'Factory Report' });
+  } catch {
+    /* setProperties unavailable — non-fatal, preview still works */
+  }
   const logoDataUrl = await loadLogoDataUrl().catch(() => null);
 
   const innerLeft = H_MARGIN;
@@ -832,7 +843,7 @@ export function openFactoryWipPdf(mode, pdfBlob, previewWindow = null) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Factory-WIP-Report.pdf';
+  a.download = 'Factory_Report.pdf';
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

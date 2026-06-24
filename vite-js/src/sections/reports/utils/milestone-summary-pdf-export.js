@@ -104,7 +104,8 @@ const SHIPMENT_SPEC_API = {
 };
 
 const QTY_SPEC_API = {
-  weight: 36,
+  // Slightly wider so "<qty> <unit>" (e.g. "15 PCS") fits on one line.
+  weight: 48,
   header: 'QTY',
   kind: 'qty',
   keys: ['BookedQuantity', 'bookedQuantity', 'Quantity', 'quantity', 'QTY', 'qty'],
@@ -1427,11 +1428,17 @@ function drawQty(doc, x, y, w, h, raw, spec) {
   let t = '—';
   if (q !== '' && q != null) {
     const n = Number(q);
-    t = Number.isFinite(n) ? n.toLocaleString('en-US') : String(q);
+    const qtyText = Number.isFinite(n) ? n.toLocaleString('en-US') : String(q);
+    // Append API Units on the SAME line; when Units is empty / null / undefined
+    // show "N/A" instead. (No hardcoded unit — only the API value or N/A.)
+    const unitsRaw = pickField(raw, 'Units', 'units', 'Unit', 'unit');
+    const unitStr = unitsRaw != null && String(unitsRaw).trim() !== '' ? String(unitsRaw).trim() : 'N/A';
+    t = `${qtyText} ${unitStr}`;
   }
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.25);
-  doc.text(t, x + w / 2, y + h / 2, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
+  // Keep qty + unit on a single line (no wrapping to the next line).
+  doc.text(t, x + w / 2, y + h / 2, { align: 'center', baseline: 'middle' });
 }
 
 /** Outer frame + vertical dividers for rowspan lead block (no per-cell rects — avoids double strokes). */
@@ -1578,6 +1585,17 @@ export async function buildMilestoneSummaryPdfBlobFromRows(rawRows, meta = {}) {
   });
 
   /**
+   * PDF document title — Chrome/Edge's built-in PDF viewer uses this for the
+   * browser tab title, so the preview tab reads "Milestone Summary" instead of
+   * the raw `blob:` URL.
+   */
+  try {
+    doc.setProperties({ title: 'Milestone Summary' });
+  } catch {
+    /* setProperties unavailable — non-fatal, preview still works */
+  }
+
+  /**
    * Resolve logo + row images in parallel BEFORE we start drawing. This
    * guarantees that every cell's image is already decoded by the time
    * `drawImageCell` runs, so we never embed blank/missing images even on
@@ -1675,7 +1693,7 @@ export function openMilestoneSummaryPdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Milestone-Summary.pdf';
+  a.download = 'Milestone_Summary.pdf';
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

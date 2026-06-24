@@ -639,6 +639,17 @@ export async function buildAmsWipPdfBlobFromRows(rows, meta = {}) {
   const flatForImages = groups.flatMap((g) => [g.displayRow, ...g.colorRows]);
   await attachFactoryWipPoImageDimensions(flatForImages);
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
+
+  /**
+   * PDF document title — Chrome/Edge's built-in PDF viewer uses this for the
+   * browser tab title, so the preview tab reads "AMS Report" instead of the
+   * raw `blob:` URL.
+   */
+  try {
+    doc.setProperties({ title: 'AMS Report' });
+  } catch {
+    /* setProperties unavailable — non-fatal, preview still works */
+  }
   const logoDataUrl = await loadLogoDataUrl().catch(() => null);
 
   const innerLeft = H_MARGIN;
@@ -707,7 +718,7 @@ export function openAmsWipPdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'AMS-WIP-Report.pdf';
+  a.download = 'AMS_Report.pdf';
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();
