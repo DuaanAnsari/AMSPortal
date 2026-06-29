@@ -472,7 +472,11 @@ function buildMilestoneCellLines(raw, colIndex, numFallback) {
     lines.push('Submission');
     lines.push(sDate);
   }
-  const aDate = formatPdfMilestoneDate(app);
+  // Any milestone's Approval Date may arrive from the API as the literal string
+  // "N/A" — show that "N/A" as-is. A valid date keeps the existing formatting.
+  // (Applies only to the Approval line; target/submission are unaffected.)
+  const appIsNa = app != null && String(app).trim().toLowerCase() === 'n/a';
+  const aDate = appIsNa ? 'N/A' : formatPdfMilestoneDate(app);
   if (aDate) {
     lines.push('Approval');
     lines.push(aDate);
