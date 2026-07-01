@@ -286,6 +286,17 @@ function field(obj, ...keys) {
   return match ? obj[match] : '';
 }
 
+function normalizeActiveEmails(res) {
+  const raw = Array.isArray(res) ? res : res?.data ?? res?.items ?? res?.results ?? [];
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((row) => ({
+      userId: row.userID ?? row.userId ?? row.UserID ?? row.UserId ?? '',
+      email: String(row.email ?? row.Email ?? '').trim(),
+    }))
+    .filter((row) => row.email);
+}
+
 function resolveInspectionEmailInfo(data, header, snap, mstId) {
   const qaEmail =
     field(data, 'qaEmail', 'QAEmail') ||
@@ -982,8 +993,10 @@ export default function QualityDepartmentInspectionView() {
   const [existingSignUrl, setExistingSignUrl] = useState(null);
   const [signatureStatus, setSignatureStatus] = useState({ QA: false, Vendor: false, Control: false });
   const [emailInfoOpen, setEmailInfoOpen] = useState(false);
-  const [otherEmail, setOtherEmail] = useState('');
-  const otherEmailSeededRef = useRef(false);
+  const [otherEmailUserId, setOtherEmailUserId] = useState('');
+  const [vendorEmail, setVendorEmail] = useState('');
+  const [fetchedEmailInfo, setFetchedEmailInfo] = useState(null);
+  const [activeEmailOptions, setActiveEmailOptions] = useState([]);
 
   const sizeQtyBreakdown = useMemo(
     () => sortSizeQtyBreakdown(data?.sizeQtyBreakdown ?? data?.SizeQtyBreakdown ?? []),
@@ -1213,11 +1226,138 @@ export default function QualityDepartmentInspectionView() {
   );
 
   useEffect(() => {
-    if (!data || otherEmailSeededRef.current) return;
-    const seeded = resolveInspectionEmailInfo(data, h, snap, mstId).otherEmail;
-    if (seeded) setOtherEmail(String(seeded));
-    otherEmailSeededRef.current = true;
-  }, [data, h, snap, mstId]);
+    if (!emailInfoOpen || !poid) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [inspectionRes, activeRes] = await Promise.all([
+          qdApi.get('/QAInspection/GetInspectionEmails', {
+            params: { QDInspectionMstID: 0, POID: poid },
+          }),
+          qdApi.get('/QAInspection/GetActiveEmails'),
+        ]);
+        if (cancelled) return;
+        const payload = inspectionRes.data?.data ?? inspectionRes.data ?? {};
+        const info = {
+          qaEmail: field(payload, 'qaEmail', 'QAEmail'),
+          qaEmailOnEdit: field(payload, 'qaEmailOnEdit', 'QAEmailOnEdit'),
+          merchandiserEmail: field(payload, 'merchandiserEmail', 'MerchandiserEmail'),
+          vendorEmail: field(payload, 'vendorEmail', 'VendorEmail'),
+        };
+        setFetchedEmailInfo(info);
+        setVendorEmail(info.vendorEmail || '');
+
+        const options = normalizeActiveEmails(activeRes.data);
+        setActiveEmailOptions(options);
+
+        const savedRef = String(otherEmailUserId || info.qaEmailOnEdit || '').trim();
+        if (savedRef) {
+          const matchByUserId = options.find((o) => String(o.userId) === savedRef);
+          if (matchByUserId) {
+            setOtherEmailUserId(String(matchByUserId.userId));
+          } else {
+            const matchByEmail = options.find((o) => o.email.toLowerCase() === savedRef.toLowerCase());
+            if (matchByEmail) setOtherEmailUserId(String(matchByEmail.userId));
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setFetchedEmailInfo(null);
+          setActiveEmailOptions([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [emailInfoOpen, poid]);
+
+  const updateInspectionEmails = async (mstIdForEmail) => {
+    const idNum = Number(mstIdForEmail) || 0;
+    if (!idNum) return;
+
+    const requestParams = {
+      QDInspectionMstID: idNum,
+      QAEmailOnEdit: otherEmailUserId ?? '',
+    };
+    const requestBody = null;
+    const requestConfig = { params: requestParams };
+    const endpoint = '/QAInspection/UpdateInspectionEmails';
+    const baseURL = qdApi.defaults.baseURL || '';
+    const queryString = new URLSearchParams({
+      QDInspectionMstID: String(requestParams.QDInspectionMstID),
+      QAEmailOnEdit: requestParams.QAEmailOnEdit,
+    }).toString();
+    const fullRequestUrl = `${baseURL}${endpoint}?${queryString}`;
+    const authToken = localStorage.getItem('accessToken');
+
+    /* eslint-disable no-console */
+    console.groupCollapsed('%c[UpdateInspectionEmails] REQUEST DEBUG', 'color:#06c;font-weight:bold;');
+    console.log('Values being sent (exact object):', {
+      QDInspectionMstID: requestParams.QDInspectionMstID,
+      QAEmailOnEdit: requestParams.QAEmailOnEdit,
+      selectedOtherEmailUserId: otherEmailUserId ?? '',
+      mstIdForEmailArg: mstIdForEmail,
+    });
+    console.log('QDInspectionMstID:', requestParams.QDInspectionMstID);
+    console.log('Selected Other Email userID (QAEmailOnEdit):', requestParams.QAEmailOnEdit);
+    console.log('HTTP Method:', 'PUT');
+    console.log('Full Request URL:', fullRequestUrl);
+    console.log('Endpoint (relative):', endpoint);
+    console.log('Base URL:', baseURL);
+    console.log('Query Parameters:', requestParams);
+    console.log('Request Body:', requestBody);
+    console.log('Request Config (axios):', requestConfig);
+    console.log('Headers:', {
+      'Content-Type': qdApi.defaults.headers?.put?.['Content-Type'] ?? qdApi.defaults.headers?.common?.['Content-Type'] ?? '(axios default)',
+      Authorization: authToken ? `Bearer ${authToken}` : '(no token)',
+    });
+    console.groupEnd();
+
+    try {
+      const res = await qdApi.put(endpoint, requestBody, requestConfig);
+
+      console.groupCollapsed('%c[UpdateInspectionEmails] RESPONSE SUCCESS', 'color:#0a7;font-weight:bold;');
+      console.log('Status Code:', res?.status, res?.statusText);
+      console.log('Response Body:', res?.data);
+      console.log('Response Headers:', res?.headers);
+      console.log('Final Request URL (from axios):', res?.config?.baseURL, res?.config?.url, res?.config?.params);
+      console.log('Complete Response Object:', res);
+      console.groupEnd();
+      /* eslint-enable no-console */
+
+      setFetchedEmailInfo((prev) => ({
+        ...(prev || {}),
+        qaEmailOnEdit: otherEmailUserId ?? '',
+      }));
+    } catch (err) {
+      const resp = err?.response;
+      const respData = resp?.data;
+
+      /* eslint-disable no-console */
+      console.groupCollapsed('%c[UpdateInspectionEmails] RESPONSE ERROR', 'color:#c00;font-weight:bold;');
+      console.log('Status Code:', resp?.status, resp?.statusText);
+      console.log('Complete Response Body:', respData);
+      console.log('error.response.data:', respData);
+      console.log('error.response.errors:', respData?.errors ?? resp?.errors ?? null);
+      console.log('error.response.message:', respData?.message ?? resp?.message ?? null);
+      console.log('error.response.title:', respData?.title ?? resp?.title ?? null);
+      console.log('error.response.detail:', respData?.detail ?? resp?.detail ?? null);
+      if (respData?.errors && typeof respData.errors === 'object') {
+        console.log('Backend validation errors (expanded):', respData.errors);
+        Object.entries(respData.errors).forEach(([field, messages]) => {
+          console.log(`  Validation [${field}]:`, messages);
+        });
+      }
+      console.log('Complete error.config:', err?.config);
+      console.log('Complete Axios Error Object:', err);
+      console.groupEnd();
+      /* eslint-enable no-console */
+
+      const msg = err?.response?.data?.message || err?.message || 'Failed to update email info.';
+      enqueueSnackbar(msg, { variant: 'error' });
+    }
+  };
 
   const colorOptions = useMemo(() => {
     const poLines = data?.poLines ?? data?.PoLines ?? [];
@@ -1672,7 +1812,12 @@ export default function QualityDepartmentInspectionView() {
         });
       }
 
+      if (isMainSave && returnedId > 0) {
+        await updateInspectionEmails(returnedId);
+      }
+
       await reloadInspection(returnedId > 0 ? returnedId : null);
+
       enqueueSnackbar(isMainSave ? 'Saved.' : 'Saved as draft.', { variant: 'success' });
       if (isMainSave) {
         navigate(paths.dashboard.qaInspectionView);
@@ -3479,30 +3624,38 @@ export default function QualityDepartmentInspectionView() {
           </Stack>
         )}
       </Container>
-      <Dialog open={emailInfoOpen} onClose={() => setEmailInfoOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={emailInfoOpen} onClose={() => setEmailInfoOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle
           sx={{
             m: 0,
             p: 2,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'flex-end',
+            justifyContent: 'space-between',
             minHeight: 48,
           }}
         >
+          <Typography variant="h6" component="span" sx={{ fontWeight: 600 }}>
+            Email Info
+          </Typography>
           <IconButton aria-label="Close email info" onClick={() => setEmailInfoOpen(false)} edge="end" size="small">
             <CloseIcon />
           </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ pt: 0, pb: 3 }}>
-          <Grid container spacing={2}>
+        <DialogContent sx={{ pt: 1, pb: 3, px: 3 }}>
+          <Grid container spacing={2.5} sx={{ mt: 0 }}>
             <Grid xs={12} sm={6}>
               <TextField
                 label="QA Email"
                 fullWidth
                 size="small"
-                value={inspectionEmailInfo.qaEmail}
+                value={
+                  fetchedEmailInfo
+                    ? fetchedEmailInfo.qaEmail || ''
+                    : inspectionEmailInfo.qaEmail
+                }
                 InputProps={{ readOnly: true }}
+                InputLabelProps={{ shrink: true }}
                 inputProps={{ style: { textTransform: 'none' } }}
               />
             </Grid>
@@ -3511,20 +3664,43 @@ export default function QualityDepartmentInspectionView() {
                 label="Merchandiser Email"
                 fullWidth
                 size="small"
-                value={inspectionEmailInfo.merchandiserEmail}
+                value={
+                  fetchedEmailInfo
+                    ? fetchedEmailInfo.merchandiserEmail || ''
+                    : inspectionEmailInfo.merchandiserEmail
+                }
                 InputProps={{ readOnly: true }}
+                InputLabelProps={{ shrink: true }}
                 inputProps={{ style: { textTransform: 'none' } }}
               />
             </Grid>
-            <Grid xs={12}>
+            <Grid xs={12} sm={6}>
               <TextField
+                label="Vendor Email"
+                fullWidth
+                size="small"
+                value={vendorEmail}
+                onChange={(e) => setVendorEmail(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ style: { textTransform: 'lowercase' } }}
+              />
+            </Grid>
+            <Grid xs={12} sm={6}>
+              <TextField
+                select
                 label="Other Email"
                 fullWidth
                 size="small"
-                value={otherEmail}
-                onChange={(e) => setOtherEmail(e.target.value)}
-                inputProps={{ style: { textTransform: 'lowercase' } }}
-              />
+                value={otherEmailUserId}
+                onChange={(e) => setOtherEmailUserId(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+              >
+                {activeEmailOptions.map((opt) => (
+                  <MenuItem key={String(opt.userId || opt.email)} value={String(opt.userId)}>
+                    {opt.email}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Grid>
           </Grid>
         </DialogContent>
