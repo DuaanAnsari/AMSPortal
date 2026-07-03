@@ -56,6 +56,10 @@ import {
   fetchBusinessSummaryReportRows,
 } from 'src/sections/reports/utils/business-summary-report-api';
 import {
+  buildStatusWiseVendorOrderPdfPayload,
+  fetchOpenOrderReportRows,
+} from 'src/sections/reports/utils/status-wise-order-report-api';
+import {
   buildStatusWiseOrderReportPdfBlob,
   openStatusWiseOrderReportPdf,
 } from 'src/sections/reports/utils/status-wise-order-report-pdf-export';
@@ -742,6 +746,7 @@ function StatusWiseOrderPanel({
    */
   const [poNumbers, setPoNumbers] = useState([]);
   const [loadingPoNumbers, setLoadingPoNumbers] = useState(false);
+  const [loadingReport, setLoadingReport] = useState(false);
 
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
@@ -842,17 +847,62 @@ function StatusWiseOrderPanel({
    * - `customer-first` (LEFT, Customer) → `STATUS WISE ORDER REPORT - (<status>)` flat grid.
    * - `supplier-first` (RIGHT, Vendor) → `SHIPPED ORDER REPORT` grouped grid with yellow total bands.
    */
+  const fetchReportPayload = useCallback(async () => {
+    const { fromDate, toDate, status, customer, supplier, merchandiser, po } = filters;
+    const rawRows = await fetchOpenOrderReportRows(
+      {
+        status,
+        fromDate,
+        toDate,
+        customerId: customer,
+        supplierId: supplier,
+        marchandiserId: merchandiser,
+        refPOID: po,
+      },
+      mgtAuthHeaders()
+    );
+
+    if (!rawRows.length) {
+      return null;
+    }
+
+    const meta = { fromDate, toDate, status };
+    return buildStatusWiseVendorOrderPdfPayload(rawRows, meta);
+  }, [
+    filters.customer,
+    filters.supplier,
+    filters.merchandiser,
+    filters.po,
+    filters.status,
+    filters.fromDate,
+    filters.toDate,
+    order,
+  ]);
+
   const buildVariantBlob = useCallback(
-    (m) => {
-      if (order === 'supplier-first') {
-        return buildStatusWiseVendorOrderReportPdfBlob(undefined, {
-          fromDate: m.fromDate,
-          toDate: m.toDate,
-        });
+    async (m) => {
+      const data = await fetchReportPayload();
+      if (!data) {
+        const err = new Error('No data found for the selected filters.');
+        err.code = 'NO_DATA';
+        throw err;
       }
-      return buildStatusWiseOrderReportPdfBlob(undefined, m);
+      if (order === 'supplier-first') {
+        if (!Array.isArray(data.groups) || data.groups.length === 0) {
+          const err = new Error('No data found for the selected filters.');
+          err.code = 'NO_DATA';
+          throw err;
+        }
+        return buildStatusWiseVendorOrderReportPdfBlob(data, { ...m, statusWiseOrderGrid: true });
+      }
+      if (!Array.isArray(data.groups) || data.groups.length === 0) {
+        const err = new Error('No data found for the selected filters.');
+        err.code = 'NO_DATA';
+        throw err;
+      }
+      return buildStatusWiseOrderReportPdfBlob(data, m);
     },
-    [order]
+    [fetchReportPayload, order]
   );
 
   const openVariantPdf = useCallback(
@@ -900,6 +950,7 @@ function StatusWiseOrderPanel({
     }
 
     try {
+      setLoadingReport(true);
       const blob = await buildVariantBlob({ fromDate, toDate, status });
       if (previewWindow.closed) {
         enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
@@ -919,7 +970,11 @@ function StatusWiseOrderPanel({
       enqueueSnackbar(`${reportLabel} opened in a new tab`, { variant: 'success' });
     } catch (err) {
       console.error(`[MGT] ${reportLabel} PDF`, err);
-      enqueueSnackbar(err?.message || `${reportLabel} PDF failed`, { variant: 'error' });
+      if (err?.code === 'NO_DATA') {
+        enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
+      } else {
+        enqueueSnackbar(err?.message || `${reportLabel} PDF failed`, { variant: 'error' });
+      }
       if (!previewWindow.closed) {
         try {
           const doc = previewWindow.document;
@@ -932,6 +987,8 @@ function StatusWiseOrderPanel({
           console.warn('[MGT] preview error page', writeErr);
         }
       }
+    } finally {
+      setLoadingReport(false);
     }
   }, [filters, enqueueSnackbar, buildVariantBlob, reportLabel]);
 
@@ -942,12 +999,19 @@ function StatusWiseOrderPanel({
       return;
     }
     try {
+      setLoadingReport(true);
       const blob = await buildVariantBlob({ fromDate, toDate, status });
       openVariantPdf('pdf', blob);
       enqueueSnackbar(`${reportLabel} downloaded`, { variant: 'success' });
     } catch (err) {
       console.error(`[MGT] ${reportLabel} PDF (download)`, err);
-      enqueueSnackbar(err?.message || `${reportLabel} PDF failed`, { variant: 'error' });
+      if (err?.code === 'NO_DATA') {
+        enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
+      } else {
+        enqueueSnackbar(err?.message || `${reportLabel} PDF failed`, { variant: 'error' });
+      }
+    } finally {
+      setLoadingReport(false);
     }
   }, [filters, enqueueSnackbar, buildVariantBlob, openVariantPdf, reportLabel]);
 
@@ -1129,6 +1193,7 @@ function StatusWiseOrderPanel({
               variant="contained"
               color="primary"
               size="medium"
+              disabled={loadingReport}
               onClick={handleViewReport}
               sx={{ minWidth: 120, textTransform: 'none', fontWeight: 600 }}
             >
@@ -1138,6 +1203,7 @@ function StatusWiseOrderPanel({
               variant="contained"
               color="primary"
               size="medium"
+              disabled={loadingReport}
               onClick={handleDownloadPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
@@ -1371,10 +1437,38 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
 
   const variant = order === 'supplier-first' ? 'Vendor' : 'Customer';
 
-  /**
-   * Both Customer (LEFT) and Vendor (RIGHT) panels open the same `OPEN ORDER REPORT` PDF
-   * (demo grid for now). Backend will scope rows to the selected customer / supplier filter once wired.
-   */
+  /** Open Order Report — same OpenOrderReport API as Status Wise; status is always Confirmed. */
+  const fetchOpenOrderPayload = useCallback(async () => {
+    const { fromDate, toDate, customer, supplier, merchandiser, po } = filters;
+    const rawRows = await fetchOpenOrderReportRows(
+      {
+        status: 'Confirmed',
+        fromDate,
+        toDate,
+        customerId: customer,
+        supplierId: supplier,
+        marchandiserId: merchandiser,
+        refPOID: po,
+      },
+      mgtAuthHeaders()
+    );
+
+    if (!rawRows.length) {
+      return null;
+    }
+
+    const meta = { fromDate, toDate, status: 'Confirmed' };
+    return buildStatusWiseVendorOrderPdfPayload(rawRows, meta);
+  }, [
+    order,
+    filters.customer,
+    filters.supplier,
+    filters.merchandiser,
+    filters.po,
+    filters.fromDate,
+    filters.toDate,
+  ]);
+
   const handleViewReport = useCallback(async () => {
     const { fromDate, toDate } = filters;
     if (!fromDate || !toDate) {
@@ -1406,7 +1500,24 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
     }
 
     try {
-      const blob = await buildOpenOrderReportPdfBlob(undefined, { fromDate, toDate });
+      const data = await fetchOpenOrderPayload();
+      if (!data) {
+        enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
+        if (!previewWindow.closed) {
+          try {
+            const doc = previewWindow.document;
+            doc.open();
+            doc.write(
+              '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>No data</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;">No data found for the selected filters.</p></body></html>'
+            );
+            doc.close();
+          } catch (writeErr) {
+            console.warn('[MGT] preview no-data page', writeErr);
+          }
+        }
+        return;
+      }
+      const blob = await buildOpenOrderReportPdfBlob(data, { fromDate, toDate });
       if (previewWindow.closed) {
         enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
           variant: 'warning',
@@ -1439,7 +1550,7 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
         }
       }
     }
-  }, [filters, variant, enqueueSnackbar]);
+  }, [filters, variant, enqueueSnackbar, fetchOpenOrderPayload]);
 
   const handleDownloadPdf = useCallback(async () => {
     const { fromDate, toDate } = filters;
@@ -1448,14 +1559,19 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
       return;
     }
     try {
-      const blob = await buildOpenOrderReportPdfBlob(undefined, { fromDate, toDate });
+      const data = await fetchOpenOrderPayload();
+      if (!data) {
+        enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
+        return;
+      }
+      const blob = await buildOpenOrderReportPdfBlob(data, { fromDate, toDate });
       openOpenOrderReportPdf('pdf', blob);
       enqueueSnackbar(`Open Order Report (${variant}) downloaded`, { variant: 'success' });
     } catch (err) {
       console.error('[MGT] Open Order Report PDF (download)', err);
       enqueueSnackbar(err?.message || 'Open Order Report PDF failed', { variant: 'error' });
     }
-  }, [filters, variant, enqueueSnackbar]);
+  }, [filters, variant, enqueueSnackbar, fetchOpenOrderPayload]);
 
   const customerField = (
     <Grid item xs={12}>

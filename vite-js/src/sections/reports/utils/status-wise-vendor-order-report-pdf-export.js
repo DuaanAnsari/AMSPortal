@@ -1,4 +1,12 @@
 import jsPDF from 'jspdf';
+import {
+  ORDER_REPORT_GRID,
+  drawOrderReportDataRow,
+  drawOrderReportTableHeaderRow,
+  drawOrderReportTotalRow,
+  getOrderReportColWidths,
+  sumOrderReportTotals,
+} from './status-wise-order-report-pdf-export';
 
 const LOGO_PATH = `${import.meta.env.BASE_URL}logo/AMSlogo.png`;
 
@@ -504,11 +512,94 @@ function drawFooter(doc, pageIdx, totalPages) {
   });
 }
 
+function ensureRowFits(doc, y, rowH, pageBodyBottom, flushSegmentFrame, startPage) {
+  if (y + rowH > pageBodyBottom) {
+    flushSegmentFrame();
+    doc.addPage([PAGE_W, PAGE_H], 'l');
+    startPage();
+  }
+}
+
+/**
+ * Status Wise Vendor panel — same 14-column order grid as the customer report,
+ * grouped by supplier with PO Qty / Value / LDP Value subtotals and a grand total.
+ */
+async function buildStatusWiseVendorOrderGridPdfBlob(data, meta = {}) {
+  if (!data || !Array.isArray(data.groups) || data.groups.length === 0) {
+    throw new Error('No data found for the selected filters.');
+  }
+
+  const headerMeta = {
+    fromDate: meta.fromDate || data.fromDate,
+    toDate: meta.toDate || data.toDate,
+  };
+
+  const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
+  const logoDataUrl = await loadLogoDataUrl().catch(() => null);
+
+  const innerLeft = H_MARGIN;
+  const innerW = PAGE_W - 2 * H_MARGIN;
+  const widths = getOrderReportColWidths(innerW);
+  const { DATA_ROW_H, TOTAL_ROW_H } = ORDER_REPORT_GRID;
+
+  const pageBodyBottom = PAGE_H - V_MARGIN - FOOTER_H;
+  let tableSegTop = 0;
+  let y = 0;
+
+  const startPage = () => {
+    const tableTop = drawPageHeader(doc, logoDataUrl, headerMeta);
+    tableSegTop = tableTop;
+    y = drawOrderReportTableHeaderRow(doc, tableTop, innerLeft, widths);
+  };
+
+  const flushSegmentFrame = () => {
+    const h = y - tableSegTop;
+    if (h > 0) {
+      drawOuterTableFrame(doc, innerLeft, tableSegTop, innerW, h);
+    }
+  };
+
+  startPage();
+
+  const grandTotals = { poQty: 0, value: 0, ldpValue: 0 };
+
+  data.groups.forEach((group) => {
+    group.rows.forEach((row) => {
+      ensureRowFits(doc, y, DATA_ROW_H, pageBodyBottom, flushSegmentFrame, startPage);
+      y = drawOrderReportDataRow(doc, y, innerLeft, widths, row);
+    });
+
+    ensureRowFits(doc, y, TOTAL_ROW_H, pageBodyBottom, flushSegmentFrame, startPage);
+    const totals = sumOrderReportTotals(group.rows);
+    grandTotals.poQty += totals.poQty;
+    grandTotals.value += totals.value;
+    grandTotals.ldpValue += totals.ldpValue;
+    y = drawOrderReportTotalRow(doc, y, innerLeft, widths, totals, 'Total');
+  });
+
+  ensureRowFits(doc, y, TOTAL_ROW_H, pageBodyBottom, flushSegmentFrame, startPage);
+  y = drawOrderReportTotalRow(doc, y, innerLeft, widths, grandTotals, 'Grand Total');
+
+  flushSegmentFrame();
+
+  const total = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= total; p += 1) {
+    doc.setPage(p);
+    drawFooter(doc, p, total);
+  }
+
+  return doc.output('blob');
+}
+
 /**
  * @param {{ fromDate?: string; toDate?: string; groups?: Array<{ rows: object[] }> }} data
- * @param {{ fromDate?: string; toDate?: string }} [meta]
+ * @param {{ fromDate?: string; toDate?: string; statusWiseOrderGrid?: boolean }} [meta]
  */
 export async function buildStatusWiseVendorOrderReportPdfBlob(data, meta = {}) {
+  if (meta.statusWiseOrderGrid) {
+    return buildStatusWiseVendorOrderGridPdfBlob(data, meta);
+  }
+
   const payload =
     data && Array.isArray(data.groups) && data.groups.length > 0
       ? data

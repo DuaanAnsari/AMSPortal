@@ -7,10 +7,16 @@ const H_MARGIN = 16;
 const HEADER_BLOCK_H = 96;
 const TABLE_HEADER_ROW_H = 30;
 const DATA_ROW_H = 22;
+const TOTAL_ROW_H = 22;
 const FOOTER_H = 20;
 
 const TITLE_BLUE = [0, 51, 153];
 const HEADER_FILL = [225, 228, 233];
+const TOTAL_FILL = [255, 240, 190];
+
+const PO_QTY_COL = 9;
+const VALUE_COL = 11;
+const LDP_VALUE_COL = 13;
 
 const PAGE_W = 1100;
 const PAGE_H = 700;
@@ -324,7 +330,19 @@ function drawTableHeaderRow(doc, y, x0, widths) {
   return y + TABLE_HEADER_ROW_H;
 }
 
-function drawDataRow(doc, y, x0, widths, row) {
+export function sumOrderReportTotals(rows) {
+  return rows.reduce(
+    (acc, r) => {
+      acc.poQty += Number(r.poQty) || 0;
+      acc.value += Number(r.value) || 0;
+      acc.ldpValue += Number(r.ldpValue) || 0;
+      return acc;
+    },
+    { poQty: 0, value: 0, ldpValue: 0 }
+  );
+}
+
+export function drawOrderReportDataRow(doc, y, x0, widths, row) {
   const xs = colXs(x0, widths);
   let i = 0;
   drawTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.poNo, { align: 'left' });
@@ -356,6 +374,67 @@ function drawDataRow(doc, y, x0, widths, row) {
   drawTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, formatNumber2(row.ldpValue), { align: 'right' });
   return y + DATA_ROW_H;
 }
+
+/** Yellow total band — only PO Quantity, Value, and LDP Value are summed. */
+export function drawOrderReportTotalRow(doc, y, x0, widths, totals, label = 'Total') {
+  const xs = colXs(x0, widths);
+  const totalRowW = widths.reduce((a, b) => a + b, 0);
+
+  doc.setFillColor(TOTAL_FILL[0], TOTAL_FILL[1], TOTAL_FILL[2]);
+  doc.rect(x0, y, totalRowW, TOTAL_ROW_H, 'F');
+
+  doc.setDrawColor(170, 170, 170);
+  doc.setLineWidth(0.25);
+  doc.rect(x0, y, totalRowW, TOTAL_ROW_H);
+  doc.line(xs[PO_QTY_COL], y, xs[PO_QTY_COL], y + TOTAL_ROW_H);
+  doc.line(xs[PO_QTY_COL + 1], y, xs[PO_QTY_COL + 1], y + TOTAL_ROW_H);
+  doc.line(xs[VALUE_COL], y, xs[VALUE_COL], y + TOTAL_ROW_H);
+  doc.line(xs[VALUE_COL + 1], y, xs[VALUE_COL + 1], y + TOTAL_ROW_H);
+  doc.line(xs[LDP_VALUE_COL], y, xs[LDP_VALUE_COL], y + TOTAL_ROW_H);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(0, 0, 0);
+  const leftSpanCenter = xs[0] + (xs[PO_QTY_COL] - xs[0]) / 2;
+  doc.text(String(label), leftSpanCenter, y + TOTAL_ROW_H / 2, {
+    align: 'center',
+    baseline: 'middle',
+  });
+
+  doc.setFontSize(7);
+  doc.text(formatQty(totals.poQty), xs[PO_QTY_COL] + widths[PO_QTY_COL] - 3, y + TOTAL_ROW_H / 2, {
+    align: 'right',
+    baseline: 'middle',
+  });
+  doc.text(formatNumber2(totals.value), xs[VALUE_COL] + widths[VALUE_COL] - 3, y + TOTAL_ROW_H / 2, {
+    align: 'right',
+    baseline: 'middle',
+  });
+  doc.text(
+    formatNumber2(totals.ldpValue),
+    xs[LDP_VALUE_COL] + widths[LDP_VALUE_COL] - 3,
+    y + TOTAL_ROW_H / 2,
+    { align: 'right', baseline: 'middle' }
+  );
+
+  return y + TOTAL_ROW_H;
+}
+
+export function drawOrderReportTableHeaderRow(doc, y, x0, widths) {
+  return drawTableHeaderRow(doc, y, x0, widths);
+}
+
+export function getOrderReportColWidths(innerW) {
+  return colWidths(innerW);
+}
+
+export const ORDER_REPORT_GRID = {
+  HEADERS,
+  COL_WEIGHTS,
+  DATA_ROW_H,
+  TOTAL_ROW_H,
+  TABLE_HEADER_ROW_H,
+};
 
 function drawOuterTableFrame(doc, x, y, w, h) {
   doc.setDrawColor(110, 110, 110);
@@ -416,14 +495,31 @@ function drawFooter(doc, pageIdx, totalPages) {
   });
 }
 
+function resolveOrderReportPayload(data) {
+  if (data && Array.isArray(data.groups) && data.groups.length > 0) {
+    return { payload: data, mode: 'grouped' };
+  }
+  if (data && Array.isArray(data.rows) && data.rows.length > 0) {
+    return { payload: data, mode: 'flat' };
+  }
+  return { payload: STATUS_WISE_ORDER_REPORT_DEMO, mode: 'flat' };
+}
+
+function ensureRowFits(doc, y, rowH, pageBodyBottom, flushSegmentFrame, startPage) {
+  if (y + rowH > pageBodyBottom) {
+    flushSegmentFrame();
+    doc.addPage([PAGE_W, PAGE_H], 'l');
+    startPage();
+  }
+}
+
 /**
- * @param {{ status?: string; fromDate?: string; toDate?: string; rows?: object[] }} data
+ * @param {{ status?: string; fromDate?: string; toDate?: string; rows?: object[]; groups?: Array<{ rows: object[] }> }} data
  * @param {{ status?: string; fromDate?: string; toDate?: string; title?: string }} [meta]
  *   `title` (optional) replaces the default `STATUS WISE ORDER REPORT - (<status>)` heading.
  */
 export async function buildStatusWiseOrderReportPdfBlob(data, meta = {}) {
-  const payload =
-    data && Array.isArray(data.rows) && data.rows.length > 0 ? data : STATUS_WISE_ORDER_REPORT_DEMO;
+  const { payload, mode } = resolveOrderReportPayload(data);
   const headerMeta = {
     title: meta.title,
     status: meta.status || payload.status || 'Confirmed',
@@ -457,14 +553,31 @@ export async function buildStatusWiseOrderReportPdfBlob(data, meta = {}) {
 
   startPage();
 
-  payload.rows.forEach((row) => {
-    if (y + DATA_ROW_H > pageBodyBottom) {
-      flushSegmentFrame();
-      doc.addPage([PAGE_W, PAGE_H], 'l');
-      startPage();
-    }
-    y = drawDataRow(doc, y, innerLeft, widths, row);
-  });
+  if (mode === 'grouped') {
+    const grandTotals = { poQty: 0, value: 0, ldpValue: 0 };
+
+    payload.groups.forEach((group) => {
+      group.rows.forEach((row) => {
+        ensureRowFits(doc, y, DATA_ROW_H, pageBodyBottom, flushSegmentFrame, startPage);
+        y = drawOrderReportDataRow(doc, y, innerLeft, widths, row);
+      });
+
+      ensureRowFits(doc, y, TOTAL_ROW_H, pageBodyBottom, flushSegmentFrame, startPage);
+      const totals = sumOrderReportTotals(group.rows);
+      grandTotals.poQty += totals.poQty;
+      grandTotals.value += totals.value;
+      grandTotals.ldpValue += totals.ldpValue;
+      y = drawOrderReportTotalRow(doc, y, innerLeft, widths, totals, 'Total');
+    });
+
+    ensureRowFits(doc, y, TOTAL_ROW_H, pageBodyBottom, flushSegmentFrame, startPage);
+    y = drawOrderReportTotalRow(doc, y, innerLeft, widths, grandTotals, 'Grand Total');
+  } else {
+    payload.rows.forEach((row) => {
+      ensureRowFits(doc, y, DATA_ROW_H, pageBodyBottom, flushSegmentFrame, startPage);
+      y = drawOrderReportDataRow(doc, y, innerLeft, widths, row);
+    });
+  }
 
   flushSegmentFrame();
 
