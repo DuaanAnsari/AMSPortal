@@ -508,10 +508,10 @@ function drawFooter(doc) {
  */
 export async function buildBusinessSummaryPdfBlob(data, meta = {}) {
   const payload =
-    data && Array.isArray(data.rows) && data.rows.length > 0 ? data : BUSINESS_SUMMARY_DEMO;
+    data && Array.isArray(data.rows) ? data : { rows: [] };
   const headerMeta = {
-    fromDate: meta.fromDate || payload.fromDate,
-    toDate: meta.toDate || payload.toDate,
+    fromDate: meta.fromDate || data?.fromDate || '',
+    toDate: meta.toDate || data?.toDate || '',
   };
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });

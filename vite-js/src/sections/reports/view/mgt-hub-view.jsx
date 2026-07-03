@@ -35,6 +35,11 @@ import {
 } from 'src/sections/reports/utils/milestone-summary-dropdown-api';
 import { fetchPoNumbers } from 'src/sections/reports/utils/pono-dropdown-api';
 import {
+  buildBusinessSummaryCustomerWisePdfPayload,
+  buildBusinessSummarySupplierWisePdfPayload,
+  fetchBusinessSummaryOrderWiseRows,
+} from 'src/sections/reports/utils/business-summary-order-wise-report-api';
+import {
   buildBusinessSummaryOrderWisePdfBlob,
   openBusinessSummaryOrderWisePdf,
 } from 'src/sections/reports/utils/business-summary-order-wise-pdf-export';
@@ -46,6 +51,10 @@ import {
   buildBusinessSummaryPdfBlob,
   openBusinessSummaryPdf,
 } from 'src/sections/reports/utils/business-summary-pdf-export';
+import {
+  buildBusinessSummaryPdfPayload,
+  fetchBusinessSummaryReportRows,
+} from 'src/sections/reports/utils/business-summary-report-api';
 import {
   buildStatusWiseOrderReportPdfBlob,
   openStatusWiseOrderReportPdf,
@@ -117,6 +126,7 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
     fromDate: '2026-01-01',
     toDate: '2026-12-31',
   });
+  const [loadingReport, setLoadingReport] = useState(false);
 
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
@@ -156,14 +166,44 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
    * - `customer-first` (LEFT): grouped by Customer (`Customer Total` rows).
    * - `supplier-first` (RIGHT): grouped by Supplier (`Supplier Total` rows + extra `Developed by …` footer).
    */
+  const fetchReportPayload = useCallback(async () => {
+    const fromDate = filters.fromDate;
+    const toDate = filters.toDate;
+    const rawRows = await fetchBusinessSummaryOrderWiseRows(
+      {
+        fromDate,
+        toDate,
+        customerId: filters.customer,
+        supplierId: filters.supplier,
+      },
+      mgtAuthHeaders()
+    );
+
+    if (!rawRows.length) {
+      return null;
+    }
+
+    const meta = { fromDate, toDate };
+    if (order === 'supplier-first') {
+      return buildBusinessSummarySupplierWisePdfPayload(rawRows, meta);
+    }
+    return buildBusinessSummaryCustomerWisePdfPayload(rawRows, meta);
+  }, [filters.customer, filters.supplier, filters.fromDate, filters.toDate, order]);
+
   const buildBlob = useCallback(
-    (m) => {
-      if (order === 'supplier-first') {
-        return buildBusinessSummaryOrderWiseSupplierPdfBlob(null, m);
+    async (m) => {
+      const data = await fetchReportPayload();
+      if (!data || !Array.isArray(data.groups) || data.groups.length === 0) {
+        const err = new Error('No data found for the selected filters.');
+        err.code = 'NO_DATA';
+        throw err;
       }
-      return buildBusinessSummaryOrderWisePdfBlob(null, m);
+      if (order === 'supplier-first') {
+        return buildBusinessSummaryOrderWiseSupplierPdfBlob(data, m);
+      }
+      return buildBusinessSummaryOrderWisePdfBlob(data, m);
     },
-    [order]
+    [fetchReportPayload, order]
   );
 
   const downloadPdf = useCallback(
@@ -214,6 +254,7 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
     }
 
     try {
+      setLoadingReport(true);
       const blob = await buildBlob({ fromDate, toDate });
       if (previewWindow.closed) {
         enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
@@ -233,7 +274,11 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
       enqueueSnackbar(`${reportLabel} opened in a new tab`, { variant: 'success' });
     } catch (err) {
       console.error('[MGT] Business Summary Order Wise PDF', err);
-      enqueueSnackbar(err?.message || `${reportLabel} failed`, { variant: 'error' });
+      if (err?.code === 'NO_DATA') {
+        enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
+      } else {
+        enqueueSnackbar(err?.message || `${reportLabel} failed`, { variant: 'error' });
+      }
       if (!previewWindow.closed) {
         try {
           const doc = previewWindow.document;
@@ -246,6 +291,8 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
           console.warn('[MGT] preview error page', writeErr);
         }
       }
+    } finally {
+      setLoadingReport(false);
     }
   }, [filters.fromDate, filters.toDate, enqueueSnackbar, buildBlob, reportLabel]);
 
@@ -257,12 +304,19 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
       return;
     }
     try {
+      setLoadingReport(true);
       const blob = await buildBlob({ fromDate, toDate });
       downloadPdf('pdf', blob);
       enqueueSnackbar(`${reportLabel} downloaded`, { variant: 'success' });
     } catch (err) {
       console.error('[MGT] Business Summary Order Wise PDF (download)', err);
-      enqueueSnackbar(err?.message || `${reportLabel} failed`, { variant: 'error' });
+      if (err?.code === 'NO_DATA') {
+        enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
+      } else {
+        enqueueSnackbar(err?.message || `${reportLabel} failed`, { variant: 'error' });
+      }
+    } finally {
+      setLoadingReport(false);
     }
   }, [filters.fromDate, filters.toDate, enqueueSnackbar, buildBlob, downloadPdf, reportLabel]);
 
@@ -365,18 +419,20 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
               color="primary"
               size="medium"
               onClick={handleViewReport}
+              disabled={loadingReport}
               sx={{ minWidth: 120, textTransform: 'none', fontWeight: 600 }}
             >
-              View Report
+              {loadingReport ? 'Loading…' : 'View Report'}
             </Button>
             <Button
               variant="contained"
               color="primary"
               size="medium"
               onClick={handleDownloadPdf}
+              disabled={loadingReport}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              Download PDF
+              {loadingReport ? 'Loading…' : 'Download PDF'}
             </Button>
             <Button
               variant="contained"
@@ -478,8 +534,7 @@ function BusinessSummaryOrderWiseForm() {
 
 /**
  * Business Summary page — single-column date range (From / To) with three centered actions and a
- * Supplier-shipment-date footnote. View / Download PDF run against the hardcoded demo payload until
- * the backend ships; Excel is still placeholder.
+ * Supplier-shipment-date footnote. View / Download PDF use live API data; Excel is still placeholder.
  */
 function BusinessSummaryForm() {
   const { enqueueSnackbar } = useSnackbar();
@@ -494,15 +549,40 @@ function BusinessSummaryForm() {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
   };
 
+  const fetchReportPayload = useCallback(async () => {
+    const { fromDate, toDate } = filters;
+    const rawRows = await fetchBusinessSummaryReportRows({ fromDate, toDate }, mgtAuthHeaders());
+    if (!rawRows.length) {
+      return null;
+    }
+    return {
+      fromDate,
+      toDate,
+      ...buildBusinessSummaryPdfPayload(rawRows),
+    };
+  }, [filters.fromDate, filters.toDate]);
+
   const runPdf = useCallback(
     async (mode) => {
+      const { fromDate, toDate } = filters;
+      if (!fromDate || !toDate) {
+        enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+        return;
+      }
+      if (!MGT_ISO_DATE.test(fromDate) || !MGT_ISO_DATE.test(toDate)) {
+        enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+        return;
+      }
       if (busy) return;
       setBusy(true);
       try {
-        const blob = await buildBusinessSummaryPdfBlob(undefined, {
-          fromDate: filters.fromDate,
-          toDate: filters.toDate,
-        });
+        const data = await fetchReportPayload();
+        if (!data || !Array.isArray(data.rows) || data.rows.length === 0) {
+          const err = new Error('No data found for the selected filters.');
+          err.code = 'NO_DATA';
+          throw err;
+        }
+        const blob = await buildBusinessSummaryPdfBlob(data, { fromDate, toDate });
         openBusinessSummaryPdf(mode, blob);
         enqueueSnackbar(
           mode === 'view' ? 'Business Summary PDF opened.' : 'Business Summary PDF downloaded.',
@@ -510,12 +590,18 @@ function BusinessSummaryForm() {
         );
       } catch (err) {
         console.error('[BusinessSummary] pdf', err);
-        enqueueSnackbar('Could not generate the Business Summary PDF.', { variant: 'error' });
+        if (err?.code === 'NO_DATA') {
+          enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
+        } else {
+          enqueueSnackbar(err?.message || 'Could not generate the Business Summary PDF.', {
+            variant: 'error',
+          });
+        }
       } finally {
         setBusy(false);
       }
     },
-    [busy, filters.fromDate, filters.toDate, enqueueSnackbar]
+    [busy, filters, fetchReportPayload, enqueueSnackbar]
   );
 
   return (

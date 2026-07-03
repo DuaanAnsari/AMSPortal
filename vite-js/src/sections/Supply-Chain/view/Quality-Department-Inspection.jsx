@@ -286,15 +286,125 @@ function field(obj, ...keys) {
   return match ? obj[match] : '';
 }
 
+function pickPositiveInt(...values) {
+  for (const value of values) {
+    const n = Number(value);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return 0;
+}
+
+function pickQdInspectionMstIdFromRecord(record) {
+  if (!record || typeof record !== 'object') return 0;
+  return pickPositiveInt(
+    record.qdInspectionMstId,
+    record.QdInspectionMstId,
+    record.qdInspectionMstID,
+    record.QdInspectionMstID,
+    record.QDInspectionMstId,
+    record.QDInspectionMstID,
+    record.qDInspectionMstId,
+    record.qDInspectionMstID
+  );
+}
+
+/** Extract mst id from quality-department-inspection GET payload (same shells as QA-Inspection-PDF). */
+function resolveQdInspectionMstIdFromInspectionData(data) {
+  if (!data) return 0;
+  const saved = data.savedInspection ?? data.SavedInspection;
+  const mst = data.mst ?? data.Mst ?? data.inspectionMst ?? data.InspectionMst;
+  const header = data.header ?? data.Header;
+  const mstRecord = saved || mst || data;
+  return pickPositiveInt(
+    pickQdInspectionMstIdFromRecord(data),
+    pickQdInspectionMstIdFromRecord(saved),
+    pickQdInspectionMstIdFromRecord(mst),
+    pickQdInspectionMstIdFromRecord(mstRecord),
+    pickQdInspectionMstIdFromRecord(header)
+  );
+}
+
+/**
+ * Master Order entry has no URL mst id — use same lookup as QA Inspection View grid (`GET /QAInspection`).
+ */
+async function lookupQdInspectionMstIdFromQaInspectionList({ poid, inspType, header }) {
+  const poNo = field(header, 'pONo', 'PONo', 'pono', 'poNo');
+  if (!poNo) return 0;
+  try {
+    const { data: list } = await qdApi.get('/QAInspection', {
+      params: {
+        poNo,
+        customerId: 0,
+        supplierId: 0,
+        inspType: inspType || 'ALL',
+      },
+    });
+    if (!Array.isArray(list) || !list.length) return 0;
+
+    const poidNum = Number(poid);
+    const typeUpper = String(inspType || '').trim().toUpperCase();
+    const matched =
+      list.find((row) => {
+        const rowPoid = Number(row.poid ?? row.POID ?? 0);
+        const rowType = String(row.inspectionType ?? row.InspectionType ?? '').trim().toUpperCase();
+        return rowPoid === poidNum && (!typeUpper || rowType === typeUpper);
+      }) ||
+      list.find((row) => {
+        const rowType = String(row.inspectionType ?? row.InspectionType ?? '').trim().toUpperCase();
+        return !typeUpper || rowType === typeUpper;
+      });
+
+    return pickQdInspectionMstIdFromRecord(matched);
+  } catch {
+    return 0;
+  }
+}
+
+async function resolveInspectionMstIdForEmail({
+  qdInspectionMstIdForApi,
+  mstId,
+  data,
+  header,
+  poid,
+  inspType,
+}) {
+  let id = pickPositiveInt(
+    qdInspectionMstIdForApi,
+    mstId,
+    resolveQdInspectionMstIdFromInspectionData(data)
+  );
+
+  if (!qdInspectionMstIdForApi && id <= 0) {
+    id = await lookupQdInspectionMstIdFromQaInspectionList({ poid, inspType, header });
+  }
+
+  return id;
+}
+
 function normalizeActiveEmails(res) {
   const raw = Array.isArray(res) ? res : res?.data ?? res?.items ?? res?.results ?? [];
   if (!Array.isArray(raw)) return [];
   return raw
     .map((row) => ({
-      userId: row.userID ?? row.userId ?? row.UserID ?? row.UserId ?? '',
+      userID: row.userID ?? row.userId ?? row.UserID ?? row.UserId ?? '',
       email: String(row.email ?? row.Email ?? '').trim(),
     }))
     .filter((row) => row.email);
+}
+
+function resolveInspectionEmailsPayload(axiosData) {
+  if (!axiosData || typeof axiosData !== 'object' || Array.isArray(axiosData)) return {};
+  const candidates = [axiosData, axiosData.data, axiosData.Data, axiosData.result, axiosData.Result].filter(
+    (c) => c && typeof c === 'object' && !Array.isArray(c)
+  );
+  const withEmailFields = candidates.find(
+    (c) =>
+      (c.qaEmailOnEdit != null && c.qaEmailOnEdit !== '') ||
+      (c.QAEmailOnEdit != null && c.QAEmailOnEdit !== '') ||
+      c.qaEmail != null ||
+      c.QAEmail != null
+  );
+  return withEmailFields || axiosData;
 }
 
 function resolveInspectionEmailInfo(data, header, snap, mstId) {
@@ -1227,39 +1337,68 @@ export default function QualityDepartmentInspectionView() {
 
   useEffect(() => {
     if (!emailInfoOpen || !poid) return undefined;
+
+    // Master Order flow: wait for inspection GET (header/poNo) before resolving mst id.
+    if (!qdInspectionMstIdForApi && (loading || !data)) return undefined;
+
     let cancelled = false;
     (async () => {
       try {
-        const [inspectionRes, activeRes] = await Promise.all([
-          qdApi.get('/QAInspection/GetInspectionEmails', {
-            params: { QDInspectionMstID: 0, POID: poid },
-          }),
-          qdApi.get('/QAInspection/GetActiveEmails'),
-        ]);
+        const inspectionMstIdForEmail = await resolveInspectionMstIdForEmail({
+          qdInspectionMstIdForApi,
+          mstId,
+          data,
+          header: h,
+          poid,
+          inspType,
+        });
         if (cancelled) return;
-        const payload = inspectionRes.data?.data ?? inspectionRes.data ?? {};
+
+        const inspectionRes = await qdApi.get('/QAInspection/GetInspectionEmails', {
+          params: { QDInspectionMstID: inspectionMstIdForEmail, POID: poid },
+        });
+        if (cancelled) return;
+
+        const inspectionResponseData = inspectionRes.data;
+        const payload = resolveInspectionEmailsPayload(inspectionResponseData);
+        const qaEmailOnEditFromApi = field(payload, 'qaEmailOnEdit', 'QAEmailOnEdit');
+
         const info = {
           qaEmail: field(payload, 'qaEmail', 'QAEmail'),
-          qaEmailOnEdit: field(payload, 'qaEmailOnEdit', 'QAEmailOnEdit'),
+          qaEmailOnEdit: qaEmailOnEditFromApi,
           merchandiserEmail: field(payload, 'merchandiserEmail', 'MerchandiserEmail'),
           vendorEmail: field(payload, 'vendorEmail', 'VendorEmail'),
         };
         setFetchedEmailInfo(info);
         setVendorEmail(info.vendorEmail || '');
 
+        const activeRes = await qdApi.get('/QAInspection/GetActiveEmails');
+        if (cancelled) return;
+
         const options = normalizeActiveEmails(activeRes.data);
         setActiveEmailOptions(options);
 
-        const savedRef = String(otherEmailUserId || info.qaEmailOnEdit || '').trim();
-        if (savedRef) {
-          const matchByUserId = options.find((o) => String(o.userId) === savedRef);
-          if (matchByUserId) {
-            setOtherEmailUserId(String(matchByUserId.userId));
-          } else {
-            const matchByEmail = options.find((o) => o.email.toLowerCase() === savedRef.toLowerCase());
-            if (matchByEmail) setOtherEmailUserId(String(matchByEmail.userId));
-          }
+        const qaUserIDOnEdit = Number(
+          field(payload, 'qaUserIDOnEdit', 'QAUserIDOnEdit', 'qaUserIdOnEdit') || 0
+        );
+        const activeEmails = options;
+        const response = inspectionRes;
+        const flowIsInspectionView = !!qdInspectionMstIdForApi;
+
+        if (flowIsInspectionView) {
+          console.log('===== INSPECTION VIEW FLOW =====');
+        } else {
+          console.log('===== MASTER ORDER FLOW =====');
         }
+        console.log('Resolved QDInspectionMstID:', inspectionMstIdForEmail);
+        console.log('GetInspectionEmails Response:', response.data);
+        console.log('qaUserIDOnEdit:', response.data?.qaUserIDOnEdit);
+        console.log('qaEmailOnEdit:', response.data?.qaEmailOnEdit);
+        console.log('Active Email List:', activeEmails);
+        console.log('Dropdown Current Value:', otherEmailUserId);
+        console.log('Calling setOtherEmailUserId with:', response.data?.qaUserIDOnEdit);
+
+        setOtherEmailUserId(qaUserIDOnEdit > 0 ? String(qaUserIDOnEdit) : '');
       } catch {
         if (!cancelled) {
           setFetchedEmailInfo(null);
@@ -1270,7 +1409,15 @@ export default function QualityDepartmentInspectionView() {
     return () => {
       cancelled = true;
     };
-  }, [emailInfoOpen, poid]);
+  }, [emailInfoOpen, poid, qdInspectionMstIdForApi, mstId, data, loading, h, inspType]);
+
+  useEffect(() => {
+    if (!emailInfoOpen) return;
+    const flowIsInspectionView = !!qdInspectionMstIdForApi;
+    const flowLabel = flowIsInspectionView ? 'INSPECTION VIEW FLOW' : 'MASTER ORDER FLOW';
+    console.log(`[${flowLabel}] otherEmailUserId after state update:`, otherEmailUserId);
+    console.log(`[${flowLabel}] activeEmailOptions loaded:`, activeEmailOptions.length);
+  }, [emailInfoOpen, otherEmailUserId, activeEmailOptions, qdInspectionMstIdForApi]);
 
   const updateInspectionEmails = async (mstIdForEmail) => {
     const idNum = Number(mstIdForEmail) || 0;
@@ -3696,7 +3843,7 @@ export default function QualityDepartmentInspectionView() {
                 InputLabelProps={{ shrink: true }}
               >
                 {activeEmailOptions.map((opt) => (
-                  <MenuItem key={String(opt.userId || opt.email)} value={String(opt.userId)}>
+                  <MenuItem key={String(opt.userID || opt.email)} value={String(opt.userID)}>
                     {opt.email}
                   </MenuItem>
                 ))}
