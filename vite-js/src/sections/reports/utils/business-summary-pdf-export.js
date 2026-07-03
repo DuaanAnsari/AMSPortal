@@ -414,11 +414,11 @@ function drawTotalRow(doc, y, x0, widths, totals) {
   cell(4, formatQty(totals.shippedQty), 'right');
   cell(5, formatQty(totals.noOfShipOrder), 'center');
   cell(6, formatMoney(totals.bookedFob, CURRENCY_USD), 'right');
-  cell(7, formatMoney(totals.shippedFob, CURRENCY_PKR), 'right');
+  cell(7, formatMoney(totals.shippedFob, CURRENCY_USD), 'right');
   cell(8, formatMoney(totals.bookedCommFob, CURRENCY_USD), 'right');
-  cell(9, formatMoney(totals.shippedCommFob, CURRENCY_PKR), 'right');
+  cell(9, formatMoney(totals.shippedCommFob, CURRENCY_USD), 'right');
   cell(10, formatMoney(totals.bookedLdp, CURRENCY_USD), 'right');
-  cell(11, formatMoney(totals.shippedLdp, CURRENCY_PKR), 'right');
+  cell(11, formatMoney(totals.shippedLdp, CURRENCY_USD), 'right');
   cell(12, formatPercent(computeTargetAchievedPercent(totals)), 'center');
 
   return y + TOTAL_ROW_H;
