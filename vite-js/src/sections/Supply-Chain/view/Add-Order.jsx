@@ -116,6 +116,28 @@ function FullScreenImagePreview({ open, imageUrl, onClose }) {
   );
 }
 
+// -------------------- Reference & Attachment helpers (GetPOFiles URLs only) --------------------
+function isValidPoAttachmentUrl(url) {
+  const value = String(url ?? '').trim();
+  if (!value) return false;
+  return /^https?:\/\//i.test(value);
+}
+
+const ATTACHMENT_IMAGE_EXT_RE = /\.(jpe?g|png|gif|webp|bmp|svg)$/i;
+
+function isAttachmentImageValue(fileValue, isExistingAttachmentUrl) {
+  if (fileValue instanceof File) {
+    return (
+      Boolean(fileValue.type?.startsWith('image/')) ||
+      ATTACHMENT_IMAGE_EXT_RE.test(fileValue.name || '')
+    );
+  }
+  if (isExistingAttachmentUrl) {
+    return ATTACHMENT_IMAGE_EXT_RE.test(String(fileValue));
+  }
+  return false;
+}
+
 // -------------------- File Upload Component with Preview --------------------
 function FileUploadWithPreview({ name, label, accept = "image/*" }) {
   const { setValue, watch } = useFormContext();
@@ -123,6 +145,22 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
   const [previewUrl, setPreviewUrl] = useState('');
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const fileValue = watch(name);
+
+  const isExistingAttachmentUrl =
+    typeof fileValue === 'string' && isValidPoAttachmentUrl(fileValue);
+  const hasDisplayableFile = fileValue instanceof File || isExistingAttachmentUrl;
+
+  useEffect(() => {
+    if (typeof fileValue === 'string' && !isValidPoAttachmentUrl(fileValue)) {
+      setValue(name, null);
+      return;
+    }
+    if (isExistingAttachmentUrl) {
+      setPreviewUrl(fileValue);
+    } else if (!fileValue || typeof fileValue === 'string') {
+      setPreviewUrl('');
+    }
+  }, [fileValue, isExistingAttachmentUrl, name, setValue]);
 
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
@@ -157,17 +195,25 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
   };
 
   const handlePreviewClick = () => {
-    if (previewUrl && fileValue) {
+    if (!hasDisplayableFile) return;
+
+    if (isImage) {
+      setFullScreenOpen(true);
+      return;
+    }
+
+    if (isExistingAttachmentUrl) {
+      window.open(fileValue, '_blank');
+      return;
+    }
+
+    if (previewUrl && fileValue instanceof File) {
       const fileType = fileValue.type;
       const fileName = fileValue.name;
       const fileExtension = fileName.split('.').pop().toLowerCase();
       
-      // For images, show full screen preview
-      if (fileType.startsWith('image/')) {
-      setFullScreenOpen(true);
-      } 
       // For Word files, download instead (can't preview locally)
-      else if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+      if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
                fileType === 'application/msword' ||
                fileExtension === 'doc' || fileExtension === 'docx') {
         // Create download link for Word files
@@ -179,7 +225,7 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
         document.body.removeChild(link);
       }
       // For PDF and Excel, open in new tab
-      else {
+      else if (previewUrl.startsWith('blob:') || previewUrl.startsWith('data:')) {
         window.open(previewUrl, '_blank');
       }
     }
@@ -191,7 +237,7 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
 
   // Reset preview when form is reset
   useEffect(() => {
-    if (!fileValue) {
+    if (!hasDisplayableFile) {
       setPreviewUrl('');
     }
     // Cleanup on unmount
@@ -200,15 +246,23 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
         URL.revokeObjectURL(previewUrl);
       }
     };
-  }, [fileValue, previewUrl]);
+  }, [fileValue, previewUrl, hasDisplayableFile]);
 
-  const isImage = fileValue?.type?.startsWith('image/');
-  const isPDF = fileValue?.type === 'application/pdf';
-  const isExcel = fileValue?.type === 'application/vnd.ms-excel' || 
-                  fileValue?.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-  const isWord = fileValue?.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
-                 fileValue?.type === 'application/msword';
-  const isOtherFile = fileValue && !isImage && !isPDF && !isExcel && !isWord;
+  const isImage = isAttachmentImageValue(fileValue, isExistingAttachmentUrl);
+  const isPDF =
+    (fileValue instanceof File && fileValue.type === 'application/pdf') ||
+    (isExistingAttachmentUrl && fileValue.toLowerCase().endsWith('.pdf'));
+  const isExcel =
+    (fileValue instanceof File &&
+      (fileValue.type === 'application/vnd.ms-excel' ||
+        fileValue.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')) ||
+    (isExistingAttachmentUrl && /\.(xls|xlsx)$/i.test(fileValue));
+  const isWord =
+    (fileValue instanceof File &&
+      (fileValue.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        fileValue.type === 'application/msword')) ||
+    (isExistingAttachmentUrl && /\.(doc|docx)$/i.test(fileValue));
+  const isOtherFile = hasDisplayableFile && !isImage && !isPDF && !isExcel && !isWord;
   const canPreview = isImage || isPDF || isExcel || isWord || isOtherFile;
 
   return (
@@ -229,12 +283,12 @@ function FileUploadWithPreview({ name, label, accept = "image/*" }) {
         />
       </Button>
       
-      {fileValue && (
+      {hasDisplayableFile && (
         <Box sx={{ mt: 1, p: 1, border: '1px solid #ddd', borderRadius: 1 }}>
           <Grid container alignItems="center" justifyContent="space-between">
             <Grid item>
               <Typography variant="body2" noWrap>
-                {fileValue.name}
+                {fileValue instanceof File ? fileValue.name : 'Existing file'}
               </Typography>
               <Typography variant="caption" color="success.main">
                 ✓ File selected

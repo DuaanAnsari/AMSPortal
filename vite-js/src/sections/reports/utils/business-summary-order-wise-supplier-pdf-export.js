@@ -46,7 +46,6 @@ const COL_WEIGHTS = [
 ];
 
 const CURRENCY_USD = '$';
-const CURRENCY_PKR = 'Rs';
 
 /** Demo rows — replace with API rows when backend is ready. */
 export const BUSINESS_SUMMARY_ORDER_WISE_SUPPLIER_DEMO = {
@@ -842,19 +841,19 @@ function drawDataRow(doc, y, x0, widths, sNo, row, supplierLabel) {
     align: 'right',
   });
   i += 1;
-  drawTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, formatMoney(row.bookedCommOn, CURRENCY_PKR), {
+  drawTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, formatMoney(row.bookedCommOn, CURRENCY_USD), {
     align: 'right',
   });
   i += 1;
-  drawTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, formatMoney(row.shippedCommOn, CURRENCY_PKR), {
+  drawTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, formatMoney(row.shippedCommOn, CURRENCY_USD), {
     align: 'right',
   });
   i += 1;
-  drawTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, formatMoney(row.bookedLdp, CURRENCY_PKR), {
+  drawTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, formatMoney(row.bookedLdp, CURRENCY_USD), {
     align: 'right',
   });
   i += 1;
-  drawTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, formatMoney(row.shippedLdp, CURRENCY_PKR), {
+  drawTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, formatMoney(row.shippedLdp, CURRENCY_USD), {
     align: 'right',
   });
   i += 1;
@@ -928,22 +927,22 @@ function drawGroupTotalRow(doc, y, x0, widths, totals) {
     bold: true,
   });
   i += 1;
-  drawTextCell(doc, xs[i], y, widths[i], TOTAL_ROW_H, formatMoney(totals.bookedCommOn, CURRENCY_PKR), {
+  drawTextCell(doc, xs[i], y, widths[i], TOTAL_ROW_H, formatMoney(totals.bookedCommOn, CURRENCY_USD), {
     align: 'right',
     bold: true,
   });
   i += 1;
-  drawTextCell(doc, xs[i], y, widths[i], TOTAL_ROW_H, formatMoney(totals.shippedCommOn, CURRENCY_PKR), {
+  drawTextCell(doc, xs[i], y, widths[i], TOTAL_ROW_H, formatMoney(totals.shippedCommOn, CURRENCY_USD), {
     align: 'right',
     bold: true,
   });
   i += 1;
-  drawTextCell(doc, xs[i], y, widths[i], TOTAL_ROW_H, formatMoney(totals.bookedLdp, CURRENCY_PKR), {
+  drawTextCell(doc, xs[i], y, widths[i], TOTAL_ROW_H, formatMoney(totals.bookedLdp, CURRENCY_USD), {
     align: 'right',
     bold: true,
   });
   i += 1;
-  drawTextCell(doc, xs[i], y, widths[i], TOTAL_ROW_H, formatMoney(totals.shippedLdp, CURRENCY_PKR), {
+  drawTextCell(doc, xs[i], y, widths[i], TOTAL_ROW_H, formatMoney(totals.shippedLdp, CURRENCY_USD), {
     align: 'right',
     bold: true,
   });

@@ -3,21 +3,25 @@
  * the Status Wise Vendor panel. Same 14-column grouped layout (yellow Total bands) and footer;
  * only the download filename differs so saved files don't collide.
  */
-import {
-  buildStatusWiseVendorOrderReportPdfBlob,
-  STATUS_WISE_VENDOR_ORDER_REPORT_DEMO,
-} from './status-wise-vendor-order-report-pdf-export';
+import { buildStatusWiseVendorOrderReportPdfBlob } from './status-wise-vendor-order-report-pdf-export';
 
+const SHIPPED_ORDER_TITLE = 'Shipped Order Report';
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
-
-export const SHIPPED_ORDER_REPORT_DEMO = STATUS_WISE_VENDOR_ORDER_REPORT_DEMO;
 
 /**
  * @param {{ fromDate?: string; toDate?: string; groups?: Array<{ rows: object[] }> }} [data]
  * @param {{ fromDate?: string; toDate?: string }} [meta]
  */
 export async function buildShippedOrderReportPdfBlob(data, meta = {}) {
-  return buildStatusWiseVendorOrderReportPdfBlob(data, meta);
+  if (!data || !Array.isArray(data.groups) || data.groups.length === 0) {
+    throw new Error('No data found for the selected filters.');
+  }
+
+  return buildStatusWiseVendorOrderReportPdfBlob(data, {
+    ...meta,
+    title: SHIPPED_ORDER_TITLE,
+    shippedOrderGrandTotal: true,
+  });
 }
 
 /**

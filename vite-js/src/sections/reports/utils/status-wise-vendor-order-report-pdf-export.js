@@ -408,7 +408,7 @@ function drawDataRow(doc, y, x0, widths, row) {
  * label; cells 12 (qty), 13 (rate), 14 (value) retain their own borders so totals line up
  * visually with the column above.
  */
-function drawTotalRow(doc, y, x0, widths, totals) {
+function drawTotalRow(doc, y, x0, widths, totals, label = 'Total') {
   const xs = colXs(x0, widths);
   const totalRowW = widths.reduce((a, b) => a + b, 0);
 
@@ -426,7 +426,7 @@ function drawTotalRow(doc, y, x0, widths, totals) {
   doc.setFontSize(8.5);
   doc.setTextColor(0, 0, 0);
   const leftSpanCenter = xs[0] + (xs[QTY_COL] - xs[0]) / 2;
-  doc.text('Total', leftSpanCenter, y + TOTAL_ROW_H / 2, {
+  doc.text(String(label), leftSpanCenter, y + TOTAL_ROW_H / 2, {
     align: 'center',
     baseline: 'middle',
   });
@@ -479,7 +479,13 @@ function drawPageHeader(doc, logoDataUrl, meta) {
 
   const centerX = (innerLeft + innerRight) / 2;
   const titleY = V_MARGIN + 22;
-  drawBlueBoldUnderlineCenter(doc, 'SHIPPED ORDER REPORT', centerX, titleY, innerRight - innerLeft - 240);
+  drawBlueBoldUnderlineCenter(
+    doc,
+    meta.title || 'SHIPPED ORDER REPORT',
+    centerX,
+    titleY,
+    innerRight - innerLeft - 240
+  );
 
   const fromH = formatIsoToHeader(meta.fromDate);
   const toH = formatIsoToHeader(meta.toDate);
@@ -607,6 +613,7 @@ export async function buildStatusWiseVendorOrderReportPdfBlob(data, meta = {}) {
   const headerMeta = {
     fromDate: meta.fromDate || payload.fromDate,
     toDate: meta.toDate || payload.toDate,
+    title: meta.title,
   };
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
@@ -635,6 +642,8 @@ export async function buildStatusWiseVendorOrderReportPdfBlob(data, meta = {}) {
 
   startPage();
 
+  const grandTotals = meta.shippedOrderGrandTotal ? { shippedQty: 0, value: 0 } : null;
+
   payload.groups.forEach((group) => {
     group.rows.forEach((row) => {
       if (y + DATA_ROW_H > pageBodyBottom) {
@@ -651,8 +660,21 @@ export async function buildStatusWiseVendorOrderReportPdfBlob(data, meta = {}) {
       startPage();
     }
     const totals = sumGroup(group.rows);
+    if (grandTotals) {
+      grandTotals.shippedQty += totals.shippedQty;
+      grandTotals.value += totals.value;
+    }
     y = drawTotalRow(doc, y, innerLeft, widths, totals);
   });
+
+  if (grandTotals) {
+    if (y + TOTAL_ROW_H > pageBodyBottom) {
+      flushSegmentFrame();
+      doc.addPage([PAGE_W, PAGE_H], 'l');
+      startPage();
+    }
+    y = drawTotalRow(doc, y, innerLeft, widths, grandTotals, 'Grand Total');
+  }
 
   flushSegmentFrame();
 

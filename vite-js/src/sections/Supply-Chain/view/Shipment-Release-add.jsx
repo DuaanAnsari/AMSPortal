@@ -1809,7 +1809,7 @@ export default function ShipmentReleaseAddPage() {
               '&:hover': { borderColor: '#000000', backgroundColor: '#F3F4F6' },
             }}
           >
-            Select &amp; Close
+            Save &amp; Close
           </Button>
         </DialogActions>
       </Dialog>

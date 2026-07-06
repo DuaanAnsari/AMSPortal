@@ -160,6 +160,41 @@ function FullScreenImagePreview({ open, imageUrl, onClose }) {
   );
 }
 
+// -------------------- Reference & Attachment helpers (GetPOFiles URLs only) --------------------
+function isValidPoAttachmentUrl(url) {
+  const value = String(url ?? '').trim();
+  if (!value) return false;
+  return /^https?:\/\//i.test(value);
+}
+
+const ATTACHMENT_IMAGE_EXT_RE = /\.(jpe?g|png|gif|webp|bmp|svg)$/i;
+
+function attachmentUrlPath(url) {
+  try {
+    return new URL(String(url)).pathname;
+  } catch {
+    return String(url).split('?')[0].split('#')[0];
+  }
+}
+
+function isAttachmentImageValue(fileValue, isExistingAttachmentUrl) {
+  if (fileValue instanceof File) {
+    return (
+      Boolean(fileValue.type?.startsWith('image/')) ||
+      ATTACHMENT_IMAGE_EXT_RE.test(fileValue.name || '')
+    );
+  }
+  if (isExistingAttachmentUrl) {
+    const path = attachmentUrlPath(fileValue);
+    return ATTACHMENT_IMAGE_EXT_RE.test(path);
+  }
+  return false;
+}
+
+function pickPoAttachmentUrl(url) {
+  return isValidPoAttachmentUrl(url) ? String(url).trim() : null;
+}
+
 // -------------------- File Upload Component with Preview --------------------
 function FileUploadWithPreview({ name, label, accept = "*/*" }) {
   const { setValue, watch } = useFormContext();
@@ -167,6 +202,55 @@ function FileUploadWithPreview({ name, label, accept = "*/*" }) {
   const [previewUrl, setPreviewUrl] = useState('');
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const fileValue = watch(name);
+
+  const isExistingAttachmentUrl =
+    typeof fileValue === 'string' && isValidPoAttachmentUrl(fileValue);
+  const hasDisplayableFile = fileValue instanceof File || isExistingAttachmentUrl;
+
+  /** null = probing, true = image, false = not an image */
+  const [existingUrlImageResolved, setExistingUrlImageResolved] = useState(null);
+
+  useEffect(() => {
+    if (!isExistingAttachmentUrl) {
+      setExistingUrlImageResolved(null);
+      return undefined;
+    }
+
+    if (isAttachmentImageValue(fileValue, true)) {
+      setExistingUrlImageResolved(true);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setExistingUrlImageResolved(null);
+
+    const img = new Image();
+    img.onload = () => {
+      if (!cancelled) setExistingUrlImageResolved(true);
+    };
+    img.onerror = () => {
+      if (!cancelled) setExistingUrlImageResolved(false);
+    };
+    img.src = fileValue;
+
+    return () => {
+      cancelled = true;
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [fileValue, isExistingAttachmentUrl]);
+
+  useEffect(() => {
+    if (typeof fileValue === 'string' && !isValidPoAttachmentUrl(fileValue)) {
+      setValue(name, null);
+      return;
+    }
+    if (isExistingAttachmentUrl) {
+      setPreviewUrl(fileValue);
+    } else if (!fileValue || typeof fileValue === 'string') {
+      setPreviewUrl('');
+    }
+  }, [fileValue, isExistingAttachmentUrl, name, setValue]);
 
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
@@ -198,39 +282,36 @@ function FileUploadWithPreview({ name, label, accept = "*/*" }) {
   };
 
   useEffect(() => {
-    if (fileValue) {
-      if (typeof fileValue === 'string') {
-        // Existing file data from API (URL)
-        setPreviewUrl(fileValue);
-      } else {
-        // New File object – preview for images is already set by handleFileChange
-      }
-    } else {
+    if (!hasDisplayableFile) {
       setPreviewUrl('');
     }
-  }, [fileValue]);
+  }, [hasDisplayableFile]);
 
-  const isString = typeof fileValue === 'string';
-  const fileNameStr = isString ? fileValue.toLowerCase() : (fileValue?.name || '').toLowerCase();
+  const isString = isExistingAttachmentUrl;
+  const fileNameStr = isString
+    ? attachmentUrlPath(fileValue).toLowerCase()
+    : (fileValue?.name || '').toLowerCase();
 
-  const isImage = fileNameStr.match(/\.(jpeg|jpg|gif|png|webp|svg)$/) != null || fileValue?.type?.startsWith('image/');
+  const isImage =
+    isAttachmentImageValue(fileValue, isExistingAttachmentUrl) ||
+    (isExistingAttachmentUrl && existingUrlImageResolved === true);
   const isPDF = fileNameStr.endsWith('.pdf') || fileValue?.type === 'application/pdf';
   const isExcel = fileNameStr.match(/\.(xls|xlsx)$/) != null || fileValue?.type === 'application/vnd.ms-excel' || fileValue?.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   const isWord = fileNameStr.match(/\.(doc|docx)$/) != null || fileValue?.type === 'application/msword' || fileValue?.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-  const isOtherFile = fileValue && !isImage && !isPDF && !isExcel && !isWord;
+  const isProbingExistingImage = isExistingAttachmentUrl && existingUrlImageResolved === null;
+  const isOtherFile =
+    hasDisplayableFile && !isProbingExistingImage && !isImage && !isPDF && !isExcel && !isWord;
 
   const handlePreviewClick = () => {
     if (isImage) {
       setFullScreenOpen(true);
     } else {
-      // For documents (PDF, Excel, etc.)
-      if (typeof fileValue === 'string' && fileValue) {
+      if (isExistingAttachmentUrl) {
         window.open(fileValue, '_blank');
       } else if (fileValue instanceof File) {
         const url = URL.createObjectURL(fileValue);
         window.open(url, '_blank');
-        // We let the browser handle cleanup when tab is closed
-      } else if (previewUrl) {
+      } else if (previewUrl && isValidPoAttachmentUrl(previewUrl)) {
         window.open(previewUrl, '_blank');
       }
     }
@@ -254,7 +335,7 @@ function FileUploadWithPreview({ name, label, accept = "*/*" }) {
         />
       </Button>
 
-      {fileValue && (
+      {hasDisplayableFile && (
         <Box sx={{ mt: 1, p: 1, border: '1px solid #ddd', borderRadius: 1 }}>
           <Grid container alignItems="center" justifyContent="space-between">
             <Grid item>
@@ -1451,17 +1532,24 @@ export default function CompletePurchaseOrderFormEdit() {
           try {
             const filesResponse = await apiClient.get(`/MyOrders/GetPOFiles/${id}`);
             if (Array.isArray(filesResponse.data)) {
-              filesResponse.data.forEach(file => {
+              filesResponse.data.forEach((file) => {
                 const name = (file.fileName || '').toLowerCase();
-                if (name.includes('originalpurchaseorder') || name.includes('orginalpurchaseorder')) poFiles.orginalpurchaseorder = file.fileUrl;
-                else if (name.includes('processorderconfirmation') || name.includes('process')) poFiles.process = file.fileUrl;
-                else if (name.includes('finalspecs')) poFiles.finalSpecs = file.fileUrl;
-                else if (name.includes('productimage')) poFiles.productImage = file.fileUrl;
-                else if (name.includes('sizesetcomment') || name.includes('sizeset')) poFiles.sizeSet = file.fileUrl;
-                else if (name.includes('ppcomment') || name.includes('pplimage') || name.includes('pp comment')) poFiles.pplImage = file.fileUrl;
+                const fileUrl = pickPoAttachmentUrl(file.fileUrl);
+                if (!fileUrl) return;
+                if (name.includes('originalpurchaseorder') || name.includes('orginalpurchaseorder')) {
+                  poFiles.orginalpurchaseorder = fileUrl;
+                } else if (name.includes('processorderconfirmation') || name.includes('process')) {
+                  poFiles.process = fileUrl;
+                } else if (name.includes('finalspecs')) {
+                  poFiles.finalSpecs = fileUrl;
+                } else if (name.includes('productimage')) {
+                  poFiles.productImage = fileUrl;
+                } else if (name.includes('sizesetcomment') || name.includes('sizeset')) {
+                  poFiles.sizeSet = fileUrl;
+                } else if (name.includes('ppcomment') || name.includes('pplimage') || name.includes('pp comment')) {
+                  poFiles.pplImage = fileUrl;
+                }
               });
-            } else {
-              poFiles = filesResponse.data || {};
             }
             console.log("=== MAPPED PO FILES DATA ===", poFiles);
           } catch (filesErr) {
@@ -1582,13 +1670,13 @@ export default function CompletePurchaseOrderFormEdit() {
             shipmentMode: orderData.deliveryType || '',
 
 
-            // Reference & Attachment fields (file uploads)
-            originalPurchaseOrder: poFiles.orginalpurchaseorder || orderData.poImage || null,
-            processOrderConfirmation: poFiles.process || orderData.specsimage || null,
-            finalSpecs: poFiles.finalSpecs || orderData.finalspecs || null,
-            productImage: poFiles.productImage || orderData.productImage || null,
-            ppComment: poFiles.pplImage || orderData.pPimage || null,
-            sizeSetComment: poFiles.sizeSet || orderData.sizeset || null,
+            // Reference & Attachment — GetPOFiles URLs only (no legacy poImage/specsimage fallbacks)
+            originalPurchaseOrder: pickPoAttachmentUrl(poFiles.orginalpurchaseorder),
+            processOrderConfirmation: pickPoAttachmentUrl(poFiles.process),
+            finalSpecs: pickPoAttachmentUrl(poFiles.finalSpecs),
+            productImage: pickPoAttachmentUrl(poFiles.productImage),
+            ppComment: pickPoAttachmentUrl(poFiles.pplImage),
+            sizeSetComment: pickPoAttachmentUrl(poFiles.sizeSet),
 
             bankBranch: orderData.bankBranch || '',
             titleOfAccount: orderData.titleOfAccount || '',

@@ -72,6 +72,10 @@ import {
   openOpenOrderReportPdf,
 } from 'src/sections/reports/utils/open-order-report-pdf-export';
 import {
+  buildShippedOrderReportPdfPayload,
+  fetchShippedOrderReportRows,
+} from 'src/sections/reports/utils/shipped-order-report-api';
+import {
   buildShippedOrderReportPdfBlob,
   openShippedOrderReportPdf,
 } from 'src/sections/reports/utils/shipped-order-report-pdf-export';
@@ -1904,11 +1908,25 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
 
   const variant = order === 'supplier-first' ? 'Vendor' : 'Customer';
 
-  /**
-   * Both Customer (LEFT) and Vendor (RIGHT) panels open the same `SHIPPED ORDER REPORT` PDF
-   * (reuses the Status Wise Vendor builder — same layout/columns/totals). Backend will scope
-   * rows to the selected customer / supplier filter once wired.
-   */
+  const fetchShippedOrderPayload = useCallback(async () => {
+    const { fromDate, toDate, customer, supplier } = filters;
+    const rawRows = await fetchShippedOrderReportRows(
+      {
+        fromDate,
+        toDate,
+        customerId: customer,
+        supplierId: supplier,
+      },
+      mgtAuthHeaders()
+    );
+
+    if (!rawRows.length) {
+      return null;
+    }
+
+    return buildShippedOrderReportPdfPayload(rawRows, { fromDate, toDate });
+  }, [filters.customer, filters.supplier, filters.fromDate, filters.toDate]);
+
   const handleViewReport = useCallback(async () => {
     const { fromDate, toDate } = filters;
     if (!fromDate || !toDate) {
@@ -1940,7 +1958,24 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
     }
 
     try {
-      const blob = await buildShippedOrderReportPdfBlob(undefined, { fromDate, toDate });
+      const data = await fetchShippedOrderPayload();
+      if (!data) {
+        enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
+        if (!previewWindow.closed) {
+          try {
+            const doc = previewWindow.document;
+            doc.open();
+            doc.write(
+              '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>No data</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;">No data found for the selected filters.</p></body></html>'
+            );
+            doc.close();
+          } catch (writeErr) {
+            console.warn('[MGT] preview no-data page', writeErr);
+          }
+        }
+        return;
+      }
+      const blob = await buildShippedOrderReportPdfBlob(data, { fromDate, toDate });
       if (previewWindow.closed) {
         enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
           variant: 'warning',
@@ -1973,7 +2008,7 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
         }
       }
     }
-  }, [filters, variant, enqueueSnackbar]);
+  }, [filters, variant, enqueueSnackbar, fetchShippedOrderPayload]);
 
   const handleDownloadPdf = useCallback(async () => {
     const { fromDate, toDate } = filters;
@@ -1982,14 +2017,19 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
       return;
     }
     try {
-      const blob = await buildShippedOrderReportPdfBlob(undefined, { fromDate, toDate });
+      const data = await fetchShippedOrderPayload();
+      if (!data) {
+        enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
+        return;
+      }
+      const blob = await buildShippedOrderReportPdfBlob(data, { fromDate, toDate });
       openShippedOrderReportPdf('pdf', blob);
       enqueueSnackbar(`Shipped Order Report (${variant}) downloaded`, { variant: 'success' });
     } catch (err) {
       console.error('[MGT] Shipped Order Report PDF (download)', err);
       enqueueSnackbar(err?.message || 'Shipped Order Report PDF failed', { variant: 'error' });
     }
-  }, [filters, variant, enqueueSnackbar]);
+  }, [filters, variant, enqueueSnackbar, fetchShippedOrderPayload]);
 
   const customerField = (
     <Grid item xs={12}>
