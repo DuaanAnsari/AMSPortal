@@ -323,6 +323,9 @@ function parseMilestonePdfLines(lines) {
   if (lines.length === 1 && String(lines[0]).trim() === 'Not Required') {
     return { mode: 'notRequired', pairs: [], status: 'Not Required' };
   }
+  if (lines.length === 1 && String(lines[0]).trim() === '0') {
+    return { mode: 'notRequired', pairs: [], status: '0' };
+  }
   const copy = lines.map((x) => String(x ?? ''));
   const status = copy.length ? String(copy.pop()).trim() : '';
   const pairs = [];
@@ -614,6 +617,7 @@ function drawMilestoneAndProdTail(doc, xs, y, widths, row, startIndex, rowH) {
     rgb,
     drawMilestoneDataCell,
     drawMultilineCell,
+    centerProductionStatusNa: true,
   });
 }
 

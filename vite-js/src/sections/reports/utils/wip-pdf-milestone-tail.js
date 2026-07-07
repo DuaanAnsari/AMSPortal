@@ -13,10 +13,28 @@ import { WIP_MILESTONE_PDF_COLUMN_COUNT } from './factory-wip-report-map';
  *   rgb: number[];
  *   drawMilestoneDataCell: (doc: unknown, x: number, y: number, w: number, h: number, lines: string[], rgb: number[]) => void;
  *   drawMultilineCell: (doc: unknown, x: number, y: number, w: number, h: number, lines: string[], align?: string, fontSize?: number, rgb?: number[], opts?: object) => void;
+ *   centerProductionStatusNa?: boolean;
  * }} ctx
  */
+function isProductionStatusNaOnly(prodLines) {
+  if (!Array.isArray(prodLines) || prodLines.length !== 1) return false;
+  return String(prodLines[0]).trim().toUpperCase() === 'N/A';
+}
+
 export function drawWipPdfMilestoneAndProdTail(ctx) {
-  const { doc, xs, y, widths, row, startIndex, rowH, rgb, drawMilestoneDataCell, drawMultilineCell } = ctx;
+  const {
+    doc,
+    xs,
+    y,
+    widths,
+    row,
+    startIndex,
+    rowH,
+    rgb,
+    drawMilestoneDataCell,
+    drawMultilineCell,
+    centerProductionStatusNa = false,
+  } = ctx;
 
   let i = startIndex;
   const nums = row.statusNums || [];
@@ -41,6 +59,18 @@ export function drawWipPdfMilestoneAndProdTail(ctx) {
             ? String(row.productionStatus).trim()
             : 'N/A',
         ];
+
+  if (centerProductionStatusNa && isProductionStatusNaOnly(prodLines)) {
+    // Factory / Customer WIP: match milestone "0" — centered horizontally + vertically.
+    drawMultilineCell(doc, xs[i], y, widths[i], rowH, prodLines, 'center', 5.05, rgb, {
+      lineMult: 1.08,
+      maxLines: 1,
+      padX: 2,
+      vertical: 'middle',
+    });
+    return;
+  }
+
   drawMultilineCell(doc, xs[i], y, widths[i], rowH, prodLines, 'center', 4.25, rgb, {
     lineMult: 1.08,
     maxLines: 10,
