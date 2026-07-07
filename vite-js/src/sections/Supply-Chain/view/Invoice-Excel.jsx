@@ -106,7 +106,10 @@ export default function InvoiceExcelPage() {
         const token = localStorage.getItem('accessToken');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
         const base = String(API_BASE_URL).replace(/\/+$/, '');
-        const url = `${base}/api/Report/PrintInvoicePDF/${encodeURIComponent(invoiceNo)}`;
+        // cargoId helps distinguish duplicate LDP invoice numbers across different customers
+        const cargoId = state?.shipment?.id || id;
+        const cargoIdParam = cargoId && !Number.isNaN(Number(cargoId)) ? `?cargoId=${cargoId}` : '';
+        const url = `${base}/api/Report/PrintInvoicePDF/${encodeURIComponent(invoiceNo)}${cargoIdParam}`;
 
         const res = await fetch(url, { headers });
         if (!res.ok) throw new Error(`Failed (${res.status})`);

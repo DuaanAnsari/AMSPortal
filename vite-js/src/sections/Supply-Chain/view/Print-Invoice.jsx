@@ -88,8 +88,12 @@ export default function PrintInvoicePage() {
                 const token = localStorage.getItem('accessToken');
                 const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
+                // cargoId from URL param (id) helps distinguish duplicate LDP invoice numbers across different customers
+                const cargoId = state?.shipment?.id || id;
+                const cargoIdParam = cargoId && !Number.isNaN(Number(cargoId)) ? `?cargoId=${cargoId}` : '';
+
                 const response = await fetch(
-                    `${API_BASE_URL}/api/Report/PrintInvoicePDF/${encodeURIComponent(invoiceNo)}`,
+                    `${API_BASE_URL}/api/Report/PrintInvoicePDF/${encodeURIComponent(invoiceNo)}${cargoIdParam}`,
                     { headers }
                 );
 

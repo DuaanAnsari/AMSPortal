@@ -946,7 +946,7 @@ export default function TNAChartPage() {
               },
               {
                 headerName: 'Factory Commitment Date',
-                field: safeKey('actualDate'),
+                field: safeKey('estimatedDate'),
                 minWidth: 130,
                 editable: notEditableIfNoProcess,
                 ...TNA_DATE_COL_PROPS,
@@ -957,7 +957,7 @@ export default function TNAChartPage() {
               },
               {
                 headerName: 'Submission Date',
-                field: safeKey('estimatedDate'),
+                field: safeKey('actualDate'),
                 minWidth: 110,
                 editable: notEditableIfNoProcess,
                 ...TNA_DATE_COL_PROPS,

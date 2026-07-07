@@ -299,6 +299,13 @@ export default function ShipmentEditView() {
 
   const handleGridChange = (index, field, value) => {
     const updatedRows = [...articleRows];
+    if (field === 'remainQTY') {
+      const val = Number(value);
+      if (val > (updatedRows[index].maxQty ?? ((Number(updatedRows[index].quantity) || 0) - (Number(updatedRows[index].releaseQty) || 0)))) {
+        enqueueSnackbar(`Release quantity cannot exceed available quantity`, { variant: 'warning' });
+        return;
+      }
+    }
     updatedRows[index] = { ...updatedRows[index], [field]: value };
     setArticleRows(updatedRows);
   };
@@ -323,6 +330,7 @@ export default function ShipmentEditView() {
       const rows = rowsRaw.map((row) => ({
         ...row,
         supplierID: extractSupplierId(row),
+        maxQty: (Number(row.quantity) || 0) - (Number(row.releaseQty) || 0),
       }));
       setDialogRows(rows);
       setDialogSelectedRow(rows[0] ?? null);
@@ -338,29 +346,40 @@ export default function ShipmentEditView() {
   const handleSelectClose = () => {
     const trimmedInvoice = ldpInvoice.trim();
     if (dialogRows.length > 0) {
-      const dialogKeys = new Set(dialogRows.map((row) => getRowKey(row)));
       setArticleRows((prev) => {
         const merged = [...prev];
-        const existingKeys = new Set(prev.map((item) => getRowKey(item)));
-        const addedKeys = [];
+        
         dialogRows.forEach((row) => {
-          const rowKey = getRowKey(row);
-          if (!existingKeys.has(rowKey)) {
-            merged.push(row);
-            addedKeys.push(rowKey);
+          // Determine the effective LDP invoice for this row from the dialog
+          const effectiveLdp = trimmedInvoice || (row.ldpInvoiceNo || '').trim();
+          
+          // Generate a unique key for the row + LDP combination
+          const rowKey = `${row?.poid ?? ''}-${row?.styleNo ?? ''}-${row?.pono ?? ''}-${effectiveLdp}`;
+          
+          // Find if this exact combination already exists in the main grid
+          const existingIndex = merged.findIndex(
+            (item) => `${item?.poid ?? ''}-${item?.styleNo ?? ''}-${item?.pono ?? ''}-${(item?.ldpInvoiceNo || '').trim()}` === rowKey
+          );
+          
+          if (existingIndex === -1) {
+            // Does not exist, add as new row
+            merged.push({ ...row, ldpInvoiceNo: effectiveLdp });
+          } else {
+            // Exists, update it by adding the quantities
+            const existingRow = merged[existingIndex];
+            const updatedRemainQty = Number(existingRow.remainQTY || 0) + Number(row.remainQTY || 0);
+            const updatedCartons = Number(existingRow.cartons || 0) + Number(row.cartons || 0);
+            
+            merged[existingIndex] = { 
+              ...existingRow, 
+              ldpInvoiceNo: effectiveLdp,
+              remainQTY: updatedRemainQty,
+              cartons: updatedCartons,
+              releaseQty: row.releaseQty // Update shipped qty if needed
+            };
           }
         });
-        if (trimmedInvoice && addedKeys.length > 0) {
-          const keysToUpdate = new Set(addedKeys);
-          return merged.map((row) =>
-            keysToUpdate.has(getRowKey(row)) ? { ...row, ldpInvoiceNo: trimmedInvoice } : row
-          );
-        }
-        if (trimmedInvoice && dialogKeys.size > 0 && addedKeys.length === 0) {
-          return merged.map((row) =>
-            dialogKeys.has(getRowKey(row)) ? { ...row, ldpInvoiceNo: trimmedInvoice } : row
-          );
-        }
+        
         return merged;
       });
     }
@@ -370,6 +389,13 @@ export default function ShipmentEditView() {
   const handleDialogGridChange = (index, field, value) => {
     setDialogRows((prev) => {
       const updatedRows = [...prev];
+      if (field === 'remainQTY') {
+        const val = Number(value);
+        if (val > updatedRows[index].maxQty) {
+          enqueueSnackbar(`Release quantity cannot exceed available quantity (${updatedRows[index].maxQty})`, { variant: 'warning' });
+          return prev;
+        }
+      }
       updatedRows[index] = { ...updatedRows[index], [field]: value };
       return updatedRows;
     });
@@ -556,7 +582,7 @@ export default function ShipmentEditView() {
 
         const sourceDetails = data.details ?? siblingRows[0]?.details ?? [];
 
-        const mappedRows = (sourceDetails.length ? sourceDetails : siblingRows).map((item, idx) => ({
+          const mappedRows = (sourceDetails.length ? sourceDetails : siblingRows).map((item, idx) => ({
           pono: item.pono || item.poNo || data.poNo || '',
           customerName: item.customerName || data.customerName || '',
           styleNo: item.styles,
@@ -564,6 +590,7 @@ export default function ShipmentEditView() {
           quantity: item.poqty, // Total PO Qty
           releaseQty: item.quantity, // This seems to be the 'Release Qty' column
           remainQTY: item.quantity, // Editable field 'Release Qty'
+          maxQty: (Number(item.poqty) || 0) - (Number(item.quantity) || 0) + (Number(item.quantity) || 0), // Allow current edit to maintain its value, max is actually poqty - other shipments
           cartons: item.cartons,
           cartonNo: item.cartonNo,
           rate: item.shippedRate,

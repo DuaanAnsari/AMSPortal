@@ -721,7 +721,7 @@ const EditOrderPage = () => {
         {
             headerName: "Status", field: "status",
             cellEditor: 'agSelectCellEditor',
-            cellEditorParams: { values: ['Confirm', 'Cancel', 'Close'] }
+            cellEditorParams: { values: ['Confirmed', 'Cancel', 'Close'] }
         },
         { headerName: "PO Special Treatment", field: "poSpecialTreatment" },
         { headerName: "Style Source", field: "styleSource" },

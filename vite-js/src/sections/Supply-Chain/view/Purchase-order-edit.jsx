@@ -3060,7 +3060,7 @@ export default function CompletePurchaseOrderFormEdit() {
                         <FormControl fullWidth>
                           <InputLabel>Status</InputLabel>
                           <Select {...field} label="Status" value={field.value || ''}>
-                            <MenuItem value="Confirm">Confirm</MenuItem>
+                            <MenuItem value="Confirmed">Confirmed</MenuItem>
                             <MenuItem value="Cancel">Cancel</MenuItem>
                             <MenuItem value="Close">Close</MenuItem>
                           </Select>
