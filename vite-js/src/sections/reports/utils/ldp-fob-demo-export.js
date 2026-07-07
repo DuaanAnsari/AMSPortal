@@ -16,7 +16,7 @@ const COMPANY_LINES = [
   'Telephone #: 02134937216 & 02134946005',
 ];
 
-const TABLE_HEADERS = [
+const DEFAULT_TABLE_HEADERS = [
   'SUPPLIER',
   'PO.NO #',
   'STYLE NO #',
@@ -29,7 +29,39 @@ const TABLE_HEADERS = [
 ];
 
 /** Column widths (pt) — sum ≈ PAGE_W - 2*MARGIN */
-const COL_W = [66, 52, 44, 156, 38, 44, 50, 50, 36];
+const DEFAULT_COL_W = [66, 52, 44, 156, 38, 44, 50, 50, 36];
+
+/** LDP and FOB Report page — title + LDP column after FOB (wip-hub keeps defaults). */
+export const LDP_FOB_PRICE_LIST_REPORT_OPTIONS = {
+  reportTitle: 'LDP / FOB PRICE LIST',
+  includeLdpColumn: true,
+};
+
+const LDP_FOB_PAGE_TABLE_HEADERS = [
+  ...DEFAULT_TABLE_HEADERS,
+  'LDP',
+];
+
+/** 10 columns incl. LDP — full page width with tighter side margins (567pt). */
+const LDP_FOB_PAGE_TABLE_MARGIN = 14;
+const LDP_FOB_PAGE_COL_W = [61, 51, 52, 165, 36, 40, 51, 51, 30, 30];
+
+function resolveLdpFobReportLayout(options = {}) {
+  const includeLdpColumn = Boolean(options.includeLdpColumn);
+  const reportTitle = options.reportTitle || 'FOB PRICE LIST';
+  return {
+    reportTitle,
+    continuedTitle: options.continuedTitle || `${reportTitle} (continued)`,
+    headers: includeLdpColumn ? LDP_FOB_PAGE_TABLE_HEADERS : DEFAULT_TABLE_HEADERS,
+    colWidths: includeLdpColumn ? LDP_FOB_PAGE_COL_W : DEFAULT_COL_W,
+    tableMargin: includeLdpColumn ? LDP_FOB_PAGE_TABLE_MARGIN : MARGIN,
+    headerAlign: includeLdpColumn ? 'center' : 'mixed',
+    headerFontSize: includeLdpColumn ? 6.8 : 7,
+    headerRowH: includeLdpColumn ? 28 : 26,
+    dataFontSize: includeLdpColumn ? 8 : 7.5,
+    includeLdpColumn,
+  };
+}
 
 function pickField(obj, ...keys) {
   for (let i = 0; i < keys.length; i += 1) {
@@ -69,10 +101,10 @@ function sortLdpFobRawRowsByCustomer(rawRows) {
  * Full-width band row: customer name in first column (same grid as sample — e.g. AVALON APPAREL).
  * @returns {number} row height (pt)
  */
-function getCustomerBannerRowHeight(doc, name) {
+function getCustomerBannerRowHeight(doc, name, colWidths) {
   const fontSize = 6.2;
   const pad = 3;
-  const maxW = Math.max(8, COL_W[0] - pad * 2);
+  const maxW = Math.max(8, colWidths[0] - pad * 2);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(fontSize);
   const lines = doc.splitTextToSize(String(name || ''), maxW);
@@ -86,21 +118,21 @@ function getCustomerBannerRowHeight(doc, name) {
  * @param {string} customerName
  * @returns {number} y below row
  */
-function drawCustomerGroupBannerRow(doc, y, customerName) {
-  const xs = colStarts();
+function drawCustomerGroupBannerRow(doc, y, customerName, colWidths, tableMargin = MARGIN) {
+  const xs = colStarts(colWidths, tableMargin);
   const fontSize = 6.2;
   const pad = 3;
-  const maxW = Math.max(8, COL_W[0] - pad * 2);
+  const maxW = Math.max(8, colWidths[0] - pad * 2);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(fontSize);
   const lines = doc.splitTextToSize(String(customerName || ''), maxW);
   const lineH = fontSize * 1.15;
   const rowH = Math.min(36, Math.max(15, lines.length * lineH + pad * 2 + 4));
 
-  for (let i = 0; i < COL_W.length; i += 1) {
-    drawCellBorder(doc, xs[i], y, COL_W[i], rowH);
+  for (let i = 0; i < colWidths.length; i += 1) {
+    drawCellBorder(doc, xs[i], y, colWidths[i], rowH);
   }
-  drawCellText(doc, customerName, xs[0], y, COL_W[0], rowH, 'left', true, fontSize);
+  drawCellText(doc, customerName, xs[0], y, colWidths[0], rowH, 'left', true, fontSize);
   return y + rowH;
 }
 
@@ -137,6 +169,12 @@ export function mapLdpFobApiRowToPdfRow(raw) {
     const n = Number(rateRaw);
     fob = Number.isFinite(n) ? n.toFixed(2) : String(rateRaw);
   }
+  const ldpRateRaw = pickField(r, 'LDPRate', 'ldpRate');
+  let ldp = '—';
+  if (ldpRateRaw !== '' && ldpRateRaw != null) {
+    const n = Number(ldpRateRaw);
+    ldp = Number.isFinite(n) ? n.toFixed(2) : String(ldpRateRaw);
+  }
   return {
     supplier: String(pickField(r, 'VenderName', 'venderName', 'VendorName', 'vendorName') || '—'),
     po: String(pickField(r, 'PONO', 'PONo', 'pono', 'PoNo') || '—'),
@@ -151,6 +189,7 @@ export function mapLdpFobApiRowToPdfRow(raw) {
       pickField(r, 'VendorExIndiaShipmentDate', 'vendorExIndiaShipmentDate')
     ),
     fob,
+    ldp,
   };
 }
 
@@ -225,12 +264,12 @@ export function mergeLdpFobRawRowsByLineKey(sortedRaw) {
   });
 }
 
-function colStarts() {
+function colStarts(colWidths, tableMargin = MARGIN) {
   const xs = [];
-  let x = MARGIN;
-  for (let i = 0; i < COL_W.length; i += 1) {
+  let x = tableMargin;
+  for (let i = 0; i < colWidths.length; i += 1) {
     xs.push(x);
-    x += COL_W[i];
+    x += colWidths[i];
   }
   return xs;
 }
@@ -292,21 +331,21 @@ function drawCellText(doc, text, x, yTop, w, h, align, bold, fontSize) {
  * @param {number} y
  * @returns {number} new y below header row
  */
-function drawTableHeaderRow(doc, y) {
-  const xs = colStarts();
-  const rowH = 26;
+function drawTableHeaderRow(doc, y, layout) {
+  const { headers, colWidths, headerAlign, headerFontSize, headerRowH, tableMargin } = layout;
+  const xs = colStarts(colWidths, tableMargin);
   doc.setDrawColor(0);
   doc.setLineWidth(0.45);
-  for (let i = 0; i < COL_W.length; i += 1) {
-    drawCellBorder(doc, xs[i], y, COL_W[i], rowH);
-    const align = i <= 3 ? 'left' : 'center';
-    drawCellText(doc, TABLE_HEADERS[i], xs[i], y, COL_W[i], rowH, align, true, 7);
+  for (let i = 0; i < colWidths.length; i += 1) {
+    drawCellBorder(doc, xs[i], y, colWidths[i], headerRowH);
+    const align = headerAlign === 'center' ? 'center' : i <= 3 ? 'left' : 'center';
+    drawCellText(doc, headers[i], xs[i], y, colWidths[i], headerRowH, align, true, headerFontSize);
   }
-  return y + rowH;
+  return y + headerRowH;
 }
 
-function getPdfDataCells(row) {
-  return [
+function getPdfDataCells(row, layout) {
+  const cells = [
     row.supplier,
     row.po,
     row.style,
@@ -317,21 +356,26 @@ function getPdfDataCells(row) {
     row.factoryShipDate,
     row.fob,
   ];
+  if (layout.includeLdpColumn) {
+    cells.push(row.ldp);
+  }
+  return cells;
 }
 
 /**
  * @param {import('jspdf').jsPDF} doc
  * @param {object} row
  */
-function measureDataRowHeight(doc, row) {
-  const cells = getPdfDataCells(row);
+function measureDataRowHeight(doc, row, layout) {
+  const cells = getPdfDataCells(row, layout);
+  const { colWidths, dataFontSize } = layout;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
+  doc.setFontSize(dataFontSize);
   const innerH = [];
   for (let i = 0; i < cells.length; i += 1) {
-    const maxW = Math.max(6, COL_W[i] - 6);
+    const maxW = Math.max(6, colWidths[i] - 6);
     const lines = doc.splitTextToSize(String(cells[i] || ''), maxW);
-    const lh = 7.5 * 1.2;
+    const lh = dataFontSize * 1.2;
     innerH.push(Math.max(22, lines.length * lh + 10));
   }
   return Math.min(120, Math.max(...innerH));
@@ -342,15 +386,16 @@ function measureDataRowHeight(doc, row) {
  * @param {number} y
  * @param {object} row
  */
-function drawDataRow(doc, y, row) {
-  const xs = colStarts();
-  const cells = getPdfDataCells(row);
-  const rowH = measureDataRowHeight(doc, row);
+function drawDataRow(doc, y, row, layout) {
+  const { colWidths, dataFontSize, tableMargin } = layout;
+  const xs = colStarts(colWidths, tableMargin);
+  const cells = getPdfDataCells(row, layout);
+  const rowH = measureDataRowHeight(doc, row, layout);
 
-  for (let i = 0; i < COL_W.length; i += 1) {
-    drawCellBorder(doc, xs[i], y, COL_W[i], rowH);
+  for (let i = 0; i < colWidths.length; i += 1) {
+    drawCellBorder(doc, xs[i], y, colWidths[i], rowH);
     const align = i <= 3 ? 'left' : 'center';
-    drawCellText(doc, cells[i], xs[i], y, COL_W[i], rowH, align, false, 7.5);
+    drawCellText(doc, cells[i], xs[i], y, colWidths[i], rowH, align, false, dataFontSize);
   }
   return y + rowH;
 }
@@ -360,12 +405,12 @@ function drawDataRow(doc, y, row) {
  * @param {string | null} logoDataUrl
  * @returns {Promise<number>} y position below header (before table)
  */
-async function drawPageHeader(doc, logoDataUrl) {
+async function drawPageHeader(doc, logoDataUrl, layout) {
   const titleY = 48;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
   doc.setTextColor(0);
-  doc.text('FOB PRICE LIST', MARGIN, titleY);
+  doc.text(layout.reportTitle, MARGIN, titleY);
 
   let logoBottomY = 32;
   if (logoDataUrl) {
@@ -401,20 +446,22 @@ async function drawPageHeader(doc, logoDataUrl) {
   return cy + 18;
 }
 
-function drawContinuedPageHeader(doc) {
+function drawContinuedPageHeader(doc, layout) {
   let y = MARGIN + 14;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('FOB PRICE LIST (continued)', MARGIN, y);
+  doc.text(layout.continuedTitle, MARGIN, y);
   y += 22;
-  return drawTableHeaderRow(doc, y);
+  return drawTableHeaderRow(doc, y, layout);
 }
 
 /**
  * @param {object[]} rawRows API rows (mapped via {@link mapLdpFobApiRowToPdfRow})
+ * @param {object} [options] {@link LDP_FOB_PRICE_LIST_REPORT_OPTIONS} for LDP and FOB Report page
  * @returns {Promise<Blob>}
  */
-export async function buildLdpFobPdfBlobFromRows(rawRows) {
+export async function buildLdpFobPdfBlobFromRows(rawRows, options = {}) {
+  const layout = resolveLdpFobReportLayout(options);
   // eslint-disable-next-line new-cap -- library default export
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
 
@@ -425,8 +472,8 @@ export async function buildLdpFobPdfBlobFromRows(rawRows) {
     console.warn('[FOB PDF] Logo load failed — check public/logo/AMSlogo.png', e);
   }
 
-  let y = await drawPageHeader(doc, logoDataUrl);
-  y = drawTableHeaderRow(doc, y);
+  let y = await drawPageHeader(doc, logoDataUrl, layout);
+  y = drawTableHeaderRow(doc, y, layout);
 
   const bottomLimit = PAGE_H - 36;
   const sortedRaw = sortLdpFobRawRowsByCustomer(rawRows);
@@ -443,8 +490,9 @@ export async function buildLdpFobPdfBlobFromRows(rawRows) {
       deliveryDate: '—',
       factoryShipDate: '—',
       fob: '—',
+      ldp: '—',
     };
-    drawDataRow(doc, y, emptyRow);
+    drawDataRow(doc, y, emptyRow, layout);
   } else {
     let prevCustomerKey = null;
     for (let i = 0; i < mergedRaw.length; i += 1) {
@@ -453,25 +501,25 @@ export async function buildLdpFobPdfBlobFromRows(rawRows) {
       const row = mapLdpFobApiRowToPdfRow(raw);
 
       if (customerLabel !== prevCustomerKey) {
-        const bannerH = getCustomerBannerRowHeight(doc, customerLabel);
-        const dataH = measureDataRowHeight(doc, row);
+        const bannerH = getCustomerBannerRowHeight(doc, customerLabel, layout.colWidths);
+        const dataH = measureDataRowHeight(doc, row, layout);
         if (y + bannerH + dataH > bottomLimit) {
           doc.addPage();
-          y = drawContinuedPageHeader(doc);
+          y = drawContinuedPageHeader(doc, layout);
         } else if (y + bannerH > bottomLimit) {
           doc.addPage();
-          y = drawContinuedPageHeader(doc);
+          y = drawContinuedPageHeader(doc, layout);
         }
-        y = drawCustomerGroupBannerRow(doc, y, customerLabel);
+        y = drawCustomerGroupBannerRow(doc, y, customerLabel, layout.colWidths, layout.tableMargin);
         prevCustomerKey = customerLabel;
       }
 
-      const h = measureDataRowHeight(doc, row);
+      const h = measureDataRowHeight(doc, row, layout);
       if (y + h > bottomLimit) {
         doc.addPage();
-        y = drawContinuedPageHeader(doc);
+        y = drawContinuedPageHeader(doc, layout);
       }
-      y = drawDataRow(doc, y, row);
+      y = drawDataRow(doc, y, row, layout);
     }
   }
 
@@ -481,7 +529,7 @@ export async function buildLdpFobPdfBlobFromRows(rawRows) {
 /** CSV — same columns as PDF table. */
 export function buildLdpFobCsvFromRows(rawRows) {
   const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
-  const lines = [TABLE_HEADERS];
+  const lines = [DEFAULT_TABLE_HEADERS];
   const sortedRaw = sortLdpFobRawRowsByCustomer(rawRows);
   const mergedRaw = mergeLdpFobRawRowsByLineKey(sortedRaw);
   let prevCustomerKey = null;

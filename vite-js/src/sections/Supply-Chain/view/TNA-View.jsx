@@ -52,6 +52,23 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+const isSubmissionDateFieldKey = (fieldKey) =>
+  String(fieldKey || '').toLowerCase().endsWith('_approvaldatee');
+
+/** Submission Date edit/add → actualDateBid 1 on UpdateTNA; otherwise 0. */
+const getActualDateBid = (changedFields, proc, row, tnaChartID) => {
+  const submissionChanged = [...(changedFields || [])].some((key) => {
+    if (!isSubmissionDateFieldKey(key)) return false;
+    const fieldProc = key.slice(0, key.lastIndexOf('_'));
+    if (row && tnaChartID) {
+      return Number(row[`${fieldProc}_tnaChartID`]) === Number(tnaChartID);
+    }
+    const normalize = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '_');
+    return normalize(fieldProc) === normalize(proc);
+  });
+  return submissionChanged ? 1 : 0;
+};
+
 // Checkbox that blocks AG Grid's native range-selection mousedown via capture phase
 const SelectCheckbox = React.memo(({ isChecked, onToggle }) => {
   const ref = React.useRef(null);
@@ -720,6 +737,7 @@ export default function TNAViewPage() {
             actualDate: toApiDateTime(row[`${proc}_actualDate`]),
             approvalDatee: toApiDateTime(row[`${proc}_approvalDatee`]),
             estimatedDate: toApiDateTime(row[`${proc}_estimatedDate`]),
+            actualDateBid: getActualDateBid(changedFields, proc, row, tnaChartID),
           });
         });
       });

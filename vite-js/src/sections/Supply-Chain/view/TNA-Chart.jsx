@@ -72,6 +72,23 @@ const getSafeKey = (proc, suffix) => {
   return suffix ? `${safeProc}_${suffix.toLowerCase()}` : safeProc;
 };
 
+const isSubmissionDateFieldKey = (fieldKey) =>
+  String(fieldKey || '').toLowerCase().endsWith('_approvaldatee');
+
+/** Submission Date edit/add → actualDateBid 1 on UpdateTNA; otherwise 0. */
+const getActualDateBid = (changedFields, proc, row, tnaChartID) => {
+  const submissionChanged = [...(changedFields || [])].some((key) => {
+    if (!isSubmissionDateFieldKey(key)) return false;
+    const fieldProc = key.slice(0, key.lastIndexOf('_'));
+    if (row && tnaChartID) {
+      return Number(row[`${fieldProc}_tnachartid`] ?? row[`${fieldProc}_tnaChartID`]) === Number(tnaChartID);
+    }
+    const normalize = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '_');
+    return normalize(fieldProc) === normalize(proc);
+  });
+  return submissionChanged ? 1 : 0;
+};
+
 // Helper: Check if a column has any actual "activity" or progress data
 const hasActivity = (proc, data) =>
   data.some((row) => {
@@ -1714,6 +1731,7 @@ export default function TNAChartPage() {
             freezeCondPPSample: toApiDateTime(
               row[`${proc}_freezecondppsample`] ?? row[`${proc}_freezeCondPPSample`] ?? row.freezeCondPPSample
             ),
+            actualDateBid: getActualDateBid(changedFields, proc, row, tnaChartID),
           };
 
           updates.push(payload);

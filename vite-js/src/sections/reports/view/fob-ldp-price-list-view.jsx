@@ -31,6 +31,7 @@ import {
   buildLdpFobCsvFromRows,
   buildLdpFobPdfBlobFromRows,
   openLdpFobDemoDownload,
+  LDP_FOB_PRICE_LIST_REPORT_OPTIONS,
 } from 'src/sections/reports/utils/ldp-fob-demo-export';
 
 // ----------------------------------------------------------------------
@@ -217,7 +218,7 @@ export default function FobLdpPriceListView() {
           return;
         }
 
-        const pdfBlob = await buildLdpFobPdfBlobFromRows(raw);
+        const pdfBlob = await buildLdpFobPdfBlobFromRows(raw, LDP_FOB_PRICE_LIST_REPORT_OPTIONS);
         await assertValidPdfBlob(pdfBlob);
 
         if (mode === 'view') {
