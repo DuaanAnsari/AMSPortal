@@ -13,7 +13,7 @@ const FOOTER_H = 18;
 const TITLE_BLUE = [0, 51, 153];
 const TABLE_BLUE = [97, 116, 159];
 
-const PAGE_W = 1000;
+const PAGE_W = 842;
 const PAGE_H = 595;
 
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
@@ -34,10 +34,13 @@ const HEADERS = [
   'Target Achieved',
 ];
 
-const COL_WEIGHTS = [22, 110, 58, 58, 58, 60, 70, 70, 70, 70, 80, 80, 70];
+/**
+ * Column weights tuned for A4 landscape width — trims excess Customer/qty spacing
+ * while keeping money columns wide enough for values like `$1,046,498.10`.
+ */
+const COL_WEIGHTS = [18, 88, 48, 50, 50, 48, 66, 66, 62, 62, 72, 72, 58];
 
 const CURRENCY_USD = '$';
-const CURRENCY_PKR = 'Rs';
 
 /** Demo rows that mirror the spec image; replaced with API rows once backend lands. */
 export const BUSINESS_SUMMARY_DEMO = {
@@ -328,7 +331,7 @@ function drawDataRow(doc, y, x0, widths, sNo, row) {
     align: 'right',
   });
   i += 1;
-  drawTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, formatMoney(row.bookedCommFob, CURRENCY_PKR), {
+  drawTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, formatMoney(row.bookedCommFob, CURRENCY_USD), {
     align: 'right',
   });
   i += 1;
@@ -336,7 +339,7 @@ function drawDataRow(doc, y, x0, widths, sNo, row) {
     align: 'right',
   });
   i += 1;
-  drawTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, formatMoney(row.bookedLdp, CURRENCY_PKR), {
+  drawTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, formatMoney(row.bookedLdp, CURRENCY_USD), {
     align: 'right',
   });
   i += 1;

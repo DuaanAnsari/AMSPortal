@@ -308,7 +308,7 @@ const MILESTONE_PDF_FIELD_SPECS = [
     submission: ['FitSubmissionDate', 'ProtoFITSubmissionDate', 'ProtoSubmissionDate', 'FITSubmissionDate'],
     approval: ['FitApprovalDate', 'ProtoFITApprovalDate', 'ProtoApprovalDate', 'FITApprovalDate'],
     status: ['FitStatus', 'ProtoFITStatus', 'FITStatus', 'ProtoStatus', 'ProtoFIT', 'Proto', 'FIT'],
-    remarks: ['FitRemarks', 'ProtoFITRemarks'],
+    remarks: ['ProtoFitRemarks', 'FitRemarks', 'ProtoFITRemarks'],
     qty: ['FitQtyCompleted', 'ProtoFITQtyCompleted', 'FITQty', 'ProtoFITQty'],
   },
   {
@@ -332,7 +332,7 @@ const MILESTONE_PDF_FIELD_SPECS = [
     submission: ['PPSubmissionDate', 'PPSampleSubmissionDate', 'PP_SubmissionDate'],
     approval: ['PPApprovalDate', 'PPSampleApprovalDate', 'PP_ApprovalDate'],
     status: ['PPStatus', 'PPSampleStatus', 'PP', 'PPSample'],
-    remarks: ['PPRemarks', 'PPSampleRemarks'],
+    remarks: ['PPSampleRemarks', 'PPRemarks'],
     qty: ['PPQtyCompleted', 'PPSampleQtyCompleted', 'PPCompletedQty'],
   },
   {
@@ -411,7 +411,7 @@ const MILESTONE_PDF_FIELD_SPECS = [
     submission: ['PackingSubmissionDate', 'PackingPCSSubmissionDate'],
     approval: ['PackingApprovalDate', 'PackingPCSApprovalDate'],
     status: ['PackingStatus', 'PackingPCSStatus', 'Packing', 'PackingPCS'],
-    remarks: ['PackingRemarks', 'PackingPCSRemarks'],
+    remarks: ['PackingPCSRemarks', 'PackingRemarks'],
     qty: ['PackingQtyCompleted', 'PackingPCSQtyCompleted', 'PackingCompletedQty'],
   },
 ];
@@ -444,20 +444,19 @@ const MILESTONE_PDF_UNIT_FIELD_GROUPS = [
 function buildMilestoneCellLines(raw, colIndex, numFallback) {
   const spec = MILESTONE_PDF_FIELD_SPECS[colIndex];
   if (!spec) return ['Not Required'];
-  const tgt = pickField(raw, ...spec.target);
+
   const sub = pickField(raw, ...spec.submission);
+  if (isBlankWipMilestonePdfDateInput(sub)) {
+    return ['0'];
+  }
+
+  const tgt = pickField(raw, ...spec.target);
   const app = pickField(raw, ...spec.approval);
-  const st = pickField(raw, ...spec.status);
   const rem = pickField(raw, ...spec.remarks);
   const qtyRaw = pickField(raw, ...spec.qty);
   const unitsRaw = pickField(raw, ...(MILESTONE_PDF_UNIT_FIELD_GROUPS[colIndex] || []));
   const unitStr = unitsRaw != null && String(unitsRaw).trim() !== '' ? String(unitsRaw).trim() : '';
-
-  const hasDetail = [tgt, sub, app, st, rem, qtyRaw, unitsRaw].some(
-    (v) => v != null && String(v).trim() !== ''
-  );
   const hasNum = Number.isFinite(numFallback) && numFallback !== 0;
-  if (!hasDetail && !hasNum) return ['Not Required'];
 
   // Only emit a date line (with its label) when the API actually returned that
   // date. No hardcoded/placeholder labels or repeated default dates.
@@ -481,10 +480,6 @@ function buildMilestoneCellLines(raw, colIndex, numFallback) {
     lines.push('Approval');
     lines.push(aDate);
   }
-  if (rem != null && String(rem).trim() !== '') {
-    lines.push('Remarks');
-    lines.push(String(rem).trim());
-  }
   // Qty: actual API value when present, otherwise 0.
   lines.push('Qty');
   if (qtyRaw != null && String(qtyRaw).trim() !== '') {
@@ -495,9 +490,9 @@ function buildMilestoneCellLines(raw, colIndex, numFallback) {
   } else {
     lines.push('0');
   }
-  // Status: actual API value when present, otherwise empty (no default).
-  const stTrim = st != null ? String(st).trim() : '';
-  lines.push(stTrim);
+  // Footer slot (was Status): show XXXRemarks only — blank when empty; never show XXXStatus.
+  const remTrim = rem != null ? String(rem).trim() : '';
+  lines.push(remTrim);
   return lines;
 }
 

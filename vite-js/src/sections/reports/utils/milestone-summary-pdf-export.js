@@ -1234,6 +1234,133 @@ function embedRowImageInBox(doc, x, y, w, h, raw) {
   drawImagePlaceholder(doc, x, y, w, h);
 }
 
+/**
+ * Parse one or more milestone strings like `40% ES: 12 May 2026`.
+ * Date text is kept exactly as returned by the API (only `ES:` prefix removed).
+ * @returns {{ percent: string; date: string }[]}
+ */
+function parseMilestoneEsDisplaySegments(raw) {
+  if (raw == null || raw === '' || raw === 0 || raw === '0') return [];
+  const s = String(raw).trim();
+  if (!s) return [];
+
+  const segments = [];
+  const re = /(\d+)\s*%\s*ES\s*:\s*([\s\S]*?)(?=\s*\d+\s*%\s*ES\s*:|$)/gi;
+  let m = re.exec(s);
+  while (m) {
+    const percent = `${m[1]}%`;
+    const date = String(m[2] || '')
+      .trim()
+      .replace(/\s+/g, ' ');
+    segments.push({ percent, date });
+    m = re.exec(s);
+  }
+  if (segments.length) return segments;
+
+  const single = /^(\d+)\s*%\s*(?:ES\s*[:\-]?\s*)?(.*)$/is.exec(s);
+  if (single) {
+    const datePart = String(single[2] || '')
+      .trim()
+      .replace(/^ES\s*[:\-]?\s*/i, '')
+      .trim()
+      .replace(/\s+/g, ' ');
+    return [{ percent: `${single[1]}%`, date: datePart }];
+  }
+
+  return [];
+}
+
+function isMilestoneZeroOnlyValue(raw) {
+  if (raw == null || raw === '') return false;
+  return String(raw).trim() === '0';
+}
+
+function getMilestoneEsDisplayLinesFromValue(raw) {
+  if (isMilestoneZeroOnlyValue(raw)) return ['0%', 'N/A'];
+
+  const segments = parseMilestoneEsDisplaySegments(raw);
+  if (!segments.length) return ['0%', 'N/A'];
+
+  const lines = [];
+  segments.forEach(({ percent, date }) => {
+    if (percent) lines.push(percent);
+    if (date) lines.push(date);
+    else if (percent) lines.push('N/A');
+  });
+  return lines.length ? lines : ['0%', 'N/A'];
+}
+
+function getMilestoneCellDisplayLines(raw, spec) {
+  const combined = pickField(raw, ...(spec.keys || []));
+  if (isMilestoneZeroOnlyValue(combined)) return ['0%', 'N/A'];
+
+  if (combined !== '' && combined != null) {
+    const segments = parseMilestoneEsDisplaySegments(combined);
+    if (segments.length) return getMilestoneEsDisplayLinesFromValue(combined);
+  }
+
+  const statusOnly = pickField(raw, ...(spec.statusKeys || []));
+  if (statusOnly !== '' && statusOnly != null) {
+    const segments = parseMilestoneEsDisplaySegments(statusOnly);
+    if (segments.length) return getMilestoneEsDisplayLinesFromValue(statusOnly);
+    const pct = String(statusOnly).trim();
+    if (/^\d+\s*%/.test(pct)) {
+      const percent = `${pct.match(/^(\d+)/)[1]}%`;
+      const dateText = combined != null && combined !== '' ? String(combined).trim() : '';
+      return dateText ? [percent, dateText] : [percent, 'N/A'];
+    }
+  }
+
+  if (combined !== '' && combined != null) {
+    const t = String(combined).trim();
+    if (t) return ['0', t];
+  }
+
+  return ['0%', 'N/A'];
+}
+
+function drawMilestoneEsDisplayLines(doc, x, y, w, h, lines) {
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const pctFs = 5.5;
+  const dateFs = 5.85;
+  /** Fixed distance from pair centre to percent (up) and date/N/A (down) — same for 0%, 1%, 100%. */
+  const PAIR_LINE_OFFSET = 6.5;
+  /** Vertical gap between stacked milestone pairs in one cell. */
+  const PAIR_STACK_GAP = 14;
+
+  const list = Array.isArray(lines) && lines.length ? lines : ['0%', 'N/A'];
+  const pairs = [];
+  for (let i = 0; i < list.length; i += 2) {
+    pairs.push([list[i], list[i + 1] ?? 'N/A']);
+  }
+
+  const stackSpan = pairs.length > 1 ? (pairs.length - 1) * PAIR_STACK_GAP : 0;
+  let pairCy = cy - stackSpan / 2;
+
+  pairs.forEach(([pctRaw, dateRaw]) => {
+    const pctText = String(pctRaw ?? '').trim();
+    const dateText = String(dateRaw ?? '').trim();
+    const dateShown = dateText === '—' ? 'N/A' : dateText;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(pctFs);
+    doc.text(pctText, cx, pairCy - PAIR_LINE_OFFSET, {
+      align: 'center',
+      baseline: 'middle',
+      maxWidth: w - 2,
+    });
+    doc.setFontSize(dateFs);
+    doc.text(dateShown, cx, pairCy + PAIR_LINE_OFFSET, {
+      align: 'center',
+      baseline: 'middle',
+      maxWidth: w - 2,
+    });
+
+    pairCy += PAIR_STACK_GAP;
+  });
+}
+
 /** Milestone status line in PDF — show digit only (strip `%`). */
 function displayMilestoneStatusValue(raw) {
   const s = String(raw ?? '').trim();
@@ -1338,30 +1465,13 @@ export function milestoneSummaryMilestoneExcelText(raw, spec) {
 
 function drawMilestoneCell(doc, x, y, w, h, raw, spec) {
   drawCellBorder(doc, x, y, w, h);
-  const top = milestoneTopStatus(raw, spec);
-  const bottom = milestoneBottomDate(raw, spec);
-  const cx = x + w / 2;
-  const cy = y + h / 2;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(5.5);
-  doc.text(displayMilestoneStatusValue(top), cx, cy - 6.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
-  doc.setFontSize(5.85);
-  // Display-only: bottom line placeholder "—" renders as "N/A".
-  const dateShown = String(bottom) === '—' ? 'N/A' : String(bottom);
-  doc.text(dateShown, cx, cy + 6.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
+  drawMilestoneEsDisplayLines(doc, x, y, w, h, getMilestoneCellDisplayLines(raw, spec));
 }
 
 function drawFriCombinedCell(doc, x, y, w, h, raw, spec) {
   drawCellBorder(doc, x, y, w, h);
   const v = pickField(raw, ...(spec.keys || []));
-  const { top, bottom } = parseFriCombined(v);
-  const cx = x + w / 2;
-  const cy = y + h / 2;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(5.5);
-  doc.text(displayMilestoneStatusValue(top || '0'), cx, cy - 6.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
-  doc.setFontSize(5.85);
-  doc.text(String(bottom || '—'), cx, cy + 6.5, { align: 'center', baseline: 'middle', maxWidth: w - 2 });
+  drawMilestoneEsDisplayLines(doc, x, y, w, h, getMilestoneEsDisplayLinesFromValue(v));
 }
 
 function drawStackedTwoDates(doc, x, y, w, h, raw, spec) {

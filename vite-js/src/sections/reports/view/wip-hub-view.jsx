@@ -1206,7 +1206,7 @@ async function runSaltWipPdfFromFilters(enqueueSnackbar, filters, mode, dropdown
   }
 }
 
-/** Customised Customer WIP PDF — demo grid until API rows are wired (`buildCustomisedCustomerWipPdfBlobFromRows(rows, meta)`). */
+/** Customised Customer WIP PDF — temporary: headings + empty grid only (no API, no demo rows). */
 async function runCustomisedCustomerWipPdfFromFilters(
   enqueueSnackbar,
   filters,
@@ -1258,11 +1258,13 @@ async function runCustomisedCustomerWipPdfFromFilters(
   };
 
   const meta = {
+    customerId: filters.customer,
     customerLabel: resolveCustomerLabel(),
     supplierLabel: resolveSupplierLabel(),
     merchantLabel: resolveMerchantLabel(),
     fromDate,
     toDate,
+    emptyGridOnly: true,
   };
 
   try {
@@ -3370,13 +3372,23 @@ function SaltWipReportForm() {
 const CUSTOMISED_CUSTOMER_WIP_PAGE_TITLE =
   'Customised Customer WIP Report / Summary of Production Status Report';
 
+/** Customer dropdown — only these IDs visible on Customised Customer WIP. */
+const CUSTOMISED_CUSTOMER_WIP_ALLOWED_CUSTOMER_IDS = new Set(['108', '30']);
+const CUSTOMISED_CUSTOMER_WIP_DEFAULT_CUSTOMER_ID = '108';
+
+function filterCustomisedCustomerWipCustomers(list) {
+  return (Array.isArray(list) ? list : []).filter((row) =>
+    CUSTOMISED_CUSTOMER_WIP_ALLOWED_CUSTOMER_IDS.has(milestoneCustomerKey(row))
+  );
+}
+
 /** Customised Customer WIP — full-width Merchandiser; Customer / Supplier / PO; Style / dates; four actions. */
 function CustomisedCustomerWipReportForm() {
   const { enqueueSnackbar } = useSnackbar();
 
   const [filters, setFilters] = useState({
     merchandiser: ALL,
-    customer: ALL,
+    customer: CUSTOMISED_CUSTOMER_WIP_DEFAULT_CUSTOMER_ID,
     supplier: ALL,
     poScope: ALL,
     style: ALL,
@@ -3425,7 +3437,7 @@ function CustomisedCustomerWipReportForm() {
       try {
         const res = await fetchMilestoneSummaryDropdowns(wipLdpFobAuthHeaders());
         if (cancelled) return;
-        setCustomers(res.customers);
+        setCustomers(filterCustomisedCustomerWipCustomers(res.customers));
         setSuppliers(res.suppliers);
         setMerchants(res.merchants);
         setPortfolios(res.portfolios);
@@ -3446,14 +3458,17 @@ function CustomisedCustomerWipReportForm() {
     };
   }, [enqueueSnackbar]);
 
-  /** If a selected key isn't in the latest API list, reset it to "All". */
+  /** If a selected key isn't in the latest API list, reset customer to Bailey Apparel (108). */
   useEffect(() => {
     setFilters((prev) => {
       let changed = false;
       const next = { ...prev };
 
-      if (prev.customer !== ALL && !customers.some((r) => milestoneCustomerKey(r) === prev.customer)) {
-        next.customer = ALL;
+      if (
+        prev.customer === ALL ||
+        !customers.some((r) => milestoneCustomerKey(r) === prev.customer)
+      ) {
+        next.customer = CUSTOMISED_CUSTOMER_WIP_DEFAULT_CUSTOMER_ID;
         changed = true;
       }
       if (prev.supplier !== ALL && !suppliers.some((r) => milestoneSupplierKey(r) === prev.supplier)) {
@@ -3576,7 +3591,6 @@ function CustomisedCustomerWipReportForm() {
               sx={selectSx}
               disabled={loadingDropdowns && customers.length === 0}
             >
-              <MenuItem value={ALL}>All Customer</MenuItem>
               {customers
                 .filter((row) => milestoneCustomerKey(row))
                 .map((row) => {
