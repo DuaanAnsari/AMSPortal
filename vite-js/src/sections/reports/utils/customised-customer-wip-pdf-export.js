@@ -66,6 +66,62 @@ const COL_WEIGHTS = [
   28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 30,
 ];
 
+/** C-LIFE GROUP LTD. — customer-specific table headings only (data fields unchanged). */
+export const CUSTOMISED_CUSTOMER_WIP_CLIFE_CUSTOMER_ID = '30';
+
+const CLIFE_HEADERS = [
+  'IMAGE',
+  'STYLE\n#',
+  'DESCRIPTION',
+  'COLOR',
+  'PO\n#',
+  'TTL\nQTY',
+  'SHIP\nDATE',
+  'LAB DIPS',
+  'KNIT\nDOWN',
+  'STRIKE\nOFFS',
+  'FIT\nSAMPLES',
+  'PP\nSAMPLES',
+  'LICENSOR\nSAMPLE',
+  'TOP\nSAMPLES',
+  'TESTING',
+  'TRIMS',
+  'YARN IN\nHOUSE',
+  'KNITTING',
+  'DYEING',
+  'CUTTING',
+  'STITCH\nOFFLINE',
+  'FINISHING',
+  'PACKING',
+  'COMMENTS',
+];
+
+const CLIFE_COL_WEIGHTS = [
+  36, 32, 46, 50, 36, 28, 32,
+  28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 30,
+];
+
+function isClifeCustomisedCustomerWip(meta) {
+  return String(meta?.customerId ?? meta?.customerID ?? '') === CUSTOMISED_CUSTOMER_WIP_CLIFE_CUSTOMER_ID;
+}
+
+function getCustomisedCustomerWipGridConfig(meta) {
+  if (isClifeCustomisedCustomerWip(meta)) {
+    return {
+      headers: CLIFE_HEADERS,
+      colWeights: CLIFE_COL_WEIGHTS,
+      ttlQtyColIndex: 5,
+      drawRow: drawDataRowClife,
+    };
+  }
+  return {
+    headers: HEADERS,
+    colWeights: COL_WEIGHTS,
+    ttlQtyColIndex: 10,
+    drawRow: drawDataRow,
+  };
+}
+
 /** Demo rows — replace with API rows when backend is ready. */
 export const CUSTOMISED_CUSTOMER_WIP_DEMO_ROWS = [
   {
@@ -159,9 +215,9 @@ export const CUSTOMISED_CUSTOMER_WIP_DEMO_ROWS = [
   },
 ];
 
-function colWidths(innerW) {
-  const sum = COL_WEIGHTS.reduce((a, b) => a + b, 0);
-  const out = COL_WEIGHTS.map((w) => (w / sum) * innerW);
+function colWidths(innerW, weights = COL_WEIGHTS) {
+  const sum = weights.reduce((a, b) => a + b, 0);
+  const out = weights.map((w) => (w / sum) * innerW);
   const drift = innerW - out.reduce((a, b) => a + b, 0);
   out[out.length - 1] += drift;
   return out;
@@ -239,14 +295,14 @@ function drawHeaderCell(doc, x, y, w, h, headerText) {
     .filter((p) => p.length > 0);
   if (parts.length === 0) parts.push('—');
 
-  let fs = 5;
+  let fs = 5.6;
   doc.setFontSize(fs);
   let lines = [];
   parts.forEach((p) => {
     lines.push(...doc.splitTextToSize(p, Math.max(3, w - 3)));
   });
   if (lines.length > 4) {
-    fs = 4.4;
+    fs = 5;
     doc.setFontSize(fs);
     lines = [];
     parts.forEach((p) => {
@@ -401,10 +457,10 @@ function drawStatusValueCell(doc, x, y, w, h, val) {
   doc.setTextColor(0, 0, 0);
 }
 
-function drawTableHeaderRow(doc, y, x0, widths) {
+function drawTableHeaderRow(doc, y, x0, widths, headers) {
   const xs = colXs(x0, widths);
-  for (let i = 0; i < HEADERS.length; i += 1) {
-    drawHeaderCell(doc, xs[i], y, widths[i], TABLE_HEADER_ROW_H, HEADERS[i]);
+  for (let i = 0; i < headers.length; i += 1) {
+    drawHeaderCell(doc, xs[i], y, widths[i], TABLE_HEADER_ROW_H, headers[i]);
   }
   return y + TABLE_HEADER_ROW_H;
 }
@@ -444,6 +500,61 @@ function drawDataRow(doc, y, x0, widths, row) {
     i += 1;
   }
   return y + DATA_ROW_H;
+}
+
+/** C-LIFE GROUP LTD. — same demo/API row fields; column order matches {@link CLIFE_HEADERS}. */
+function drawDataRowClife(doc, y, x0, widths, row) {
+  const xs = colXs(x0, widths);
+  let i = 0;
+  drawImageCell(doc, xs[i], y, widths[i], DATA_ROW_H, row);
+  i += 1;
+  drawCenterTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.productNumber, 5.6);
+  i += 1;
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, [row.description], 'left', 5.2);
+  i += 1;
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.bodyColor || [], 'left', 4.9);
+  i += 1;
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, [row.poNo], 'left', 5.1);
+  i += 1;
+  drawQtyCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.ttlQty);
+  i += 1;
+  drawMultilineCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.exFactory || [], 'center', 5.2);
+  i += 1;
+  const cells = row.statusCells || [];
+  for (let k = 0; k < 16; k += 1) {
+    drawStatusValueCell(doc, xs[i], y, widths[i], DATA_ROW_H, cells[k]);
+    i += 1;
+  }
+  drawCenterTextCell(doc, xs[i], y, widths[i], DATA_ROW_H, row.custCancel ?? '', 5.4);
+  return y + DATA_ROW_H;
+}
+
+/** Temporary empty grid — borders only, no placeholders or cell text. */
+function drawBlankDataRow(doc, y, x0, widths) {
+  const xs = colXs(x0, widths);
+  for (let i = 0; i < widths.length; i += 1) {
+    drawCellBorder(doc, xs[i], y, widths[i], DATA_ROW_H);
+  }
+  return y + DATA_ROW_H;
+}
+
+/** Grand Total — below the grid (outside table frame); label + full-width underline. */
+function drawCustomisedCustomerWipGrandTotalRow(doc, y, x0, widths) {
+  const tableW = widths.reduce((a, b) => a + b, 0);
+  const gapBelowGrid = 4;
+  const labelY = y + gapBelowGrid + 6;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(0, 0, 0);
+  doc.text('Grand Total:', x0 + 4, labelY, { align: 'left', baseline: 'middle' });
+
+  const lineY = labelY + 7;
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.35);
+  doc.line(x0, lineY, x0 + tableW, lineY);
+
+  return lineY;
 }
 
 function drawOuterTableFrame(doc, x, y, w, h) {
@@ -525,10 +636,17 @@ function drawFooter(doc, pageIndex, totalPages) {
  *   merchantLabel?: string;
  *   fromDate?: string;
  *   toDate?: string;
+ *   customerId?: string | number;
+ *   emptyGridOnly?: boolean;
  * }} [meta]
  */
 export async function buildCustomisedCustomerWipPdfBlobFromRows(rows, meta = {}) {
-  const data = Array.isArray(rows) && rows.length > 0 ? rows : CUSTOMISED_CUSTOMER_WIP_DEMO_ROWS;
+  const data = meta.emptyGridOnly
+    ? []
+    : Array.isArray(rows) && rows.length > 0
+      ? rows
+      : CUSTOMISED_CUSTOMER_WIP_DEMO_ROWS;
+  const grid = getCustomisedCustomerWipGridConfig(meta);
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
 
   /**
@@ -545,7 +663,7 @@ export async function buildCustomisedCustomerWipPdfBlobFromRows(rows, meta = {})
 
   const innerLeft = H_MARGIN;
   const innerW = PAGE_W - 2 * H_MARGIN;
-  const widths = colWidths(innerW);
+  const widths = colWidths(innerW, grid.colWeights);
 
   const pageBodyBottom = PAGE_H - V_MARGIN - FOOTER_H;
   let tableSegTop = 0;
@@ -554,7 +672,7 @@ export async function buildCustomisedCustomerWipPdfBlobFromRows(rows, meta = {})
   const startPage = () => {
     const tableTop = drawPageHeader(doc, logoDataUrl, meta);
     tableSegTop = tableTop;
-    y = drawTableHeaderRow(doc, tableTop, innerLeft, widths);
+    y = drawTableHeaderRow(doc, tableTop, innerLeft, widths, grid.headers);
   };
 
   const flushSegmentFrame = () => {
@@ -566,16 +684,30 @@ export async function buildCustomisedCustomerWipPdfBlobFromRows(rows, meta = {})
 
   startPage();
 
-  data.forEach((row) => {
-    if (y + DATA_ROW_H > pageBodyBottom) {
+  const ensureBodyRowFits = (rowH, onNewPage) => {
+    if (y + rowH > pageBodyBottom) {
       flushSegmentFrame();
       doc.addPage([PAGE_W, PAGE_H], 'l');
-      startPage();
+      onNewPage();
     }
-    y = drawDataRow(doc, y, innerLeft, widths, row);
-  });
+  };
 
-  flushSegmentFrame();
+  if (meta.emptyGridOnly) {
+    ensureBodyRowFits(DATA_ROW_H, startPage);
+    y = drawBlankDataRow(doc, y, innerLeft, widths);
+    flushSegmentFrame();
+    y = drawCustomisedCustomerWipGrandTotalRow(doc, y, innerLeft, widths);
+  } else {
+    data.forEach((row) => {
+      if (y + DATA_ROW_H > pageBodyBottom) {
+        flushSegmentFrame();
+        doc.addPage([PAGE_W, PAGE_H], 'l');
+        startPage();
+      }
+      y = grid.drawRow(doc, y, innerLeft, widths, row);
+    });
+    flushSegmentFrame();
+  }
 
   const total = doc.internal.getNumberOfPages();
   for (let p = 1; p <= total; p += 1) {
