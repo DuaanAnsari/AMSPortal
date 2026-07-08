@@ -72,13 +72,31 @@ const getSafeKey = (proc, suffix) => {
   return suffix ? `${safeProc}_${suffix.toLowerCase()}` : safeProc;
 };
 
-const isSubmissionDateFieldKey = (fieldKey) =>
-  String(fieldKey || '').toLowerCase().endsWith('_approvaldatee');
+const collectSubmissionFieldKeys = (columnDefs) => {
+  const keys = new Set();
+  (columnDefs || []).forEach((group) => {
+    const submissionCol = group?.children?.find((c) => c.headerName === 'Submission Date');
+    if (submissionCol?.field) keys.add(submissionCol.field);
+  });
+  return keys;
+};
+
+/** Mutable refs wired from TNAChartPage — used by date valueSetter commit hook. */
+const submissionFieldKeysRef = { current: new Set() };
+const commitTnaGridCellChangeRef = { current: null };
+
+const getSubmissionFieldKeyForProc = (columnDefs, proc, processKeyToNameRef) => {
+  const originalProcName = processKeyToNameRef.current?.get(proc) || proc;
+  const procGroup = (columnDefs || []).find((c) => c.headerName === originalProcName);
+  const submissionCol = procGroup?.children?.find((c) => c.headerName === 'Submission Date');
+  if (submissionCol?.field) return submissionCol.field;
+  return getSafeKey(originalProcName, 'actualDate');
+};
 
 /** Submission Date edit/add → actualDateBid 1 on UpdateTNA; otherwise 0. */
-const getActualDateBid = (changedFields, proc, row, tnaChartID) => {
+const getActualDateBid = (changedFields, proc, row, tnaChartID, submissionFieldKey) => {
   const submissionChanged = [...(changedFields || [])].some((key) => {
-    if (!isSubmissionDateFieldKey(key)) return false;
+    if (String(key).toLowerCase() !== String(submissionFieldKey).toLowerCase()) return false;
     const fieldProc = key.slice(0, key.lastIndexOf('_'));
     if (row && tnaChartID) {
       return Number(row[`${fieldProc}_tnachartid`] ?? row[`${fieldProc}_tnaChartID`]) === Number(tnaChartID);
@@ -186,6 +204,19 @@ const formatGridDate = (value) => {
   return `${dd}/${mm}/${yyyy}`;
 };
 
+const areTnaCellValuesEqual = (fieldKey, left, right) => {
+  if (left === right) return true;
+  if (!isTnaDateFieldKey(fieldKey)) return false;
+
+  const leftDate = parseApiDateToDate(left);
+  const rightDate = parseApiDateToDate(right);
+  if (leftDate && rightDate) return leftDate.getTime() === rightDate.getTime();
+
+  const leftEmpty = left == null || left === '';
+  const rightEmpty = right == null || right === '';
+  return leftEmpty && rightEmpty;
+};
+
 const isTnaDateFieldKey = (fieldKey) =>
   Boolean(fieldKey) && (
     fieldKey.endsWith('_actualdate') ||
@@ -219,6 +250,7 @@ const TNA_DATE_COL_PROPS = {
     const field = params.colDef?.field;
     if (!field || !params.data) return false;
 
+    const previousValue = params.data[field];
     const { newValue } = params;
     let storedValue;
 
@@ -227,11 +259,45 @@ const TNA_DATE_COL_PROPS = {
     } else if (newValue instanceof Date && !Number.isNaN(newValue.getTime())) {
       storedValue = formatGridDate(newValue);
     } else {
-      storedValue = normalizeTnaDateCellValue(newValue, params.data[field] ?? '');
+      storedValue = normalizeTnaDateCellValue(newValue, previousValue ?? '');
     }
 
-    if (params.data[field] === storedValue) return false;
+    if (areTnaCellValuesEqual(field, storedValue, previousValue)) {
+      if (submissionFieldKeysRef.current.has(field)) {
+        // eslint-disable-next-line no-console
+        console.log('Submission valueSetter skipped (no change detected)');
+      }
+      return false;
+    }
+
+    if (submissionFieldKeysRef.current.has(field)) {
+      // eslint-disable-next-line no-console
+      console.log('Submission valueSetter fired');
+      // eslint-disable-next-line no-console
+      console.log('Row ID:', `${params.data.poid}_${params.data.color || ''}`);
+      // eslint-disable-next-line no-console
+      console.log('Field:', field);
+      // eslint-disable-next-line no-console
+      console.log('Old Value:', previousValue);
+      // eslint-disable-next-line no-console
+      console.log('New Value:', storedValue);
+      // eslint-disable-next-line no-console
+      console.log('commitRef wired:', Boolean(commitTnaGridCellChangeRef.current));
+    }
+
     params.data[field] = storedValue;
+
+    queueMicrotask(() => {
+      commitTnaGridCellChangeRef.current?.({
+        data: params.data,
+        colDef: params.colDef,
+        node: params.node,
+        api: params.api,
+        oldValue: previousValue,
+        newValue: storedValue,
+      });
+    });
+
     return true;
   },
   valueFormatter: (params) => {
@@ -530,6 +596,10 @@ export default function TNAChartPage() {
 
   const [columnDefs, setColumnDefs] = useState([]);
   const restoredFromCacheRef = useRef(false);
+
+  useEffect(() => {
+    submissionFieldKeysRef.current = collectSubmissionFieldKeys(columnDefs);
+  }, [columnDefs]);
 
   const fetchProcessListByPortfolio = useCallback(async (portfolioId) => {
     if (!portfolioId) return [];
@@ -1544,16 +1614,42 @@ export default function TNAChartPage() {
     if (!fieldKey || fieldKey.endsWith('_select')) return;
 
     const rowKey = `${data.poid}_${data.color || ''}`;
+    const isSubmissionDateField = submissionFieldKeysRef.current.has(fieldKey);
+
+    if (isSubmissionDateField) {
+      // eslint-disable-next-line no-console
+      console.log('syncCellChangeToState called');
+      // eslint-disable-next-line no-console
+      console.log('Row ID:', rowKey);
+      // eslint-disable-next-line no-console
+      console.log('Field:', fieldKey);
+      // eslint-disable-next-line no-console
+      console.log('Old Value:', oldValue);
+      // eslint-disable-next-line no-console
+      console.log('New Value:', newValue);
+    }
+
+    // Never use data[fieldKey] as old value — valueSetter may have already written the new value
     const oldStored = isTnaDateFieldKey(fieldKey)
-      ? normalizeTnaDateCellValue(oldValue ?? data[fieldKey], data[fieldKey] ?? '')
+      ? normalizeTnaDateCellValue(oldValue, '')
       : oldValue;
 
     let normalizedValue = node?.data?.[fieldKey] ?? newValue;
     if (isTnaDateFieldKey(fieldKey)) {
-      normalizedValue = normalizeTnaDateCellValue(normalizedValue, oldStored ?? data[fieldKey] ?? '');
+      normalizedValue = normalizeTnaDateCellValue(normalizedValue, '');
     }
 
-    if (normalizedValue === oldStored) return;
+    if (areTnaCellValuesEqual(fieldKey, normalizedValue, oldStored)) {
+      if (isSubmissionDateField) {
+        // eslint-disable-next-line no-console
+        console.log('syncCellChangeToState BLOCKED at areTnaCellValuesEqual:', {
+          oldStored,
+          normalizedValue,
+          dataField: data[fieldKey],
+        });
+      }
+      return;
+    }
 
     // --- Quantity Completed validation based on unit (pcs or %) ---
     if (fieldKey.endsWith('_qtycompleted')) {
@@ -1622,6 +1718,16 @@ export default function TNAChartPage() {
           __changedFields: [fieldKey],
         });
       }
+
+      if (isSubmissionDateField) {
+        // eslint-disable-next-line no-console
+        console.log('modifiedRows.size:', newMap.size);
+        // eslint-disable-next-line no-console
+        console.log('Modified Row:', newMap.get(rowKey));
+        // eslint-disable-next-line no-console
+        console.log('Save Button Visible:', newMap.size > 0);
+      }
+
       return newMap;
     });
 
@@ -1632,11 +1738,16 @@ export default function TNAChartPage() {
     }
   }, []);
 
+  useEffect(() => {
+    commitTnaGridCellChangeRef.current = syncCellChangeToState;
+  }, [syncCellChangeToState]);
+
   const onCellValueChanged = (params) => {
     syncCellChangeToState(params);
   };
 
   const onCellEditingStopped = (params) => {
+    if (!params.valueChanged) return;
     const fieldKey = params.colDef?.field;
     if (!fieldKey || !isTnaDateFieldKey(fieldKey)) return;
     syncCellChangeToState(params);
@@ -1669,7 +1780,13 @@ export default function TNAChartPage() {
       const updates = [];
 
       // Har modified grid row ko per‑process TNA objects me convert karo
-      modifiedRows.forEach((row) => {
+      modifiedRows.forEach((modifiedRow) => {
+        const rowKey = `${modifiedRow.poid}_${modifiedRow.color || ''}`;
+        const liveNode = gridRef.current?.api?.getRowNode?.(rowKey);
+        const row = liveNode?.data
+          ? { ...liveNode.data, ...modifiedRow, __changedFields: modifiedRow.__changedFields }
+          : modifiedRow;
+
         const processesInRow = new Set();
 
         const changedFields = new Set(row.__changedFields || []);
@@ -1704,6 +1821,11 @@ export default function TNAChartPage() {
           const tnaChartID = row[`${proc}_tnachartid`] ?? row[`${proc}_tnaChartID`] ?? 0;
           if (!tnaChartID) return;
 
+          const submissionFieldKey = getSubmissionFieldKeyForProc(columnDefs, proc, processKeyToNameRef);
+          const actualDateBid = getActualDateBid(changedFields, proc, row, tnaChartID, submissionFieldKey);
+          const submissionDateValue = row[submissionFieldKey];
+          const defaultActualDateValue = row[`${proc}_actualdate`] ?? row[`${proc}_actualDate`];
+
           const payload = {
             tnaChartID,
             poid: row.poid ?? 0,
@@ -1725,14 +1847,22 @@ export default function TNAChartPage() {
             // Dates – always send in API string format
             date: toApiDateTime(row[`${proc}_date`] ?? row.date),
             idealDate: toApiDateTime(row[`${proc}_idealdate`] ?? row[`${proc}_idealDate`]),
-            actualDate: toApiDateTime(row[`${proc}_actualdate`] ?? row[`${proc}_actualDate`]),
+            actualDate: toApiDateTime(actualDateBid === 1 ? submissionDateValue : defaultActualDateValue),
             approvalDatee: toApiDateTime(row[`${proc}_approvaldatee`] ?? row[`${proc}_approvalDatee`]),
             estimatedDate: toApiDateTime(row[`${proc}_estimateddate`] ?? row[`${proc}_estimatedDate`]),
             freezeCondPPSample: toApiDateTime(
               row[`${proc}_freezecondppsample`] ?? row[`${proc}_freezeCondPPSample`] ?? row.freezeCondPPSample
             ),
-            actualDateBid: getActualDateBid(changedFields, proc, row, tnaChartID),
+            actualDateBid,
           };
+
+          if (actualDateBid === 1) {
+            // eslint-disable-next-line no-console
+            console.log('Payload Before API:', {
+              actualDate: payload.actualDate,
+              actualDateBid: payload.actualDateBid,
+            });
+          }
 
           updates.push(payload);
         });
