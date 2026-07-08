@@ -35,6 +35,8 @@ import {
 import { fetchPoNumbers } from 'src/sections/reports/utils/pono-dropdown-api';
 import {
   buildShipmentTrackingReportPdfBlob,
+  saveShipmentTrackingReportPdf,
+  SHIPMENT_TRACKING_PDF_FILENAME,
   openShipmentTrackingReportPdf,
 } from 'src/sections/reports/utils/shipment-tracking-report-pdf-export';
 import {
@@ -117,6 +119,223 @@ const sectionLabelSx = {
   color: 'text.secondary',
 };
 
+const SHIPMENT_ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Browser tab title for this report page and its PDF preview only. */
+const SHIPMENT_TRACKING_TAB_TITLE = 'Shipment Tracking Report';
+
+/** Sentinel / empty dates must never appear on the report (e.g. 1900-01-01). */
+const SHIPMENT_TRACKING_SENTINEL_DATES = new Set([
+  '1900-01-01',
+  '0001-01-01',
+  '1970-01-01',
+  '1899-12-30',
+]);
+
+function shipmentFilterIdOrZero(value) {
+  const s = String(value ?? '').trim();
+  if (!s || s.toLowerCase() === ALL) return '0';
+  return s;
+}
+
+function unwrapShipmentTrackingList(data) {
+  if (Array.isArray(data)) return data;
+  if (data == null) return [];
+  if (Array.isArray(data.data)) return data.data;
+  if (Array.isArray(data.Data)) return data.Data;
+  if (Array.isArray(data.result)) return data.result;
+  if (Array.isArray(data.Result)) return data.Result;
+  if (Array.isArray(data.rows)) return data.rows;
+  if (Array.isArray(data.Rows)) return data.Rows;
+  return [];
+}
+
+function pickShipmentTrackingField(obj, ...keys) {
+  if (!obj) return '';
+  const match = keys.find((k) => obj[k] != null && obj[k] !== '');
+  return match != null ? obj[match] : '';
+}
+
+/**
+ * Format API dates for the Shipment Tracking PDF (`MM/DD/YY`).
+ * null / empty / 1900-01-01 (and similar sentinels) → blank.
+ */
+function formatShipmentTrackingReportDate(value) {
+  if (value == null || value === '') return '';
+  const s = String(value).trim();
+  if (!s) return '';
+
+  const iso = s.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null;
+  if (iso && SHIPMENT_TRACKING_SENTINEL_DATES.has(iso)) return '';
+
+  const d = iso ? new Date(`${iso}T00:00:00`) : new Date(s);
+  if (Number.isNaN(d.getTime())) return '';
+
+  const yyyy = d.getFullYear();
+  const mmPad = String(d.getMonth() + 1).padStart(2, '0');
+  const ddPad = String(d.getDate()).padStart(2, '0');
+  if (SHIPMENT_TRACKING_SENTINEL_DATES.has(`${yyyy}-${mmPad}-${ddPad}`)) return '';
+
+  const yy = String(yyyy).slice(-2);
+  return `${mmPad}/${ddPad}/${yy}`;
+}
+
+function mapShipmentTrackingApiRowToPdfRow(raw) {
+  const remarkParts = [
+    pickShipmentTrackingField(raw, 'UpdateSheetremarks', 'updateSheetremarks'),
+    pickShipmentTrackingField(raw, 'ShipRemarks', 'shipRemarks'),
+    (() => {
+      const v = formatShipmentTrackingReportDate(
+        pickShipmentTrackingField(raw, 'EntryFiledDate', 'entryFiledDate')
+      );
+      return v ? `Entry Filed: ${v}` : '';
+    })(),
+    (() => {
+      const v = formatShipmentTrackingReportDate(
+        pickShipmentTrackingField(raw, 'GoodsClearedDate', 'goodsClearedDate')
+      );
+      return v ? `Goods Cleared: ${v}` : '';
+    })(),
+    (() => {
+      const v = formatShipmentTrackingReportDate(
+        pickShipmentTrackingField(raw, 'DocstoBrokerDate', 'docstoBrokerDate')
+      );
+      return v ? `Docs to Broker: ${v}` : '';
+    })(),
+    (() => {
+      const v = formatShipmentTrackingReportDate(
+        pickShipmentTrackingField(raw, 'DocstoBankDate', 'docstoBankDate')
+      );
+      return v ? `Docs to Bank: ${v}` : '';
+    })(),
+    (() => {
+      const v = formatShipmentTrackingReportDate(
+        pickShipmentTrackingField(raw, 'ETDActualDate', 'etdActualDate')
+      );
+      return v ? `ETD Actual: ${v}` : '';
+    })(),
+    pickShipmentTrackingField(raw, 'PoCommission', 'poCommission') &&
+      `Commission: ${pickShipmentTrackingField(raw, 'PoCommission', 'poCommission')}`,
+    pickShipmentTrackingField(raw, 'NewCurrency', 'newCurrency') &&
+      `Currency: ${pickShipmentTrackingField(raw, 'NewCurrency', 'newCurrency')}`,
+    [
+      pickShipmentTrackingField(raw, 'CusAddress', 'cusAddress'),
+      pickShipmentTrackingField(raw, 'CusCity', 'cusCity'),
+      pickShipmentTrackingField(raw, 'CusCountry', 'cusCountry'),
+    ]
+      .filter(Boolean)
+      .join(', '),
+    pickShipmentTrackingField(raw, 'venderCity', 'VenderCity', 'vendorCity') &&
+      `Vendor City: ${pickShipmentTrackingField(raw, 'venderCity', 'VenderCity', 'vendorCity')}`,
+  ].filter(Boolean);
+
+  const shipCartons = pickShipmentTrackingField(raw, 'ShipCartons', 'shipCartons', 'Cartons', 'cartons');
+
+  return {
+    vendor: pickShipmentTrackingField(raw, 'CargoConsigneeName', 'cargoConsigneeName'),
+    poNo: pickShipmentTrackingField(raw, 'PONO', 'pono', 'PONo', 'poNo'),
+    vpoActualDate: formatShipmentTrackingReportDate(
+      pickShipmentTrackingField(raw, 'VPOActualDate', 'vpoActualDate')
+    ),
+    styleNo: pickShipmentTrackingField(raw, 'Styles', 'styles'),
+    ldpInvoiceNo: pickShipmentTrackingField(raw, 'LDPInvoiceNo', 'ldpInvoiceNo'),
+    qtyUnits: Number(pickShipmentTrackingField(raw, 'ShipQty', 'shipQty')) || 0,
+    shippedCtns: Number(shipCartons) || shipCartons || '',
+    mblAwblNo: pickShipmentTrackingField(raw, 'BillNo', 'billNo'),
+    containerNo: pickShipmentTrackingField(raw, 'ContainerNo', 'containerNo'),
+    destination: pickShipmentTrackingField(raw, 'CarGoDestination', 'cargoDestination', 'CargoDestination'),
+    shipmentEtd: formatShipmentTrackingReportDate(
+      pickShipmentTrackingField(raw, 'ETDExpectedDate', 'etdExpectedDate')
+    ),
+    shipmentEta: formatShipmentTrackingReportDate(
+      pickShipmentTrackingField(raw, 'ETAExpectedDate', 'etaExpectedDate')
+    ),
+    shipmentEtw: formatShipmentTrackingReportDate(pickShipmentTrackingField(raw, 'ETWDate', 'etwDate')),
+    revisedEtd: formatShipmentTrackingReportDate(pickShipmentTrackingField(raw, 'RevisedETD', 'revisedETD')),
+    revisedEta: formatShipmentTrackingReportDate(pickShipmentTrackingField(raw, 'RevisedETA', 'revisedETA')),
+    revisedEtw: formatShipmentTrackingReportDate(
+      pickShipmentTrackingField(raw, 'ReverseETWDate', 'reverseETWDate', 'ReverseEtwDate')
+    ),
+    actualEta: formatShipmentTrackingReportDate(
+      pickShipmentTrackingField(raw, 'ETAActualDate', 'etaActualDate')
+    ),
+    actualEtw: formatShipmentTrackingReportDate(pickShipmentTrackingField(raw, 'ActualETW', 'actualETW')),
+    containerRelease: formatShipmentTrackingReportDate(
+      pickShipmentTrackingField(raw, 'ContainerReleaseDate', 'containerReleaseDate')
+    ),
+    containerDelivery: formatShipmentTrackingReportDate(
+      pickShipmentTrackingField(raw, 'ContainerDeliveryDateASTWH', 'containerDeliveryDateASTWH')
+    ),
+    warehouseName: pickShipmentTrackingField(raw, 'WareHouseName', 'wareHouseName', 'WarehouseName'),
+    truckerName: pickShipmentTrackingField(raw, 'TruckerName', 'truckerName'),
+    remarks: remarkParts.join(' | '),
+    voyageMode: pickShipmentTrackingField(raw, 'Mode', 'mode'),
+    voyageName: pickShipmentTrackingField(raw, 'VoyageFlight', 'voyageFlight'),
+    description: pickShipmentTrackingField(raw, 'ItemDescriptionShippingInvoice', 'itemDescriptionShippingInvoice'),
+    _customer: pickShipmentTrackingField(raw, 'CustomerName', 'customerName'),
+    _cargoId: pickShipmentTrackingField(raw, 'CargoID', 'cargoID', 'cargoId'),
+    _poid: pickShipmentTrackingField(raw, 'POID', 'poid'),
+  };
+}
+
+function buildShipmentTrackingReportPdfPayload(rawRows) {
+  const customerMap = new Map();
+
+  (rawRows || []).forEach((raw) => {
+    const row = mapShipmentTrackingApiRowToPdfRow(raw);
+    const customer = row._customer || '—';
+    if (!customerMap.has(customer)) customerMap.set(customer, new Map());
+
+    const cargoKey = String(row._cargoId || row.mblAwblNo || row.containerNo || row._poid || 'default');
+    const subMap = customerMap.get(customer);
+    if (!subMap.has(cargoKey)) subMap.set(cargoKey, []);
+    subMap.get(cargoKey).push(row);
+  });
+
+  const groups = [...customerMap.entries()].map(([customer, subMap]) => {
+    const subGroups = [];
+    let customerQty = 0;
+    let customerCtns = 0;
+
+    subMap.forEach((rows) => {
+      const subQty = rows.reduce((sum, r) => sum + (Number(r.qtyUnits) || 0), 0);
+      const subCtns = rows.reduce((sum, r) => sum + (Number(r.shippedCtns) || 0), 0);
+      subGroups.push({
+        rows: rows.map(({ _customer, _cargoId, _poid, ...rest }) => rest),
+        subtotal: { qty: subQty, ctns: subCtns },
+      });
+      customerQty += subQty;
+      customerCtns += subCtns;
+    });
+
+    return { customer, subGroups, total: { qty: customerQty, ctns: customerCtns } };
+  });
+
+  return { printedBy: '', groups };
+}
+
+async function fetchShipmentTrackingReportRows(params, headers = {}) {
+  const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+  if (!base) {
+    throw new Error('VITE_API_BASE_URL is not set');
+  }
+
+  const q = new URLSearchParams({
+    fromDate: String(params.fromDate || ''),
+    toDate: String(params.toDate || ''),
+    marchandiserId: shipmentFilterIdOrZero(params.marchandiserId),
+  });
+
+  const url = `${base}/api/Report/ShipmentTrackingReport?${q.toString()}`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    throw new Error(`ShipmentTrackingReport API failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  return unwrapShipmentTrackingList(data);
+}
+
 // ----------------------------------------------------------------------
 // Shipment & Tracking Report (default landing form)
 // ----------------------------------------------------------------------
@@ -148,6 +367,45 @@ function ShipmentTrackingReportForm() {
   const [merchants, setMerchants] = useState([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
 
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = SHIPMENT_TRACKING_TAB_TITLE;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, []);
+
+  // Drop any leftover Service Worker from the reverted named-URL experiment.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(
+          regs
+            .filter((r) => {
+              const script = r.active?.scriptURL || r.installing?.scriptURL || r.waiting?.scriptURL || '';
+              const scope = r.scope || '';
+              return (
+                script.includes('/__shipment_tracking_pdf__/') ||
+                scope.includes('/__shipment_tracking_pdf__/')
+              );
+            })
+            .map((r) => r.unregister())
+        );
+        if (!cancelled && 'caches' in window) {
+          await caches.delete('shipment-tracking-pdf-v1');
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
   };
@@ -167,46 +425,73 @@ function ShipmentTrackingReportForm() {
 
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  const fetchShipmentTrackingPayload = useCallback(async () => {
+    const { fromDate, toDate, merchandiser } = filters;
+    const rawRows = await fetchShipmentTrackingReportRows(
+      {
+        fromDate,
+        toDate,
+        marchandiserId: merchandiser,
+      },
+      shipmentAuthHeaders()
+    );
+
+    if (!rawRows.length) return null;
+    return buildShipmentTrackingReportPdfPayload(rawRows);
+  }, [filters.merchandiser, filters.fromDate, filters.toDate]);
+
   /**
-   * Build the Shipment & Documents Tracking PDF blob (demo data for now — the
-   * backend payload will share the same shape) and either preview-tab it or
-   * trigger a direct file download.
+   * Fetch ShipmentTrackingReport (ENV base URL), map API fields onto the existing
+   * PDF row shape, then preview or download. Layout / columns unchanged.
    *
    * @param {'view'|'pdf'} mode
    */
   const runPdfExport = useCallback(
     async (mode) => {
       if (generatingPdf) return;
-      const previewWindow = mode === 'view' ? window.open('about:blank') : null;
+
+      const { fromDate, toDate } = filters;
+      if (!fromDate || !toDate) {
+        enqueueSnackbar('Fill From and To dates', { variant: 'warning' });
+        return;
+      }
+      if (!SHIPMENT_ISO_DATE.test(fromDate) || !SHIPMENT_ISO_DATE.test(toDate)) {
+        enqueueSnackbar('Dates must be yyyy-mm-dd', { variant: 'warning' });
+        return;
+      }
+
       setGeneratingPdf(true);
       try {
-        const blob = await buildShipmentTrackingReportPdfBlob({
-          printedBy: '',
-          fromDate: filters.fromDate,
-          toDate: filters.toDate,
-        });
-        if (mode === 'view' && previewWindow) {
-          const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
-          previewWindow.location.replace(url);
-          setTimeout(() => URL.revokeObjectURL(url), 120_000);
+        const payload = await fetchShipmentTrackingPayload();
+        if (!payload) {
+          enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
           return;
         }
-        openShipmentTrackingReportPdf(mode, blob);
+
+        if (mode === 'view') {
+          // Restore normal flow: blob File → createObjectURL → window.open (native viewer).
+          // No about:blank, no Service Worker, no custom PDF route.
+          // Filename assigned on File: "Shipment Tracking Report.pdf"
+          const blob = await buildShipmentTrackingReportPdfBlob(payload);
+          openShipmentTrackingReportPdf('view', blob);
+          return;
+        }
+
+        // Page "Download PDF" — jsPDF doc.save with exact filename.
+        await saveShipmentTrackingReportPdf(payload, SHIPMENT_TRACKING_PDF_FILENAME);
       } catch (err) {
         console.error('[ShipmentTracking] PDF build failed', err);
-        if (previewWindow) {
-          try {
-            previewWindow.close();
-          } catch {
-            /* ignore */
-          }
-        }
-        enqueueSnackbar('Could not build Shipment Tracking PDF', { variant: 'error' });
+        enqueueSnackbar(
+          err?.message?.includes('VITE_API_BASE_URL')
+            ? 'API URL missing: set VITE_API_BASE_URL'
+            : 'Could not build Shipment Tracking PDF',
+          { variant: 'error' }
+        );
       } finally {
         setGeneratingPdf(false);
       }
     },
-    [filters.fromDate, filters.toDate, generatingPdf, enqueueSnackbar]
+    [filters.fromDate, filters.toDate, generatingPdf, enqueueSnackbar, fetchShipmentTrackingPayload]
   );
 
   const handleViewReport = useCallback(() => runPdfExport('view'), [runPdfExport]);
@@ -519,6 +804,95 @@ function buildYearOptions() {
   return years;
 }
 
+const COMMISSION_INVOICE_TAB_TITLE = 'Logistic Department Shipped';
+
+function unwrapCommissionInvoiceList(data) {
+  if (Array.isArray(data)) return data;
+  if (data == null) return [];
+  if (Array.isArray(data.data)) return data.data;
+  if (Array.isArray(data.Data)) return data.Data;
+  if (Array.isArray(data.result)) return data.result;
+  if (Array.isArray(data.Result)) return data.Result;
+  if (Array.isArray(data.rows)) return data.rows;
+  if (Array.isArray(data.Rows)) return data.Rows;
+  return [];
+}
+
+function pickCommissionInvoiceField(obj, ...keys) {
+  if (!obj) return '';
+  const match = keys.find((k) => obj[k] != null && obj[k] !== '');
+  return match != null ? obj[match] : '';
+}
+
+/** Match existing demo date cells (`08-Jan-2026`). */
+function formatCommissionInvoiceShipmentDate(value) {
+  if (value == null || value === '') return '';
+  const s = String(value).trim();
+  if (!s) return '';
+
+  const iso = s.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null;
+  const d = iso ? new Date(`${iso}T00:00:00`) : new Date(s);
+  if (Number.isNaN(d.getTime())) return '';
+
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mon = d.toLocaleDateString('en-US', { month: 'short' });
+  return `${dd}-${mon}-${d.getFullYear()}`;
+}
+
+function mapCommissionInvoiceApiRowToPdfRow(raw) {
+  const quantityRaw = pickCommissionInvoiceField(raw, 'Quantity', 'quantity');
+
+  return {
+    shipmentDate: formatCommissionInvoiceShipmentDate(
+      pickCommissionInvoiceField(raw, 'ShipmentDate', 'shipmentDate')
+    ),
+    supplierName: pickCommissionInvoiceField(raw, 'VenderName', 'venderName', 'VendorName', 'vendorName'),
+    orderNo: pickCommissionInvoiceField(raw, 'PONO', 'pono', 'PONo', 'poNo'),
+    ldpInvoiceNo: pickCommissionInvoiceField(raw, 'LDPInvoiceNo', 'ldpInvoiceNo'),
+    invoiceNo: pickCommissionInvoiceField(raw, 'InvoiceNo', 'invoiceNo'),
+    quantity: quantityRaw === '' ? '' : Number(quantityRaw),
+    unitPrice: pickCommissionInvoiceField(raw, 'ShippedRate', 'shippedRate'),
+    totalValue: pickCommissionInvoiceField(raw, 'InvoiceValue', 'invoiceValue'),
+    commissionPct: pickCommissionInvoiceField(raw, 'Commission', 'commission'),
+    commissionValue: pickCommissionInvoiceField(raw, 'CommissionValue', 'commissionValue'),
+  };
+}
+
+function buildCommissionInvoiceReportPdfPayload(rawRows, meta = {}) {
+  return {
+    monthLabel: meta.monthLabel || '',
+    year: meta.year,
+    rows: (rawRows || []).map(mapCommissionInvoiceApiRowToPdfRow),
+  };
+}
+
+async function fetchShipmentCommissionReportRows(params, headers = {}) {
+  const base = String(import.meta.env.VITE_REPORT_API || '').replace(/\/+$/, '');
+  if (!base) {
+    throw new Error('VITE_REPORT_API is not set');
+  }
+
+  const monthNum = Number(params.month);
+  const month = Number.isFinite(monthNum)
+    ? String(monthNum).padStart(2, '0')
+    : String(params.month || '');
+
+  const q = new URLSearchParams({
+    year: String(params.year || ''),
+    month,
+    marchandiserId: shipmentFilterIdOrZero(params.marchandiserId),
+  });
+
+  const url = `${base}/api/Report/ShipmentCommissionReport?${q.toString()}`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    throw new Error(`ShipmentCommissionReport API failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  return unwrapCommissionInvoiceList(data);
+}
+
 /**
  * "Logistic Department Shipped Status Download" form.
  *
@@ -540,7 +914,7 @@ function CommisionInvoiceReportForm() {
   const now = new Date();
   const [filters, setFilters] = useState({
     consignee: ALL,
-    month: now.getMonth() + 1,
+    month: 5, // May
     year: now.getFullYear(),
     supplier: ALL,
     merchandiser: ALL,
@@ -557,6 +931,14 @@ function CommisionInvoiceReportForm() {
 
   const yearOptions = useMemo(buildYearOptions, []);
 
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = COMMISSION_INVOICE_TAB_TITLE;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, []);
+
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
   };
@@ -568,9 +950,27 @@ function CommisionInvoiceReportForm() {
 
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  const fetchCommissionInvoicePayload = useCallback(async () => {
+    const { year, month, merchandiser } = filters;
+    const rawRows = await fetchShipmentCommissionReportRows(
+      {
+        year,
+        month,
+        marchandiserId: merchandiser,
+      },
+      shipmentAuthHeaders()
+    );
+
+    if (!rawRows.length) return null;
+    return buildCommissionInvoiceReportPdfPayload(rawRows, {
+      monthLabel: commissionInvoiceMonthLabel(month),
+      year,
+    });
+  }, [filters.year, filters.month, filters.merchandiser]);
+
   /**
-   * Build the Commission Invoice PDF (demo data for now) and either preview-tab
-   * it or trigger a direct file download.
+   * Fetch ShipmentCommissionReport via VITE_REPORT_API, map onto existing PDF
+   * columns, then preview or download. Layout unchanged.
    *
    * @param {'view'|'pdf'} mode
    */
@@ -580,12 +980,26 @@ function CommisionInvoiceReportForm() {
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
-        const blob = await buildCommissionInvoiceReportPdfBlob({
-          monthLabel: commissionInvoiceMonthLabel(filters.month),
-          year: filters.year,
-        });
+        const payload = await fetchCommissionInvoicePayload();
+        if (!payload) {
+          if (previewWindow) {
+            try {
+              previewWindow.close();
+            } catch {
+              /* ignore */
+            }
+          }
+          enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
+          return;
+        }
+
+        const blob = await buildCommissionInvoiceReportPdfBlob(payload);
         if (mode === 'view' && previewWindow) {
-          const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+          const namedFile =
+            typeof File !== 'undefined'
+              ? new File([blob], 'Logistic Department Shipped.pdf', { type: 'application/pdf' })
+              : new Blob([blob], { type: 'application/pdf' });
+          const url = URL.createObjectURL(namedFile);
           previewWindow.location.replace(url);
           setTimeout(() => URL.revokeObjectURL(url), 120_000);
           return;
@@ -600,12 +1014,17 @@ function CommisionInvoiceReportForm() {
             /* ignore */
           }
         }
-        enqueueSnackbar('Could not build Commission Invoice PDF', { variant: 'error' });
+        enqueueSnackbar(
+          err?.message?.includes('VITE_REPORT_API')
+            ? 'API URL missing: set VITE_REPORT_API'
+            : 'Could not build Commission Invoice PDF',
+          { variant: 'error' }
+        );
       } finally {
         setGeneratingPdf(false);
       }
     },
-    [filters.month, filters.year, generatingPdf, enqueueSnackbar]
+    [generatingPdf, enqueueSnackbar, fetchCommissionInvoicePayload]
   );
 
   const handleViewReport = useCallback(() => runPdfExport('view'), [runPdfExport]);

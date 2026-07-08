@@ -56,7 +56,8 @@ function mapApiStatusToOption(status) {
   const s = String(status).trim().toLowerCase();
   if (!s) return '';
 
-  if (s === 'confirm' || s === 'confirmed') return 'Confirm';
+  // Must match Select MenuItem values: Confirmed | Cancel | Close
+  if (s === 'confirm' || s === 'confirmed') return 'Confirmed';
   if (s === 'cancel' || s === 'cancelled' || s === 'canceled') return 'Cancel';
   if (s === 'close' || s === 'closed') return 'Close';
 

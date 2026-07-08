@@ -426,6 +426,11 @@ export async function buildCommissionInvoiceReportPdfBlob(data = {}) {
     drawFooter(doc, p, total);
   }
 
+  doc.setProperties({
+    title: 'Logistic Department Shipped',
+    subject: 'Logistic Department Shipped',
+  });
+
   return doc.output('blob');
 }
 
@@ -445,7 +450,7 @@ export function openCommissionInvoiceReportPdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Commission-Invoice-Report.pdf';
+  a.download = 'Logistic Department Shipped.pdf';
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

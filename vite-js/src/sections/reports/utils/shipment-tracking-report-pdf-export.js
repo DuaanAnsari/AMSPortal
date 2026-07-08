@@ -57,7 +57,7 @@ const SUBTOTAL_FILL = [220, 220, 220];
 const VOYAGE_FILL = [240, 240, 240];
 const BORDER = [150, 150, 150];
 
-const PDF_VIEW_ZOOM_HASH = '#zoom=110';
+const PDF_VIEW_ZOOM_HASH = '#zoom=75';
 
 // ----------------------------------------------------------------------
 // Column definition — 23 leaf cells. `group` keys collapse into one wide
@@ -848,10 +848,11 @@ function drawFooter(doc, pageIdx, totalPages, printedBy) {
 // ----------------------------------------------------------------------
 
 /**
+ * Shared PDF document builder (layout unchanged).
  * @param {{ printedBy?: string; groups?: Array<{ customer: string; subGroups: Array<{ rows: object[]; subtotal: { qty: number; ctns: number } }>; total: { qty: number; ctns: number } }> }} data
- * @returns {Promise<Blob>}
+ * @returns {Promise<import('jspdf').jsPDF>}
  */
-export async function buildShipmentTrackingReportPdfBlob(data) {
+async function createShipmentTrackingReportDoc(data) {
   const payload =
     data && Array.isArray(data.groups) && data.groups.length > 0
       ? data
@@ -921,29 +922,90 @@ export async function buildShipmentTrackingReportPdfBlob(data) {
     drawFooter(doc, p, total, payload.printedBy);
   }
 
-  return doc.output('blob');
+  // PDF Info /Title — Chrome/Edge native viewer toolbar uses this (not the blob UUID).
+  doc.setProperties({
+    title: 'Shipment Tracking Report',
+    subject: 'Shipment Tracking Report',
+  });
+
+  return doc;
 }
 
 /**
- * @param {'view'|'pdf'} mode
- * @param {Blob} pdfBlob
+ * @param {{ printedBy?: string; groups?: Array<{ customer: string; subGroups: Array<{ rows: object[]; subtotal: { qty: number; ctns: number } }>; total: { qty: number; ctns: number } }> }} data
+ * @returns {Promise<Blob>}
  */
-export function openShipmentTrackingReportPdf(mode, pdfBlob) {
-  const pdf = new Blob([pdfBlob], { type: 'application/pdf' });
-  const blobUrl = URL.createObjectURL(pdf);
+export async function buildShipmentTrackingReportPdfBlob(data) {
+  const doc = await createShipmentTrackingReportDoc(data);
+  return doc.output('blob');
+}
 
-  if (mode === 'view') {
-    window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000);
+/** Download / preview filename for this report only. */
+export const SHIPMENT_TRACKING_PDF_FILENAME = 'Shipment Tracking Report.pdf';
+
+/**
+ * Force a named file download from a PDF blob (page Download PDF button).
+ * Uses `<a download="Shipment Tracking Report.pdf">` — not the blob UUID.
+ *
+ * @param {Blob} pdfBlob
+ * @param {string} [filename]
+ */
+export function downloadShipmentTrackingReportPdf(
+  pdfBlob,
+  filename = SHIPMENT_TRACKING_PDF_FILENAME
+) {
+  const pdf = new Blob([pdfBlob], { type: 'application/pdf' });
+
+  if (typeof window !== 'undefined' && window.navigator?.msSaveOrOpenBlob) {
+    window.navigator.msSaveOrOpenBlob(pdf, filename);
     return;
   }
 
+  const blobUrl = URL.createObjectURL(pdf);
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Shipment-Tracking-Report.pdf';
+  a.download = filename;
+  a.setAttribute('download', filename);
   a.rel = 'noopener';
+  a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+}
+
+/**
+ * Build PDF and save with the exact report filename via jsPDF `doc.save`.
+ *
+ * @param {{ printedBy?: string; groups?: Array }} data
+ * @param {string} [filename]
+ */
+export async function saveShipmentTrackingReportPdf(
+  data,
+  filename = SHIPMENT_TRACKING_PDF_FILENAME
+) {
+  const doc = await createShipmentTrackingReportDoc(data);
+  doc.save(filename);
+}
+
+/**
+ * Open in the browser's built-in PDF viewer (blob URL — no about:blank, no SW).
+ * Filename is assigned on the `File` object passed to `URL.createObjectURL`.
+ *
+ * @param {'view'|'pdf'} mode
+ * @param {Blob} pdfBlob
+ */
+export function openShipmentTrackingReportPdf(mode, pdfBlob) {
+  if (mode === 'pdf') {
+    downloadShipmentTrackingReportPdf(pdfBlob, SHIPMENT_TRACKING_PDF_FILENAME);
+    return;
+  }
+
+  const namedFile =
+    typeof File !== 'undefined'
+      ? new File([pdfBlob], SHIPMENT_TRACKING_PDF_FILENAME, { type: 'application/pdf' })
+      : new Blob([pdfBlob], { type: 'application/pdf' });
+  const blobUrl = URL.createObjectURL(namedFile);
+  window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000);
 }
