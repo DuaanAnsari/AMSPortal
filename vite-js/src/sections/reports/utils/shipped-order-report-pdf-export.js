@@ -6,6 +6,8 @@
 import { buildStatusWiseVendorOrderReportPdfBlob } from './status-wise-vendor-order-report-pdf-export';
 
 const SHIPPED_ORDER_TITLE = 'Shipped Order Report';
+export const SHIPPED_ORDER_DOCUMENT_TITLE = 'Shipped Order Report';
+export const SHIPPED_ORDER_PDF_FILENAME = 'Shipped Order Report.pdf';
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
 
 /**
@@ -20,6 +22,7 @@ export async function buildShippedOrderReportPdfBlob(data, meta = {}) {
   return buildStatusWiseVendorOrderReportPdfBlob(data, {
     ...meta,
     title: SHIPPED_ORDER_TITLE,
+    documentTitle: SHIPPED_ORDER_DOCUMENT_TITLE,
     shippedOrderGrandTotal: true,
   });
 }
@@ -29,8 +32,11 @@ export async function buildShippedOrderReportPdfBlob(data, meta = {}) {
  * @param {Blob} pdfBlob
  */
 export function openShippedOrderReportPdf(mode, pdfBlob) {
-  const pdf = new Blob([pdfBlob], { type: 'application/pdf' });
-  const blobUrl = URL.createObjectURL(pdf);
+  const namedPdf =
+    typeof File !== 'undefined'
+      ? new File([pdfBlob], SHIPPED_ORDER_PDF_FILENAME, { type: 'application/pdf' })
+      : new Blob([pdfBlob], { type: 'application/pdf' });
+  const blobUrl = URL.createObjectURL(namedPdf);
 
   if (mode === 'view') {
     window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
@@ -40,7 +46,7 @@ export function openShippedOrderReportPdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Shipped-Order-Report.pdf';
+  a.download = SHIPPED_ORDER_PDF_FILENAME;
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

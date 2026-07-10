@@ -5,6 +5,8 @@
 import { buildStatusWiseOrderReportPdfBlob } from './status-wise-order-report-pdf-export';
 
 const OPEN_ORDER_TITLE = 'OPEN ORDER REPORT';
+export const OPEN_ORDER_DOCUMENT_TITLE = 'Open Order Report';
+export const OPEN_ORDER_PDF_FILENAME = 'Open Order Report.pdf';
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
 
 /**
@@ -12,7 +14,11 @@ const PDF_VIEW_ZOOM_HASH = '#zoom=110';
  * @param {{ fromDate?: string; toDate?: string }} [meta]
  */
 export async function buildOpenOrderReportPdfBlob(data, meta = {}) {
-  return buildStatusWiseOrderReportPdfBlob(data, { ...meta, title: OPEN_ORDER_TITLE });
+  return buildStatusWiseOrderReportPdfBlob(data, {
+    ...meta,
+    title: OPEN_ORDER_TITLE,
+    documentTitle: OPEN_ORDER_DOCUMENT_TITLE,
+  });
 }
 
 /**
@@ -20,8 +26,11 @@ export async function buildOpenOrderReportPdfBlob(data, meta = {}) {
  * @param {Blob} pdfBlob
  */
 export function openOpenOrderReportPdf(mode, pdfBlob) {
-  const pdf = new Blob([pdfBlob], { type: 'application/pdf' });
-  const blobUrl = URL.createObjectURL(pdf);
+  const namedPdf =
+    typeof File !== 'undefined'
+      ? new File([pdfBlob], OPEN_ORDER_PDF_FILENAME, { type: 'application/pdf' })
+      : new Blob([pdfBlob], { type: 'application/pdf' });
+  const blobUrl = URL.createObjectURL(namedPdf);
 
   if (mode === 'view') {
     window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
@@ -31,7 +40,7 @@ export function openOpenOrderReportPdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Open-Order-Report.pdf';
+  a.download = OPEN_ORDER_PDF_FILENAME;
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 
-import { getWipColorQtyDisplayLines } from './wip-color-qty-normalize';
+import { getWipColorQtyCellRenderLines } from './wip-color-qty-normalize';
 import { drawWipPdfMilestoneAndProdTail } from './wip-pdf-milestone-tail';
 import { normalizeWipPdfRowGroups } from './wip-pdf-color-row-groups';
 import { drawWipPdfDataRowGroup, paginateWipPdfGroupedRows } from './wip-pdf-data-row-group';
@@ -642,14 +642,8 @@ function drawMergedLeadCellsFactory(doc, xs, y, widths, h, row) {
 
 function drawColorTailRowFactory(doc, xs, yRow, widths, row, mergeCount, rowH) {
   const rgb = getRowPdfTextRgb(row);
-  const colorLine = getWipColorQtyDisplayLines(row)[0] || '—';
-  drawMultilineCell(doc, xs[mergeCount], yRow, widths[mergeCount], rowH, [colorLine], 'left', WIP_PDF_FONT_COLOR_QTY, rgb, {
-    maxLines: 2,
-    lineMult: 1.12,
-    padX: 2,
-    padTop: 3,
-    vertical: 'top',
-  });
+  const colorLines = getWipColorQtyCellRenderLines(row);
+  drawMultilineCell(doc, xs[mergeCount], yRow, widths[mergeCount], rowH, colorLines, 'center', WIP_PDF_FONT_COLOR_QTY, rgb);
   drawMilestoneAndProdTail(doc, xs, yRow, widths, row, mergeCount + 1, rowH);
 }
 

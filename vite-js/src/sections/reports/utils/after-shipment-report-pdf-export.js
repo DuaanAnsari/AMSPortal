@@ -40,6 +40,9 @@ const NAVY = [0, 51, 102];
 
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
 
+export const AFTER_SHIPMENT_DOCUMENT_TITLE = 'AFTER SHIPMENT REPORT';
+export const AFTER_SHIPMENT_PDF_FILENAME = 'AFTER SHIPMENT REPORT.pdf';
+
 /** @typedef {{ key: string; label: string; weight: number; align?: 'left'|'center'|'right' }} AfterShipmentCol */
 
 /** @type {AfterShipmentCol[]} */
@@ -352,8 +355,13 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  */
 export async function buildAfterShipmentReportPdfBlob(data = {}) {
   const payload =
-    data && Array.isArray(data.rows) && data.rows.length > 0
-      ? data
+    data && Array.isArray(data.rows)
+      ? {
+          fromLabel: data.fromLabel || AFTER_SHIPMENT_REPORT_DEMO.fromLabel,
+          toLabel: data.toLabel || AFTER_SHIPMENT_REPORT_DEMO.toLabel,
+          printedOn: data.printedOn || '',
+          rows: data.rows,
+        }
       : AFTER_SHIPMENT_REPORT_DEMO;
 
   const meta = {
@@ -393,6 +401,15 @@ export async function buildAfterShipmentReportPdfBlob(data = {}) {
     drawFooter(doc, p, total, meta.printedOn);
   }
 
+  try {
+    doc.setProperties({
+      title: AFTER_SHIPMENT_DOCUMENT_TITLE,
+      subject: AFTER_SHIPMENT_DOCUMENT_TITLE,
+    });
+  } catch (e) {
+    /* setProperties unavailable — non-fatal, preview still works */
+  }
+
   return doc.output('blob');
 }
 
@@ -401,8 +418,11 @@ export async function buildAfterShipmentReportPdfBlob(data = {}) {
  * @param {Blob} pdfBlob
  */
 export function openAfterShipmentReportPdf(mode, pdfBlob) {
-  const pdf = new Blob([pdfBlob], { type: 'application/pdf' });
-  const blobUrl = URL.createObjectURL(pdf);
+  const namedPdf =
+    typeof File !== 'undefined'
+      ? new File([pdfBlob], AFTER_SHIPMENT_PDF_FILENAME, { type: 'application/pdf' })
+      : new Blob([pdfBlob], { type: 'application/pdf' });
+  const blobUrl = URL.createObjectURL(namedPdf);
 
   if (mode === 'view') {
     window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
@@ -412,7 +432,7 @@ export function openAfterShipmentReportPdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'After-Shipment-Report.pdf';
+  a.download = AFTER_SHIPMENT_PDF_FILENAME;
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

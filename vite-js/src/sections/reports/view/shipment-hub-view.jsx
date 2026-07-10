@@ -48,11 +48,15 @@ import {
   buildShipmentHistoryReportPdfBlob,
   openShipmentHistoryReportPdf,
   shipmentHistoryHeaderDate,
+  SHIPMENT_HISTORY_DOCUMENT_TITLE,
+  SHIPMENT_HISTORY_PDF_FILENAME,
 } from 'src/sections/reports/utils/shipment-history-report-pdf-export';
 import {
   buildAfterShipmentReportPdfBlob,
   openAfterShipmentReportPdf,
   afterShipmentHeaderDate,
+  AFTER_SHIPMENT_DOCUMENT_TITLE,
+  AFTER_SHIPMENT_PDF_FILENAME,
 } from 'src/sections/reports/utils/after-shipment-report-pdf-export';
 import {
   buildShipmentDelayReportPdfBlob,
@@ -312,6 +316,201 @@ function buildShipmentTrackingReportPdfPayload(rawRows) {
   });
 
   return { printedBy: '', groups };
+}
+
+function unwrapShipmentHistoryList(data) {
+  if (Array.isArray(data)) return data;
+  if (data == null) return [];
+  if (Array.isArray(data.data)) return data.data;
+  if (Array.isArray(data.Data)) return data.Data;
+  if (Array.isArray(data.result)) return data.result;
+  if (Array.isArray(data.Result)) return data.Result;
+  if (Array.isArray(data.rows)) return data.rows;
+  if (Array.isArray(data.Rows)) return data.Rows;
+  return [];
+}
+
+function pickShipmentHistoryField(obj, ...keys) {
+  for (let i = 0; i < keys.length; i += 1) {
+    const v = obj?.[keys[i]];
+    if (v !== undefined && v !== null && v !== '') return v;
+  }
+  return '';
+}
+
+function formatShipmentHistoryReportDate(value) {
+  if (value == null || value === '') return '';
+  const s = String(value).trim();
+  if (!s) return '';
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+}
+
+function mapShipmentHistoryApiRowToPdfRow(raw) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  return {
+    shipmentDate: formatShipmentHistoryReportDate(
+      pickShipmentHistoryField(r, 'ShipmentDate', 'shipmentDate')
+    ),
+    invoiceNo: String(pickShipmentHistoryField(r, 'InvoiceNo', 'invoiceNo') || ''),
+    vendorInvoiceNo: String(
+      pickShipmentHistoryField(r, 'VendorInvoiceNo', 'vendorInvoiceNo') || ''
+    ),
+    containerNo: String(pickShipmentHistoryField(r, 'ContainerNo', 'containerNo') || ''),
+    shipmentMode: String(pickShipmentHistoryField(r, 'Mode', 'mode') || ''),
+    shippedQty: Number(pickShipmentHistoryField(r, 'Quantity', 'quantity')) || 0,
+    cartons: Number(pickShipmentHistoryField(r, 'Cartons', 'cartons')) || 0,
+    expEtdDate: formatShipmentHistoryReportDate(
+      pickShipmentHistoryField(r, 'ETDExpectedDate', 'etdExpectedDate')
+    ),
+  };
+}
+
+function shipmentHistoryModeParam(value) {
+  const s = String(value ?? '').trim();
+  if (!s || s.toLowerCase() === ALL) return 'All';
+  return s;
+}
+
+async function fetchShipmentHistoryReportRows(params, headers = {}) {
+  const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+  if (!base) {
+    throw new Error('VITE_API_BASE_URL is not set');
+  }
+
+  const q = new URLSearchParams({
+    dateFrom: String(params.dateFrom || ''),
+    dateTo: String(params.dateTo || ''),
+    shipmentMode: shipmentHistoryModeParam(params.shipmentMode),
+  });
+
+  const url = `${base}/api/Report/ShipmentHistoryReport?${q.toString()}`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    throw new Error(`ShipmentHistoryReport API failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  return unwrapShipmentHistoryList(data);
+}
+
+function buildShipmentHistoryReportPdfPayload(rawRows, meta = {}) {
+  return {
+    fromLabel: meta.fromLabel || '',
+    toLabel: meta.toLabel || '',
+    rows: (rawRows || []).map(mapShipmentHistoryApiRowToPdfRow),
+  };
+}
+
+function unwrapAfterShipmentList(data) {
+  if (Array.isArray(data)) return data;
+  if (data == null) return [];
+  if (Array.isArray(data.data)) return data.data;
+  if (Array.isArray(data.Data)) return data.Data;
+  if (Array.isArray(data.result)) return data.result;
+  if (Array.isArray(data.Result)) return data.Result;
+  if (Array.isArray(data.rows)) return data.rows;
+  if (Array.isArray(data.Rows)) return data.Rows;
+  return [];
+}
+
+function pickAfterShipmentField(obj, ...keys) {
+  for (let i = 0; i < keys.length; i += 1) {
+    const v = obj?.[keys[i]];
+    if (v !== undefined && v !== null && v !== '') return v;
+  }
+  return '';
+}
+
+function pickAfterShipmentNumeric(obj, ...keys) {
+  for (let i = 0; i < keys.length; i += 1) {
+    const v = obj?.[keys[i]];
+    if (v !== undefined && v !== null && v !== '') {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    }
+  }
+  return undefined;
+}
+
+function formatAfterShipmentReportDate(value) {
+  if (value == null || value === '') return '';
+  const s = String(value).trim();
+  if (!s) return '';
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+}
+
+function mapAfterShipmentApiRowToPdfRow(raw) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  return {
+    pono: String(pickAfterShipmentField(r, 'PONO', 'pono') || ''),
+    customer: String(pickAfterShipmentField(r, 'CustomerName', 'customerName') || ''),
+    vendor: String(pickAfterShipmentField(r, 'VenderName', 'venderName', 'VendorName', 'vendorName') || ''),
+    orderQty: pickAfterShipmentNumeric(r, 'POQty', 'poQty'),
+    shipmentDateB: formatAfterShipmentReportDate(
+      pickAfterShipmentField(
+        r,
+        'Shipment Date (Buyer)',
+        'ShipmentDateBuyer',
+        'shipmentDateBuyer'
+      )
+    ),
+    shipmentDateV: formatAfterShipmentReportDate(
+      pickAfterShipmentField(
+        r,
+        'Shipment Date (Vendor)',
+        'ShipmentDateVendor',
+        'shipmentDateVendor'
+      )
+    ),
+    cargoShipDate: formatAfterShipmentReportDate(
+      pickAfterShipmentField(r, 'ShipmentDateCargo', 'shipmentDateCargo')
+    ),
+    shippedQty: pickAfterShipmentNumeric(r, 'ShipQuantity', 'shipQuantity'),
+    shippedCarton: pickAfterShipmentNumeric(r, 'ShipCartons', 'shipCartons'),
+    rShipmentDateB: formatAfterShipmentReportDate(
+      pickAfterShipmentField(r, 'BuyerReviseShipment', 'buyerReviseShipment')
+    ),
+    rShipmentDateV: formatAfterShipmentReportDate(
+      pickAfterShipmentField(r, 'VendorReviseShipment', 'vendorReviseShipment')
+    ),
+    reason: String(
+      pickAfterShipmentField(r, 'ReasonforReviseShpmnt', 'reasonforReviseShpmnt', 'ReasonForReviseShpmnt') ||
+        ''
+    ),
+  };
+}
+
+async function fetchAfterShipmentReportRows(params, headers = {}) {
+  const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+  if (!base) {
+    throw new Error('VITE_API_BASE_URL is not set');
+  }
+
+  const q = new URLSearchParams({
+    dateFrom: String(params.dateFrom || ''),
+    dateTo: String(params.dateTo || ''),
+  });
+
+  const url = `${base}/api/Report/AfterShipmentReport?${q.toString()}`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    throw new Error(`AfterShipmentReport API failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  return unwrapAfterShipmentList(data);
+}
+
+function buildAfterShipmentReportPdfPayload(rawRows, meta = {}) {
+  return {
+    fromLabel: meta.fromLabel || '',
+    toLabel: meta.toLabel || '',
+    rows: (rawRows || []).map(mapAfterShipmentApiRowToPdfRow),
+  };
 }
 
 async function fetchShipmentTrackingReportRows(params, headers = {}) {
@@ -1385,9 +1584,25 @@ function ShipmentHistoryReportForm() {
 
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  const fetchShipmentHistoryPayload = useCallback(async () => {
+    const rawRows = await fetchShipmentHistoryReportRows(
+      {
+        dateFrom: filters.fromDate,
+        dateTo: filters.toDate,
+        shipmentMode: filters.shipmentMode,
+      },
+      shipmentAuthHeaders()
+    );
+
+    return buildShipmentHistoryReportPdfPayload(rawRows, {
+      fromLabel: shipmentHistoryHeaderDate(filters.fromDate),
+      toLabel: shipmentHistoryHeaderDate(filters.toDate),
+    });
+  }, [filters.fromDate, filters.toDate, filters.shipmentMode]);
+
   /**
-   * Build the Shipment History PDF (demo data for now) and either preview-tab
-   * it or trigger a direct file download.
+   * Fetch ShipmentHistoryReport (ENV base URL), map API fields onto the existing
+   * PDF columns, then preview or download. Layout unchanged.
    *
    * @param {'view'|'pdf'} mode
    */
@@ -1397,12 +1612,22 @@ function ShipmentHistoryReportForm() {
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
-        const blob = await buildShipmentHistoryReportPdfBlob({
-          fromLabel: shipmentHistoryHeaderDate(filters.fromDate),
-          toLabel: shipmentHistoryHeaderDate(filters.toDate),
-        });
+        const payload = await fetchShipmentHistoryPayload();
+        const blob = await buildShipmentHistoryReportPdfBlob(payload);
         if (mode === 'view' && previewWindow) {
-          const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+          try {
+            const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>${SHIPMENT_HISTORY_DOCUMENT_TITLE}</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fafafa;color:#333;"><p style="padding:24px;font-size:15px;">Loading PDF…</p></body></html>`;
+            previewWindow.document.open();
+            previewWindow.document.write(html);
+            previewWindow.document.close();
+          } catch {
+            /* ignore */
+          }
+          const namedPdf =
+            typeof File !== 'undefined'
+              ? new File([blob], SHIPMENT_HISTORY_PDF_FILENAME, { type: 'application/pdf' })
+              : blob;
+          const url = URL.createObjectURL(namedPdf);
           previewWindow.location.replace(url);
           setTimeout(() => URL.revokeObjectURL(url), 120_000);
           return;
@@ -1422,7 +1647,7 @@ function ShipmentHistoryReportForm() {
         setGeneratingPdf(false);
       }
     },
-    [filters.fromDate, filters.toDate, generatingPdf, enqueueSnackbar]
+    [fetchShipmentHistoryPayload, generatingPdf, enqueueSnackbar]
   );
 
   const handleViewReport = useCallback(() => runPdfExport('view'), [runPdfExport]);
@@ -1558,9 +1783,24 @@ function AfterShipmentReportForm() {
 
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  const fetchAfterShipmentPayload = useCallback(async () => {
+    const rawRows = await fetchAfterShipmentReportRows(
+      {
+        dateFrom: filters.fromDate,
+        dateTo: filters.toDate,
+      },
+      shipmentAuthHeaders()
+    );
+
+    return buildAfterShipmentReportPdfPayload(rawRows, {
+      fromLabel: afterShipmentHeaderDate(filters.fromDate),
+      toLabel: afterShipmentHeaderDate(filters.toDate),
+    });
+  }, [filters.fromDate, filters.toDate]);
+
   /**
-   * Build the After Shipment PDF (demo data for now) and either preview-tab it
-   * or trigger a direct file download.
+   * Fetch AfterShipmentReport (ENV base URL), map API fields onto the existing
+   * PDF columns, then preview or download. Layout unchanged.
    *
    * @param {'view'|'pdf'} mode
    */
@@ -1570,12 +1810,22 @@ function AfterShipmentReportForm() {
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
-        const blob = await buildAfterShipmentReportPdfBlob({
-          fromLabel: afterShipmentHeaderDate(filters.fromDate),
-          toLabel: afterShipmentHeaderDate(filters.toDate),
-        });
+        const payload = await fetchAfterShipmentPayload();
+        const blob = await buildAfterShipmentReportPdfBlob(payload);
         if (mode === 'view' && previewWindow) {
-          const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+          try {
+            const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>${AFTER_SHIPMENT_DOCUMENT_TITLE}</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fafafa;color:#333;"><p style="padding:24px;font-size:15px;">Loading PDF…</p></body></html>`;
+            previewWindow.document.open();
+            previewWindow.document.write(html);
+            previewWindow.document.close();
+          } catch {
+            /* ignore */
+          }
+          const namedPdf =
+            typeof File !== 'undefined'
+              ? new File([blob], AFTER_SHIPMENT_PDF_FILENAME, { type: 'application/pdf' })
+              : blob;
+          const url = URL.createObjectURL(namedPdf);
           previewWindow.location.replace(url);
           setTimeout(() => URL.revokeObjectURL(url), 120_000);
           return;
@@ -1595,7 +1845,7 @@ function AfterShipmentReportForm() {
         setGeneratingPdf(false);
       }
     },
-    [filters.fromDate, filters.toDate, generatingPdf, enqueueSnackbar]
+    [fetchAfterShipmentPayload, generatingPdf, enqueueSnackbar]
   );
 
   const handleViewReport = useCallback(() => runPdfExport('view'), [runPdfExport]);

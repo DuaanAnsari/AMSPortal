@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 
 import { attachFactoryWipPoImageDimensions } from './factory-wip-pdf-export';
-import { getWipColorQtyDisplayLines } from './wip-color-qty-normalize';
+import { getWipColorQtyCellRenderLines } from './wip-color-qty-normalize';
 import { drawWipPdfMilestoneAndProdTail } from './wip-pdf-milestone-tail';
 import { normalizeWipPdfRowGroups } from './wip-pdf-color-row-groups';
 import { drawWipPdfDataRowGroup, paginateWipPdfGroupedRows } from './wip-pdf-data-row-group';
@@ -531,8 +531,8 @@ function drawMergedLeadCellsAms(doc, xs, y, widths, h, rowRaw) {
 
 function drawColorTailRowAms(doc, xs, yRow, widths, rowRaw, mergeCount, rowH) {
   const row = normalizeRow(rowRaw);
-  const colorLine = getWipColorQtyDisplayLines(row)[0] || '—';
-  drawMultilineCell(doc, xs[mergeCount], yRow, widths[mergeCount], rowH, [colorLine], 'left', WIP_PDF_FONT_COLOR_QTY);
+  const colorLines = getWipColorQtyCellRenderLines(row);
+  drawMultilineCell(doc, xs[mergeCount], yRow, widths[mergeCount], rowH, colorLines, 'center', WIP_PDF_FONT_COLOR_QTY);
   drawMilestoneAndProdTail(doc, xs, yRow, widths, row, mergeCount + 1, rowH);
 }
 

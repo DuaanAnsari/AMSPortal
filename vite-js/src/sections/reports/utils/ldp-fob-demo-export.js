@@ -35,7 +35,11 @@ const DEFAULT_COL_W = [66, 52, 44, 156, 38, 44, 50, 50, 36];
 export const LDP_FOB_PRICE_LIST_REPORT_OPTIONS = {
   reportTitle: 'LDP / FOB PRICE LIST',
   includeLdpColumn: true,
+  documentTitle: 'LDP / FOB PRICE LIST',
 };
+
+/** Default Save As / download filename for the LDP and FOB Report page only. */
+export const LDP_FOB_PRICE_LIST_PDF_FILENAME = 'LDP / FOB PRICE LIST.pdf';
 
 const LDP_FOB_PAGE_TABLE_HEADERS = [
   ...DEFAULT_TABLE_HEADERS,
@@ -99,9 +103,9 @@ function sortLdpFobRawRowsByCustomer(rawRows) {
 
 /**
  * Full-width band row: customer name in first column (same grid as sample — e.g. AVALON APPAREL).
- * @returns {number} row height (pt)
+ * @returns {{ rowH: number; lines: string[]; fontSize: number; pad: number }}
  */
-function getCustomerBannerRowHeight(doc, name, colWidths) {
+function getCustomerBannerMetrics(doc, name, colWidths) {
   const fontSize = 6.2;
   const pad = 3;
   const maxW = Math.max(8, colWidths[0] - pad * 2);
@@ -109,30 +113,28 @@ function getCustomerBannerRowHeight(doc, name, colWidths) {
   doc.setFontSize(fontSize);
   const lines = doc.splitTextToSize(String(name || ''), maxW);
   const lineH = fontSize * 1.15;
-  return Math.min(36, Math.max(15, lines.length * lineH + pad * 2 + 4));
+  const rowH = Math.min(36, Math.max(15, lines.length * lineH + pad * 2 + 4));
+  return { rowH, lines, fontSize, pad };
 }
 
 /**
  * @param {import('jspdf').jsPDF} doc
  * @param {number} y
  * @param {string} customerName
+ * @param {number[]} colWidths
+ * @param {number} [tableMargin]
+ * @param {{ rowH: number; lines: string[]; fontSize: number; pad: number }} [metrics]
  * @returns {number} y below row
  */
-function drawCustomerGroupBannerRow(doc, y, customerName, colWidths, tableMargin = MARGIN) {
+function drawCustomerGroupBannerRow(doc, y, customerName, colWidths, tableMargin = MARGIN, metrics) {
   const xs = colStarts(colWidths, tableMargin);
-  const fontSize = 6.2;
-  const pad = 3;
-  const maxW = Math.max(8, colWidths[0] - pad * 2);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(fontSize);
-  const lines = doc.splitTextToSize(String(customerName || ''), maxW);
-  const lineH = fontSize * 1.15;
-  const rowH = Math.min(36, Math.max(15, lines.length * lineH + pad * 2 + 4));
+  const m = metrics ?? getCustomerBannerMetrics(doc, customerName, colWidths);
+  const { rowH, lines, fontSize } = m;
 
   for (let i = 0; i < colWidths.length; i += 1) {
     drawCellBorder(doc, xs[i], y, colWidths[i], rowH);
   }
-  drawCellText(doc, customerName, xs[0], y, colWidths[0], rowH, 'left', true, fontSize);
+  drawCellText(doc, customerName, xs[0], y, colWidths[0], rowH, 'left', true, fontSize, lines);
   return y + rowH;
 }
 
@@ -211,10 +213,11 @@ function getLdpFobQtyNumeric(raw) {
 /**
  * Identity for merge: same customer band + same grid columns except QTY (sizes/dates/FOB must match).
  * @param {object} raw
+ * @param {object} [pdfRowOpt] pre-mapped PDF row (avoids duplicate mapping during merge)
  */
-function ldpFobRowMergeKey(raw) {
+function ldpFobRowMergeKey(raw, pdfRowOpt) {
   const cust = normLdpFobKeyPart(getLdpFobCustomerGroupLabel(raw));
-  const r = mapLdpFobApiRowToPdfRow(raw);
+  const r = pdfRowOpt ?? mapLdpFobApiRowToPdfRow(raw);
   const fobKey = r.fob === '—' || r.fob === '' ? '' : normLdpFobKeyPart(String(r.fob));
   return [
     cust,
@@ -229,22 +232,39 @@ function ldpFobRowMergeKey(raw) {
   ].join('\x1e');
 }
 
+/** Update only merged quantity on a cached PDF row (all other columns unchanged). */
+function applyMergedQtyToPdfRow(pdfRow, mergedRaw) {
+  const qtyRaw = pickField(mergedRaw, 'Quantity', 'quantity');
+  let qtyDisplay = '—';
+  if (qtyRaw !== '' && qtyRaw != null) {
+    const n = Number(qtyRaw);
+    qtyDisplay = Number.isFinite(n) ? n.toLocaleString('en-US') : String(qtyRaw);
+  }
+  if (pdfRow.qty === qtyDisplay) return pdfRow;
+  return { ...pdfRow, qty: qtyDisplay };
+}
+
 /**
  * Merge rows that are identical on all PDF columns except QTY; quantities are summed.
  * Preserves customer sort order and first-seen row order within each customer.
  * @param {object[]} sortedRaw output of {@link sortLdpFobRawRowsByCustomer}
+ * @param {{ pdfRowByRaw?: WeakMap<object, object>; mergedPdfRowByMergedRaw?: WeakMap<object, object> }} [mergeOpts]
  * @returns {object[]} shallow-cloned API rows with merged `Quantity` / `quantity`
  */
-export function mergeLdpFobRawRowsByLineKey(sortedRaw) {
+export function mergeLdpFobRawRowsByLineKey(sortedRaw, mergeOpts) {
   const list = sortedRaw || [];
   if (!list.length) return [];
+
+  const pdfRowByRaw = mergeOpts?.pdfRowByRaw;
+  const mergedPdfRowByMergedRaw = mergeOpts?.mergedPdfRowByMergedRaw;
 
   const order = [];
   /** @type {Map<string, { firstRaw: object; totalQty: number }>} */
   const groups = new Map();
 
   for (const raw of list) {
-    const key = ldpFobRowMergeKey(raw);
+    const pdfRow = pdfRowByRaw?.get(raw);
+    const key = ldpFobRowMergeKey(raw, pdfRow);
     const q = getLdpFobQtyNumeric(raw);
     if (!groups.has(key)) {
       groups.set(key, { firstRaw: raw, totalQty: q });
@@ -260,6 +280,12 @@ export function mergeLdpFobRawRowsByLineKey(sortedRaw) {
     const t = g.totalQty;
     base.Quantity = t;
     base.quantity = t;
+    if (mergedPdfRowByMergedRaw && pdfRowByRaw) {
+      const basePdf = pdfRowByRaw.get(g.firstRaw);
+      if (basePdf) {
+        mergedPdfRowByMergedRaw.set(base, applyMergedQtyToPdfRow(basePdf, base));
+      }
+    }
     return base;
   });
 }
@@ -302,13 +328,14 @@ function drawCellBorder(doc, x, y, w, h) {
  * @param {'left'|'center'} align
  * @param {boolean} bold
  * @param {number} fontSize
+ * @param {string[]} [linesOpt] precomputed wrapped lines
  */
-function drawCellText(doc, text, x, yTop, w, h, align, bold, fontSize) {
+function drawCellText(doc, text, x, yTop, w, h, align, bold, fontSize, linesOpt) {
   doc.setFont('helvetica', bold ? 'bold' : 'normal');
   doc.setFontSize(fontSize);
   const pad = 3;
   const maxW = Math.max(8, w - pad * 2);
-  const lines = doc.splitTextToSize(String(text || ''), maxW);
+  const lines = linesOpt ?? doc.splitTextToSize(String(text || ''), maxW);
   const lineH = fontSize * 1.15;
   const blockH = lines.length * lineH;
   let startY = yTop + pad + lineH * 0.85;
@@ -363,39 +390,43 @@ function getPdfDataCells(row, layout) {
 }
 
 /**
- * @param {import('jspdf').jsPDF} doc
- * @param {object} row
+ * Measure row height and cache wrapped lines for draw (single splitTextToSize per cell).
+ * @returns {{ cells: string[]; cellLines: string[][]; rowH: number }}
  */
-function measureDataRowHeight(doc, row, layout) {
+function buildDataRowPrep(doc, row, layout) {
   const cells = getPdfDataCells(row, layout);
   const { colWidths, dataFontSize } = layout;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(dataFontSize);
+  const cellLines = [];
   const innerH = [];
   for (let i = 0; i < cells.length; i += 1) {
     const maxW = Math.max(6, colWidths[i] - 6);
     const lines = doc.splitTextToSize(String(cells[i] || ''), maxW);
+    cellLines.push(lines);
     const lh = dataFontSize * 1.2;
     innerH.push(Math.max(22, lines.length * lh + 10));
   }
-  return Math.min(120, Math.max(...innerH));
+  const rowH = Math.min(120, Math.max(...innerH));
+  return { cells, cellLines, rowH };
 }
 
 /**
  * @param {import('jspdf').jsPDF} doc
  * @param {number} y
  * @param {object} row
+ * @param {{ cells: string[]; cellLines: string[][]; rowH: number }} [prep]
  */
-function drawDataRow(doc, y, row, layout) {
+function drawDataRow(doc, y, row, layout, prep) {
   const { colWidths, dataFontSize, tableMargin } = layout;
-  const xs = colStarts(colWidths, tableMargin);
-  const cells = getPdfDataCells(row, layout);
-  const rowH = measureDataRowHeight(doc, row, layout);
+  const xs = layout._tableXs ?? colStarts(colWidths, tableMargin);
+  const rowPrep = prep ?? buildDataRowPrep(doc, row, layout);
+  const { cells, cellLines, rowH } = rowPrep;
 
   for (let i = 0; i < colWidths.length; i += 1) {
     drawCellBorder(doc, xs[i], y, colWidths[i], rowH);
     const align = i <= 3 ? 'left' : 'center';
-    drawCellText(doc, cells[i], xs[i], y, colWidths[i], rowH, align, false, dataFontSize);
+    drawCellText(doc, cells[i], xs[i], y, colWidths[i], rowH, align, false, dataFontSize, cellLines[i]);
   }
   return y + rowH;
 }
@@ -456,28 +487,76 @@ function drawContinuedPageHeader(doc, layout) {
 }
 
 /**
+ * Pre-map sorted raw rows once; merge reuses cached PDF rows for keys and merged output.
+ */
+function prepareLdpFobMergedRows(rawRows) {
+  const sortedRaw = sortLdpFobRawRowsByCustomer(rawRows);
+  const pdfRowByRaw = new WeakMap();
+  for (let i = 0; i < sortedRaw.length; i += 1) {
+    const raw = sortedRaw[i];
+    pdfRowByRaw.set(raw, mapLdpFobApiRowToPdfRow(raw));
+  }
+  const mergedPdfRowByMergedRaw = new WeakMap();
+  const mergedRaw = mergeLdpFobRawRowsByLineKey(sortedRaw, {
+    pdfRowByRaw,
+    mergedPdfRowByMergedRaw,
+  });
+  return { sortedRaw, mergedRaw, mergedPdfRowByMergedRaw };
+}
+
+/**
+ * Build draw-ready items: one map + one height/line-wrap pass per merged row.
+ * @returns {Array<{ customerLabel: string; pdfRow: object; prep: { cells: string[]; cellLines: string[][]; rowH: number } }>}
+ */
+function buildLdpFobPdfDrawItems(doc, mergedRaw, mergedPdfRowByMergedRaw, layout) {
+  const items = [];
+  for (let i = 0; i < mergedRaw.length; i += 1) {
+    const merged = mergedRaw[i];
+    const pdfRow =
+      mergedPdfRowByMergedRaw.get(merged) ?? mapLdpFobApiRowToPdfRow(merged);
+    items.push({
+      customerLabel: getLdpFobCustomerGroupLabel(merged),
+      pdfRow,
+      prep: buildDataRowPrep(doc, pdfRow, layout),
+    });
+  }
+  return items;
+}
+
+/**
  * @param {object[]} rawRows API rows (mapped via {@link mapLdpFobApiRowToPdfRow})
  * @param {object} [options] {@link LDP_FOB_PRICE_LIST_REPORT_OPTIONS} for LDP and FOB Report page
  * @returns {Promise<Blob>}
  */
-export async function buildLdpFobPdfBlobFromRows(rawRows, options = {}) {
+export async function buildLdpFobPdfBlobFromRows(rawRows, options = {}, debug = {}) {
+  const { onTiming } = debug;
   const layout = resolveLdpFobReportLayout(options);
+  layout._tableXs = colStarts(layout.colWidths, layout.tableMargin);
+
+  const dataProcStart = performance.now();
+  const { mergedRaw, mergedPdfRowByMergedRaw } = prepareLdpFobMergedRows(rawRows);
+  onTiming?.('dataProcessing', Math.round(performance.now() - dataProcStart));
+
   // eslint-disable-next-line new-cap -- library default export
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
 
-  let logoDataUrl = null;
-  try {
-    logoDataUrl = await loadLogoDataUrl();
-  } catch (e) {
+  const pdfGenStart = performance.now();
+
+  const logoPromise = loadLogoDataUrl().catch((e) => {
     console.warn('[FOB PDF] Logo load failed — check public/logo/AMSlogo.png', e);
-  }
+    return null;
+  });
+  const drawItems =
+    mergedRaw.length > 0
+      ? buildLdpFobPdfDrawItems(doc, mergedRaw, mergedPdfRowByMergedRaw, layout)
+      : null;
+  const logoDataUrl = await logoPromise;
 
   let y = await drawPageHeader(doc, logoDataUrl, layout);
   y = drawTableHeaderRow(doc, y, layout);
 
   const bottomLimit = PAGE_H - 36;
-  const sortedRaw = sortLdpFobRawRowsByCustomer(rawRows);
-  const mergedRaw = mergeLdpFobRawRowsByLineKey(sortedRaw);
+  const bannerMetricsCache = new Map();
 
   if (!mergedRaw.length) {
     const emptyRow = {
@@ -492,17 +571,21 @@ export async function buildLdpFobPdfBlobFromRows(rawRows, options = {}) {
       fob: '—',
       ldp: '—',
     };
-    drawDataRow(doc, y, emptyRow, layout);
+    drawDataRow(doc, y, emptyRow, layout, buildDataRowPrep(doc, emptyRow, layout));
   } else {
     let prevCustomerKey = null;
-    for (let i = 0; i < mergedRaw.length; i += 1) {
-      const raw = mergedRaw[i];
-      const customerLabel = getLdpFobCustomerGroupLabel(raw);
-      const row = mapLdpFobApiRowToPdfRow(raw);
+
+    for (let i = 0; i < drawItems.length; i += 1) {
+      const { customerLabel, pdfRow, prep } = drawItems[i];
 
       if (customerLabel !== prevCustomerKey) {
-        const bannerH = getCustomerBannerRowHeight(doc, customerLabel, layout.colWidths);
-        const dataH = measureDataRowHeight(doc, row, layout);
+        let bannerMetrics = bannerMetricsCache.get(customerLabel);
+        if (!bannerMetrics) {
+          bannerMetrics = getCustomerBannerMetrics(doc, customerLabel, layout.colWidths);
+          bannerMetricsCache.set(customerLabel, bannerMetrics);
+        }
+        const { rowH: bannerH } = bannerMetrics;
+        const dataH = prep.rowH;
         if (y + bannerH + dataH > bottomLimit) {
           doc.addPage();
           y = drawContinuedPageHeader(doc, layout);
@@ -510,20 +593,38 @@ export async function buildLdpFobPdfBlobFromRows(rawRows, options = {}) {
           doc.addPage();
           y = drawContinuedPageHeader(doc, layout);
         }
-        y = drawCustomerGroupBannerRow(doc, y, customerLabel, layout.colWidths, layout.tableMargin);
+        y = drawCustomerGroupBannerRow(
+          doc,
+          y,
+          customerLabel,
+          layout.colWidths,
+          layout.tableMargin,
+          bannerMetrics
+        );
         prevCustomerKey = customerLabel;
       }
 
-      const h = measureDataRowHeight(doc, row, layout);
+      const h = prep.rowH;
       if (y + h > bottomLimit) {
         doc.addPage();
         y = drawContinuedPageHeader(doc, layout);
       }
-      y = drawDataRow(doc, y, row, layout);
+      y = drawDataRow(doc, y, pdfRow, layout, prep);
     }
   }
 
-  return doc.output('blob');
+  const documentTitle = options.documentTitle;
+  if (documentTitle) {
+    try {
+      doc.setProperties({ title: documentTitle, subject: documentTitle });
+    } catch (e) {
+      /* setProperties unavailable — non-fatal, preview still works */
+    }
+  }
+
+  const blob = doc.output('blob');
+  onTiming?.('pdfGeneration', Math.round(performance.now() - pdfGenStart));
+  return blob;
 }
 
 /** CSV — same columns as PDF table. */
@@ -563,8 +664,9 @@ export function buildLdpFobCsvFromRows(rawRows) {
  * @param {'view'|'pdf'|'excel'} mode
  * @param {Blob} pdfBlob
  * @param {Blob} [csvBlob]
+ * @param {{ pdfFilename?: string }} [options]
  */
-export function openLdpFobDemoDownload(mode, pdfBlob, csvBlob) {
+export function openLdpFobDemoDownload(mode, pdfBlob, csvBlob, options = {}) {
   if (mode === 'excel' && csvBlob) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(csvBlob);
@@ -577,8 +679,12 @@ export function openLdpFobDemoDownload(mode, pdfBlob, csvBlob) {
     return;
   }
 
-  const pdf = new Blob([pdfBlob], { type: 'application/pdf' });
-  const blobUrl = URL.createObjectURL(pdf);
+  const pdfFilename = options.pdfFilename || 'FOB PRICE LIST.pdf';
+  const namedPdf =
+    typeof File !== 'undefined'
+      ? new File([pdfBlob], pdfFilename, { type: 'application/pdf' })
+      : new Blob([pdfBlob], { type: 'application/pdf' });
+  const blobUrl = URL.createObjectURL(namedPdf);
 
   if (mode === 'view') {
     window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
@@ -588,7 +694,7 @@ export function openLdpFobDemoDownload(mode, pdfBlob, csvBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'FOB PRICE LIST.pdf';
+  a.download = pdfFilename;
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

@@ -1235,37 +1235,27 @@ function embedRowImageInBox(doc, x, y, w, h, raw) {
 }
 
 /**
- * Parse one or more milestone strings like `40% ES: 12 May 2026`.
- * Date text is kept exactly as returned by the API (only `ES:` prefix removed).
- * @returns {{ percent: string; date: string }[]}
+ * Parse one or more milestone strings like `45 % ES: 12 May 2026` or `0 PCS ES: 12 May 2026`.
+ * Value and date text are kept exactly as returned by the API (`ES:` is not shown).
+ * @returns {{ value: string; date: string }[]}
  */
 function parseMilestoneEsDisplaySegments(raw) {
-  if (raw == null || raw === '' || raw === 0 || raw === '0') return [];
+  if (raw == null || raw === '') return [];
   const s = String(raw).trim();
   if (!s) return [];
 
   const segments = [];
-  const re = /(\d+)\s*%\s*ES\s*:\s*([\s\S]*?)(?=\s*\d+\s*%\s*ES\s*:|$)/gi;
+  const re = /(.+?)\s+ES\s*:\s*(.*?)(?=\s*.+?\s+ES\s*:|$)/gis;
   let m = re.exec(s);
   while (m) {
-    const percent = `${m[1]}%`;
+    const value = String(m[1] || '').trim();
     const date = String(m[2] || '')
       .trim()
       .replace(/\s+/g, ' ');
-    segments.push({ percent, date });
+    if (value) segments.push({ value, date });
     m = re.exec(s);
   }
   if (segments.length) return segments;
-
-  const single = /^(\d+)\s*%\s*(?:ES\s*[:\-]?\s*)?(.*)$/is.exec(s);
-  if (single) {
-    const datePart = String(single[2] || '')
-      .trim()
-      .replace(/^ES\s*[:\-]?\s*/i, '')
-      .trim()
-      .replace(/\s+/g, ' ');
-    return [{ percent: `${single[1]}%`, date: datePart }];
-  }
 
   return [];
 }
@@ -1276,23 +1266,23 @@ function isMilestoneZeroOnlyValue(raw) {
 }
 
 function getMilestoneEsDisplayLinesFromValue(raw) {
-  if (isMilestoneZeroOnlyValue(raw)) return ['0%', 'N/A'];
+  if (isMilestoneZeroOnlyValue(raw)) return ['0', 'N/A'];
 
   const segments = parseMilestoneEsDisplaySegments(raw);
-  if (!segments.length) return ['0%', 'N/A'];
+  if (!segments.length) return ['0', 'N/A'];
 
   const lines = [];
-  segments.forEach(({ percent, date }) => {
-    if (percent) lines.push(percent);
+  segments.forEach(({ value, date }) => {
+    if (value) lines.push(value);
     if (date) lines.push(date);
-    else if (percent) lines.push('N/A');
+    else if (value) lines.push('N/A');
   });
-  return lines.length ? lines : ['0%', 'N/A'];
+  return lines.length ? lines : ['0', 'N/A'];
 }
 
 function getMilestoneCellDisplayLines(raw, spec) {
   const combined = pickField(raw, ...(spec.keys || []));
-  if (isMilestoneZeroOnlyValue(combined)) return ['0%', 'N/A'];
+  if (isMilestoneZeroOnlyValue(combined)) return ['0', 'N/A'];
 
   if (combined !== '' && combined != null) {
     const segments = parseMilestoneEsDisplaySegments(combined);
@@ -1303,11 +1293,10 @@ function getMilestoneCellDisplayLines(raw, spec) {
   if (statusOnly !== '' && statusOnly != null) {
     const segments = parseMilestoneEsDisplaySegments(statusOnly);
     if (segments.length) return getMilestoneEsDisplayLinesFromValue(statusOnly);
-    const pct = String(statusOnly).trim();
-    if (/^\d+\s*%/.test(pct)) {
-      const percent = `${pct.match(/^(\d+)/)[1]}%`;
+    const valueText = String(statusOnly).trim();
+    if (valueText) {
       const dateText = combined != null && combined !== '' ? String(combined).trim() : '';
-      return dateText ? [percent, dateText] : [percent, 'N/A'];
+      return dateText ? [valueText, dateText] : [valueText, 'N/A'];
     }
   }
 
@@ -1316,7 +1305,7 @@ function getMilestoneCellDisplayLines(raw, spec) {
     if (t) return ['0', t];
   }
 
-  return ['0%', 'N/A'];
+  return ['0', 'N/A'];
 }
 
 function drawMilestoneEsDisplayLines(doc, x, y, w, h, lines) {
@@ -1329,7 +1318,7 @@ function drawMilestoneEsDisplayLines(doc, x, y, w, h, lines) {
   /** Vertical gap between stacked milestone pairs in one cell. */
   const PAIR_STACK_GAP = 14;
 
-  const list = Array.isArray(lines) && lines.length ? lines : ['0%', 'N/A'];
+  const list = Array.isArray(lines) && lines.length ? lines : ['0', 'N/A'];
   const pairs = [];
   for (let i = 0; i < list.length; i += 2) {
     pairs.push([list[i], list[i + 1] ?? 'N/A']);
@@ -1361,83 +1350,19 @@ function drawMilestoneEsDisplayLines(doc, x, y, w, h, lines) {
   });
 }
 
-/** Milestone status line in PDF — show digit only (strip `%`). */
-function displayMilestoneStatusValue(raw) {
-  const s = String(raw ?? '').trim();
-  if (!s) return '0';
-  const withoutPct = s.replace(/%/g, '').trim();
-  return withoutPct || '0';
-}
-
-/**
- * Parse combined milestone values e.g. `"0% ES: 31 Jan 2026"` → status + date only.
- * Strips `0% ES:` / `90% ES` prefix so PDF shows clean dates.
- * @returns {{ status: string; date: string }}
- */
-function parseMilestoneCombinedDateString(raw) {
-  if (raw == null || raw === '' || raw === 0 || raw === '0') return { status: '', date: '' };
-  const s = String(raw).trim();
-  if (!s) return { status: '', date: '' };
-
-  const m = /^(\d+\s*%)\s*(?:ES\s*[:\-]?\s*)?(.*)$/i.exec(s);
-  if (m) {
-    const status = m[1].replace(/\s+/g, '').replace(/%/g, '');
-    let datePart = (m[2] || '').trim().replace(/^ES\s*[:\-]?\s*/i, '').trim();
-    if (datePart) {
-      const dm = /^(\d{1,2})[\s\-/]+([A-Za-z]+)[\s\-/]+(\d{2,4})$/.exec(datePart);
-      if (dm) {
-        const yyyy = dm[3].length === 2 ? `20${dm[3]}` : dm[3];
-        datePart = `${dm[1].padStart(2, '0')} ${dm[2].slice(0, 3)} ${yyyy}`;
-      } else {
-        const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(datePart);
-        if (iso) datePart = formatMilestoneDate(`${iso[1]}-${iso[2]}-${iso[3]}`) || datePart;
-        else datePart = formatMilestoneDate(datePart) || datePart;
-      }
-    }
-    return { status, date: datePart };
-  }
-
-  const formatted = formatMilestoneDate(s);
-  if (formatted) return { status: '', date: formatted };
-  if (/^\d+\s*%/i.test(s)) {
-    return {
-      status: s.replace(/\s*(?:ES\s*[:\-]?\s*)?.*$/i, '').replace(/\s+/g, '').replace(/%/g, ''),
-      date: '',
-    };
-  }
-  return { status: '', date: s };
-}
-
-/**
- * Parse FRI combined string e.g. `"0% ES: 31 Jan 2026"` → `{ top: '0%', bottom: '31 Jan 2026' }`.
- * Tolerates variants like `"100% 15-Jan-2026"`, `"0%"` (no date), or empty.
- */
-function parseFriCombined(raw) {
-  const { status, date } = parseMilestoneCombinedDateString(raw);
-  return { top: status || '0', bottom: date };
+/** First value/date pair for Excel — matches PDF milestone cell lines. */
+function milestoneEsDisplayLinesToExcelText(lines) {
+  const list = Array.isArray(lines) && lines.length ? lines : ['0', 'N/A'];
+  const value = list[0] ?? '0';
+  const dateRaw = list[1] ?? 'N/A';
+  const date = dateRaw === 'N/A' || dateRaw === '—' ? '—' : dateRaw;
+  return `${value}\n${date}`;
 }
 
 /** Same two lines as PDF `drawFriCombinedCell` — used by Excel exporter. */
 export function milestoneSummaryFriCombinedExcelText(raw, spec) {
   const v = pickField(raw, ...(spec.keys || []));
-  const { top, bottom } = parseFriCombined(v);
-  return `${top}\n${bottom || '—'}`;
-}
-
-function milestoneTopStatus(raw, spec) {
-  const s = pickField(raw, ...(spec.statusKeys || []));
-  if (s !== '' && s != null) return displayMilestoneStatusValue(s);
-  const v = pickField(raw, ...(spec.keys || []));
-  const { status } = parseMilestoneCombinedDateString(v);
-  if (status) return displayMilestoneStatusValue(status);
-  return '0';
-}
-
-function milestoneBottomDate(raw, spec) {
-  const v = pickField(raw, ...(spec.keys || []));
-  const { date } = parseMilestoneCombinedDateString(v);
-  if (date) return date;
-  return '—';
+  return milestoneEsDisplayLinesToExcelText(getMilestoneEsDisplayLinesFromValue(v));
 }
 
 /** Same two lines as PDF `drawStackedTwoDates` (shipment / FRI). */
@@ -1460,7 +1385,7 @@ export function milestoneSummaryStack2ExcelText(raw, spec, reportType) {
 
 /** Same two lines as PDF milestone cell (status + date). */
 export function milestoneSummaryMilestoneExcelText(raw, spec) {
-  return `${milestoneTopStatus(raw, spec)}\n${milestoneBottomDate(raw, spec)}`;
+  return milestoneEsDisplayLinesToExcelText(getMilestoneCellDisplayLines(raw, spec));
 }
 
 function drawMilestoneCell(doc, x, y, w, h, raw, spec) {

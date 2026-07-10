@@ -41,6 +41,9 @@ const NAVY = [0, 51, 102];
 
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
 
+export const SHIPMENT_HISTORY_DOCUMENT_TITLE = 'Shipment History Report';
+export const SHIPMENT_HISTORY_PDF_FILENAME = 'Shipment History Report.pdf';
+
 /** @typedef {{ key: string; label: string; weight: number; align?: 'left'|'center'|'right' }} HistoryCol */
 
 /** @type {HistoryCol[]} */
@@ -495,8 +498,13 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  */
 export async function buildShipmentHistoryReportPdfBlob(data = {}) {
   const payload =
-    data && Array.isArray(data.rows) && data.rows.length > 0
-      ? data
+    data && Array.isArray(data.rows)
+      ? {
+          fromLabel: data.fromLabel || SHIPMENT_HISTORY_REPORT_DEMO.fromLabel,
+          toLabel: data.toLabel || SHIPMENT_HISTORY_REPORT_DEMO.toLabel,
+          printedOn: data.printedOn || '',
+          rows: data.rows,
+        }
       : SHIPMENT_HISTORY_REPORT_DEMO;
 
   const meta = {
@@ -559,6 +567,15 @@ export async function buildShipmentHistoryReportPdfBlob(data = {}) {
     drawFooter(doc, p, total, meta.printedOn);
   }
 
+  try {
+    doc.setProperties({
+      title: SHIPMENT_HISTORY_DOCUMENT_TITLE,
+      subject: SHIPMENT_HISTORY_DOCUMENT_TITLE,
+    });
+  } catch (e) {
+    /* setProperties unavailable — non-fatal, preview still works */
+  }
+
   return doc.output('blob');
 }
 
@@ -567,8 +584,11 @@ export async function buildShipmentHistoryReportPdfBlob(data = {}) {
  * @param {Blob} pdfBlob
  */
 export function openShipmentHistoryReportPdf(mode, pdfBlob) {
-  const pdf = new Blob([pdfBlob], { type: 'application/pdf' });
-  const blobUrl = URL.createObjectURL(pdf);
+  const namedPdf =
+    typeof File !== 'undefined'
+      ? new File([pdfBlob], SHIPMENT_HISTORY_PDF_FILENAME, { type: 'application/pdf' })
+      : new Blob([pdfBlob], { type: 'application/pdf' });
+  const blobUrl = URL.createObjectURL(namedPdf);
 
   if (mode === 'view') {
     window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
@@ -578,7 +598,7 @@ export function openShipmentHistoryReportPdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Shipment-History-Report.pdf';
+  a.download = SHIPMENT_HISTORY_PDF_FILENAME;
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

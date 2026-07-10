@@ -471,15 +471,6 @@ function buildMilestoneCellLines(raw, colIndex, numFallback) {
     lines.push('Submission');
     lines.push(sDate);
   }
-  // Any milestone's Approval Date may arrive from the API as the literal string
-  // "N/A" — show that "N/A" as-is. A valid date keeps the existing formatting.
-  // (Applies only to the Approval line; target/submission are unaffected.)
-  const appIsNa = app != null && String(app).trim().toLowerCase() === 'n/a';
-  const aDate = appIsNa ? 'N/A' : formatPdfMilestoneDate(app);
-  if (aDate) {
-    lines.push('Approval');
-    lines.push(aDate);
-  }
   // Qty: actual API value when present, otherwise 0.
   lines.push('Qty');
   if (qtyRaw != null && String(qtyRaw).trim() !== '') {
@@ -489,6 +480,15 @@ function buildMilestoneCellLines(raw, colIndex, numFallback) {
     lines.push(unitStr ? `${numFallback} ${unitStr}` : String(numFallback));
   } else {
     lines.push('0');
+  }
+  // Any milestone's Approval Date may arrive from the API as the literal string
+  // "N/A" — show that "N/A" as-is. A valid date keeps the existing formatting.
+  // (Applies only to the Approval line; target/submission are unaffected.)
+  const appIsNa = app != null && String(app).trim().toLowerCase() === 'n/a';
+  const aDate = appIsNa ? 'N/A' : formatPdfMilestoneDate(app);
+  if (aDate) {
+    lines.push('Approval');
+    lines.push(aDate);
   }
   // Footer slot (was Status): show XXXRemarks only — blank when empty; never show XXXStatus.
   const remTrim = rem != null ? String(rem).trim() : '';

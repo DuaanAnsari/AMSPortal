@@ -17,6 +17,18 @@ const PAGE_H = 595;
 
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
 
+export const BUSINESS_SUMMARY_ORDER_WISE_DOCUMENT_TITLE = 'Business Summary Order wise';
+export const BUSINESS_SUMMARY_ORDER_WISE_PDF_FILENAME = 'Business Summary Order wise.pdf';
+
+function setPdfDocumentTitle(doc, title) {
+  if (!title) return;
+  try {
+    doc.setProperties({ title, subject: title });
+  } catch (e) {
+    /* setProperties unavailable — non-fatal, preview still works */
+  }
+}
+
 /** 17 columns in display order. */
 const HEADERS = [
   'S.No',
@@ -896,6 +908,8 @@ export async function buildBusinessSummaryOrderWisePdfBlob(data, meta = {}) {
     drawFooter(doc);
   }
 
+  setPdfDocumentTitle(doc, BUSINESS_SUMMARY_ORDER_WISE_DOCUMENT_TITLE);
+
   return doc.output('blob');
 }
 
@@ -904,8 +918,11 @@ export async function buildBusinessSummaryOrderWisePdfBlob(data, meta = {}) {
  * @param {Blob} pdfBlob
  */
 export function openBusinessSummaryOrderWisePdf(mode, pdfBlob) {
-  const pdf = new Blob([pdfBlob], { type: 'application/pdf' });
-  const blobUrl = URL.createObjectURL(pdf);
+  const namedPdf =
+    typeof File !== 'undefined'
+      ? new File([pdfBlob], BUSINESS_SUMMARY_ORDER_WISE_PDF_FILENAME, { type: 'application/pdf' })
+      : new Blob([pdfBlob], { type: 'application/pdf' });
+  const blobUrl = URL.createObjectURL(namedPdf);
 
   if (mode === 'view') {
     window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
@@ -915,7 +932,7 @@ export function openBusinessSummaryOrderWisePdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Business-Summary-Order-Wise.pdf';
+  a.download = BUSINESS_SUMMARY_ORDER_WISE_PDF_FILENAME;
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

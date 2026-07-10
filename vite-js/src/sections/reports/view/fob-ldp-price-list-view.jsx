@@ -32,6 +32,7 @@ import {
   buildLdpFobPdfBlobFromRows,
   openLdpFobDemoDownload,
   LDP_FOB_PRICE_LIST_REPORT_OPTIONS,
+  LDP_FOB_PRICE_LIST_PDF_FILENAME,
 } from 'src/sections/reports/utils/ldp-fob-demo-export';
 
 // ----------------------------------------------------------------------
@@ -54,8 +55,9 @@ const DISABLE_LDP_FOB_EXCEL_DOWNLOAD = true;
 
 /** Show immediate feedback in the tab opened synchronously on click (avoids blank tab before blob is ready). */
 function writePdfPreviewPlaceholder(previewWindow) {
+  const title = LDP_FOB_PRICE_LIST_REPORT_OPTIONS.documentTitle;
   try {
-    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Loading PDF…</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fafafa;color:#333;"><p style="padding:24px;font-size:15px;">Loading PDF…</p></body></html>`;
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>${title}</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fafafa;color:#333;"><p style="padding:24px;font-size:15px;">Loading PDF…</p></body></html>`;
     previewWindow.document.open();
     previewWindow.document.write(html);
     previewWindow.document.close();
@@ -190,6 +192,9 @@ export default function FobLdpPriceListView() {
       };
 
       setExporting(mode);
+      const timingMarks = { api: 0, dataProcessing: 0, pdfGeneration: 0, render: 0, total: 0 };
+      const timingStart = performance.now();
+      console.time('Total Report Time');
       try {
         // PO# dropdown selection takes precedence; otherwise fall back to the PO NO text input.
         const ponoFilter =
@@ -197,6 +202,8 @@ export default function FobLdpPriceListView() {
             ? String(filters.poScope).trim()
             : String(filters.poNo ?? '').trim();
 
+        console.time('API Request');
+        const apiStart = performance.now();
         const raw = await fetchLdpFobReportRows(
           {
             fromDate: filters.fromDate,
@@ -208,6 +215,9 @@ export default function FobLdpPriceListView() {
           },
           headers
         );
+        timingMarks.api = Math.round(performance.now() - apiStart);
+        console.timeEnd('API Request');
+        console.log('[LDP/FOB Report] API rows received:', raw?.length ?? 0);
 
         if (mode === 'excel') {
           const csv = buildLdpFobCsvFromRows(raw);
@@ -218,7 +228,16 @@ export default function FobLdpPriceListView() {
           return;
         }
 
-        const pdfBlob = await buildLdpFobPdfBlobFromRows(raw, LDP_FOB_PRICE_LIST_REPORT_OPTIONS);
+        const pdfStart = performance.now();
+        const pdfBlob = await buildLdpFobPdfBlobFromRows(raw, LDP_FOB_PRICE_LIST_REPORT_OPTIONS, {
+          onTiming: (phase, ms) => {
+            if (phase === 'dataProcessing') timingMarks.dataProcessing = ms;
+            if (phase === 'pdfGeneration') timingMarks.pdfGeneration = ms;
+          },
+        });
+        if (!timingMarks.dataProcessing && !timingMarks.pdfGeneration) {
+          timingMarks.pdfGeneration = Math.round(performance.now() - pdfStart);
+        }
         await assertValidPdfBlob(pdfBlob);
 
         if (mode === 'view') {
@@ -229,7 +248,13 @@ export default function FobLdpPriceListView() {
             });
             return;
           }
-          const blobUrl = URL.createObjectURL(pdfBlob);
+          console.time('Report Render');
+          const renderStart = performance.now();
+          const namedPdf =
+            typeof File !== 'undefined'
+              ? new File([pdfBlob], LDP_FOB_PRICE_LIST_PDF_FILENAME, { type: 'application/pdf' })
+              : pdfBlob;
+          const blobUrl = URL.createObjectURL(namedPdf);
           try {
             previewWindow.location.replace(blobUrl);
           } catch (navErr) {
@@ -238,12 +263,16 @@ export default function FobLdpPriceListView() {
           }
           previewWindow.focus?.();
           setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
+          timingMarks.render = Math.round(performance.now() - renderStart);
+          console.timeEnd('Report Render');
           enqueueSnackbar(
             raw.length ? 'PDF opened in new tab' : 'PDF opened (no row data for selected filters)',
             { variant: 'success' }
           );
         } else {
-          openLdpFobDemoDownload(mode, pdfBlob, null);
+          openLdpFobDemoDownload(mode, pdfBlob, null, {
+            pdfFilename: LDP_FOB_PRICE_LIST_PDF_FILENAME,
+          });
           enqueueSnackbar('PDF download started', { variant: 'success' });
         }
       } catch (err) {
@@ -269,6 +298,24 @@ export default function FobLdpPriceListView() {
           }
         }
       } finally {
+        timingMarks.total = Math.round(performance.now() - timingStart);
+        console.timeEnd('Total Report Time');
+        if (mode !== 'excel') {
+          const steps = [
+            { label: 'API', ms: timingMarks.api },
+            { label: 'Data Processing', ms: timingMarks.dataProcessing },
+            { label: 'PDF Generation', ms: timingMarks.pdfGeneration },
+            { label: 'Render', ms: timingMarks.render },
+          ];
+          const bottleneck = steps.reduce((max, step) => (step.ms > max.ms ? step : max), steps[0]);
+          console.log('[LDP/FOB Report Timing Summary]');
+          console.log(`API Time = ${timingMarks.api} ms`);
+          console.log(`Data Processing = ${timingMarks.dataProcessing} ms`);
+          console.log(`PDF Generation = ${timingMarks.pdfGeneration} ms`);
+          console.log(`Render = ${timingMarks.render} ms`);
+          console.log(`Total = ${timingMarks.total} ms`);
+          console.log(`Bottleneck = ${bottleneck.label} (${bottleneck.ms} ms)`);
+        }
         setExporting(null);
       }
     },

@@ -1,5 +1,10 @@
 import jsPDF from 'jspdf';
 
+import {
+  BUSINESS_SUMMARY_ORDER_WISE_DOCUMENT_TITLE,
+  BUSINESS_SUMMARY_ORDER_WISE_PDF_FILENAME,
+} from './business-summary-order-wise-pdf-export';
+
 const LOGO_PATH = `${import.meta.env.BASE_URL}logo/AMSlogo.png`;
 
 const V_MARGIN = 8;
@@ -16,6 +21,15 @@ const PAGE_W = 1000;
 const PAGE_H = 595;
 
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
+
+function setPdfDocumentTitle(doc, title) {
+  if (!title) return;
+  try {
+    doc.setProperties({ title, subject: title });
+  } catch (e) {
+    /* setProperties unavailable — non-fatal, preview still works */
+  }
+}
 
 /**
  * 17 columns — supplier-wise ordering. Column 2 is Supplier, column 3 is Customer.
@@ -1117,6 +1131,8 @@ export async function buildBusinessSummaryOrderWiseSupplierPdfBlob(data, meta = 
     drawFooter(doc, p, total);
   }
 
+  setPdfDocumentTitle(doc, BUSINESS_SUMMARY_ORDER_WISE_DOCUMENT_TITLE);
+
   return doc.output('blob');
 }
 
@@ -1125,8 +1141,11 @@ export async function buildBusinessSummaryOrderWiseSupplierPdfBlob(data, meta = 
  * @param {Blob} pdfBlob
  */
 export function openBusinessSummaryOrderWiseSupplierPdf(mode, pdfBlob) {
-  const pdf = new Blob([pdfBlob], { type: 'application/pdf' });
-  const blobUrl = URL.createObjectURL(pdf);
+  const namedPdf =
+    typeof File !== 'undefined'
+      ? new File([pdfBlob], BUSINESS_SUMMARY_ORDER_WISE_PDF_FILENAME, { type: 'application/pdf' })
+      : new Blob([pdfBlob], { type: 'application/pdf' });
+  const blobUrl = URL.createObjectURL(namedPdf);
 
   if (mode === 'view') {
     window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
@@ -1136,7 +1155,7 @@ export function openBusinessSummaryOrderWiseSupplierPdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Business-Summary-Order-Wise-Supplier.pdf';
+  a.download = BUSINESS_SUMMARY_ORDER_WISE_PDF_FILENAME;
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

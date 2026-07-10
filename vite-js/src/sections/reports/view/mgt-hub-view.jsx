@@ -42,6 +42,8 @@ import {
 import {
   buildBusinessSummaryOrderWisePdfBlob,
   openBusinessSummaryOrderWisePdf,
+  BUSINESS_SUMMARY_ORDER_WISE_DOCUMENT_TITLE,
+  BUSINESS_SUMMARY_ORDER_WISE_PDF_FILENAME,
 } from 'src/sections/reports/utils/business-summary-order-wise-pdf-export';
 import {
   buildBusinessSummaryOrderWiseSupplierPdfBlob,
@@ -62,6 +64,8 @@ import {
 import {
   buildStatusWiseOrderReportPdfBlob,
   openStatusWiseOrderReportPdf,
+  STATUS_WISE_ORDER_DOCUMENT_TITLE,
+  STATUS_WISE_ORDER_PDF_FILENAME,
 } from 'src/sections/reports/utils/status-wise-order-report-pdf-export';
 import {
   buildStatusWiseVendorOrderReportPdfBlob,
@@ -70,6 +74,8 @@ import {
 import {
   buildOpenOrderReportPdfBlob,
   openOpenOrderReportPdf,
+  OPEN_ORDER_DOCUMENT_TITLE,
+  OPEN_ORDER_PDF_FILENAME,
 } from 'src/sections/reports/utils/open-order-report-pdf-export';
 import {
   buildShippedOrderReportPdfPayload,
@@ -78,6 +84,8 @@ import {
 import {
   buildShippedOrderReportPdfBlob,
   openShippedOrderReportPdf,
+  SHIPPED_ORDER_DOCUMENT_TITLE,
+  SHIPPED_ORDER_PDF_FILENAME,
 } from 'src/sections/reports/utils/shipped-order-report-pdf-export';
 
 // ----------------------------------------------------------------------
@@ -102,6 +110,34 @@ function mgtAuthHeaders() {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
+}
+
+function writeMgtPdfPreviewPlaceholder(previewWindow, title) {
+  try {
+    previewWindow.document.open();
+    previewWindow.document.write(
+      `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>${title}</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;">Generating PDF...</p></body></html>`
+    );
+    previewWindow.document.close();
+  } catch (e) {
+    console.warn('[MGT] preview placeholder', e);
+  }
+}
+
+function openMgtPdfPreviewTab(previewWindow, blob, filename) {
+  const namedPdf =
+    typeof File !== 'undefined'
+      ? new File([blob], filename, { type: 'application/pdf' })
+      : blob;
+  const blobUrl = URL.createObjectURL(namedPdf);
+  try {
+    previewWindow.location.replace(blobUrl);
+  } catch (navErr) {
+    URL.revokeObjectURL(blobUrl);
+    throw navErr;
+  }
+  previewWindow.focus?.();
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
 }
 
 const cardSx = {
@@ -252,11 +288,7 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
     }
 
     try {
-      previewWindow.document.open();
-      previewWindow.document.write(
-        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Loading report...</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;">Generating PDF...</p></body></html>'
-      );
-      previewWindow.document.close();
+      writeMgtPdfPreviewPlaceholder(previewWindow, BUSINESS_SUMMARY_ORDER_WISE_DOCUMENT_TITLE);
     } catch (e) {
       console.warn('[MGT] preview placeholder', e);
     }
@@ -270,15 +302,7 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
         });
         return;
       }
-      const blobUrl = URL.createObjectURL(blob);
-      try {
-        previewWindow.location.replace(blobUrl);
-      } catch (navErr) {
-        URL.revokeObjectURL(blobUrl);
-        throw navErr;
-      }
-      previewWindow.focus?.();
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
+      openMgtPdfPreviewTab(previewWindow, blob, BUSINESS_SUMMARY_ORDER_WISE_PDF_FILENAME);
       enqueueSnackbar(`${reportLabel} opened in a new tab`, { variant: 'success' });
     } catch (err) {
       console.error('[MGT] Business Summary Order Wise PDF', err);
@@ -944,11 +968,7 @@ function StatusWiseOrderPanel({
     }
 
     try {
-      previewWindow.document.open();
-      previewWindow.document.write(
-        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Loading report...</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;">Generating PDF...</p></body></html>'
-      );
-      previewWindow.document.close();
+      writeMgtPdfPreviewPlaceholder(previewWindow, STATUS_WISE_ORDER_DOCUMENT_TITLE);
     } catch (e) {
       console.warn('[MGT] preview placeholder', e);
     }
@@ -962,15 +982,7 @@ function StatusWiseOrderPanel({
         });
         return;
       }
-      const blobUrl = URL.createObjectURL(blob);
-      try {
-        previewWindow.location.replace(blobUrl);
-      } catch (navErr) {
-        URL.revokeObjectURL(blobUrl);
-        throw navErr;
-      }
-      previewWindow.focus?.();
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
+      openMgtPdfPreviewTab(previewWindow, blob, STATUS_WISE_ORDER_PDF_FILENAME);
       enqueueSnackbar(`${reportLabel} opened in a new tab`, { variant: 'success' });
     } catch (err) {
       console.error(`[MGT] ${reportLabel} PDF`, err);
@@ -1494,11 +1506,7 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
     }
 
     try {
-      previewWindow.document.open();
-      previewWindow.document.write(
-        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Loading report...</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;">Generating PDF...</p></body></html>'
-      );
-      previewWindow.document.close();
+      writeMgtPdfPreviewPlaceholder(previewWindow, OPEN_ORDER_DOCUMENT_TITLE);
     } catch (e) {
       console.warn('[MGT] preview placeholder', e);
     }
@@ -1528,15 +1536,7 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
         });
         return;
       }
-      const blobUrl = URL.createObjectURL(blob);
-      try {
-        previewWindow.location.replace(blobUrl);
-      } catch (navErr) {
-        URL.revokeObjectURL(blobUrl);
-        throw navErr;
-      }
-      previewWindow.focus?.();
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
+      openMgtPdfPreviewTab(previewWindow, blob, OPEN_ORDER_PDF_FILENAME);
       enqueueSnackbar(`Open Order Report (${variant}) opened in a new tab`, { variant: 'success' });
     } catch (err) {
       console.error('[MGT] Open Order Report PDF', err);
@@ -1948,11 +1948,7 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
     }
 
     try {
-      previewWindow.document.open();
-      previewWindow.document.write(
-        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Loading report...</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;">Generating PDF...</p></body></html>'
-      );
-      previewWindow.document.close();
+      writeMgtPdfPreviewPlaceholder(previewWindow, SHIPPED_ORDER_DOCUMENT_TITLE);
     } catch (e) {
       console.warn('[MGT] preview placeholder', e);
     }
@@ -1982,15 +1978,7 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
         });
         return;
       }
-      const blobUrl = URL.createObjectURL(blob);
-      try {
-        previewWindow.location.replace(blobUrl);
-      } catch (navErr) {
-        URL.revokeObjectURL(blobUrl);
-        throw navErr;
-      }
-      previewWindow.focus?.();
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
+      openMgtPdfPreviewTab(previewWindow, blob, SHIPPED_ORDER_PDF_FILENAME);
       enqueueSnackbar(`Shipped Order Report (${variant}) opened in a new tab`, { variant: 'success' });
     } catch (err) {
       console.error('[MGT] Shipped Order Report PDF', err);

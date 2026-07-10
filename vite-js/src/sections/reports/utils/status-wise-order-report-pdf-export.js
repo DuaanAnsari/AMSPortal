@@ -23,6 +23,18 @@ const PAGE_H = 700;
 
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
 
+export const STATUS_WISE_ORDER_DOCUMENT_TITLE = 'Status Wise Order Report';
+export const STATUS_WISE_ORDER_PDF_FILENAME = 'Status Wise Order Report.pdf';
+
+function setPdfDocumentTitle(doc, title) {
+  if (!title) return;
+  try {
+    doc.setProperties({ title, subject: title });
+  } catch (e) {
+    /* setProperties unavailable — non-fatal, preview still works */
+  }
+}
+
 /** 14 columns in display order — exact match with the spec image. */
 const HEADERS = [
   'PO No.',
@@ -587,6 +599,8 @@ export async function buildStatusWiseOrderReportPdfBlob(data, meta = {}) {
     drawFooter(doc, p, total);
   }
 
+  setPdfDocumentTitle(doc, meta.documentTitle || STATUS_WISE_ORDER_DOCUMENT_TITLE);
+
   return doc.output('blob');
 }
 
@@ -595,8 +609,11 @@ export async function buildStatusWiseOrderReportPdfBlob(data, meta = {}) {
  * @param {Blob} pdfBlob
  */
 export function openStatusWiseOrderReportPdf(mode, pdfBlob) {
-  const pdf = new Blob([pdfBlob], { type: 'application/pdf' });
-  const blobUrl = URL.createObjectURL(pdf);
+  const namedPdf =
+    typeof File !== 'undefined'
+      ? new File([pdfBlob], STATUS_WISE_ORDER_PDF_FILENAME, { type: 'application/pdf' })
+      : new Blob([pdfBlob], { type: 'application/pdf' });
+  const blobUrl = URL.createObjectURL(namedPdf);
 
   if (mode === 'view') {
     window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
@@ -606,7 +623,7 @@ export function openStatusWiseOrderReportPdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Status-Wise-Order-Report.pdf';
+  a.download = STATUS_WISE_ORDER_PDF_FILENAME;
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

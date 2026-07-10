@@ -6,6 +6,8 @@ import {
   drawOrderReportTotalRow,
   getOrderReportColWidths,
   sumOrderReportTotals,
+  STATUS_WISE_ORDER_DOCUMENT_TITLE,
+  STATUS_WISE_ORDER_PDF_FILENAME,
 } from './status-wise-order-report-pdf-export';
 
 const LOGO_PATH = `${import.meta.env.BASE_URL}logo/AMSlogo.png`;
@@ -26,6 +28,15 @@ const PAGE_W = 1100;
 const PAGE_H = 700;
 
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
+
+function setPdfDocumentTitle(doc, title) {
+  if (!title) return;
+  try {
+    doc.setProperties({ title, subject: title });
+  } catch (e) {
+    /* setProperties unavailable — non-fatal, preview still works */
+  }
+}
 
 /** 14 columns in display order — exact match with the spec image. */
 const HEADERS = [
@@ -594,6 +605,8 @@ async function buildStatusWiseVendorOrderGridPdfBlob(data, meta = {}) {
     drawFooter(doc, p, total);
   }
 
+  setPdfDocumentTitle(doc, meta.documentTitle || STATUS_WISE_ORDER_DOCUMENT_TITLE);
+
   return doc.output('blob');
 }
 
@@ -684,6 +697,11 @@ export async function buildStatusWiseVendorOrderReportPdfBlob(data, meta = {}) {
     drawFooter(doc, p, total);
   }
 
+  setPdfDocumentTitle(
+    doc,
+    meta.documentTitle || meta.title || 'Shipped Order Report'
+  );
+
   return doc.output('blob');
 }
 
@@ -692,8 +710,11 @@ export async function buildStatusWiseVendorOrderReportPdfBlob(data, meta = {}) {
  * @param {Blob} pdfBlob
  */
 export function openStatusWiseVendorOrderReportPdf(mode, pdfBlob) {
-  const pdf = new Blob([pdfBlob], { type: 'application/pdf' });
-  const blobUrl = URL.createObjectURL(pdf);
+  const namedPdf =
+    typeof File !== 'undefined'
+      ? new File([pdfBlob], STATUS_WISE_ORDER_PDF_FILENAME, { type: 'application/pdf' })
+      : new Blob([pdfBlob], { type: 'application/pdf' });
+  const blobUrl = URL.createObjectURL(namedPdf);
 
   if (mode === 'view') {
     window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
@@ -703,7 +724,7 @@ export function openStatusWiseVendorOrderReportPdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Shipped-Order-Report.pdf';
+  a.download = STATUS_WISE_ORDER_PDF_FILENAME;
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

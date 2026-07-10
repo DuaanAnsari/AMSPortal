@@ -73,6 +73,14 @@ export function parseUniqueWipColorQtyValues(input) {
   return out.length ? out : ['—'];
 }
 
+/** True when value already uses WIP canonical color/qty token(s), e.g. `1- (NAVY_3984)`. */
+function hasCanonicalWipColorQtyToken(input) {
+  const s = String(input ?? '').trim();
+  if (!s) return false;
+  if (CANONICAL_TOKEN.test(s)) return true;
+  return parseUniqueWipColorQtyValues(s).some((line) => CANONICAL_TOKEN.test(line));
+}
+
 /**
  * @param {Record<string, unknown>} row
  * @param {(row: Record<string, unknown>, ...keys: string[]) => unknown} pickFieldFn
@@ -88,11 +96,47 @@ export function buildWipColorQtyLines(row, pickFieldFn) {
     'Color_Qty',
     'ColorQtyDisplay'
   );
+  const colorWay = pickFieldFn(
+    row,
+    'ColorWay',
+    'colorWay',
+    'Colorway',
+    'colorway',
+    'Color',
+    'color',
+    'Colour',
+    'colour'
+  );
+
   if (combined !== '' && combined != null) {
+    const combinedStr = String(combined).trim();
+    if (hasCanonicalWipColorQtyToken(combinedStr)) {
+      return parseUniqueWipColorQtyValues(combined);
+    }
+
+    const colorStr = colorWay != null ? String(colorWay).trim() : '';
+    if (colorStr) {
+      if (/^\d+\s*-\s*\(/.test(colorStr)) {
+        return parseUniqueWipColorQtyValues(colorStr);
+      }
+      const stacked = `${colorStr}\n${combinedStr}`;
+      return stacked.trim() ? [stacked] : ['—'];
+    }
+
     return parseUniqueWipColorQtyValues(combined);
   }
 
-  const color = pickFieldFn(row, 'Color', 'color', 'Colorway', 'colorway', 'Colour', 'colour');
+  const color = pickFieldFn(
+    row,
+    'ColorWay',
+    'colorWay',
+    'Colorway',
+    'colorway',
+    'Color',
+    'color',
+    'Colour',
+    'colour'
+  );
   const qty = pickFieldFn(row, 'Qty', 'qty', 'ColorQuantity', 'colorQuantity');
 
   if (color && qty) {
@@ -117,4 +161,16 @@ export function getWipColorQtyDisplayLines(row) {
     return row.colorQtyLines;
   }
   return parseUniqueWipColorQtyValues(row?.colorQty);
+}
+
+/** Lines for one Color / QTY PDF cell (splits stacked ColorWay + Qty). */
+export function getWipColorQtyCellRenderLines(row) {
+  const lines = getWipColorQtyDisplayLines(row);
+  const first = lines[0];
+  if (!first || first === '—') return ['—'];
+  const parts = String(first)
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return parts.length ? parts : ['—'];
 }
