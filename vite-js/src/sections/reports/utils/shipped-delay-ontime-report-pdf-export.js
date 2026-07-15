@@ -36,6 +36,9 @@ const NAVY = [0, 51, 102];
 
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
 
+export const SHIPPED_DELAY_ONTIME_DOCUMENT_TITLE = 'Shipped Delay / OnTime Report';
+export const SHIPPED_DELAY_ONTIME_PDF_FILENAME = 'Shipped Delay / OnTime Report.pdf';
+
 /** @typedef {{ key: string; label: string; weight: number; align?: 'left'|'center'|'right' }} ShippedDelayCol */
 
 /** @type {ShippedDelayCol[]} */
@@ -468,6 +471,15 @@ export async function buildShippedDelayOnTimeReportPdfBlob(data = {}) {
     drawFooter(doc, p, total, meta.printedOn);
   }
 
+  try {
+    doc.setProperties({
+      title: SHIPPED_DELAY_ONTIME_DOCUMENT_TITLE,
+      subject: SHIPPED_DELAY_ONTIME_DOCUMENT_TITLE,
+    });
+  } catch {
+    /* setProperties unavailable — non-fatal, preview still works */
+  }
+
   return doc.output('blob');
 }
 
@@ -476,9 +488,12 @@ export async function buildShippedDelayOnTimeReportPdfBlob(data = {}) {
  * @param {Blob} pdfBlob
  * @param {string} [status]
  */
-export function openShippedDelayOnTimeReportPdf(mode, pdfBlob, status = 'DELAY') {
-  const pdf = new Blob([pdfBlob], { type: 'application/pdf' });
-  const blobUrl = URL.createObjectURL(pdf);
+export function openShippedDelayOnTimeReportPdf(mode, pdfBlob, _status = 'DELAY') {
+  const namedFile =
+    typeof File !== 'undefined'
+      ? new File([pdfBlob], SHIPPED_DELAY_ONTIME_PDF_FILENAME, { type: 'application/pdf' })
+      : new Blob([pdfBlob], { type: 'application/pdf' });
+  const blobUrl = URL.createObjectURL(namedFile);
 
   if (mode === 'view') {
     window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
@@ -486,14 +501,9 @@ export function openShippedDelayOnTimeReportPdf(mode, pdfBlob, status = 'DELAY')
     return;
   }
 
-  const fileName =
-    String(status).toUpperCase() === 'ONTIME'
-      ? 'Shipped-OnTime-Report.pdf'
-      : 'Shipped-Delay-Report.pdf';
-
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = fileName;
+  a.download = SHIPPED_DELAY_ONTIME_PDF_FILENAME;
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

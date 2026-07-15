@@ -38,6 +38,9 @@ const NAVY = [0, 51, 102];
 
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
 
+export const SHIPMENT_DELAY_DOCUMENT_TITLE = 'Shipment Delay Report';
+export const SHIPMENT_DELAY_PDF_FILENAME = 'Shipment Delay Report.pdf';
+
 /** @typedef {{ key: string; label: string; weight: number; align?: 'left'|'center'|'right' }} DelayCol */
 
 /** @type {DelayCol[]} */
@@ -414,6 +417,15 @@ export async function buildShipmentDelayReportPdfBlob(data = {}) {
     drawFooter(doc, p, total, meta.printedOn);
   }
 
+  try {
+    doc.setProperties({
+      title: SHIPMENT_DELAY_DOCUMENT_TITLE,
+      subject: SHIPMENT_DELAY_DOCUMENT_TITLE,
+    });
+  } catch {
+    /* setProperties unavailable — non-fatal, preview still works */
+  }
+
   return doc.output('blob');
 }
 
@@ -422,8 +434,11 @@ export async function buildShipmentDelayReportPdfBlob(data = {}) {
  * @param {Blob} pdfBlob
  */
 export function openShipmentDelayReportPdf(mode, pdfBlob) {
-  const pdf = new Blob([pdfBlob], { type: 'application/pdf' });
-  const blobUrl = URL.createObjectURL(pdf);
+  const namedFile =
+    typeof File !== 'undefined'
+      ? new File([pdfBlob], SHIPMENT_DELAY_PDF_FILENAME, { type: 'application/pdf' })
+      : new Blob([pdfBlob], { type: 'application/pdf' });
+  const blobUrl = URL.createObjectURL(namedFile);
 
   if (mode === 'view') {
     window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
@@ -433,7 +448,7 @@ export function openShipmentDelayReportPdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Shipment-Delay-Report.pdf';
+  a.download = SHIPMENT_DELAY_PDF_FILENAME;
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

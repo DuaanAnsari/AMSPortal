@@ -61,20 +61,24 @@ import {
 import {
   buildShipmentDelayReportPdfBlob,
   openShipmentDelayReportPdf,
+  SHIPMENT_DELAY_PDF_FILENAME,
 } from 'src/sections/reports/utils/shipment-delay-report-pdf-export';
 import {
   buildProductComparisionReportPdfBlob,
   openProductComparisionReportPdf,
+  PRODUCT_COMPARISION_PDF_FILENAME,
 } from 'src/sections/reports/utils/product-comparision-report-pdf-export';
 import {
   buildShippedDelayOnTimeReportPdfBlob,
   openShippedDelayOnTimeReportPdf,
   shippedDelayHeaderDate,
+  SHIPPED_DELAY_ONTIME_PDF_FILENAME,
 } from 'src/sections/reports/utils/shipped-delay-ontime-report-pdf-export';
 import {
   buildShippedNotCloseStatusReportPdfBlob,
   openShippedNotCloseStatusReportPdf,
   shippedNotCloseHeaderDate,
+  SHIPPED_NOT_CLOSE_PDF_FILENAME,
 } from 'src/sections/reports/utils/shipped-not-close-status-report-pdf-export';
 
 // ----------------------------------------------------------------------
@@ -1947,6 +1951,155 @@ function AfterShipmentReportForm() {
 // Shipment Delay Report
 // ----------------------------------------------------------------------
 
+const SHIPMENT_DELAY_TAB_TITLE = 'Shipment Delay Report';
+
+function unwrapShipmentDelayList(data) {
+  if (Array.isArray(data)) return data;
+  if (data == null) return [];
+  if (Array.isArray(data.data)) return data.data;
+  if (Array.isArray(data.Data)) return data.Data;
+  if (Array.isArray(data.result)) return data.result;
+  if (Array.isArray(data.Result)) return data.Result;
+  if (Array.isArray(data.rows)) return data.rows;
+  if (Array.isArray(data.Rows)) return data.Rows;
+  return [];
+}
+
+function pickShipmentDelayField(obj, ...keys) {
+  for (let i = 0; i < keys.length; i += 1) {
+    const v = obj?.[keys[i]];
+    if (v !== undefined && v !== null && v !== '') return v;
+  }
+  return '';
+}
+
+function pickShipmentDelayNumeric(obj, ...keys) {
+  for (let i = 0; i < keys.length; i += 1) {
+    const v = obj?.[keys[i]];
+    if (v !== undefined && v !== null && v !== '') {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    }
+  }
+  return undefined;
+}
+
+/** Match existing demo date cells (`Apr 07, 2026`). */
+function formatShipmentDelayReportDate(value) {
+  if (value == null || value === '') return '';
+  const s = String(value).trim();
+  if (!s) return '';
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+}
+
+function mapShipmentDelayApiRowToPdfRow(raw) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  return {
+    poNo: String(pickShipmentDelayField(r, 'PONO', 'pono', 'PONo', 'PoNo') || ''),
+    customer: String(pickShipmentDelayField(r, 'CustomerName', 'customerName') || ''),
+    vendor: String(
+      pickShipmentDelayField(r, 'VenderName', 'venderName', 'VendorName', 'vendorName') || ''
+    ),
+    orderQty: pickShipmentDelayNumeric(r, 'POQty', 'poQty'),
+    shipDateV: formatShipmentDelayReportDate(
+      pickShipmentDelayField(
+        r,
+        'Shipment Date (Vendor)',
+        'ShipmentDateVendor',
+        'shipmentDateVendor',
+        'VendorShipmentDate',
+        'vendorShipmentDate'
+      )
+    ),
+    shipDateB: formatShipmentDelayReportDate(
+      pickShipmentDelayField(
+        r,
+        'Shipment Date (Buyer)',
+        'ShipmentDateBuyer',
+        'shipmentDateBuyer',
+        'BuyerShipmentDate',
+        'buyerShipmentDate'
+      )
+    ),
+    invoiceValue: pickShipmentDelayNumeric(r, 'InvoiceValue', 'invoiceValue'),
+    week1Delay: pickShipmentDelayNumeric(
+      r,
+      'Week1Delay',
+      'week1Delay',
+      'Week1Delay3',
+      'WEEK1DELAY'
+    ),
+    week2Delay: pickShipmentDelayNumeric(
+      r,
+      'Week2Delay',
+      'week2Delay',
+      'Week2Delay5',
+      'WEEK2DELAY'
+    ),
+    week3Delay: pickShipmentDelayNumeric(
+      r,
+      'Week3Delay',
+      'week3Delay',
+      'Week3Delay8',
+      'WEEK3DELAY'
+    ),
+    onward10: pickShipmentDelayNumeric(
+      r,
+      'Onward10',
+      'onward10',
+      'OnwardDelay',
+      'onwardDelay',
+      'ONWARD10'
+    ),
+    reasonB: String(
+      pickShipmentDelayField(
+        r,
+        'ReasonforReviseShpmnt',
+        'reasonforReviseShpmnt',
+        'ReasonForReviseShpmnt'
+      ) || ''
+    ),
+    reasonV: String(
+      pickShipmentDelayField(
+        r,
+        'ReasonforReviseShpmntVendor',
+        'reasonforReviseShpmntVendor',
+        'ReasonForReviseShpmntVendor'
+      ) || ''
+    ),
+  };
+}
+
+async function fetchShipmentDelayReportRows(params, headers = {}) {
+  const base = String(import.meta.env.VITE_REPORT_API || '').replace(/\/+$/, '');
+  if (!base) {
+    throw new Error('VITE_REPORT_API is not set');
+  }
+
+  const q = new URLSearchParams({
+    marchandiserId: shipmentFilterIdOrZero(params.marchandiserId),
+    customerId: shipmentFilterIdOrZero(params.customerId),
+    supplierId: shipmentFilterIdOrZero(params.supplierId),
+  });
+
+  const url = `${base}/api/Report/ShipmentDelayReport?${q.toString()}`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    throw new Error(`ShipmentDelayReport API failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  return unwrapShipmentDelayList(data);
+}
+
+function buildShipmentDelayReportPdfPayload(rawRows) {
+  return {
+    rows: (rawRows || []).map(mapShipmentDelayApiRowToPdfRow),
+  };
+}
+
 /**
  * "Shipment Delay Report" form.
  *
@@ -1954,8 +2107,7 @@ function AfterShipmentReportForm() {
  * shared Milestone Summary dropdown endpoint) followed by a centered action
  * row (View Report, Download PDF, Download Excel).
  *
- * Buttons toast for now — they'll hook into the real backend endpoint once
- * confirmed, same pattern as the other Shipment hub reports.
+ * Report data: GET `/api/Report/ShipmentDelayReport` via `VITE_REPORT_API`.
  */
 function ShipmentDelayReportForm() {
   const { enqueueSnackbar } = useSnackbar();
@@ -1971,6 +2123,14 @@ function ShipmentDelayReportForm() {
   const [merchants, setMerchants] = useState([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
 
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = SHIPMENT_DELAY_TAB_TITLE;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, []);
+
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
   };
@@ -1982,9 +2142,24 @@ function ShipmentDelayReportForm() {
 
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  const fetchShipmentDelayPayload = useCallback(async () => {
+    const { merchandiser, customer, supplier } = filters;
+    const rawRows = await fetchShipmentDelayReportRows(
+      {
+        marchandiserId: merchandiser,
+        customerId: customer,
+        supplierId: supplier,
+      },
+      shipmentAuthHeaders()
+    );
+
+    if (!rawRows.length) return null;
+    return buildShipmentDelayReportPdfPayload(rawRows);
+  }, [filters.merchandiser, filters.customer, filters.supplier]);
+
   /**
-   * Build the Shipment Delay PDF (demo data for now) and either preview-tab it
-   * or trigger a direct file download.
+   * Fetch ShipmentDelayReport via VITE_REPORT_API, map onto existing PDF
+   * columns, then preview or download. Layout unchanged.
    *
    * @param {'view'|'pdf'} mode
    */
@@ -1994,9 +2169,26 @@ function ShipmentDelayReportForm() {
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
-        const blob = await buildShipmentDelayReportPdfBlob({});
+        const payload = await fetchShipmentDelayPayload();
+        if (!payload) {
+          if (previewWindow) {
+            try {
+              previewWindow.close();
+            } catch {
+              /* ignore */
+            }
+          }
+          enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
+          return;
+        }
+
+        const blob = await buildShipmentDelayReportPdfBlob(payload);
         if (mode === 'view' && previewWindow) {
-          const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+          const namedFile =
+            typeof File !== 'undefined'
+              ? new File([blob], SHIPMENT_DELAY_PDF_FILENAME, { type: 'application/pdf' })
+              : new Blob([blob], { type: 'application/pdf' });
+          const url = URL.createObjectURL(namedFile);
           previewWindow.location.replace(url);
           setTimeout(() => URL.revokeObjectURL(url), 120_000);
           return;
@@ -2011,12 +2203,17 @@ function ShipmentDelayReportForm() {
             /* ignore */
           }
         }
-        enqueueSnackbar('Could not build Shipment Delay PDF', { variant: 'error' });
+        enqueueSnackbar(
+          err?.message?.includes('VITE_REPORT_API')
+            ? 'API URL missing: set VITE_REPORT_API'
+            : 'Could not build Shipment Delay PDF',
+          { variant: 'error' }
+        );
       } finally {
         setGeneratingPdf(false);
       }
     },
-    [generatingPdf, enqueueSnackbar]
+    [generatingPdf, enqueueSnackbar, fetchShipmentDelayPayload]
   );
 
   const handleViewReport = useCallback(() => runPdfExport('view'), [runPdfExport]);
@@ -2216,6 +2413,160 @@ function ShipmentDelayReportForm() {
 // Product Comparision Report
 // ----------------------------------------------------------------------
 
+const PRODUCT_COMPARISION_TAB_TITLE = 'Product Comparision Report';
+
+const PRODUCT_COMPARISION_REPORT_TYPE = {
+  quantity: 1,
+  fob: 2,
+  ldp: 3,
+};
+
+function unwrapProductComparisionList(data) {
+  if (Array.isArray(data)) return data;
+  if (data == null) return [];
+  if (Array.isArray(data.data)) return data.data;
+  if (Array.isArray(data.Data)) return data.Data;
+  if (Array.isArray(data.result)) return data.result;
+  if (Array.isArray(data.Result)) return data.Result;
+  if (Array.isArray(data.rows)) return data.rows;
+  if (Array.isArray(data.Rows)) return data.Rows;
+  return [];
+}
+
+function pickProductComparisionField(obj, ...keys) {
+  for (let i = 0; i < keys.length; i += 1) {
+    const v = obj?.[keys[i]];
+    if (v !== undefined && v !== null && v !== '') return v;
+  }
+  return '';
+}
+
+function pickProductComparisionNumeric(obj, ...keys) {
+  for (let i = 0; i < keys.length; i += 1) {
+    const v = obj?.[keys[i]];
+    if (v !== undefined && v !== null && v !== '') {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    }
+  }
+  return undefined;
+}
+
+function productComparisionGroupKey(row) {
+  const id = row?.ProductGroupID ?? row?.productGroupID ?? row?.productGroupId ?? row?.ProductGroupId;
+  return id != null && String(id).trim() !== '' ? String(id) : '';
+}
+
+function productComparisionGroupLabel(row) {
+  return String(pickProductComparisionField(row, 'ProductGroup', 'productGroup') || '').trim();
+}
+
+/**
+ * Existing demo-encoded formula: More Sale % = (monthB − monthA) / 100.
+ * @param {number} monthASale
+ * @param {number} monthBSale
+ */
+function productComparisionPercentChange(monthASale, monthBSale) {
+  const a = Number(monthASale);
+  const b = Number(monthBSale);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+  return (b - a) / 100;
+}
+
+function resolveProductComparisionMonthSales(raw, type) {
+  const t = String(type || 'quantity').toLowerCase();
+  if (t === 'fob') {
+    return {
+      monthASale: pickProductComparisionNumeric(raw, 'ShippedFOB1', 'shippedFOB1', 'ShippedFob1') ?? 0,
+      monthBSale: pickProductComparisionNumeric(raw, 'ShippedFOB2', 'shippedFOB2', 'ShippedFob2') ?? 0,
+    };
+  }
+  if (t === 'ldp') {
+    return {
+      monthASale: pickProductComparisionNumeric(raw, 'ShippedLDP1', 'shippedLDP1', 'ShippedLdp1') ?? 0,
+      monthBSale: pickProductComparisionNumeric(raw, 'ShippedLDP2', 'shippedLDP2', 'ShippedLdp2') ?? 0,
+    };
+  }
+  return {
+    monthASale:
+      pickProductComparisionNumeric(raw, 'Quantity1', 'quantity1', 'Qty1', 'qty1', 'Quantity', 'quantity') ??
+      0,
+    monthBSale: pickProductComparisionNumeric(raw, 'Quantity2', 'quantity2', 'Qty2', 'qty2') ?? 0,
+  };
+}
+
+function mapProductComparisionApiRowToPdfRow(raw, type) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  const { monthASale, monthBSale } = resolveProductComparisionMonthSales(r, type);
+  return {
+    product: String(pickProductComparisionField(r, 'ProductGroup', 'productGroup') || ''),
+    monthASale,
+    monthBSale,
+    percentChange: productComparisionPercentChange(monthASale, monthBSale),
+    highestMonth: '',
+  };
+}
+
+async function fetchProductComparisionReportRows(params, headers = {}) {
+  const base = String(import.meta.env.VITE_REPORT_API || '').replace(/\/+$/, '');
+  if (!base) {
+    throw new Error('VITE_REPORT_API is not set');
+  }
+
+  const reportType =
+    PRODUCT_COMPARISION_REPORT_TYPE[String(params.type || 'quantity').toLowerCase()] ?? 1;
+
+  const q = new URLSearchParams({
+    reportType: String(reportType),
+    year1: String(params.year1 || ''),
+    month1: String(params.month1 || ''),
+    year2: String(params.year2 || ''),
+    month2: String(params.month2 || ''),
+  });
+
+  const productGroupId = shipmentFilterIdOrZero(params.productGroupId);
+  if (productGroupId !== '0') {
+    q.set('productGroupId', productGroupId);
+  }
+
+  const url = `${base}/api/Report/ProductComparisonReport?${q.toString()}`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    throw new Error(`ProductComparisonReport API failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  return unwrapProductComparisionList(data);
+}
+
+async function fetchProductComparisionProductGroups(headers = {}) {
+  const base = String(import.meta.env.VITE_REPORT_API || '').replace(/\/+$/, '');
+  if (!base) {
+    throw new Error('VITE_REPORT_API is not set');
+  }
+
+  const url = `${base}/api/Report/productgroups`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    throw new Error(`productgroups API failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  return unwrapProductComparisionList(data);
+}
+
+function buildProductComparisionReportPdfPayload(rawRows, meta = {}) {
+  const type = meta.type || 'quantity';
+  const periodA = meta.periodA || { month: 1, year: new Date().getFullYear() - 1 };
+  const periodB = meta.periodB || { month: 1, year: new Date().getFullYear() };
+  return {
+    type,
+    periodA,
+    periodB,
+    rows: (rawRows || []).map((row) => mapProductComparisionApiRowToPdfRow(row, type)),
+  };
+}
+
 /**
  * "Product Comparision Report" form.
  *
@@ -2223,11 +2574,7 @@ function ShipmentDelayReportForm() {
  *   - Left  side : Year, Month, Product       (period A + product filter)
  *   - Right side : Year, Month, Type          (period B + quantity/value mode)
  *
- * Year list is current-year ± 5 (shared with the Commission Invoice form).
- * Month list is the shared {@link MONTH_OPTIONS}. Product / Type are simple
- * static selects for now — they'll hook into the real backend endpoints once
- * the API contracts are confirmed (same pattern as the other Shipment hub
- * "coming-soon" reports).
+ * Report + Product dropdown: `VITE_REPORT_API`.
  */
 function ProductComparisionReportForm() {
   const { enqueueSnackbar } = useSnackbar();
@@ -2244,6 +2591,9 @@ function ProductComparisionReportForm() {
     type: 'quantity',
   });
 
+  const [productGroups, setProductGroups] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
   };
@@ -2257,10 +2607,98 @@ function ProductComparisionReportForm() {
 
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = PRODUCT_COMPARISION_TAB_TITLE;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoadingProducts(true);
+      try {
+        const rows = await fetchProductComparisionProductGroups(shipmentAuthHeaders());
+        if (cancelled) return;
+        setProductGroups(rows);
+      } catch (err) {
+        console.error('[ProductComparision] product groups', err);
+        if (!cancelled) {
+          enqueueSnackbar(
+            err?.message?.includes('VITE_REPORT_API')
+              ? 'API URL missing: set VITE_REPORT_API'
+              : 'Could not load product groups',
+            { variant: 'error' }
+          );
+        }
+      } finally {
+        if (!cancelled) setLoadingProducts(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enqueueSnackbar]);
+
+  useEffect(() => {
+    setFilters((prev) => {
+      if (prev.product === ALL) return prev;
+      if (productGroups.some((r) => productComparisionGroupKey(r) === prev.product)) return prev;
+      return { ...prev, product: ALL };
+    });
+  }, [productGroups]);
+
+  const fetchProductComparisionPayload = useCallback(async () => {
+    const periodA = { month: Number(filters.monthA), year: Number(filters.yearA) };
+    const periodB = { month: Number(filters.monthB), year: Number(filters.yearB) };
+    const rawRows = await fetchProductComparisionReportRows(
+      {
+        type: filters.type,
+        year1: periodA.year,
+        month1: periodA.month,
+        year2: periodB.year,
+        month2: periodB.month,
+        productGroupId: filters.product,
+      },
+      shipmentAuthHeaders()
+    );
+
+    let rows = rawRows;
+    if (filters.product !== ALL) {
+      const selected = productGroups.find((r) => productComparisionGroupKey(r) === filters.product);
+      const label = selected ? productComparisionGroupLabel(selected) : '';
+      if (label) {
+        rows = rawRows.filter(
+          (r) =>
+            String(pickProductComparisionField(r, 'ProductGroup', 'productGroup') || '')
+              .trim()
+              .toLowerCase() === label.toLowerCase()
+        );
+      }
+    }
+
+    if (!rows.length) return null;
+    return buildProductComparisionReportPdfPayload(rows, {
+      type: filters.type,
+      periodA,
+      periodB,
+    });
+  }, [
+    filters.type,
+    filters.monthA,
+    filters.yearA,
+    filters.monthB,
+    filters.yearB,
+    filters.product,
+    productGroups,
+  ]);
+
   /**
-   * Build the Product Comparision PDF (demo data for now) and either
-   * preview-tab it or trigger a direct file download. The currently selected
-   * Type / Year / Month values drive the dynamic header and column titles.
+   * Fetch ProductComparisonReport via VITE_REPORT_API, map onto existing PDF
+   * columns, then preview or download. Layout unchanged.
    *
    * @param {'view'|'pdf'} mode
    */
@@ -2270,13 +2708,26 @@ function ProductComparisionReportForm() {
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
-        const blob = await buildProductComparisionReportPdfBlob({
-          type: filters.type,
-          periodA: { month: Number(filters.monthA), year: Number(filters.yearA) },
-          periodB: { month: Number(filters.monthB), year: Number(filters.yearB) },
-        });
+        const payload = await fetchProductComparisionPayload();
+        if (!payload) {
+          if (previewWindow) {
+            try {
+              previewWindow.close();
+            } catch {
+              /* ignore */
+            }
+          }
+          enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
+          return;
+        }
+
+        const blob = await buildProductComparisionReportPdfBlob(payload);
         if (mode === 'view' && previewWindow) {
-          const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+          const namedFile =
+            typeof File !== 'undefined'
+              ? new File([blob], PRODUCT_COMPARISION_PDF_FILENAME, { type: 'application/pdf' })
+              : new Blob([blob], { type: 'application/pdf' });
+          const url = URL.createObjectURL(namedFile);
           previewWindow.location.replace(url);
           setTimeout(() => URL.revokeObjectURL(url), 120_000);
           return;
@@ -2291,20 +2742,17 @@ function ProductComparisionReportForm() {
             /* ignore */
           }
         }
-        enqueueSnackbar('Could not build Product Comparision PDF', { variant: 'error' });
+        enqueueSnackbar(
+          err?.message?.includes('VITE_REPORT_API')
+            ? 'API URL missing: set VITE_REPORT_API'
+            : 'Could not build Product Comparision PDF',
+          { variant: 'error' }
+        );
       } finally {
         setGeneratingPdf(false);
       }
     },
-    [
-      filters.type,
-      filters.monthA,
-      filters.yearA,
-      filters.monthB,
-      filters.yearB,
-      generatingPdf,
-      enqueueSnackbar,
-    ]
+    [generatingPdf, enqueueSnackbar, fetchProductComparisionPayload]
   );
 
   const handleViewReport = useCallback(() => runPdfExport('view'), [runPdfExport]);
@@ -2407,8 +2855,19 @@ function ProductComparisionReportForm() {
               value={filters.product}
               onChange={handleSelect('product')}
               sx={selectSx}
+              disabled={loadingProducts && productGroups.length === 0}
             >
               <MenuItem value={ALL}>All</MenuItem>
+              {productGroups
+                .filter((row) => productComparisionGroupKey(row))
+                .map((row) => {
+                  const val = productComparisionGroupKey(row);
+                  return (
+                    <MenuItem key={val} value={val}>
+                      {productComparisionGroupLabel(row) || val}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </FormControl>
         </Grid>
@@ -2481,6 +2940,169 @@ function ProductComparisionReportForm() {
 // Shipped Delay / OnTime Report
 // ----------------------------------------------------------------------
 
+const SHIPPED_DELAY_ONTIME_TAB_TITLE = 'Shipped Delay / OnTime Report';
+
+const SHIPPED_DELAY_ONTIME_SENTINEL_DATES = new Set([
+  '1900-01-01',
+  '0001-01-01',
+  '1970-01-01',
+  '1899-12-30',
+]);
+
+function unwrapShippedDelayOnTimeList(data) {
+  if (Array.isArray(data)) return data;
+  if (data == null) return [];
+  if (Array.isArray(data.data)) return data.data;
+  if (Array.isArray(data.Data)) return data.Data;
+  if (Array.isArray(data.result)) return data.result;
+  if (Array.isArray(data.Result)) return data.Result;
+  if (Array.isArray(data.rows)) return data.rows;
+  if (Array.isArray(data.Rows)) return data.Rows;
+  return [];
+}
+
+function pickShippedDelayOnTimeField(obj, ...keys) {
+  for (let i = 0; i < keys.length; i += 1) {
+    const v = obj?.[keys[i]];
+    if (v !== undefined && v !== null && v !== '') return v;
+  }
+  return '';
+}
+
+function pickShippedDelayOnTimeNumeric(obj, ...keys) {
+  for (let i = 0; i < keys.length; i += 1) {
+    const v = obj?.[keys[i]];
+    if (v !== undefined && v !== null && v !== '') {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    }
+  }
+  return undefined;
+}
+
+/** Parse API date to UTC midnight; sentinel / blank → null. */
+function parseShippedDelayOnTimeUtcDay(value) {
+  if (value == null || value === '') return null;
+  const s = String(value).trim();
+  if (!s) return null;
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const iso = `${m[1]}-${m[2]}-${m[3]}`;
+  if (SHIPPED_DELAY_ONTIME_SENTINEL_DATES.has(iso)) return null;
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+/**
+ * Existing demo Days formula: ShipmentDate − (Revised Ship (B) if present, else Buyer Ship Date),
+ * in whole calendar days.
+ */
+function calcShippedDelayOnTimeDays(buyerShipRaw, revisedShipRaw, shipmentRaw) {
+  const ship = parseShippedDelayOnTimeUtcDay(shipmentRaw);
+  const revised = parseShippedDelayOnTimeUtcDay(revisedShipRaw);
+  const buyer = parseShippedDelayOnTimeUtcDay(buyerShipRaw);
+  const ref = revised != null ? revised : buyer;
+  if (ship == null || ref == null) return '';
+  return Math.round((ship - ref) / 86400000);
+}
+
+function formatShippedDelayOnTimeCellDate(value) {
+  const utc = parseShippedDelayOnTimeUtcDay(value);
+  if (utc == null) return '';
+  const s = String(value).trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return '';
+  return shippedDelayHeaderDate(`${m[1]}-${m[2]}-${m[3]}`);
+}
+
+function mapShippedDelayOnTimeApiRowToPdfRow(raw) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  const buyerShipRaw = pickShippedDelayOnTimeField(
+    r,
+    'CustomerShipDate',
+    'customerShipDate',
+    'BuyerShipDate',
+    'buyerShipDate'
+  );
+  const revisedShipRaw = pickShippedDelayOnTimeField(
+    r,
+    'CustomerRevisedDate',
+    'customerRevisedDate',
+    'RevisedShipB',
+    'revisedShipB'
+  );
+  const shipmentRaw = pickShippedDelayOnTimeField(
+    r,
+    'ShipmentDate',
+    'shipmentDate'
+  );
+
+  return {
+    poNo: String(pickShippedDelayOnTimeField(r, 'PONO', 'pono', 'PONo', 'PoNo') || ''),
+    styleNo: String(pickShippedDelayOnTimeField(r, 'StyleNo', 'styleNo', 'StyleNO') || ''),
+    customer: String(pickShippedDelayOnTimeField(r, 'CustomerName', 'customerName') || ''),
+    vendor: String(
+      pickShippedDelayOnTimeField(r, 'VenderName', 'venderName', 'VendorName', 'vendorName') || ''
+    ),
+    merchandiser: String(
+      pickShippedDelayOnTimeField(r, 'Merchandiser', 'merchandiser', 'Marchandiser', 'marchandiser') ||
+        ''
+    ),
+    invoiceNo: String(pickShippedDelayOnTimeField(r, 'InvoiceNo', 'invoiceNo') || ''),
+    poQty: pickShippedDelayOnTimeNumeric(r, 'POQty', 'poQty'),
+    shipQty: pickShippedDelayOnTimeNumeric(r, 'ShipQty', 'shipQty'),
+    buyerShipDate: formatShippedDelayOnTimeCellDate(buyerShipRaw),
+    revisedShipB: formatShippedDelayOnTimeCellDate(revisedShipRaw),
+    shipmentDate: formatShippedDelayOnTimeCellDate(shipmentRaw),
+    days: calcShippedDelayOnTimeDays(buyerShipRaw, revisedShipRaw, shipmentRaw),
+  };
+}
+
+async function fetchShippedDelayOnTimeReportRows(params, headers = {}) {
+  const base = String(import.meta.env.VITE_REPORT_API || '').replace(/\/+$/, '');
+  if (!base) {
+    throw new Error('VITE_REPORT_API is not set');
+  }
+
+  const statusRaw = String(params.status || params.delayStatus || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '');
+  const delayStatus = statusRaw === 'ONTIME' ? 'ontime' : 'delay';
+
+  const q = new URLSearchParams({
+    fromDate: String(params.fromDate || ''),
+    toDate: String(params.toDate || ''),
+    delayStatus,
+  });
+
+  const url = `${base}/api/Report/ShipmentDelayOrOnTimeReport?${q.toString()}`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    // No-data responses should not surface as PDF build errors.
+    if (res.status === 204 || res.status === 404) return [];
+    throw new Error(`ShipmentDelayOrOnTimeReport API failed (${res.status})`);
+  }
+
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    return [];
+  }
+  return unwrapShippedDelayOnTimeList(data);
+}
+
+function buildShippedDelayOnTimeReportPdfPayload(rawRows, meta = {}) {
+  return {
+    status: meta.status || 'DELAY',
+    fromLabel: meta.fromLabel || '',
+    toLabel: meta.toLabel || '',
+    customerLabel: meta.customerLabel || 'All Customer',
+    supplierLabel: meta.supplierLabel || 'All Supplier',
+    rows: (rawRows || []).map(mapShippedDelayOnTimeApiRowToPdfRow),
+  };
+}
+
 /**
  * "Shipped Delay / OnTime Report" form.
  *
@@ -2489,9 +3111,7 @@ function ProductComparisionReportForm() {
  *   - Row 2 : From + To date inputs.
  *   - Row 3 : View Report, Download PDF, Download Excel — right-aligned.
  *
- * Customer / Supplier come from the shared Milestone Summary dropdown API;
- * Status is a static "ALL / DELAY / ONTIME" list. Buttons toast for now —
- * they'll hook into the real backend endpoint once confirmed.
+ * Report data: GET `/api/Report/ShipmentDelayOrOnTimeReport` via `VITE_REPORT_API`.
  */
 function ShippedDelayOrOnTimeReportForm() {
   const { enqueueSnackbar } = useSnackbar();
@@ -2507,6 +3127,14 @@ function ShippedDelayOrOnTimeReportForm() {
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
+
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = SHIPPED_DELAY_ONTIME_TAB_TITLE;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, []);
 
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
@@ -2536,11 +3164,43 @@ function ShippedDelayOrOnTimeReportForm() {
     return hit ? milestoneSupplierLabel(hit) : 'All Supplier';
   }, [filters.supplier, suppliers]);
 
+  const fetchShippedDelayOnTimePayload = useCallback(async () => {
+    const rawRows = await fetchShippedDelayOnTimeReportRows(
+      {
+        fromDate: filters.fromDate,
+        toDate: filters.toDate,
+        customerId: filters.customer,
+        supplierId: filters.supplier,
+        status: filters.status,
+      },
+      shipmentAuthHeaders()
+    );
+
+    if (!Array.isArray(rawRows) || rawRows.length === 0) return null;
+
+    const payload = buildShippedDelayOnTimeReportPdfPayload(rawRows, {
+      status: filters.status,
+      fromLabel: shippedDelayHeaderDate(filters.fromDate),
+      toLabel: shippedDelayHeaderDate(filters.toDate),
+      customerLabel: resolveCustomerLabel(),
+      supplierLabel: resolveSupplierLabel(),
+    });
+
+    if (!Array.isArray(payload.rows) || payload.rows.length === 0) return null;
+    return payload;
+  }, [
+    filters.fromDate,
+    filters.toDate,
+    filters.customer,
+    filters.supplier,
+    filters.status,
+    resolveCustomerLabel,
+    resolveSupplierLabel,
+  ]);
+
   /**
-   * Build the Shipped Delay / OnTime PDF (demo data for now) and either
-   * preview-tab it or trigger a direct file download. Title is driven by the
-   * Status dropdown ("DELAY" → "SHIPPED DELAY REPORT" / "ONTIME" →
-   * "SHIPPED ON TIME REPORT").
+   * Fetch ShipmentDelayOrOnTimeReport via VITE_REPORT_API, map onto existing
+   * PDF columns, then preview or download. Layout unchanged.
    *
    * @param {'view'|'pdf'} mode
    */
@@ -2550,15 +3210,26 @@ function ShippedDelayOrOnTimeReportForm() {
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
-        const blob = await buildShippedDelayOnTimeReportPdfBlob({
-          status: filters.status,
-          fromLabel: shippedDelayHeaderDate(filters.fromDate),
-          toLabel: shippedDelayHeaderDate(filters.toDate),
-          customerLabel: resolveCustomerLabel(),
-          supplierLabel: resolveSupplierLabel(),
-        });
+        const payload = await fetchShippedDelayOnTimePayload();
+        if (!payload || !Array.isArray(payload.rows) || payload.rows.length === 0) {
+          if (previewWindow) {
+            try {
+              previewWindow.close();
+            } catch {
+              /* ignore */
+            }
+          }
+          enqueueSnackbar('No record found', { variant: 'warning' });
+          return;
+        }
+
+        const blob = await buildShippedDelayOnTimeReportPdfBlob(payload);
         if (mode === 'view' && previewWindow) {
-          const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+          const namedFile =
+            typeof File !== 'undefined'
+              ? new File([blob], SHIPPED_DELAY_ONTIME_PDF_FILENAME, { type: 'application/pdf' })
+              : new Blob([blob], { type: 'application/pdf' });
+          const url = URL.createObjectURL(namedFile);
           previewWindow.location.replace(url);
           setTimeout(() => URL.revokeObjectURL(url), 120_000);
           return;
@@ -2573,20 +3244,17 @@ function ShippedDelayOrOnTimeReportForm() {
             /* ignore */
           }
         }
-        enqueueSnackbar('Could not build Shipped Delay / OnTime PDF', { variant: 'error' });
+        enqueueSnackbar(
+          err?.message?.includes('VITE_REPORT_API')
+            ? 'API URL missing: set VITE_REPORT_API'
+            : 'Could not build Shipped Delay / OnTime PDF',
+          { variant: 'error' }
+        );
       } finally {
         setGeneratingPdf(false);
       }
     },
-    [
-      filters.status,
-      filters.fromDate,
-      filters.toDate,
-      resolveCustomerLabel,
-      resolveSupplierLabel,
-      generatingPdf,
-      enqueueSnackbar,
-    ]
+    [filters.status, generatingPdf, enqueueSnackbar, fetchShippedDelayOnTimePayload]
   );
 
   const handleViewReport = useCallback(() => runPdfExport('view'), [runPdfExport]);
@@ -2800,6 +3468,130 @@ function ShippedDelayOrOnTimeReportForm() {
 // Shipped But Status Not Closed Report
 // ----------------------------------------------------------------------
 
+const SHIPPED_NOT_CLOSE_TAB_TITLE = 'Shipped But Status Not Closed Report';
+
+const SHIPPED_NOT_CLOSE_SENTINEL_YEARS = new Set([1899, 1900, 1]);
+
+function unwrapShippedNotCloseList(data) {
+  if (Array.isArray(data)) return data;
+  if (data == null) return [];
+  if (Array.isArray(data.data)) return data.data;
+  if (Array.isArray(data.Data)) return data.Data;
+  if (Array.isArray(data.result)) return data.result;
+  if (Array.isArray(data.Result)) return data.Result;
+  if (Array.isArray(data.rows)) return data.rows;
+  if (Array.isArray(data.Rows)) return data.Rows;
+  return [];
+}
+
+function pickShippedNotCloseField(obj, ...keys) {
+  for (let i = 0; i < keys.length; i += 1) {
+    const v = obj?.[keys[i]];
+    if (v !== undefined && v !== null && v !== '') return v;
+  }
+  return '';
+}
+
+function pickShippedNotCloseNumeric(obj, ...keys) {
+  for (let i = 0; i < keys.length; i += 1) {
+    const v = obj?.[keys[i]];
+    if (v !== undefined && v !== null && v !== '') {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Match existing demo cell dates (`15 Apr 2026`). Blank sentinel years (1899/1900).
+ */
+function formatShippedNotCloseCellDate(value) {
+  if (value == null || value === '') return '';
+  const s = String(value).trim();
+  if (!s) return '';
+
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) {
+    const y = Number(iso[1]);
+    if (SHIPPED_NOT_CLOSE_SENTINEL_YEARS.has(y)) return '';
+    return `${iso[3]} ${months[Number(iso[2]) - 1] || iso[2]} ${iso[1]}`;
+  }
+
+  const spaced = s.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
+  if (spaced) {
+    const y = Number(spaced[3]);
+    if (SHIPPED_NOT_CLOSE_SENTINEL_YEARS.has(y)) return '';
+    const dd = String(spaced[1]).padStart(2, '0');
+    const mon = spaced[2].slice(0, 1).toUpperCase() + spaced[2].slice(1, 3).toLowerCase();
+    return `${dd} ${mon} ${spaced[3]}`;
+  }
+
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+  if (SHIPPED_NOT_CLOSE_SENTINEL_YEARS.has(d.getFullYear())) return '';
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${dd} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function mapShippedNotCloseApiRowToPdfRow(raw) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  return {
+    poNo: String(pickShippedNotCloseField(r, 'PO #', 'PONO', 'pono', 'PONo') || ''),
+    shipmentDateB: formatShippedNotCloseCellDate(
+      pickShippedNotCloseField(r, 'Shipment Date (B)', 'ShipmentDateB', 'shipmentDateB')
+    ),
+    customer: String(pickShippedNotCloseField(r, 'Customer', 'CustomerName', 'customerName') || ''),
+    supplier: String(
+      pickShippedNotCloseField(r, 'Supplier', 'VenderName', 'VendorName', 'supplier') || ''
+    ),
+    merchandiser: String(
+      pickShippedNotCloseField(r, 'Merchandiser', 'merchandiser', 'Marchandiser') || ''
+    ),
+    styleNo: String(pickShippedNotCloseField(r, 'Style No', 'StyleNo', 'styleNo') || ''),
+    poQty: pickShippedNotCloseNumeric(r, 'PO Quantity', 'POQty', 'poQty', 'PO Qty'),
+    shipQty: pickShippedNotCloseNumeric(r, 'Ship Quantity', 'ShipQty', 'shipQty', 'Ship Qty'),
+    invoiceNo: String(pickShippedNotCloseField(r, 'Invoice No', 'InvoiceNo', 'invoiceNo') || ''),
+    shipmentDate: formatShippedNotCloseCellDate(
+      pickShippedNotCloseField(r, 'Shipment Date', 'ShipmentDate', 'shipmentDate')
+    ),
+    poStatus: String(pickShippedNotCloseField(r, 'PO Status', 'POStatus', 'poStatus', 'Status') || ''),
+  };
+}
+
+async function fetchShippedNotCloseReportRows(params, headers = {}) {
+  const base = String(import.meta.env.VITE_REPORT_API || '').replace(/\/+$/, '');
+  if (!base) {
+    throw new Error('VITE_REPORT_API is not set');
+  }
+
+  const q = new URLSearchParams({
+    fromDate: String(params.fromDate || ''),
+    toDate: String(params.toDate || ''),
+    customerId: shipmentFilterIdOrZero(params.customerId),
+    supplierId: shipmentFilterIdOrZero(params.supplierId),
+  });
+
+  const url = `${base}/api/Report/ShippedButNotClosedStatus?${q.toString()}`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    throw new Error(`ShippedButNotClosedStatus API failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  return unwrapShippedNotCloseList(data);
+}
+
+function buildShippedNotCloseReportPdfPayload(rawRows, meta = {}) {
+  return {
+    fromLabel: meta.fromLabel || '',
+    toLabel: meta.toLabel || '',
+    rows: (rawRows || []).map(mapShippedNotCloseApiRowToPdfRow),
+  };
+}
+
 /**
  * "Shipped But Status Not Closed Report" form.
  *
@@ -2808,9 +3600,7 @@ function ShippedDelayOrOnTimeReportForm() {
  *   - Row 2 : From + To date inputs (2 cols).
  *   - Row 3 : View Report, Download PDF, Download Excel — right-aligned.
  *
- * Customer / Supplier come from the shared Milestone Summary dropdown API.
- * Buttons toast for now — they'll hook into the real backend endpoint once
- * confirmed, same pattern as the other Shipment hub reports.
+ * Report data: GET `/api/Report/ShippedButNotClosedStatus` via `VITE_REPORT_API`.
  */
 function ShippedNotCloseStatusReportForm() {
   const { enqueueSnackbar } = useSnackbar();
@@ -2825,6 +3615,14 @@ function ShippedNotCloseStatusReportForm() {
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
+
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = SHIPPED_NOT_CLOSE_TAB_TITLE;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, []);
 
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
@@ -2841,10 +3639,27 @@ function ShippedNotCloseStatusReportForm() {
 
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  const fetchShippedNotClosePayload = useCallback(async () => {
+    const rawRows = await fetchShippedNotCloseReportRows(
+      {
+        fromDate: filters.fromDate,
+        toDate: filters.toDate,
+        customerId: filters.customer,
+        supplierId: filters.supplier,
+      },
+      shipmentAuthHeaders()
+    );
+
+    if (!rawRows.length) return null;
+    return buildShippedNotCloseReportPdfPayload(rawRows, {
+      fromLabel: shippedNotCloseHeaderDate(filters.fromDate),
+      toLabel: shippedNotCloseHeaderDate(filters.toDate),
+    });
+  }, [filters.fromDate, filters.toDate, filters.customer, filters.supplier]);
+
   /**
-   * Build the Shipped Not Closed Status PDF (demo data for now) and either
-   * preview-tab it or trigger a direct file download. The selected From/To
-   * dates feed into the centered "From : ... To : ..." subtitle.
+   * Fetch ShippedButNotClosedStatus via VITE_REPORT_API, map onto existing PDF
+   * columns, then preview or download. Layout unchanged.
    *
    * @param {'view'|'pdf'} mode
    */
@@ -2854,12 +3669,26 @@ function ShippedNotCloseStatusReportForm() {
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
-        const blob = await buildShippedNotCloseStatusReportPdfBlob({
-          fromLabel: shippedNotCloseHeaderDate(filters.fromDate),
-          toLabel: shippedNotCloseHeaderDate(filters.toDate),
-        });
+        const payload = await fetchShippedNotClosePayload();
+        if (!payload) {
+          if (previewWindow) {
+            try {
+              previewWindow.close();
+            } catch {
+              /* ignore */
+            }
+          }
+          enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
+          return;
+        }
+
+        const blob = await buildShippedNotCloseStatusReportPdfBlob(payload);
         if (mode === 'view' && previewWindow) {
-          const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+          const namedFile =
+            typeof File !== 'undefined'
+              ? new File([blob], SHIPPED_NOT_CLOSE_PDF_FILENAME, { type: 'application/pdf' })
+              : new Blob([blob], { type: 'application/pdf' });
+          const url = URL.createObjectURL(namedFile);
           previewWindow.location.replace(url);
           setTimeout(() => URL.revokeObjectURL(url), 120_000);
           return;
@@ -2874,12 +3703,17 @@ function ShippedNotCloseStatusReportForm() {
             /* ignore */
           }
         }
-        enqueueSnackbar('Could not build Shipped Not Closed PDF', { variant: 'error' });
+        enqueueSnackbar(
+          err?.message?.includes('VITE_REPORT_API')
+            ? 'API URL missing: set VITE_REPORT_API'
+            : 'Could not build Shipped Not Closed PDF',
+          { variant: 'error' }
+        );
       } finally {
         setGeneratingPdf(false);
       }
     },
-    [filters.fromDate, filters.toDate, generatingPdf, enqueueSnackbar]
+    [generatingPdf, enqueueSnackbar, fetchShippedNotClosePayload]
   );
 
   const handleViewReport = useCallback(() => runPdfExport('view'), [runPdfExport]);
