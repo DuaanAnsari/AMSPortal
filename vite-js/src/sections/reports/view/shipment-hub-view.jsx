@@ -1,4 +1,4 @@
-import PropTypes from 'prop-types';
+﻿import PropTypes from 'prop-types';
 import { useSearchParams } from 'react-router-dom';
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 
@@ -166,7 +166,7 @@ function pickShipmentTrackingField(obj, ...keys) {
 
 /**
  * Format API dates for the Shipment Tracking PDF (`MM/DD/YY`).
- * null / empty / 1900-01-01 (and similar sentinels) → blank.
+ * null / empty / 1900-01-01 (and similar sentinels) â†’ blank.
  */
 function formatShipmentTrackingReportDate(value) {
   if (value == null || value === '') return '';
@@ -291,7 +291,7 @@ function buildShipmentTrackingReportPdfPayload(rawRows) {
 
   (rawRows || []).forEach((raw) => {
     const row = mapShipmentTrackingApiRowToPdfRow(raw);
-    const customer = row._customer || '—';
+    const customer = row._customer || 'â€”';
     if (!customerMap.has(customer)) customerMap.set(customer, new Map());
 
     const cargoKey = String(row._cargoId || row.mblAwblNo || row.containerNo || row._poid || 'default');
@@ -544,7 +544,7 @@ async function fetchShipmentTrackingReportRows(params, headers = {}) {
 // ----------------------------------------------------------------------
 
 /**
- * Default Shipment hub form — three filter rows + centered action buttons.
+ * Default Shipment hub form â€” three filter rows + centered action buttons.
  * Customer / Supplier / Merchandiser come from the shared Milestone Summary
  * env-backed dropdown API. Container No. / PO No / Style No are free-text
  * inputs (per spec) and Shipment Mode is a placeholder select until the
@@ -672,7 +672,7 @@ function ShipmentTrackingReportForm() {
         }
 
         if (mode === 'view') {
-          // Restore normal flow: blob File → createObjectURL → window.open (native viewer).
+          // Restore normal flow: blob File â†’ createObjectURL â†’ window.open (native viewer).
           // No about:blank, no Service Worker, no custom PDF route.
           // Filename assigned on File: "Shipment Tracking Report.pdf"
           const blob = await buildShipmentTrackingReportPdfBlob(payload);
@@ -680,7 +680,7 @@ function ShipmentTrackingReportForm() {
           return;
         }
 
-        // Page "Download PDF" — jsPDF doc.save with exact filename.
+        // Page "Download PDF" â€” jsPDF doc.save with exact filename.
         await saveShipmentTrackingReportPdf(payload, SHIPMENT_TRACKING_PDF_FILENAME);
       } catch (err) {
         console.error('[ShipmentTracking] PDF build failed', err);
@@ -950,7 +950,7 @@ function ShipmentTrackingReportForm() {
               disabled={generatingPdf}
               sx={{ minWidth: 120, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'View Report'}
+              {generatingPdf ? 'Buildingâ€¦' : 'View Report'}
             </Button>
             <Button
               variant="contained"
@@ -960,7 +960,7 @@ function ShipmentTrackingReportForm() {
               disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'Download PDF'}
+              {generatingPdf ? 'Buildingâ€¦' : 'Download PDF'}
             </Button>
             <Button
               variant="contained"
@@ -979,7 +979,7 @@ function ShipmentTrackingReportForm() {
 }
 
 // ----------------------------------------------------------------------
-// Commision Invoice Report — "Logistic Department Shipped Status Download"
+// Commision Invoice Report â€” "Logistic Department Shipped Status Download"
 // ----------------------------------------------------------------------
 
 const MONTH_OPTIONS = [
@@ -997,7 +997,7 @@ const MONTH_OPTIONS = [
   { value: 12, label: 'December' },
 ];
 
-/** Year list: current year ± 5 (newest first) — matches the typical legacy range. */
+/** Year list: current year Â± 5 (newest first) â€” matches the typical legacy range. */
 function buildYearOptions() {
   const now = new Date().getFullYear();
   const start = now - 5;
@@ -1070,9 +1070,9 @@ function buildCommissionInvoiceReportPdfPayload(rawRows, meta = {}) {
 }
 
 async function fetchShipmentCommissionReportRows(params, headers = {}) {
-  const base = String(import.meta.env.VITE_REPORT_API || '').replace(/\/+$/, '');
+  const base = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
   if (!base) {
-    throw new Error('VITE_REPORT_API is not set');
+    throw new Error('VITE_API_BASE_URL is not set');
   }
 
   const monthNum = Number(params.month);
@@ -1099,16 +1099,16 @@ async function fetchShipmentCommissionReportRows(params, headers = {}) {
 /**
  * "Logistic Department Shipped Status Download" form.
  *
- * 2 × 3 filter grid (Consignee, Month, Year / Supplier, Merchandiser, PO #) +
+ * 2 Ã— 3 filter grid (Consignee, Month, Year / Supplier, Merchandiser, PO #) +
  * centered action row (View Report, Download PDF, Download Excel) + a small
- * italicized footnote — exactly per the legacy mock-up.
+ * italicized footnote â€” exactly per the legacy mock-up.
  *
  * Dropdowns are wired to the shared APIs:
- *   - Customer / Supplier / Merchandiser  →  fetchMilestoneSummaryDropdowns
- *   - PO #                                →  fetchPoNumbers (scoped by selected
+ *   - Customer / Supplier / Merchandiser  â†’  fetchMilestoneSummaryDropdowns
+ *   - PO #                                â†’  fetchPoNumbers (scoped by selected
  *                                            Customer + Supplier)
  *
- * Action buttons currently toast — they'll hook into the real backend endpoint
+ * Action buttons currently toast â€” they'll hook into the real backend endpoint
  * once it's confirmed, just like the rest of the Shipment hub.
  */
 function CommisionInvoiceReportForm() {
@@ -1172,7 +1172,7 @@ function CommisionInvoiceReportForm() {
   }, [filters.year, filters.month, filters.merchandiser]);
 
   /**
-   * Fetch ShipmentCommissionReport via VITE_REPORT_API, map onto existing PDF
+   * Fetch ShipmentCommissionReport via VITE_API_BASE_URL, map onto existing PDF
    * columns, then preview or download. Layout unchanged.
    *
    * @param {'view'|'pdf'} mode
@@ -1218,8 +1218,8 @@ function CommisionInvoiceReportForm() {
           }
         }
         enqueueSnackbar(
-          err?.message?.includes('VITE_REPORT_API')
-            ? 'API URL missing: set VITE_REPORT_API'
+          err?.message?.includes('VITE_API_BASE_URL')
+            ? 'API URL missing: set VITE_API_BASE_URL'
             : 'Could not build Commission Invoice PDF',
           { variant: 'error' }
         );
@@ -1293,7 +1293,7 @@ function CommisionInvoiceReportForm() {
   }, [customers, suppliers, merchants]);
 
   /**
-   * PO# list — scoped by Consignee (customer) + Supplier.
+   * PO# list â€” scoped by Consignee (customer) + Supplier.
    * Aborts in-flight requests on dependency change.
    */
   useEffect(() => {
@@ -1466,7 +1466,7 @@ function CommisionInvoiceReportForm() {
               sx={selectSx}
               disabled={loadingPoNumbers}
               renderValue={(val) => {
-                if (loadingPoNumbers && val === ALL) return 'Loading…';
+                if (loadingPoNumbers && val === ALL) return 'Loadingâ€¦';
                 return val === ALL ? 'All' : val;
               }}
               endAdornment={
@@ -1510,7 +1510,7 @@ function CommisionInvoiceReportForm() {
               disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'View Report'}
+              {generatingPdf ? 'Buildingâ€¦' : 'View Report'}
             </Button>
             <Button
               variant="contained"
@@ -1520,7 +1520,7 @@ function CommisionInvoiceReportForm() {
               disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'Download PDF'}
+              {generatingPdf ? 'Buildingâ€¦' : 'Download PDF'}
             </Button>
             <Button
               variant="contained"
@@ -1561,7 +1561,7 @@ function CommisionInvoiceReportForm() {
  *   Shipment Mode  |  From (date)  |  To (date)
  * followed by a centered action row (View Report, Download PDF, Download Excel).
  *
- * Action buttons toast for now — they'll hook into the real backend endpoint
+ * Action buttons toast for now â€” they'll hook into the real backend endpoint
  * once it's confirmed.
  */
 function ShipmentHistoryReportForm() {
@@ -1620,7 +1620,7 @@ function ShipmentHistoryReportForm() {
         const blob = await buildShipmentHistoryReportPdfBlob(payload);
         if (mode === 'view' && previewWindow) {
           try {
-            const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>${SHIPMENT_HISTORY_DOCUMENT_TITLE}</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fafafa;color:#333;"><p style="padding:24px;font-size:15px;">Loading PDF…</p></body></html>`;
+            const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>${SHIPMENT_HISTORY_DOCUMENT_TITLE}</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fafafa;color:#333;"><p style="padding:24px;font-size:15px;">Loading PDFâ€¦</p></body></html>`;
             previewWindow.document.open();
             previewWindow.document.write(html);
             previewWindow.document.close();
@@ -1730,7 +1730,7 @@ function ShipmentHistoryReportForm() {
               disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'View Report'}
+              {generatingPdf ? 'Buildingâ€¦' : 'View Report'}
             </Button>
             <Button
               variant="contained"
@@ -1740,7 +1740,7 @@ function ShipmentHistoryReportForm() {
               disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'Download PDF'}
+              {generatingPdf ? 'Buildingâ€¦' : 'Download PDF'}
             </Button>
             <Button
               variant="contained"
@@ -1766,7 +1766,7 @@ function ShipmentHistoryReportForm() {
  * "AFTER SHIPMENT REPORT" form.
  *
  * Minimal 2-column filter (From / To dates) followed by a centered action row.
- * Backend wiring lands later — buttons currently toast.
+ * Backend wiring lands later â€” buttons currently toast.
  */
 function AfterShipmentReportForm() {
   const { enqueueSnackbar } = useSnackbar();
@@ -1818,7 +1818,7 @@ function AfterShipmentReportForm() {
         const blob = await buildAfterShipmentReportPdfBlob(payload);
         if (mode === 'view' && previewWindow) {
           try {
-            const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>${AFTER_SHIPMENT_DOCUMENT_TITLE}</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fafafa;color:#333;"><p style="padding:24px;font-size:15px;">Loading PDF…</p></body></html>`;
+            const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>${AFTER_SHIPMENT_DOCUMENT_TITLE}</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fafafa;color:#333;"><p style="padding:24px;font-size:15px;">Loading PDFâ€¦</p></body></html>`;
             previewWindow.document.open();
             previewWindow.document.write(html);
             previewWindow.document.close();
@@ -1919,7 +1919,7 @@ function AfterShipmentReportForm() {
               disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'View Report'}
+              {generatingPdf ? 'Buildingâ€¦' : 'View Report'}
             </Button>
             <Button
               variant="contained"
@@ -1929,7 +1929,7 @@ function AfterShipmentReportForm() {
               disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'Download PDF'}
+              {generatingPdf ? 'Buildingâ€¦' : 'Download PDF'}
             </Button>
             <Button
               variant="contained"
@@ -2073,9 +2073,9 @@ function mapShipmentDelayApiRowToPdfRow(raw) {
 }
 
 async function fetchShipmentDelayReportRows(params, headers = {}) {
-  const base = String(import.meta.env.VITE_REPORT_API || '').replace(/\/+$/, '');
+  const base = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
   if (!base) {
-    throw new Error('VITE_REPORT_API is not set');
+    throw new Error('VITE_API_BASE_URL is not set');
   }
 
   const q = new URLSearchParams({
@@ -2103,11 +2103,11 @@ function buildShipmentDelayReportPdfPayload(rawRows) {
 /**
  * "Shipment Delay Report" form.
  *
- * 3-column filter (Merchandiser, Customer, Supplier — all API-driven via the
+ * 3-column filter (Merchandiser, Customer, Supplier â€” all API-driven via the
  * shared Milestone Summary dropdown endpoint) followed by a centered action
  * row (View Report, Download PDF, Download Excel).
  *
- * Report data: GET `/api/Report/ShipmentDelayReport` via `VITE_REPORT_API`.
+ * Report data: GET `/api/Report/ShipmentDelayReport` via `VITE_API_BASE_URL`.
  */
 function ShipmentDelayReportForm() {
   const { enqueueSnackbar } = useSnackbar();
@@ -2158,7 +2158,7 @@ function ShipmentDelayReportForm() {
   }, [filters.merchandiser, filters.customer, filters.supplier]);
 
   /**
-   * Fetch ShipmentDelayReport via VITE_REPORT_API, map onto existing PDF
+   * Fetch ShipmentDelayReport via VITE_API_BASE_URL, map onto existing PDF
    * columns, then preview or download. Layout unchanged.
    *
    * @param {'view'|'pdf'} mode
@@ -2204,8 +2204,8 @@ function ShipmentDelayReportForm() {
           }
         }
         enqueueSnackbar(
-          err?.message?.includes('VITE_REPORT_API')
-            ? 'API URL missing: set VITE_REPORT_API'
+          err?.message?.includes('VITE_API_BASE_URL')
+            ? 'API URL missing: set VITE_API_BASE_URL'
             : 'Could not build Shipment Delay PDF',
           { variant: 'error' }
         );
@@ -2381,7 +2381,7 @@ function ShipmentDelayReportForm() {
               disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'View Report'}
+              {generatingPdf ? 'Buildingâ€¦' : 'View Report'}
             </Button>
             <Button
               variant="contained"
@@ -2391,7 +2391,7 @@ function ShipmentDelayReportForm() {
               disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'Download PDF'}
+              {generatingPdf ? 'Buildingâ€¦' : 'Download PDF'}
             </Button>
             <Button
               variant="contained"
@@ -2462,7 +2462,7 @@ function productComparisionGroupLabel(row) {
 }
 
 /**
- * Existing demo-encoded formula: More Sale % = (monthB − monthA) / 100.
+ * Existing demo-encoded formula: More Sale % = (monthB âˆ’ monthA) / 100.
  * @param {number} monthASale
  * @param {number} monthBSale
  */
@@ -2508,9 +2508,9 @@ function mapProductComparisionApiRowToPdfRow(raw, type) {
 }
 
 async function fetchProductComparisionReportRows(params, headers = {}) {
-  const base = String(import.meta.env.VITE_REPORT_API || '').replace(/\/+$/, '');
+  const base = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
   if (!base) {
-    throw new Error('VITE_REPORT_API is not set');
+    throw new Error('VITE_API_BASE_URL is not set');
   }
 
   const reportType =
@@ -2540,9 +2540,9 @@ async function fetchProductComparisionReportRows(params, headers = {}) {
 }
 
 async function fetchProductComparisionProductGroups(headers = {}) {
-  const base = String(import.meta.env.VITE_REPORT_API || '').replace(/\/+$/, '');
+  const base = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
   if (!base) {
-    throw new Error('VITE_REPORT_API is not set');
+    throw new Error('VITE_API_BASE_URL is not set');
   }
 
   const url = `${base}/api/Report/productgroups`;
@@ -2574,7 +2574,7 @@ function buildProductComparisionReportPdfPayload(rawRows, meta = {}) {
  *   - Left  side : Year, Month, Product       (period A + product filter)
  *   - Right side : Year, Month, Type          (period B + quantity/value mode)
  *
- * Report + Product dropdown: `VITE_REPORT_API`.
+ * Report + Product dropdown: `VITE_API_BASE_URL`.
  */
 function ProductComparisionReportForm() {
   const { enqueueSnackbar } = useSnackbar();
@@ -2627,8 +2627,8 @@ function ProductComparisionReportForm() {
         console.error('[ProductComparision] product groups', err);
         if (!cancelled) {
           enqueueSnackbar(
-            err?.message?.includes('VITE_REPORT_API')
-              ? 'API URL missing: set VITE_REPORT_API'
+            err?.message?.includes('VITE_API_BASE_URL')
+              ? 'API URL missing: set VITE_API_BASE_URL'
               : 'Could not load product groups',
             { variant: 'error' }
           );
@@ -2697,7 +2697,7 @@ function ProductComparisionReportForm() {
   ]);
 
   /**
-   * Fetch ProductComparisonReport via VITE_REPORT_API, map onto existing PDF
+   * Fetch ProductComparisonReport via VITE_API_BASE_URL, map onto existing PDF
    * columns, then preview or download. Layout unchanged.
    *
    * @param {'view'|'pdf'} mode
@@ -2743,8 +2743,8 @@ function ProductComparisionReportForm() {
           }
         }
         enqueueSnackbar(
-          err?.message?.includes('VITE_REPORT_API')
-            ? 'API URL missing: set VITE_REPORT_API'
+          err?.message?.includes('VITE_API_BASE_URL')
+            ? 'API URL missing: set VITE_API_BASE_URL'
             : 'Could not build Product Comparision PDF',
           { variant: 'error' }
         );
@@ -2765,7 +2765,7 @@ function ProductComparisionReportForm() {
       </Typography>
 
       <Grid container spacing={2.5}>
-        {/* Left side — Year A */}
+        {/* Left side â€” Year A */}
         <Grid item xs={12} md={6}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             Year :
@@ -2785,7 +2785,7 @@ function ProductComparisionReportForm() {
           </FormControl>
         </Grid>
 
-        {/* Right side — Year B */}
+        {/* Right side â€” Year B */}
         <Grid item xs={12} md={6}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             Year :
@@ -2805,7 +2805,7 @@ function ProductComparisionReportForm() {
           </FormControl>
         </Grid>
 
-        {/* Left side — Month A */}
+        {/* Left side â€” Month A */}
         <Grid item xs={12} md={6}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             Month :
@@ -2825,7 +2825,7 @@ function ProductComparisionReportForm() {
           </FormControl>
         </Grid>
 
-        {/* Right side — Month B */}
+        {/* Right side â€” Month B */}
         <Grid item xs={12} md={6}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             Month :
@@ -2845,7 +2845,7 @@ function ProductComparisionReportForm() {
           </FormControl>
         </Grid>
 
-        {/* Left side — Product */}
+        {/* Left side â€” Product */}
         <Grid item xs={12} md={6}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             Product :
@@ -2872,7 +2872,7 @@ function ProductComparisionReportForm() {
           </FormControl>
         </Grid>
 
-        {/* Right side — Type */}
+        {/* Right side â€” Type */}
         <Grid item xs={12} md={6}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             Type :
@@ -2908,7 +2908,7 @@ function ProductComparisionReportForm() {
               disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'View Report'}
+              {generatingPdf ? 'Buildingâ€¦' : 'View Report'}
             </Button>
             <Button
               variant="contained"
@@ -2918,7 +2918,7 @@ function ProductComparisionReportForm() {
               disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'Download PDF'}
+              {generatingPdf ? 'Buildingâ€¦' : 'Download PDF'}
             </Button>
             <Button
               variant="contained"
@@ -2980,7 +2980,7 @@ function pickShippedDelayOnTimeNumeric(obj, ...keys) {
   return undefined;
 }
 
-/** Parse API date to UTC midnight; sentinel / blank → null. */
+/** Parse API date to UTC midnight; sentinel / blank â†’ null. */
 function parseShippedDelayOnTimeUtcDay(value) {
   if (value == null || value === '') return null;
   const s = String(value).trim();
@@ -2993,7 +2993,7 @@ function parseShippedDelayOnTimeUtcDay(value) {
 }
 
 /**
- * Existing demo Days formula: ShipmentDate − (Revised Ship (B) if present, else Buyer Ship Date),
+ * Existing demo Days formula: ShipmentDate âˆ’ (Revised Ship (B) if present, else Buyer Ship Date),
  * in whole calendar days.
  */
 function calcShippedDelayOnTimeDays(buyerShipRaw, revisedShipRaw, shipmentRaw) {
@@ -3058,9 +3058,9 @@ function mapShippedDelayOnTimeApiRowToPdfRow(raw) {
 }
 
 async function fetchShippedDelayOnTimeReportRows(params, headers = {}) {
-  const base = String(import.meta.env.VITE_REPORT_API || '').replace(/\/+$/, '');
+  const base = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
   if (!base) {
-    throw new Error('VITE_REPORT_API is not set');
+    throw new Error('VITE_API_BASE_URL is not set');
   }
 
   const statusRaw = String(params.status || params.delayStatus || '')
@@ -3109,9 +3109,9 @@ function buildShippedDelayOnTimeReportPdfPayload(rawRows, meta = {}) {
  * Layout (per legacy print):
  *   - Row 1 : Customer dropdown, Supplier dropdown, Status dropdown.
  *   - Row 2 : From + To date inputs.
- *   - Row 3 : View Report, Download PDF, Download Excel — right-aligned.
+ *   - Row 3 : View Report, Download PDF, Download Excel â€” right-aligned.
  *
- * Report data: GET `/api/Report/ShipmentDelayOrOnTimeReport` via `VITE_REPORT_API`.
+ * Report data: GET `/api/Report/ShipmentDelayOrOnTimeReport` via `VITE_API_BASE_URL`.
  */
 function ShippedDelayOrOnTimeReportForm() {
   const { enqueueSnackbar } = useSnackbar();
@@ -3199,7 +3199,7 @@ function ShippedDelayOrOnTimeReportForm() {
   ]);
 
   /**
-   * Fetch ShipmentDelayOrOnTimeReport via VITE_REPORT_API, map onto existing
+   * Fetch ShipmentDelayOrOnTimeReport via VITE_API_BASE_URL, map onto existing
    * PDF columns, then preview or download. Layout unchanged.
    *
    * @param {'view'|'pdf'} mode
@@ -3245,8 +3245,8 @@ function ShippedDelayOrOnTimeReportForm() {
           }
         }
         enqueueSnackbar(
-          err?.message?.includes('VITE_REPORT_API')
-            ? 'API URL missing: set VITE_REPORT_API'
+          err?.message?.includes('VITE_API_BASE_URL')
+            ? 'API URL missing: set VITE_API_BASE_URL'
             : 'Could not build Shipped Delay / OnTime PDF',
           { variant: 'error' }
         );
@@ -3436,7 +3436,7 @@ function ShippedDelayOrOnTimeReportForm() {
               disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'View Report'}
+              {generatingPdf ? 'Buildingâ€¦' : 'View Report'}
             </Button>
             <Button
               variant="contained"
@@ -3446,7 +3446,7 @@ function ShippedDelayOrOnTimeReportForm() {
               disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'Download PDF'}
+              {generatingPdf ? 'Buildingâ€¦' : 'Download PDF'}
             </Button>
             <Button
               variant="contained"
@@ -3562,9 +3562,9 @@ function mapShippedNotCloseApiRowToPdfRow(raw) {
 }
 
 async function fetchShippedNotCloseReportRows(params, headers = {}) {
-  const base = String(import.meta.env.VITE_REPORT_API || '').replace(/\/+$/, '');
+  const base = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
   if (!base) {
-    throw new Error('VITE_REPORT_API is not set');
+    throw new Error('VITE_API_BASE_URL is not set');
   }
 
   const q = new URLSearchParams({
@@ -3598,9 +3598,9 @@ function buildShippedNotCloseReportPdfPayload(rawRows, meta = {}) {
  * Layout (per legacy print):
  *   - Row 1 : Customer dropdown + Supplier dropdown (2 cols).
  *   - Row 2 : From + To date inputs (2 cols).
- *   - Row 3 : View Report, Download PDF, Download Excel — right-aligned.
+ *   - Row 3 : View Report, Download PDF, Download Excel â€” right-aligned.
  *
- * Report data: GET `/api/Report/ShippedButNotClosedStatus` via `VITE_REPORT_API`.
+ * Report data: GET `/api/Report/ShippedButNotClosedStatus` via `VITE_API_BASE_URL`.
  */
 function ShippedNotCloseStatusReportForm() {
   const { enqueueSnackbar } = useSnackbar();
@@ -3658,7 +3658,7 @@ function ShippedNotCloseStatusReportForm() {
   }, [filters.fromDate, filters.toDate, filters.customer, filters.supplier]);
 
   /**
-   * Fetch ShippedButNotClosedStatus via VITE_REPORT_API, map onto existing PDF
+   * Fetch ShippedButNotClosedStatus via VITE_API_BASE_URL, map onto existing PDF
    * columns, then preview or download. Layout unchanged.
    *
    * @param {'view'|'pdf'} mode
@@ -3704,8 +3704,8 @@ function ShippedNotCloseStatusReportForm() {
           }
         }
         enqueueSnackbar(
-          err?.message?.includes('VITE_REPORT_API')
-            ? 'API URL missing: set VITE_REPORT_API'
+          err?.message?.includes('VITE_API_BASE_URL')
+            ? 'API URL missing: set VITE_API_BASE_URL'
             : 'Could not build Shipped Not Closed PDF',
           { variant: 'error' }
         );
@@ -3877,7 +3877,7 @@ function ShippedNotCloseStatusReportForm() {
               disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'View Report'}
+              {generatingPdf ? 'Buildingâ€¦' : 'View Report'}
             </Button>
             <Button
               variant="contained"
@@ -3887,7 +3887,7 @@ function ShippedNotCloseStatusReportForm() {
               disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'Download PDF'}
+              {generatingPdf ? 'Buildingâ€¦' : 'Download PDF'}
             </Button>
             <Button
               variant="contained"
@@ -3909,7 +3909,7 @@ function ShippedNotCloseStatusReportForm() {
 // Placeholder forms for the rest of the Shipment hub menu
 // ----------------------------------------------------------------------
 
-/** Stub form used for the remaining "coming soon" Shipment reports — same shape, single column. */
+/** Stub form used for the remaining "coming soon" Shipment reports â€” same shape, single column. */
 function PlaceholderShipmentReportForm({ pageTitle }) {
   return (
     <Card variant="outlined" sx={cardSx}>
