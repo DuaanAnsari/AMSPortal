@@ -1,4 +1,4 @@
-﻿import PropTypes from 'prop-types';
+import PropTypes from 'prop-types';
 import { useSearchParams } from 'react-router-dom';
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 
@@ -69,6 +69,7 @@ import {
   PRODUCT_COMPARISION_PDF_FILENAME,
 } from 'src/sections/reports/utils/product-comparision-report-pdf-export';
 import {
+  buildShippedDelayOnTimePdfBlobFromRows,
   buildShippedDelayOnTimeReportPdfBlob,
   openShippedDelayOnTimeReportPdf,
   shippedDelayHeaderDate,
@@ -392,6 +393,17 @@ async function fetchShipmentHistoryReportRows(params, headers = {}) {
   const url = `${base}/api/Report/ShipmentHistoryReport?${q.toString()}`;
   const res = await fetch(url, { headers });
   if (!res.ok) {
+    if (res.status === 404) {
+      try {
+        const errBody = await res.json();
+        const msg = String(errBody?.message ?? errBody?.Message ?? '').trim();
+        if (msg === 'No data found for the given criteria.') {
+          return [];
+        }
+      } catch {
+        /* not the no-data 404 — fall through to existing error handling */
+      }
+    }
     throw new Error(`ShipmentHistoryReport API failed (${res.status})`);
   }
 
@@ -502,6 +514,17 @@ async function fetchAfterShipmentReportRows(params, headers = {}) {
   const url = `${base}/api/Report/AfterShipmentReport?${q.toString()}`;
   const res = await fetch(url, { headers });
   if (!res.ok) {
+    if (res.status === 404) {
+      try {
+        const errBody = await res.json();
+        const msg = String(errBody?.message ?? errBody?.Message ?? '').trim();
+        if (msg === 'No data found for the given criteria.') {
+          return [];
+        }
+      } catch {
+        /* not the no-data 404 — fall through to existing error handling */
+      }
+    }
     throw new Error(`AfterShipmentReport API failed (${res.status})`);
   }
 
@@ -532,6 +555,17 @@ async function fetchShipmentTrackingReportRows(params, headers = {}) {
   const url = `${base}/api/Report/ShipmentTrackingReport?${q.toString()}`;
   const res = await fetch(url, { headers });
   if (!res.ok) {
+    if (res.status === 404) {
+      try {
+        const errBody = await res.json();
+        const msg = String(errBody?.message ?? errBody?.Message ?? '').trim();
+        if (msg === 'No data found for the given criteria.') {
+          return [];
+        }
+      } catch {
+        /* not the no-data 404 — fall through to existing error handling */
+      }
+    }
     throw new Error(`ShipmentTrackingReport API failed (${res.status})`);
   }
 
@@ -639,8 +673,9 @@ function ShipmentTrackingReportForm() {
       shipmentAuthHeaders()
     );
 
-    if (!rawRows.length) return null;
-    return buildShipmentTrackingReportPdfPayload(rawRows);
+    const rows = Array.isArray(rawRows) ? rawRows : [];
+
+    return buildShipmentTrackingReportPdfPayload(rows);
   }, [filters.merchandiser, filters.fromDate, filters.toDate]);
 
   /**
@@ -666,10 +701,6 @@ function ShipmentTrackingReportForm() {
       setGeneratingPdf(true);
       try {
         const payload = await fetchShipmentTrackingPayload();
-        if (!payload) {
-          enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
-          return;
-        }
 
         if (mode === 'view') {
           // Restore normal flow: blob File â†’ createObjectURL â†’ window.open (native viewer).
@@ -1089,6 +1120,17 @@ async function fetchShipmentCommissionReportRows(params, headers = {}) {
   const url = `${base}/api/Report/ShipmentCommissionReport?${q.toString()}`;
   const res = await fetch(url, { headers });
   if (!res.ok) {
+    if (res.status === 404) {
+      try {
+        const errBody = await res.json();
+        const msg = String(errBody?.message ?? errBody?.Message ?? '').trim();
+        if (msg === 'No data found for the given criteria.') {
+          return [];
+        }
+      } catch {
+        /* not the no-data 404 — fall through to existing error handling */
+      }
+    }
     throw new Error(`ShipmentCommissionReport API failed (${res.status})`);
   }
 
@@ -1164,8 +1206,9 @@ function CommisionInvoiceReportForm() {
       shipmentAuthHeaders()
     );
 
-    if (!rawRows.length) return null;
-    return buildCommissionInvoiceReportPdfPayload(rawRows, {
+    const rows = Array.isArray(rawRows) ? rawRows : [];
+
+    return buildCommissionInvoiceReportPdfPayload(rows, {
       monthLabel: commissionInvoiceMonthLabel(month),
       year,
     });
@@ -1184,17 +1227,6 @@ function CommisionInvoiceReportForm() {
       setGeneratingPdf(true);
       try {
         const payload = await fetchCommissionInvoicePayload();
-        if (!payload) {
-          if (previewWindow) {
-            try {
-              previewWindow.close();
-            } catch {
-              /* ignore */
-            }
-          }
-          enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
-          return;
-        }
 
         const blob = await buildCommissionInvoiceReportPdfBlob(payload);
         if (mode === 'view' && previewWindow) {
@@ -2087,6 +2119,17 @@ async function fetchShipmentDelayReportRows(params, headers = {}) {
   const url = `${base}/api/Report/ShipmentDelayReport?${q.toString()}`;
   const res = await fetch(url, { headers });
   if (!res.ok) {
+    if (res.status === 404) {
+      try {
+        const errBody = await res.json();
+        const msg = String(errBody?.message ?? errBody?.Message ?? '').trim();
+        if (msg === 'No delayed shipment records found.') {
+          return [];
+        }
+      } catch {
+        /* not the no-data 404 — fall through to existing error handling */
+      }
+    }
     throw new Error(`ShipmentDelayReport API failed (${res.status})`);
   }
 
@@ -2153,8 +2196,9 @@ function ShipmentDelayReportForm() {
       shipmentAuthHeaders()
     );
 
-    if (!rawRows.length) return null;
-    return buildShipmentDelayReportPdfPayload(rawRows);
+    const rows = Array.isArray(rawRows) ? rawRows : [];
+
+    return buildShipmentDelayReportPdfPayload(rows);
   }, [filters.merchandiser, filters.customer, filters.supplier]);
 
   /**
@@ -2170,17 +2214,6 @@ function ShipmentDelayReportForm() {
       setGeneratingPdf(true);
       try {
         const payload = await fetchShipmentDelayPayload();
-        if (!payload) {
-          if (previewWindow) {
-            try {
-              previewWindow.close();
-            } catch {
-              /* ignore */
-            }
-          }
-          enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
-          return;
-        }
 
         const blob = await buildShipmentDelayReportPdfBlob(payload);
         if (mode === 'view' && previewWindow) {
@@ -2416,9 +2449,9 @@ function ShipmentDelayReportForm() {
 const PRODUCT_COMPARISION_TAB_TITLE = 'Product Comparision Report';
 
 const PRODUCT_COMPARISION_REPORT_TYPE = {
-  quantity: 1,
-  fob: 2,
-  ldp: 3,
+  quantity: 0,
+  fob: 1,
+  ldp: 2,
 };
 
 function unwrapProductComparisionList(data) {
@@ -2514,7 +2547,7 @@ async function fetchProductComparisionReportRows(params, headers = {}) {
   }
 
   const reportType =
-    PRODUCT_COMPARISION_REPORT_TYPE[String(params.type || 'quantity').toLowerCase()] ?? 1;
+    PRODUCT_COMPARISION_REPORT_TYPE[String(params.type || 'quantity').toLowerCase()] ?? 0;
 
   const q = new URLSearchParams({
     reportType: String(reportType),
@@ -3067,7 +3100,7 @@ async function fetchShippedDelayOnTimeReportRows(params, headers = {}) {
     .trim()
     .toUpperCase()
     .replace(/\s+/g, '');
-  const delayStatus = statusRaw === 'ONTIME' ? 'ontime' : 'delay';
+  const delayStatus = statusRaw === 'ONTIME' ? 'ON TIME' : 'DELAY';
 
   const q = new URLSearchParams({
     fromDate: String(params.fromDate || ''),
@@ -3176,18 +3209,24 @@ function ShippedDelayOrOnTimeReportForm() {
       shipmentAuthHeaders()
     );
 
-    if (!Array.isArray(rawRows) || rawRows.length === 0) return null;
+    const isOnTime = String(filters.status || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, '') === 'ONTIME';
 
-    const payload = buildShippedDelayOnTimeReportPdfPayload(rawRows, {
+    const rows = Array.isArray(rawRows) ? rawRows : [];
+
+    // DELAY: no-data → null (existing "No record found").
+    // ON TIME: empty rows are valid input — still return a payload so PDF builds.
+    if (!isOnTime && rows.length === 0) return null;
+
+    return buildShippedDelayOnTimeReportPdfPayload(rows, {
       status: filters.status,
       fromLabel: shippedDelayHeaderDate(filters.fromDate),
       toLabel: shippedDelayHeaderDate(filters.toDate),
       customerLabel: resolveCustomerLabel(),
       supplierLabel: resolveSupplierLabel(),
     });
-
-    if (!Array.isArray(payload.rows) || payload.rows.length === 0) return null;
-    return payload;
   }, [
     filters.fromDate,
     filters.toDate,
@@ -3210,8 +3249,15 @@ function ShippedDelayOrOnTimeReportForm() {
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
+        const isOnTime = String(filters.status || '')
+          .trim()
+          .toUpperCase()
+          .replace(/\s+/g, '') === 'ONTIME';
+
         const payload = await fetchShippedDelayOnTimePayload();
-        if (!payload || !Array.isArray(payload.rows) || payload.rows.length === 0) {
+
+        // DELAY no-data only — ON TIME empty payload still builds a valid PDF.
+        if (!payload) {
           if (previewWindow) {
             try {
               previewWindow.close();
@@ -3223,7 +3269,29 @@ function ShippedDelayOrOnTimeReportForm() {
           return;
         }
 
-        const blob = await buildShippedDelayOnTimeReportPdfBlob(payload);
+        const rows = Array.isArray(payload.rows) ? payload.rows : [];
+
+        // Root fix: build from rows (including []) so empty ON TIME never hits demo/null/throw paths.
+        const blob = isOnTime
+          ? await buildShippedDelayOnTimePdfBlobFromRows(rows, {
+              status: payload.status || filters.status,
+              fromLabel: payload.fromLabel,
+              toLabel: payload.toLabel,
+              customerLabel: payload.customerLabel,
+              supplierLabel: payload.supplierLabel,
+              printedOn: payload.printedOn,
+            })
+          : await buildShippedDelayOnTimeReportPdfBlob(payload);
+
+        if (!(blob instanceof Blob) || blob.size < 32) {
+          throw new Error('Report could not be generated: PDF output is empty or too small.');
+        }
+        const sample = await blob.slice(0, 5).arrayBuffer();
+        const head = new TextDecoder('latin1').decode(sample);
+        if (!head.startsWith('%PDF')) {
+          throw new Error('Report could not be generated: output is not a valid PDF document.');
+        }
+
         if (mode === 'view' && previewWindow) {
           const namedFile =
             typeof File !== 'undefined'
@@ -3577,6 +3645,17 @@ async function fetchShippedNotCloseReportRows(params, headers = {}) {
   const url = `${base}/api/Report/ShippedButNotClosedStatus?${q.toString()}`;
   const res = await fetch(url, { headers });
   if (!res.ok) {
+    if (res.status === 404) {
+      try {
+        const errBody = await res.json();
+        const msg = String(errBody?.message || '').trim();
+        if (msg === 'No shipped but not closed records found.') {
+          return [];
+        }
+      } catch {
+        /* not the no-data 404 — fall through to existing error handling */
+      }
+    }
     throw new Error(`ShippedButNotClosedStatus API failed (${res.status})`);
   }
 
@@ -3650,8 +3729,9 @@ function ShippedNotCloseStatusReportForm() {
       shipmentAuthHeaders()
     );
 
-    if (!rawRows.length) return null;
-    return buildShippedNotCloseReportPdfPayload(rawRows, {
+    const rows = Array.isArray(rawRows) ? rawRows : [];
+
+    return buildShippedNotCloseReportPdfPayload(rows, {
       fromLabel: shippedNotCloseHeaderDate(filters.fromDate),
       toLabel: shippedNotCloseHeaderDate(filters.toDate),
     });
@@ -3670,17 +3750,6 @@ function ShippedNotCloseStatusReportForm() {
       setGeneratingPdf(true);
       try {
         const payload = await fetchShippedNotClosePayload();
-        if (!payload) {
-          if (previewWindow) {
-            try {
-              previewWindow.close();
-            } catch {
-              /* ignore */
-            }
-          }
-          enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
-          return;
-        }
 
         const blob = await buildShippedNotCloseStatusReportPdfBlob(payload);
         if (mode === 'view' && previewWindow) {

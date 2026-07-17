@@ -46,7 +46,8 @@ export function paginateGroupedColorRows(grouped, ctx) {
   const list = Array.isArray(grouped) ? grouped : [];
 
   list.forEach((g) => {
-    let rest = g.colorRows ?? g.rows ?? [];
+    const allColorRows = g.colorRows ?? g.rows ?? [];
+    let rest = allColorRows;
     const display = g.displayRow ?? g.displayRaw;
     while (rest.length) {
       const y = getY();
@@ -58,7 +59,12 @@ export function paginateGroupedColorRows(grouped, ctx) {
       const take = Math.min(maxRowsThisPage, rest.length);
       const chunk = rest.slice(0, take);
       rest = rest.slice(take);
-      setY(drawGroup(getY(), chunk, display));
+      setY(
+        drawGroup(getY(), chunk, display, {
+          isLastChunk: rest.length === 0,
+          groupColorRows: allColorRows,
+        })
+      );
     }
   });
 }

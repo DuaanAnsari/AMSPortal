@@ -457,6 +457,7 @@ function drawMilestoneAndProdTail(doc, xs, y, widths, row, startIndex, rowH) {
     drawMilestoneDataCell,
     drawMultilineCell,
     centerProductionStatusNa: true,
+    printEmbStrikeOffAlign: 'center',
   });
 }
 

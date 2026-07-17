@@ -305,23 +305,23 @@ function drawImageCell(doc, x, y, w, h, row, opts = {}) {
 function drawQtyStackCell(doc, x, y, w, h, row, opts = {}) {
   const { skipBorder = false } = opts;
   drawCellBorder(doc, x, y, w, h, skipBorder);
-  const splitY = y + h * 0.42;
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.25);
-  doc.line(x, splitY, x + w, splitY);
 
   const pad = 3;
   const rx = x + w - pad;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.2);
+  doc.setFontSize(5.6);
   doc.setTextColor(RED[0], RED[1], RED[2]);
 
-  const topMid = (y + splitY) / 2;
-  doc.text(String(row.poQty ?? ''), rx, topMid - 5, { align: 'right', baseline: 'middle' });
-  doc.text(String(row.shipQty ?? ''), rx, topMid + 5, { align: 'right', baseline: 'middle' });
-
-  const yBal = (splitY + y + h) / 2;
-  doc.text(String(row.balQty ?? ''), rx, yBal, { align: 'right', baseline: 'middle' });
+  // Labeled stack — one line each (PO / Ship / Bal).
+  const lines = [
+    `PO: ${row.poQty ?? ''}`,
+    `Ship: ${row.shipQty ?? ''}`,
+    `Bal: ${row.balQty ?? ''}`,
+  ];
+  const ys = [y + h * 0.28, y + h * 0.5, y + h * 0.72];
+  lines.forEach((text, i) => {
+    doc.text(text, rx, ys[i], { align: 'right', baseline: 'middle', maxWidth: w - pad * 2 });
+  });
 
   doc.setTextColor(0, 0, 0);
 }

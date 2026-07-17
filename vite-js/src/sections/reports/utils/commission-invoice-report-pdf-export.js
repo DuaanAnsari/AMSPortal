@@ -385,10 +385,9 @@ function drawFooter(doc, pageIdx, totalPages) {
  * @returns {Promise<Blob>}
  */
 export async function buildCommissionInvoiceReportPdfBlob(data = {}) {
+  // Empty `rows` is valid — headers/table still render; only fall back to demo when rows omitted.
   const payload =
-    data && Array.isArray(data.rows) && data.rows.length > 0
-      ? data
-      : COMMISSION_INVOICE_REPORT_DEMO;
+    data && Array.isArray(data.rows) ? data : COMMISSION_INVOICE_REPORT_DEMO;
 
   const meta = {
     monthLabel: payload.monthLabel || data.monthLabel || '',

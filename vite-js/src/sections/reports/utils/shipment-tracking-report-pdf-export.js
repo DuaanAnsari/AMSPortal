@@ -853,10 +853,9 @@ function drawFooter(doc, pageIdx, totalPages, printedBy) {
  * @returns {Promise<import('jspdf').jsPDF>}
  */
 async function createShipmentTrackingReportDoc(data) {
+  // Empty `groups` is valid — title/header/table render; only fall back to demo when groups omitted.
   const payload =
-    data && Array.isArray(data.groups) && data.groups.length > 0
-      ? data
-      : SHIPMENT_TRACKING_REPORT_DEMO;
+    data && Array.isArray(data.groups) ? data : SHIPMENT_TRACKING_REPORT_DEMO;
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
   const logoDataUrl = await loadLogoDataUrl().catch(() => null);
@@ -888,33 +887,37 @@ async function createShipmentTrackingReportDoc(data) {
 
   startPage();
 
-  payload.groups.forEach((group, gi) => {
-    ensureSpace(CUSTOMER_BAND_H + TABLE_HEADER_H + SHIPMENT_BLOCK_H);
-    y = drawCustomerBand(doc, innerLeft, y, group.customer);
+  if (payload.groups.length === 0) {
     y = drawTableHeader(doc, y, innerLeft, widths);
+  } else {
+    payload.groups.forEach((group, gi) => {
+      ensureSpace(CUSTOMER_BAND_H + TABLE_HEADER_H + SHIPMENT_BLOCK_H);
+      y = drawCustomerBand(doc, innerLeft, y, group.customer);
+      y = drawTableHeader(doc, y, innerLeft, widths);
 
-    group.subGroups.forEach((sub) => {
-      sub.rows.forEach((row) => {
-        if (y + SHIPMENT_BLOCK_H > pageBodyBottom) {
+      group.subGroups.forEach((sub) => {
+        sub.rows.forEach((row) => {
+          if (y + SHIPMENT_BLOCK_H > pageBodyBottom) {
+            continueCustomerOnNewPage(group.customer);
+          }
+          y = drawDataRow(doc, y, innerLeft, widths, row);
+          y = drawVoyageRow(doc, y, innerLeft, widths, row);
+        });
+
+        if (y + SUBTOTAL_ROW_H + 2 > pageBodyBottom) {
           continueCustomerOnNewPage(group.customer);
         }
-        y = drawDataRow(doc, y, innerLeft, widths, row);
-        y = drawVoyageRow(doc, y, innerLeft, widths, row);
+        y = drawSubtotal(doc, y, innerLeft, widths, sub.subtotal);
       });
 
-      if (y + SUBTOTAL_ROW_H + 2 > pageBodyBottom) {
+      if (y + CUSTOMER_TOTAL_H + 4 > pageBodyBottom) {
         continueCustomerOnNewPage(group.customer);
       }
-      y = drawSubtotal(doc, y, innerLeft, widths, sub.subtotal);
+      y = drawCustomerTotal(doc, y, innerLeft, widths, group.customer, group.total);
+
+      if (gi < payload.groups.length - 1) y += 4;
     });
-
-    if (y + CUSTOMER_TOTAL_H + 4 > pageBodyBottom) {
-      continueCustomerOnNewPage(group.customer);
-    }
-    y = drawCustomerTotal(doc, y, innerLeft, widths, group.customer, group.total);
-
-    if (gi < payload.groups.length - 1) y += 4;
-  });
+  }
 
   const total = doc.internal.getNumberOfPages();
   for (let p = 1; p <= total; p += 1) {

@@ -15,7 +15,9 @@ import {
   Typography,
   FormControl,
   Autocomplete,
+  ToggleButton,
   CircularProgress,
+  ToggleButtonGroup,
 } from '@mui/material';
 
 import { paths } from 'src/routes/paths';
@@ -353,7 +355,7 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
   }, [filters.fromDate, filters.toDate, enqueueSnackbar, buildBlob, downloadPdf, reportLabel]);
 
   const customerField = (
-    <Grid item xs={12}>
+    <Grid item xs={12} sm={6} md={4}>
       <Typography variant="subtitle2" sx={sectionLabelSx}>
         Customer :
       </Typography>
@@ -381,7 +383,7 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
   );
 
   const supplierField = (
-    <Grid item xs={12}>
+    <Grid item xs={12} sm={6} md={4}>
       <Typography variant="subtitle2" sx={sectionLabelSx}>
         Supplier :
       </Typography>
@@ -414,7 +416,7 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
         {order === 'supplier-first' ? supplierField : customerField}
         {order === 'supplier-first' ? customerField : supplierField}
 
-        <Grid item xs={12}>
+        <Grid item xs={12} sm={6} md={4}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             From :
           </Typography>
@@ -429,7 +431,7 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
           />
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid item xs={12} sm={6} md={4}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             To :
           </Typography>
@@ -494,11 +496,13 @@ BusinessSummaryOrderPanel.propTypes = {
 };
 
 /**
- * Business Summary Order wise page — two side-by-side panels (Customer-wise / Supplier-wise).
+ * Business Summary Order wise page — Customer / Supplier via toggle (default: Customer).
  * Dropdowns: same env-backed APIs as Milestone Summary (`VITE_API_BASE_URL`).
  */
 function BusinessSummaryOrderWiseForm() {
   const { enqueueSnackbar } = useSnackbar();
+
+  const [reportSide, setReportSide] = useState('customer');
 
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -536,30 +540,49 @@ function BusinessSummaryOrderWiseForm() {
     };
   }, [enqueueSnackbar]);
 
+  const handleReportSide = (_event, next) => {
+    if (next !== null) setReportSide(next);
+  };
+
   return (
     <Card variant="outlined" sx={{ ...cardSx, p: { xs: 1.5, sm: 2 } }}>
       <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary', mb: 2 }}>
         Business Summary Order wise
       </Typography>
 
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={6}>
-          <BusinessSummaryOrderPanel
-            order="customer-first"
-            customers={customers}
-            suppliers={suppliers}
-            loadingDropdowns={loadingDropdowns}
-          />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <BusinessSummaryOrderPanel
-            order="supplier-first"
-            customers={customers}
-            suppliers={suppliers}
-            loadingDropdowns={loadingDropdowns}
-          />
-        </Grid>
-      </Grid>
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          color="primary"
+          value={reportSide}
+          onChange={handleReportSide}
+          aria-label="Report type"
+        >
+          <ToggleButton value="customer" aria-label="Customer">
+            Customer
+          </ToggleButton>
+          <ToggleButton value="supplier" aria-label="Supplier">
+            Supplier
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+
+      {reportSide === 'customer' ? (
+        <BusinessSummaryOrderPanel
+          order="customer-first"
+          customers={customers}
+          suppliers={suppliers}
+          loadingDropdowns={loadingDropdowns}
+        />
+      ) : (
+        <BusinessSummaryOrderPanel
+          order="supplier-first"
+          customers={customers}
+          suppliers={suppliers}
+          loadingDropdowns={loadingDropdowns}
+        />
+      )}
     </Card>
   );
 }
@@ -1032,7 +1055,7 @@ function StatusWiseOrderPanel({
   }, [filters, enqueueSnackbar, buildVariantBlob, openVariantPdf, reportLabel]);
 
   const customerField = (
-    <Grid item xs={12}>
+    <Grid item xs={12} sm={6} md={4}>
       <Typography variant="subtitle2" sx={sectionLabelSx}>
         Customer :
       </Typography>
@@ -1060,7 +1083,7 @@ function StatusWiseOrderPanel({
   );
 
   const supplierField = (
-    <Grid item xs={12}>
+    <Grid item xs={12} sm={6} md={4}>
       <Typography variant="subtitle2" sx={sectionLabelSx}>
         Supplier :
       </Typography>
@@ -1097,7 +1120,7 @@ function StatusWiseOrderPanel({
         {order === 'supplier-first' ? supplierField : customerField}
         {order === 'supplier-first' ? customerField : supplierField}
 
-        <Grid item xs={12}>
+        <Grid item xs={12} sm={6} md={4}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             Merchandiser :
           </Typography>
@@ -1123,7 +1146,7 @@ function StatusWiseOrderPanel({
           </FormControl>
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid item xs={12} sm={6} md={4}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             PO # :
           </Typography>
@@ -1158,7 +1181,7 @@ function StatusWiseOrderPanel({
           />
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid item xs={12} sm={6} md={4}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             Status :
           </Typography>
@@ -1173,7 +1196,7 @@ function StatusWiseOrderPanel({
           </FormControl>
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid item xs={12} sm={6} md={4}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             From :
           </Typography>
@@ -1188,7 +1211,7 @@ function StatusWiseOrderPanel({
           />
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid item xs={12} sm={6} md={4}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             To :
           </Typography>
@@ -1253,11 +1276,13 @@ StatusWiseOrderPanel.propTypes = {
 };
 
 /**
- * Status Wise Order Report — Customer panel (left) and Vendor panel (right) side-by-side.
- * Customer / Supplier dropdowns share the Milestone Summary env API; the rest are stubbed for now.
+ * Status Wise Order Report — Customer / Vendor via toggle (default: Customer).
+ * Customer / Supplier dropdowns share the Milestone Summary env API.
  */
 function StatusWiseOrderReportForm() {
   const { enqueueSnackbar } = useSnackbar();
+
+  const [reportSide, setReportSide] = useState('customer');
 
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -1298,34 +1323,53 @@ function StatusWiseOrderReportForm() {
     };
   }, [enqueueSnackbar]);
 
+  const handleReportSide = (_event, next) => {
+    if (next !== null) setReportSide(next);
+  };
+
   return (
     <Card variant="outlined" sx={{ ...cardSx, p: { xs: 1.5, sm: 2 } }}>
       <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary', mb: 2 }}>
         Status Wise Order Report
       </Typography>
 
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={6}>
-          <StatusWiseOrderPanel
-            order="customer-first"
-            panelTitle="Order Report (Customer)"
-            customers={customers}
-            suppliers={suppliers}
-            merchants={merchants}
-            loadingDropdowns={loadingDropdowns}
-          />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <StatusWiseOrderPanel
-            order="supplier-first"
-            panelTitle="Order Report (Vendor)"
-            customers={customers}
-            suppliers={suppliers}
-            merchants={merchants}
-            loadingDropdowns={loadingDropdowns}
-          />
-        </Grid>
-      </Grid>
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          color="primary"
+          value={reportSide}
+          onChange={handleReportSide}
+          aria-label="Report type"
+        >
+          <ToggleButton value="customer" aria-label="Customer">
+            Customer
+          </ToggleButton>
+          <ToggleButton value="vendor" aria-label="Vendor">
+            Vendor
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+
+      {reportSide === 'customer' ? (
+        <StatusWiseOrderPanel
+          order="customer-first"
+          panelTitle="Order Report (Customer)"
+          customers={customers}
+          suppliers={suppliers}
+          merchants={merchants}
+          loadingDropdowns={loadingDropdowns}
+        />
+      ) : (
+        <StatusWiseOrderPanel
+          order="supplier-first"
+          panelTitle="Order Report (Vendor)"
+          customers={customers}
+          suppliers={suppliers}
+          merchants={merchants}
+          loadingDropdowns={loadingDropdowns}
+        />
+      )}
     </Card>
   );
 }
@@ -1578,7 +1622,7 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
   }, [filters, variant, enqueueSnackbar, fetchOpenOrderPayload]);
 
   const customerField = (
-    <Grid item xs={12}>
+    <Grid item xs={12} sm={6} md={4}>
       <Typography variant="subtitle2" sx={sectionLabelSx}>
         Customer :
       </Typography>
@@ -1606,7 +1650,7 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
   );
 
   const supplierField = (
-    <Grid item xs={12}>
+    <Grid item xs={12} sm={6} md={4}>
       <Typography variant="subtitle2" sx={sectionLabelSx}>
         Supplier :
       </Typography>
@@ -1643,7 +1687,7 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
         {order === 'supplier-first' ? supplierField : customerField}
         {order === 'supplier-first' ? customerField : supplierField}
 
-        <Grid item xs={12}>
+        <Grid item xs={12} sm={6} md={4}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             Merchandiser :
           </Typography>
@@ -1669,7 +1713,7 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
           </FormControl>
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid item xs={12} sm={6} md={4}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             PO # :
           </Typography>
@@ -1704,7 +1748,7 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
           />
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid item xs={12} sm={6} md={4}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             From :
           </Typography>
@@ -1719,7 +1763,7 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
           />
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid item xs={12} sm={6} md={4}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             To :
           </Typography>
@@ -1782,11 +1826,13 @@ OpenOrderReportPanel.propTypes = {
 };
 
 /**
- * Open Order Report — Customer panel (left) and Vendor panel (right) side-by-side.
+ * Open Order Report — Customer / Vendor via toggle (default: Customer).
  * Dropdowns share the Milestone Summary env API (`/api/MyOrders/...`).
  */
 function OpenOrderReportForm() {
   const { enqueueSnackbar } = useSnackbar();
+
+  const [reportSide, setReportSide] = useState('customer');
 
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -1827,34 +1873,53 @@ function OpenOrderReportForm() {
     };
   }, [enqueueSnackbar]);
 
+  const handleReportSide = (_event, next) => {
+    if (next !== null) setReportSide(next);
+  };
+
   return (
     <Card variant="outlined" sx={{ ...cardSx, p: { xs: 1.5, sm: 2 } }}>
       <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary', mb: 2 }}>
         Open Order Report
       </Typography>
 
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={6}>
-          <OpenOrderReportPanel
-            order="customer-first"
-            panelTitle="Open Order Report (Customer)"
-            customers={customers}
-            suppliers={suppliers}
-            merchants={merchants}
-            loadingDropdowns={loadingDropdowns}
-          />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <OpenOrderReportPanel
-            order="supplier-first"
-            panelTitle="Open Order Report (Vendor)"
-            customers={customers}
-            suppliers={suppliers}
-            merchants={merchants}
-            loadingDropdowns={loadingDropdowns}
-          />
-        </Grid>
-      </Grid>
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          color="primary"
+          value={reportSide}
+          onChange={handleReportSide}
+          aria-label="Report type"
+        >
+          <ToggleButton value="customer" aria-label="Customer">
+            Customer
+          </ToggleButton>
+          <ToggleButton value="vendor" aria-label="Vendor">
+            Vendor
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+
+      {reportSide === 'customer' ? (
+        <OpenOrderReportPanel
+          order="customer-first"
+          panelTitle="Open Order Report (Customer)"
+          customers={customers}
+          suppliers={suppliers}
+          merchants={merchants}
+          loadingDropdowns={loadingDropdowns}
+        />
+      ) : (
+        <OpenOrderReportPanel
+          order="supplier-first"
+          panelTitle="Open Order Report (Vendor)"
+          customers={customers}
+          suppliers={suppliers}
+          merchants={merchants}
+          loadingDropdowns={loadingDropdowns}
+        />
+      )}
     </Card>
   );
 }
@@ -2020,7 +2085,7 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
   }, [filters, variant, enqueueSnackbar, fetchShippedOrderPayload]);
 
   const customerField = (
-    <Grid item xs={12}>
+    <Grid item xs={12} sm={6} md={4}>
       <Typography variant="subtitle2" sx={sectionLabelSx}>
         Customer :
       </Typography>
@@ -2048,7 +2113,7 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
   );
 
   const supplierField = (
-    <Grid item xs={12}>
+    <Grid item xs={12} sm={6} md={4}>
       <Typography variant="subtitle2" sx={sectionLabelSx}>
         Supplier :
       </Typography>
@@ -2085,7 +2150,7 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
         {order === 'supplier-first' ? supplierField : customerField}
         {order === 'supplier-first' ? customerField : supplierField}
 
-        <Grid item xs={12}>
+        <Grid item xs={12} sm={6} md={4}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             From :
           </Typography>
@@ -2100,7 +2165,7 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
           />
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid item xs={12} sm={6} md={4}>
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             To :
           </Typography>
@@ -2162,11 +2227,13 @@ ShippedOrderReportPanel.propTypes = {
 };
 
 /**
- * Shipped Order Report — Customer panel (left) and Vendor panel (right) side-by-side.
+ * Shipped Order Report — Customer / Vendor via toggle (default: Customer).
  * Dropdowns share the Milestone Summary env API.
  */
 function ShippedOrderReportForm() {
   const { enqueueSnackbar } = useSnackbar();
+
+  const [reportSide, setReportSide] = useState('customer');
 
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -2204,32 +2271,51 @@ function ShippedOrderReportForm() {
     };
   }, [enqueueSnackbar]);
 
+  const handleReportSide = (_event, next) => {
+    if (next !== null) setReportSide(next);
+  };
+
   return (
     <Card variant="outlined" sx={{ ...cardSx, p: { xs: 1.5, sm: 2 } }}>
       <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary', mb: 2 }}>
         Shipped Order Report
       </Typography>
 
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={6}>
-          <ShippedOrderReportPanel
-            order="customer-first"
-            panelTitle="Shipped Order Report (Customer)"
-            customers={customers}
-            suppliers={suppliers}
-            loadingDropdowns={loadingDropdowns}
-          />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <ShippedOrderReportPanel
-            order="supplier-first"
-            panelTitle="Shipped Order Report (Vendor)"
-            customers={customers}
-            suppliers={suppliers}
-            loadingDropdowns={loadingDropdowns}
-          />
-        </Grid>
-      </Grid>
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          color="primary"
+          value={reportSide}
+          onChange={handleReportSide}
+          aria-label="Report type"
+        >
+          <ToggleButton value="customer" aria-label="Customer">
+            Customer
+          </ToggleButton>
+          <ToggleButton value="vendor" aria-label="Vendor">
+            Vendor
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+
+      {reportSide === 'customer' ? (
+        <ShippedOrderReportPanel
+          order="customer-first"
+          panelTitle="Shipped Order Report (Customer)"
+          customers={customers}
+          suppliers={suppliers}
+          loadingDropdowns={loadingDropdowns}
+        />
+      ) : (
+        <ShippedOrderReportPanel
+          order="supplier-first"
+          panelTitle="Shipped Order Report (Vendor)"
+          customers={customers}
+          suppliers={suppliers}
+          loadingDropdowns={loadingDropdowns}
+        />
+      )}
     </Card>
   );
 }

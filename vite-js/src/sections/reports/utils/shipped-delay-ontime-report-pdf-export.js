@@ -408,36 +408,36 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
 // ----------------------------------------------------------------------
 
 /**
+ * Build PDF from row list. Empty `rows` is valid — headers/table still render, no data rows.
+ * Never throws / returns null for an empty dataset.
+ *
+ * @param {object[]} [rows]
  * @param {{
- *   rows?: object[];
- *   status?: 'DELAY'|'ONTIME';
+ *   status?: string;
  *   fromLabel?: string;
  *   toLabel?: string;
  *   customerLabel?: string;
  *   supplierLabel?: string;
  *   printedOn?: string;
- * }} data
+ * }} [meta]
  * @returns {Promise<Blob>}
  */
-export async function buildShippedDelayOnTimeReportPdfBlob(data = {}) {
-  const payload =
-    data && Array.isArray(data.rows) && data.rows.length > 0
-      ? data
-      : SHIPPED_DELAY_ONTIME_REPORT_DEMO;
+export async function buildShippedDelayOnTimePdfBlobFromRows(rows = [], meta = {}) {
+  const safeRows = Array.isArray(rows) ? rows : [];
 
-  const status = String(data.status || payload.status || 'DELAY').toUpperCase();
+  const status = String(meta.status || 'DELAY').toUpperCase();
   const titleSuffix = status === 'ONTIME' || status === 'ON TIME' ? 'ON TIME' : 'DELAY';
 
   const now = new Date();
-  const meta = {
-    printedOn: payload.printedOn || data.printedOn || formatPrintedOnLong(now),
+  const headerMeta = {
+    printedOn: meta.printedOn || formatPrintedOnLong(now),
     printDate: formatPrintDate(now),
     printTime: formatPrintTime(now),
     title: `SHIPPED ${titleSuffix} REPORT`,
-    fromLabel: data.fromLabel || payload.fromLabel || '',
-    toLabel: data.toLabel || payload.toLabel || '',
-    customerLabel: data.customerLabel || payload.customerLabel || 'All Customer',
-    supplierLabel: data.supplierLabel || payload.supplierLabel || 'All Supplier',
+    fromLabel: meta.fromLabel || '',
+    toLabel: meta.toLabel || '',
+    customerLabel: meta.customerLabel || 'All Customer',
+    supplierLabel: meta.supplierLabel || 'All Supplier',
   };
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
@@ -451,24 +451,25 @@ export async function buildShippedDelayOnTimeReportPdfBlob(data = {}) {
   let y = 0;
 
   const startPage = () => {
-    y = drawPageHeader(doc, logoDataUrl, meta);
+    y = drawPageHeader(doc, logoDataUrl, headerMeta);
     y = drawTableHeader(doc, y, innerLeft, widths);
   };
 
   startPage();
 
-  payload.rows.forEach((row) => {
+  // Empty array → no data rows; title + table header already drawn above.
+  for (let i = 0; i < safeRows.length; i += 1) {
     if (y + DATA_ROW_H > pageBodyBottom) {
       doc.addPage([PAGE_W, PAGE_H], 'l');
       startPage();
     }
-    y = drawDataRow(doc, y, innerLeft, widths, row);
-  });
+    y = drawDataRow(doc, y, innerLeft, widths, safeRows[i] || {});
+  }
 
   const total = doc.internal.getNumberOfPages();
   for (let p = 1; p <= total; p += 1) {
     doc.setPage(p);
-    drawFooter(doc, p, total, meta.printedOn);
+    drawFooter(doc, p, total, headerMeta.printedOn);
   }
 
   try {
@@ -481,6 +482,29 @@ export async function buildShippedDelayOnTimeReportPdfBlob(data = {}) {
   }
 
   return doc.output('blob');
+}
+
+/**
+ * @param {{
+ *   rows?: object[];
+ *   status?: 'DELAY'|'ONTIME';
+ *   fromLabel?: string;
+ *   toLabel?: string;
+ *   customerLabel?: string;
+ *   supplierLabel?: string;
+ *   printedOn?: string;
+ * }} data
+ * @returns {Promise<Blob>}
+ */
+export async function buildShippedDelayOnTimeReportPdfBlob(data = {}) {
+  // Explicit rows array (including []) → build as-is. Only fall back to demo when rows omitted.
+  if (data && Array.isArray(data.rows)) {
+    return buildShippedDelayOnTimePdfBlobFromRows(data.rows, data);
+  }
+  return buildShippedDelayOnTimePdfBlobFromRows(SHIPPED_DELAY_ONTIME_REPORT_DEMO.rows, {
+    ...SHIPPED_DELAY_ONTIME_REPORT_DEMO,
+    ...data,
+  });
 }
 
 /**

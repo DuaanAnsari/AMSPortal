@@ -377,10 +377,9 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  * @returns {Promise<Blob>}
  */
 export async function buildShipmentDelayReportPdfBlob(data = {}) {
+  // Empty `rows` is valid — headers/table still render; only fall back to demo when rows omitted.
   const payload =
-    data && Array.isArray(data.rows) && data.rows.length > 0
-      ? data
-      : SHIPMENT_DELAY_REPORT_DEMO;
+    data && Array.isArray(data.rows) ? data : SHIPMENT_DELAY_REPORT_DEMO;
 
   const meta = {
     printedOn: payload.printedOn || data.printedOn || formatPrintedOn(),

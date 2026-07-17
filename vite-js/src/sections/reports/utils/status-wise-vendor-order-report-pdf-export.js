@@ -447,7 +447,7 @@ function drawTotalRow(doc, y, x0, widths, totals, label = 'Total') {
     align: 'right',
     baseline: 'middle',
   });
-  doc.text(formatNumber2(totals.value), xs[VALUE_COL] + widths[VALUE_COL] - 3, y + TOTAL_ROW_H / 2, {
+  doc.text(`$${formatNumber2(totals.value)}`, xs[VALUE_COL] + widths[VALUE_COL] - 3, y + TOTAL_ROW_H / 2, {
     align: 'right',
     baseline: 'middle',
   });

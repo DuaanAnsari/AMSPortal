@@ -428,10 +428,9 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  * @returns {Promise<Blob>}
  */
 export async function buildShippedNotCloseStatusReportPdfBlob(data = {}) {
+  // Empty `rows` is valid — headers/table/total still render; only fall back to demo when rows omitted.
   const payload =
-    data && Array.isArray(data.rows) && data.rows.length > 0
-      ? data
-      : SHIPPED_NOT_CLOSE_STATUS_REPORT_DEMO;
+    data && Array.isArray(data.rows) ? data : SHIPPED_NOT_CLOSE_STATUS_REPORT_DEMO;
 
   const now = new Date();
   const meta = {

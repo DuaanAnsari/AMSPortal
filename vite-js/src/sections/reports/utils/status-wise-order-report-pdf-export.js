@@ -418,12 +418,12 @@ export function drawOrderReportTotalRow(doc, y, x0, widths, totals, label = 'Tot
     align: 'right',
     baseline: 'middle',
   });
-  doc.text(formatNumber2(totals.value), xs[VALUE_COL] + widths[VALUE_COL] - 3, y + TOTAL_ROW_H / 2, {
+  doc.text(`$${formatNumber2(totals.value)}`, xs[VALUE_COL] + widths[VALUE_COL] - 3, y + TOTAL_ROW_H / 2, {
     align: 'right',
     baseline: 'middle',
   });
   doc.text(
-    formatNumber2(totals.ldpValue),
+    `$${formatNumber2(totals.ldpValue)}`,
     xs[LDP_VALUE_COL] + widths[LDP_VALUE_COL] - 3,
     y + TOTAL_ROW_H / 2,
     { align: 'right', baseline: 'middle' }

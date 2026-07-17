@@ -499,15 +499,39 @@ function buildMilestoneCellLines(raw, colIndex, numFallback) {
 /** Combined milestone PDF columns (Lab Dip … Packing PCS). */
 export const WIP_MILESTONE_PDF_COLUMN_COUNT = 12;
 
-/** Production status column: always the `remarksmaster` value (multi-line); never the Status field. */
-function productionStatusLinesFromRow(raw) {
+/** Production status: `remarksmaster` + optional `PrintEmbStrikeOffremarksmaster` (never Status). */
+function productionStatusPartsFromRow(raw) {
+  const main = [];
   const rm = pickField(raw, 'remarksmaster', 'RemarksMaster', 'remarksMaster', 'remarks_master');
-  if (rm == null || String(rm).trim() === '') return ['N/A'];
-  const out = String(rm)
-    .split(/\r\n|\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-  return out.length > 0 ? out : ['N/A'];
+  if (rm != null && String(rm).trim() !== '') {
+    main.push(
+      ...String(rm)
+        .split(/\r\n|\n/)
+        .map((l) => l.trim())
+        .filter(Boolean)
+    );
+  }
+
+  const printEmb = [];
+  const printEmbRm = pickField(
+    raw,
+    'PrintEmbStrikeOffremarksmaster',
+    'PrintEmbStrikeoffremarksmaster',
+    'printEmbStrikeOffremarksmaster'
+  );
+  if (printEmbRm != null && String(printEmbRm).trim() !== '') {
+    printEmb.push(
+      ...String(printEmbRm)
+        .split(/\r\n|\n/)
+        .map((l) => l.trim())
+        .filter(Boolean)
+    );
+  }
+
+  if (!main.length && !printEmb.length) {
+    return { productionStatusLines: ['N/A'], printEmbStrikeOffRemarksLines: [] };
+  }
+  return { productionStatusLines: main, printEmbStrikeOffRemarksLines: printEmb };
 }
 
 function statusNumsFromRow(row) {
@@ -607,7 +631,9 @@ export function mapApiRowToFactoryWipPdfRow(raw, rowIndex = 0) {
   logFactoryWipDelayDebugRow(raw, rowIndex);
   const rgb = delayed ? [200, 0, 0] : [0, 0, 0];
   const poQty = toNum(pickField(raw, 'POQty', 'poQty', 'PoQty', 'BookedQuantity', 'bookedQuantity'));
-  const shipQty = toNum(pickField(raw, 'ShipQty', 'shipQty', 'ShipmentQty', 'shipmentQty'));
+  const shipQty = toNum(
+    pickField(raw, 'ShipQty', 'shipQty', 'ShippedQty', 'shippedQty', 'ShipmentQty', 'shipmentQty')
+  );
   const balQty = toNum(pickField(raw, 'BalQty', 'balQty', 'BalanceQty', 'balanceQty'));
 
   const ship = pickField(
@@ -664,7 +690,10 @@ export function mapApiRowToFactoryWipPdfRow(raw, rowIndex = 0) {
 
   const statusNums = statusNumsFromRow(raw);
   const statusCellLines = statusNums.map((n, idx) => buildMilestoneCellLines(raw, idx, n));
-  const productionStatusLines = productionStatusLinesFromRow(raw);
+  const { productionStatusLines, printEmbStrikeOffRemarksLines } = productionStatusPartsFromRow(raw);
+  const productionStatusJoined = [...productionStatusLines, ...printEmbStrikeOffRemarksLines]
+    .filter((l) => l != null && String(l).trim() !== '')
+    .join('\n');
 
   return {
     imageKind: poImageDataUrl ? 'poImage' : 'none',
@@ -682,7 +711,8 @@ export function mapApiRowToFactoryWipPdfRow(raw, rowIndex = 0) {
     statusNums,
     statusCellLines,
     productionStatusLines,
-    productionStatus: productionStatusLines.join('\n'),
+    printEmbStrikeOffRemarksLines,
+    productionStatus: productionStatusJoined || 'N/A',
     _pdfTextRgb: rgb,
   };
 }

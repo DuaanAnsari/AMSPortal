@@ -559,25 +559,21 @@ function drawQtyStackCell(doc, x, y, w, h, row, opts = {}) {
   drawCellBorder(doc, x, y, w, h, skipBorder);
   const rgb = getRowPdfTextRgb(row);
 
-  /** Upper band: PO Qty + Ship Qty; lower band: Bal Qty — divider matches reference PDF. */
-  const splitY = y + h * 0.42;
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.25);
-  doc.line(x, splitY, x + w, splitY);
-
   const cx = x + w / 2;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.2);
+  doc.setFontSize(5.6);
   doc.setTextColor(rgb[0], rgb[1], rgb[2]);
 
-  const topMid = (y + splitY) / 2;
-  const yPo = topMid - 5;
-  const yShip = topMid + 5;
-  doc.text(String(row.poQty ?? ''), cx, yPo, { align: 'center', baseline: 'middle' });
-  doc.text(String(row.shipQty ?? ''), cx, yShip, { align: 'center', baseline: 'middle' });
-
-  const yBal = (splitY + y + h) / 2;
-  doc.text(String(row.balQty ?? ''), cx, yBal, { align: 'center', baseline: 'middle' });
+  // Labeled stack — one line each (PO / Ship / Bal).
+  const lines = [
+    `PO: ${row.poQty ?? ''}`,
+    `Ship: ${row.shipQty ?? ''}`,
+    `Bal: ${row.balQty ?? ''}`,
+  ];
+  const ys = [y + h * 0.28, y + h * 0.5, y + h * 0.72];
+  lines.forEach((text, i) => {
+    doc.text(text, cx, ys[i], { align: 'center', baseline: 'middle', maxWidth: w - 3 });
+  });
 
   doc.setTextColor(0, 0, 0);
 }
@@ -618,6 +614,7 @@ function drawMilestoneAndProdTail(doc, xs, y, widths, row, startIndex, rowH) {
     drawMilestoneDataCell,
     drawMultilineCell,
     centerProductionStatusNa: true,
+    printEmbStrikeOffAlign: 'center',
   });
 }
 

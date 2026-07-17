@@ -138,6 +138,7 @@ export function mapApiRowToAmsWipPdfRow(raw, rowIndex = 0) {
     statusNums: base.statusNums,
     statusCellLines: base.statusCellLines,
     productionStatusLines: base.productionStatusLines,
+    printEmbStrikeOffRemarksLines: base.printEmbStrikeOffRemarksLines,
     productionStatus: base.productionStatus,
     _pdfTextRgb: base._pdfTextRgb,
     _poImageNaturalW: 0,

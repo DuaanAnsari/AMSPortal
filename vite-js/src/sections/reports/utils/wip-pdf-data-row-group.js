@@ -64,6 +64,7 @@ export function paginateWipPdfGroupedRows({
       doc.addPage(pageSize, 'l');
       startPage();
     },
-    drawGroup: (y, chunkRows, displayRow) => drawRowGroup(y, chunkRows, displayRow),
+    drawGroup: (y, chunkRows, displayRow, chunkMeta) =>
+      drawRowGroup(y, chunkRows, displayRow, chunkMeta),
   });
 }

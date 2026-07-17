@@ -1224,7 +1224,7 @@ const defaultValues = {
   gsmOF: '',
   construction: '',
   poSpecialOperation: '',
-  status: '',
+  status: 'Confirmed',
   poSpecialTreatment: '',
   styleSource: '',
   brand: '',
