@@ -16,7 +16,7 @@ import jsPDF from 'jspdf';
  *   - Footer    : Printed on (left), Powered by … / Developed by … (center),
  *                 Page X of Y (right).
  *
- * Demo data is hardcoded; backend rows can be passed via the same shape later.
+ * Rows are supplied by the Inspection Daily Status Report API via the hub form.
  */
 
 const LOGO_PATH = `${import.meta.env.BASE_URL}logo/AMSlogo.png`;
@@ -37,6 +37,10 @@ const BORDER = [150, 150, 150];
 const NAVY = [0, 51, 102];
 
 const PDF_VIEW_ZOOM_HASH = '#zoom=125';
+
+export const INSPECTION_DAILY_STATUS_DOCUMENT_TITLE = 'Inspection Daily Status Report';
+export const INSPECTION_DAILY_STATUS_PDF_FILENAME = 'Inspection Daily Status Report.pdf';
+export const INSPECTION_DAILY_STATUS_TAB_TITLE = 'Inspection Daily Status Report';
 
 /** @typedef {{ key: string; label: string; weight: number; align?: 'left'|'center'|'right' }} InspectionDailyCol */
 
@@ -88,64 +92,58 @@ const COLOR_NAME_PALETTE = [
   [/\bwhite\b/i, [80, 80, 80]],
 ];
 
+let colorProbeCtx = null;
+
+function getColorProbeCtx() {
+  if (typeof document === 'undefined') return null;
+  if (!colorProbeCtx) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    colorProbeCtx = canvas.getContext('2d');
+  }
+  return colorProbeCtx;
+}
+
+function cssColorToRgb(name) {
+  const ctx = getColorProbeCtx();
+  const s = String(name ?? '').trim();
+  if (!ctx || !s) return null;
+
+  ctx.fillStyle = '#010101';
+  ctx.fillStyle = s;
+  const v = ctx.fillStyle;
+  if (v === '#010101' && s.toLowerCase() !== '#010101') return null;
+
+  const hex = /^#([0-9a-f]{6})$/i.exec(v);
+  if (hex) {
+    const n = parseInt(hex[1], 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+
+  const rgb = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(v);
+  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+  return null;
+}
+
 function inkForColorName(name) {
   if (!name) return [0, 0, 0];
-  const text = String(name);
+  const text = String(name).trim();
+
+  const full = cssColorToRgb(text);
+  if (full) return full;
+
+  const words = text.split(/\s+/).filter(Boolean);
+  for (let i = words.length - 1; i >= 0; i -= 1) {
+    const hit = cssColorToRgb(words[i]);
+    if (hit) return hit;
+  }
+
   for (const [re, rgb] of COLOR_NAME_PALETTE) {
     if (re.test(text)) return rgb;
   }
   return [0, 0, 0];
 }
-
-// ----------------------------------------------------------------------
-// Demo data — transcribed from the legacy print mock-up.
-// ----------------------------------------------------------------------
-
-const RAW_DEMO_ROWS = [
-  ['39006-LS-RED-IPC-001',   'IPC',   '39006-LS-RED',   'May-12-2026', 'LONE ROCK',             'Comfort apparel',      'Comfort apparel',      'MUHAMMAD NAEEM UD DIN',   'LR2096', 'RED CLAY',     'Fail'],
-  ['38998-SS-NAVY-IPC-001',  'IPC',   '38998-SS-NAVY',  'May-12-2026', 'LONE ROCK',             'Comfort apparel',      'Comfort apparel',      'MUHAMMAD NAEEM UD DIN',   'LR1096', 'NAVY',         'Pass'],
-  ['202300-980-Fin-001',     'Final', '202300-980',     'May-11-2026', 'Ultimate Apparel, Inc', 'Zakonin international', 'Zakonin international', 'MUHAMMAD ASHRAF ALI KHAN', '980',    'JAFFA ORANGE', 'Pass'],
-  ['202300-981-Fin-001',     'Final', '202300-981',     'May-11-2026', 'Ultimate Apparel, Inc', 'Zakonin international', 'Zakonin international', 'MUHAMMAD ASHRAF ALI KHAN', '981',    'MEDIUM GREEN', 'Pass'],
-  ['202300-982-Fin-001',     'Final', '202300-982',     'May-11-2026', 'Ultimate Apparel, Inc', 'Zakonin international', 'Zakonin international', 'MUHAMMAD ASHRAF ALI KHAN', '982',    'PEACOCK',      'Pass'],
-  ['202300-984-Fin-001',     'Final', '202300-984',     'May-11-2026', 'Ultimate Apparel, Inc', 'Zakonin international', 'Zakonin international', 'MUHAMMAD ASHRAF ALI KHAN', '984',    'TURQ',         'Pass'],
-  ['202300-985-Fin-001',     'Final', '202300-985',     'May-11-2026', 'Ultimate Apparel, Inc', 'Zakonin international', 'Zakonin international', 'MUHAMMAD ASHRAF ALI KHAN', '985',    'TANGO RED',    'Pass'],
-  ['202300-986-Fin-001',     'Final', '202300-986',     'May-11-2026', 'Ultimate Apparel, Inc', 'Zakonin international', 'Zakonin international', 'MUHAMMAD ASHRAF ALI KHAN', '986',    'TANGO RED',    'Pass'],
-  ['202300-987-Fin-001',     'Final', '202300-987',     'May-11-2026', 'Ultimate Apparel, Inc', 'Zakonin international', 'Zakonin international', 'MUHAMMAD ASHRAF ALI KHAN', '987',    'OLIVE GREEN',  'Pass'],
-  ['202300-310-Fin-001',     'Final', '202300-310',     'May-11-2026', 'Ultimate Apparel, Inc', 'Zakonin international', 'Zakonin international', 'MUHAMMAD ASHRAF ALI KHAN', '310',    'RED',          'Pass'],
-  ['202300-510-MPC-001',     'MPC',   '202300-510',     'May-11-2026', 'Ultimate Apparel, Inc', 'Zakonin international', 'Zakonin international', 'MUHAMMAD ASHRAF ALI KHAN', '510',    'FUCHSIA',      'Pass'],
-];
-
-export const INSPECTION_DAILY_STATUS_REPORT_DEMO = {
-  fromLabel: 'Jan 01, 2026',
-  toLabel: 'Dec 31, 2026',
-  rows: RAW_DEMO_ROWS.map(
-    ([
-      inspectionNo,
-      type,
-      poNo,
-      inspectionDate,
-      customer,
-      supplier,
-      factory,
-      qa,
-      styleNo,
-      color,
-      status,
-    ]) => ({
-      inspectionNo,
-      type,
-      poNo,
-      inspectionDate,
-      customer,
-      supplier,
-      factory,
-      qa,
-      styleNo,
-      color,
-      status,
-    })
-  ),
-};
 
 // ----------------------------------------------------------------------
 // Geometry helpers
@@ -388,15 +386,13 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  * @returns {Promise<Blob>}
  */
 export async function buildInspectionDailyStatusReportPdfBlob(data = {}) {
-  const payload =
-    data && Array.isArray(data.rows) && data.rows.length > 0
-      ? data
-      : INSPECTION_DAILY_STATUS_REPORT_DEMO;
+  // Empty `rows` is valid — headers/table still render; only omit rows when not provided.
+  const rows = Array.isArray(data.rows) ? data.rows : [];
 
   const meta = {
-    printedOn: payload.printedOn || data.printedOn || formatPrintedOnLong(),
-    fromLabel: data.fromLabel || payload.fromLabel || '',
-    toLabel: data.toLabel || payload.toLabel || '',
+    printedOn: data.printedOn || formatPrintedOnLong(),
+    fromLabel: data.fromLabel || '',
+    toLabel: data.toLabel || '',
   };
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'p' });
@@ -416,7 +412,7 @@ export async function buildInspectionDailyStatusReportPdfBlob(data = {}) {
 
   startPage();
 
-  payload.rows.forEach((row) => {
+  rows.forEach((row) => {
     if (y + DATA_ROW_H > pageBodyBottom) {
       doc.addPage([PAGE_W, PAGE_H], 'p');
       startPage();
@@ -430,6 +426,15 @@ export async function buildInspectionDailyStatusReportPdfBlob(data = {}) {
     drawFooter(doc, p, total, meta.printedOn);
   }
 
+  try {
+    doc.setProperties({
+      title: INSPECTION_DAILY_STATUS_DOCUMENT_TITLE,
+      subject: INSPECTION_DAILY_STATUS_DOCUMENT_TITLE,
+    });
+  } catch {
+    /* setProperties unavailable — non-fatal, preview still works */
+  }
+
   return doc.output('blob');
 }
 
@@ -438,8 +443,11 @@ export async function buildInspectionDailyStatusReportPdfBlob(data = {}) {
  * @param {Blob} pdfBlob
  */
 export function openInspectionDailyStatusReportPdf(mode, pdfBlob) {
-  const pdf = new Blob([pdfBlob], { type: 'application/pdf' });
-  const blobUrl = URL.createObjectURL(pdf);
+  const namedFile =
+    typeof File !== 'undefined'
+      ? new File([pdfBlob], INSPECTION_DAILY_STATUS_PDF_FILENAME, { type: 'application/pdf' })
+      : new Blob([pdfBlob], { type: 'application/pdf' });
+  const blobUrl = URL.createObjectURL(namedFile);
 
   if (mode === 'view') {
     window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
@@ -449,7 +457,7 @@ export function openInspectionDailyStatusReportPdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Inspection-Daily-Status-Report.pdf';
+  a.download = INSPECTION_DAILY_STATUS_PDF_FILENAME;
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

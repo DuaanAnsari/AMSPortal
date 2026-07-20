@@ -3823,7 +3823,7 @@ export default function QualityDepartmentInspectionView() {
             </Grid>
             <Grid xs={12} sm={6}>
               <TextField
-                label="Vendor Email"
+                label="Other Email"
                 fullWidth
                 size="small"
                 value={vendorEmail}
@@ -3835,7 +3835,7 @@ export default function QualityDepartmentInspectionView() {
             <Grid xs={12} sm={6}>
               <TextField
                 select
-                label="Other Email"
+                label="Vendor Email"
                 fullWidth
                 size="small"
                 value={otherEmailUserId}

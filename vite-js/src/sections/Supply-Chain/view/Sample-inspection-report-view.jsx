@@ -1,3 +1,4 @@
+import PropTypes from 'prop-types';
 import { pdf } from '@react-pdf/renderer';
 import { useNavigate } from 'react-router-dom';
 import { useMemo, useState, useCallback, useEffect } from 'react';
@@ -131,7 +132,7 @@ function InspectionNoRowsOverlay() {
   );
 }
 
-export default function SampleInspectionReportView() {
+export default function SampleInspectionReportView({ embedded = false }) {
   const theme = useTheme();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
@@ -369,17 +370,7 @@ export default function SampleInspectionReportView() {
     ];
   }, [hideEdit, handleEdit, handleViewPdf, pdfLoadingId, theme]);
 
-  return (
-    <Container maxWidth="xl" sx={{ py: 3 }}>
-      <CustomBreadcrumbs
-        heading="Sample Inspection Report"
-        links={[
-          { name: 'Dashboard', href: paths.dashboard.root },
-          { name: 'Sample Inspection Report' },
-        ]}
-        sx={{ mb: { xs: 2, md: 3 } }}
-      />
-
+  const pageContent = (
       <Card
         variant="outlined"
         sx={{ p: 2, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}
@@ -488,6 +479,27 @@ export default function SampleInspectionReportView() {
           />
         </Paper>
       </Card>
+  );
+
+  if (embedded) {
+    return pageContent;
+  }
+
+  return (
+    <Container maxWidth="xl" sx={{ py: 3 }}>
+      <CustomBreadcrumbs
+        heading="Sample Inspection Report"
+        links={[
+          { name: 'Dashboard', href: paths.dashboard.root },
+          { name: 'Sample Inspection Report' },
+        ]}
+        sx={{ mb: { xs: 2, md: 3 } }}
+      />
+      {pageContent}
     </Container>
   );
 }
+
+SampleInspectionReportView.propTypes = {
+  embedded: PropTypes.bool,
+};

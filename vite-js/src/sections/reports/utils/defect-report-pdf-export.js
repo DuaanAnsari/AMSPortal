@@ -16,7 +16,7 @@ import jsPDF from 'jspdf';
  *   - Footer : Printed on (left), Powered by … / Developed by … (center),
  *     Page X of Y (right).
  *
- * Demo data is hardcoded; backend rows can be passed via the same shape later.
+ * Rows are supplied by the Defect Report API via the inspection hub form.
  */
 
 const LOGO_PATH = `${import.meta.env.BASE_URL}logo/AMSlogo.png`;
@@ -40,6 +40,19 @@ const BORDER = [150, 150, 150];
 const NAVY = [0, 51, 102];
 
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
+
+export const DEFECT_REPORT_DOCUMENT_TITLE = 'Defect Report';
+export const DEFECT_REPORT_PDF_FILENAME = 'Defect Report.pdf';
+export const DEFECT_REPORT_TAB_TITLE = 'Defect Report';
+
+const EMPTY_DEFECT_REPORT_TOTALS = {
+  totalPos: 0,
+  totalPoQty: 0,
+  totalInspections: 0,
+  totalInspectionQty: 0,
+  totalOnTimeShipped: 0,
+  totalDelayShipped: 0,
+};
 
 /** @typedef {{ key: string; label: string; weight: number; align?: 'left'|'center'|'right' }} DefectCol */
 
@@ -483,20 +496,21 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  * @returns {Promise<Blob>}
  */
 export async function buildDefectReportPdfBlob(data = {}) {
-  const payload =
-    data && Array.isArray(data.rows) && data.rows.length > 0 ? data : DEFECT_REPORT_DEMO;
+  const rows = Array.isArray(data.rows) ? data.rows : [];
+  const totals = {
+    ...EMPTY_DEFECT_REPORT_TOTALS,
+    ...(data.totals || {}),
+  };
 
   const now = new Date();
   const meta = {
-    printedOn: payload.printedOn || data.printedOn || formatPrintedOnLong(now),
+    printedOn: data.printedOn || formatPrintedOnLong(now),
     printDate: formatPrintDate(now),
     printTime: formatPrintTime(now),
-    supplierLabel: data.supplierLabel || payload.supplierLabel || 'All Supplier',
-    fromLabel: data.fromLabel || payload.fromLabel || '',
-    toLabel: data.toLabel || payload.toLabel || '',
+    supplierLabel: data.supplierLabel || 'All Supplier',
+    fromLabel: data.fromLabel || '',
+    toLabel: data.toLabel || '',
   };
-
-  const totals = { ...DEFECT_REPORT_DEMO.totals, ...(payload.totals || {}), ...(data.totals || {}) };
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'p' });
   const logoDataUrl = await loadLogoDataUrl().catch(() => null);
@@ -521,7 +535,7 @@ export async function buildDefectReportPdfBlob(data = {}) {
 
   startPage();
 
-  payload.rows.forEach((row) => {
+  rows.forEach((row) => {
     if (y + DATA_ROW_H > pageBodyBottom) {
       doc.addPage([PAGE_W, PAGE_H], 'p');
       startPage();
@@ -535,6 +549,15 @@ export async function buildDefectReportPdfBlob(data = {}) {
     drawFooter(doc, p, total, meta.printedOn);
   }
 
+  try {
+    doc.setProperties({
+      title: DEFECT_REPORT_DOCUMENT_TITLE,
+      subject: DEFECT_REPORT_DOCUMENT_TITLE,
+    });
+  } catch {
+    /* setProperties unavailable — non-fatal, preview still works */
+  }
+
   return doc.output('blob');
 }
 
@@ -543,8 +566,11 @@ export async function buildDefectReportPdfBlob(data = {}) {
  * @param {Blob} pdfBlob
  */
 export function openDefectReportPdf(mode, pdfBlob) {
-  const pdf = new Blob([pdfBlob], { type: 'application/pdf' });
-  const blobUrl = URL.createObjectURL(pdf);
+  const namedFile =
+    typeof File !== 'undefined'
+      ? new File([pdfBlob], DEFECT_REPORT_PDF_FILENAME, { type: 'application/pdf' })
+      : new Blob([pdfBlob], { type: 'application/pdf' });
+  const blobUrl = URL.createObjectURL(namedFile);
 
   if (mode === 'view') {
     window.open(`${blobUrl}${PDF_VIEW_ZOOM_HASH}`, '_blank', 'noopener,noreferrer');
@@ -554,7 +580,7 @@ export function openDefectReportPdf(mode, pdfBlob) {
 
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = 'Defect-Report.pdf';
+  a.download = DEFECT_REPORT_PDF_FILENAME;
   a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();

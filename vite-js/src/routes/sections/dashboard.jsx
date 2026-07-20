@@ -167,6 +167,21 @@ const WipHubPage = lazy(() => import('src/sections/reports/view/wip-hub-view'));
 const MgtHubPage = lazy(() => import('src/sections/reports/view/mgt-hub-view'));
 const ShipmentHubPage = lazy(() => import('src/sections/reports/view/shipment-hub-view'));
 const InspectionHubPage = lazy(() => import('src/sections/reports/view/inspection-hub-view'));
+const InspectionDailyStatusReportRoute = lazy(() =>
+  import('src/sections/reports/view/inspection-hub-view').then((module) => ({
+    default: module.InspectionDailyStatusReportRoute,
+  }))
+);
+const DefectReportRoute = lazy(() =>
+  import('src/sections/reports/view/inspection-hub-view').then((module) => ({
+    default: module.DefectReportRoute,
+  }))
+);
+const DefectComparisonReportRoute = lazy(() =>
+  import('src/sections/reports/view/inspection-hub-view').then((module) => ({
+    default: module.DefectComparisonReportRoute,
+  }))
+);
 const InquiryHubPage = lazy(() => import('src/sections/reports/view/inquiry-hub-view'));
 const OtherHubPage = lazy(() => import('src/sections/reports/view/other-hub-view'));
 
@@ -324,6 +339,14 @@ export const dashboardRoutes = [
       {
         path: 'reports/inspection',
         element: <InspectionHubPage />,
+        children: [
+          { index: true, element: <Navigate to="inspection-status-report" replace /> },
+          { path: 'inspection-status-report', element: <InspectionDailyStatusReportRoute /> },
+          { path: 'inspection-report', element: <QAInspectionViewPage embedded /> },
+          { path: 'sample-inspection-report', element: <SampleInspectionReportPage embedded /> },
+          { path: 'defect-report', element: <DefectReportRoute /> },
+          { path: 'defect-comparison-report', element: <DefectComparisonReportRoute /> },
+        ],
       },
       {
         path: 'reports/inquiry',

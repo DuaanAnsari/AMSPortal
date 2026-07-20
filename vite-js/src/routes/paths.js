@@ -204,6 +204,8 @@ export const paths = {
       mgt: `${ROOTS.DASHBOARD}/reports/mgt`,
       shipment: `${ROOTS.DASHBOARD}/reports/shipment`,
       inspection: `${ROOTS.DASHBOARD}/reports/inspection`,
+      inspectionReport: (reportId) =>
+        `${ROOTS.DASHBOARD}/reports/inspection/${encodeURIComponent(reportId)}`,
       other: `${ROOTS.DASHBOARD}/reports/other`,
     },
 

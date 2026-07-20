@@ -1,4 +1,4 @@
-import PropTypes from 'prop-types';
+﻿import PropTypes from 'prop-types';
 import { useSearchParams } from 'react-router-dom';
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 
@@ -70,7 +70,6 @@ import {
 } from 'src/sections/reports/utils/product-comparision-report-pdf-export';
 import {
   buildShippedDelayOnTimePdfBlobFromRows,
-  buildShippedDelayOnTimeReportPdfBlob,
   openShippedDelayOnTimeReportPdf,
   shippedDelayHeaderDate,
   SHIPPED_DELAY_ONTIME_PDF_FILENAME,
@@ -3105,6 +3104,8 @@ async function fetchShippedDelayOnTimeReportRows(params, headers = {}) {
   const q = new URLSearchParams({
     fromDate: String(params.fromDate || ''),
     toDate: String(params.toDate || ''),
+    customerId: shipmentFilterIdOrZero(params.customerId),
+    supplierId: shipmentFilterIdOrZero(params.supplierId),
     delayStatus,
   });
 
@@ -3209,17 +3210,9 @@ function ShippedDelayOrOnTimeReportForm() {
       shipmentAuthHeaders()
     );
 
-    const isOnTime = String(filters.status || '')
-      .trim()
-      .toUpperCase()
-      .replace(/\s+/g, '') === 'ONTIME';
-
     const rows = Array.isArray(rawRows) ? rawRows : [];
 
-    // DELAY: no-data → null (existing "No record found").
-    // ON TIME: empty rows are valid input — still return a payload so PDF builds.
-    if (!isOnTime && rows.length === 0) return null;
-
+    // Empty API result → payload with [] (empty PDF; never demo/ALL fallback).
     return buildShippedDelayOnTimeReportPdfPayload(rows, {
       status: filters.status,
       fromLabel: shippedDelayHeaderDate(filters.fromDate),
@@ -3249,39 +3242,18 @@ function ShippedDelayOrOnTimeReportForm() {
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
-        const isOnTime = String(filters.status || '')
-          .trim()
-          .toUpperCase()
-          .replace(/\s+/g, '') === 'ONTIME';
-
         const payload = await fetchShippedDelayOnTimePayload();
+        const rows = Array.isArray(payload?.rows) ? payload.rows : [];
 
-        // DELAY no-data only — ON TIME empty payload still builds a valid PDF.
-        if (!payload) {
-          if (previewWindow) {
-            try {
-              previewWindow.close();
-            } catch {
-              /* ignore */
-            }
-          }
-          enqueueSnackbar('No record found', { variant: 'warning' });
-          return;
-        }
-
-        const rows = Array.isArray(payload.rows) ? payload.rows : [];
-
-        // Root fix: build from rows (including []) so empty ON TIME never hits demo/null/throw paths.
-        const blob = isOnTime
-          ? await buildShippedDelayOnTimePdfBlobFromRows(rows, {
-              status: payload.status || filters.status,
-              fromLabel: payload.fromLabel,
-              toLabel: payload.toLabel,
-              customerLabel: payload.customerLabel,
-              supplierLabel: payload.supplierLabel,
-              printedOn: payload.printedOn,
-            })
-          : await buildShippedDelayOnTimeReportPdfBlob(payload);
+        // Always build from API rows (including []) — never omit rows (demo/ALL fallback).
+        const blob = await buildShippedDelayOnTimePdfBlobFromRows(rows, {
+          status: payload?.status || filters.status,
+          fromLabel: payload?.fromLabel,
+          toLabel: payload?.toLabel,
+          customerLabel: payload?.customerLabel,
+          supplierLabel: payload?.supplierLabel,
+          printedOn: payload?.printedOn,
+        });
 
         if (!(blob instanceof Blob) || blob.size < 32) {
           throw new Error('Report could not be generated: PDF output is empty or too small.');

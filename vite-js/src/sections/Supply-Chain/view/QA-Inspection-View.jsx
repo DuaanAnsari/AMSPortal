@@ -1,3 +1,4 @@
+import PropTypes from 'prop-types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import Box from '@mui/material/Box';
@@ -31,7 +32,7 @@ import { pdf } from '@react-pdf/renderer';
 
 const INSP_TYPES = ['ALL', 'IPC', 'MPC', 'Pre-Final', 'Final'];
 
-export default function QAInspectionView() {
+export default function QAInspectionView({ embedded = false }) {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
 
@@ -225,17 +226,7 @@ export default function QAInspectionView() {
     [navigate, pdfLoadingId]
   );
 
-  return (
-    <Container maxWidth="xl" sx={{ py: 3 }}>
-      <CustomBreadcrumbs
-        heading="QUALITY DEPARTMENT INSPECTION VIEW"
-        links={[
-          { name: 'Dashboard', href: '/dashboard' },
-          { name: 'QA Inspection View' },
-        ]}
-        sx={{ mb: { xs: 2, md: 3 } }}
-      />
-
+  const pageContent = (
       <Card variant="outlined" sx={{ p: 2, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
         <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
           QA Inspection Records
@@ -342,7 +333,28 @@ export default function QAInspectionView() {
           />
         </Paper>
       </Card>
+  );
+
+  if (embedded) {
+    return pageContent;
+  }
+
+  return (
+    <Container maxWidth="xl" sx={{ py: 3 }}>
+      <CustomBreadcrumbs
+        heading="QUALITY DEPARTMENT INSPECTION VIEW"
+        links={[
+          { name: 'Dashboard', href: '/dashboard' },
+          { name: 'QA Inspection View' },
+        ]}
+        sx={{ mb: { xs: 2, md: 3 } }}
+      />
+      {pageContent}
     </Container>
   );
 }
+
+QAInspectionView.propTypes = {
+  embedded: PropTypes.bool,
+};
 
