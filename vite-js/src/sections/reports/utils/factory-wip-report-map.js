@@ -101,6 +101,27 @@ export function isFactoryWipPdfDelayedByDelayOrderChk(raw) {
   return normalizeFactoryWipDelayOrderChk(raw) === 1;
 }
 
+const WIP_PDF_TEXT_BLACK = [0, 0, 0];
+const WIP_PDF_TEXT_RED = [200, 0, 0];
+const WIP_PDF_TEXT_GREEN = [0, 128, 0];
+
+/** True when backend `XMLFileName` is present (non-null, non-empty, non-whitespace). */
+function hasFactoryWipXmlFileName(raw) {
+  const v = pickField(raw, 'XMLFileName', 'xmlFileName', 'XmlFileName');
+  return v != null && String(v).trim() !== '';
+}
+
+/** Row text color priority: Green (XMLFileName) → Red (delayed) → Black (default). */
+function resolveFactoryWipPdfTextRgb(raw) {
+  if (hasFactoryWipXmlFileName(raw)) {
+    return WIP_PDF_TEXT_GREEN;
+  }
+  if (isFactoryWipPdfDelayedByDelayOrderChk(raw)) {
+    return WIP_PDF_TEXT_RED;
+  }
+  return WIP_PDF_TEXT_BLACK;
+}
+
 /** DEV: log delay flag + shipment fields for every mapped row. */
 export function logFactoryWipDelayDebugRow(raw, rowIndex = 0) {
   if (!import.meta.env.DEV) return;
@@ -627,9 +648,8 @@ export function normalizeFactoryWipPoImageDataUrl(raw) {
  */
 export function mapApiRowToFactoryWipPdfRow(raw, rowIndex = 0) {
   const poImageDataUrl = normalizeFactoryWipPoImageDataUrl(raw);
-  const delayed = isFactoryWipPdfDelayedByDelayOrderChk(raw);
   logFactoryWipDelayDebugRow(raw, rowIndex);
-  const rgb = delayed ? [200, 0, 0] : [0, 0, 0];
+  const rgb = resolveFactoryWipPdfTextRgb(raw);
   const poQty = toNum(pickField(raw, 'POQty', 'poQty', 'PoQty', 'BookedQuantity', 'bookedQuantity'));
   const shipQty = toNum(
     pickField(raw, 'ShipQty', 'shipQty', 'ShippedQty', 'shippedQty', 'ShipmentQty', 'shipmentQty')

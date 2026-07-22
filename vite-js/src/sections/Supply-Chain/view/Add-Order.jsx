@@ -2583,7 +2583,7 @@ export default function CompletePurchaseOrderForm() {
       exchangeDate: new Date().toISOString(),
       lastUpdate: new Date().toISOString(),
       
-      xmlFileName: '',
+      xmlFileName: formatDate(data.RevisedShipmentDate) || '',
       buyerName: data.customer || '',
       buyingDepartment: '',
       contactName: '',

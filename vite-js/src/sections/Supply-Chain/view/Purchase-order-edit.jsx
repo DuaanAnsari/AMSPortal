@@ -1088,6 +1088,7 @@ export default function CompletePurchaseOrderFormEdit() {
       buyerShipInitial: '',
       buyerShipLast: '',
       RevisedShipmentDate: '',
+      RevisedShipmentDateVendor: '',
       vendorShipInitial: '',
       vendorShipLast: '',
       finalInspectionDate: '',
@@ -1692,7 +1693,17 @@ export default function CompletePurchaseOrderFormEdit() {
                 orderData.costingMstID !== 0
                 ? String(orderData.costingMstID)
                 : '',
-            RevisedShipmentDate: '',
+            RevisedShipmentDate: (orderData.xmlFileName ?? orderData.XMLFileName)
+              ? String(orderData.xmlFileName ?? orderData.XMLFileName).split('T')[0]
+              : '',
+            RevisedShipmentDateVendor: (() => {
+              const raw =
+                orderData.vendorRevisedShipmentDate ??
+                orderData.VendorRevisedShipmentDate ??
+                orderData.revisedShipmentDateVendor ??
+                orderData.RevisedShipmentDateVendor;
+              return raw ? String(raw).split('T')[0] : '';
+            })(),
             reasonReviseBuyer: '',
             reasonReviseVendor: '',
             tolQuantity: orderData.toleranceindays || 0,
@@ -2075,6 +2086,33 @@ export default function CompletePurchaseOrderFormEdit() {
       form.vendorShipLast,
       apiData.vendorExIndiaShipmentDate
     );
+
+    const toYyyyMmDdOrEmpty = (dateStr) => {
+      if (!dateStr || !String(dateStr).trim()) return '';
+      const s = String(dateStr).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      const d = new Date(s);
+      if (Number.isNaN(d.getTime())) return '';
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    payload.xmlFileName = toYyyyMmDdOrEmpty(form.RevisedShipmentDate);
+
+    const vendorRevisedApiKeys = [
+      'vendorRevisedShipmentDate',
+      'VendorRevisedShipmentDate',
+      'revisedShipmentDateVendor',
+      'RevisedShipmentDateVendor',
+    ];
+    const vendorRevisedExisting = vendorRevisedApiKeys
+      .map((key) => apiData[key])
+      .find((value) => value != null && value !== '');
+    const vendorRevisedIso = toIsoOrExisting(
+      form.RevisedShipmentDateVendor,
+      vendorRevisedExisting
+    );
+    const vendorRevisedKey =
+      vendorRevisedApiKeys.find((key) => key in apiData) || 'vendorRevisedShipmentDate';
+    payload[vendorRevisedKey] = vendorRevisedIso;
 
     // Product Information
     payload.season = form.season || apiData.season || '';
@@ -2842,7 +2880,7 @@ export default function CompletePurchaseOrderFormEdit() {
                     {/* Revised Shipment Date (V) */}
                     <Grid item xs={12} sm={4}>
                       <Controller
-                        name="RevisedShipmentDate"
+                        name="RevisedShipmentDateVendor"
                         control={control}
                         render={({ field }) => (
                           <TextField
