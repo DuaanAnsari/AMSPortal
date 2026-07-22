@@ -1068,10 +1068,11 @@ function drawFooter(doc, pageIndex, totalPages) {
  * @param {{ fromDate?: string; toDate?: string }} [meta]
  */
 export async function buildBusinessSummaryOrderWiseSupplierPdfBlob(data, meta = {}) {
+  // Empty `groups` is valid — title/header/table render; only fall back to demo when groups omitted.
   const payload =
-    data && Array.isArray(data.groups) && data.groups.length > 0
+    data && Array.isArray(data.groups)
       ? data
-      : BUSINESS_SUMMARY_ORDER_WISE_SUPPLIER_DEMO;
+      : { groups: [], fromDate: meta.fromDate, toDate: meta.toDate };
   const headerMeta = {
     fromDate: meta.fromDate || payload.fromDate,
     toDate: meta.toDate || payload.toDate,

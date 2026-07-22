@@ -158,6 +158,9 @@ const MixCartonEntryPage = lazy(
 const AddUserPage = lazy(
   () => import('src/sections/power-tool/view/add-user')
 );
+const CreateUserPage = lazy(
+  () => import('src/sections/profile-setting/view/create-user')
+);
 
 const FobLdpPriceListPage = lazy(
   () => import('src/sections/reports/view/fob-ldp-price-list-view')
@@ -313,6 +316,14 @@ export const dashboardRoutes = [
           { path: 'measurement-points', element: <MeasurementPointsPage /> },
           { path: 'mix-carton-entry', element: <MixCartonEntryPage /> },
           { path: 'add-user', element: <AddUserPage /> },
+        ],
+      },
+
+      {
+        path: 'profile-setting',
+        children: [
+          { element: <Navigate to="create-user" replace />, index: true },
+          { path: 'create-user', element: <CreateUserPage /> },
         ],
       },
 

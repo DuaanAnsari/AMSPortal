@@ -212,6 +212,15 @@ export function useNavData() {
           },
 
           {
+            title: 'Profile Setting',
+            path: paths.dashboard.profileSetting.root,
+            icon: ICONS.user,
+            children: [
+              { title: 'Create User', path: paths.dashboard.profileSetting.createUser },
+            ],
+          },
+
+          {
             title: 'Reports',
             path: paths.dashboard.reports.root,
             icon: ICONS.analytics,

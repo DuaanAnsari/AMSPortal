@@ -114,6 +114,17 @@ function mgtAuthHeaders() {
   };
 }
 
+/** Shipment reports pattern — API no-data / validation failures yield [] (blank PDF, not an error). */
+async function fetchMgtReportRowsOrEmpty(fetchRows) {
+  try {
+    const rows = await fetchRows();
+    return Array.isArray(rows) ? rows : [];
+  } catch (err) {
+    console.warn('[MGT] report fetch returned no rows', err);
+    return [];
+  }
+}
+
 function writeMgtPdfPreviewPlaceholder(previewWindow, title) {
   try {
     previewWindow.document.open();
@@ -215,19 +226,17 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
   const fetchReportPayload = useCallback(async () => {
     const fromDate = filters.fromDate;
     const toDate = filters.toDate;
-    const rawRows = await fetchBusinessSummaryOrderWiseRows(
-      {
-        fromDate,
-        toDate,
-        customerId: filters.customer,
-        supplierId: filters.supplier,
-      },
-      mgtAuthHeaders()
+    const rawRows = await fetchMgtReportRowsOrEmpty(() =>
+      fetchBusinessSummaryOrderWiseRows(
+        {
+          fromDate,
+          toDate,
+          customerId: filters.customer,
+          supplierId: filters.supplier,
+        },
+        mgtAuthHeaders()
+      )
     );
-
-    if (!rawRows.length) {
-      return null;
-    }
 
     const meta = { fromDate, toDate };
     if (order === 'supplier-first') {
@@ -239,11 +248,6 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
   const buildBlob = useCallback(
     async (m) => {
       const data = await fetchReportPayload();
-      if (!data || !Array.isArray(data.groups) || data.groups.length === 0) {
-        const err = new Error('No data found for the selected filters.');
-        err.code = 'NO_DATA';
-        throw err;
-      }
       if (order === 'supplier-first') {
         return buildBusinessSummaryOrderWiseSupplierPdfBlob(data, m);
       }
@@ -308,21 +312,12 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
       enqueueSnackbar(`${reportLabel} opened in a new tab`, { variant: 'success' });
     } catch (err) {
       console.error('[MGT] Business Summary Order Wise PDF', err);
-      if (err?.code === 'NO_DATA') {
-        enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
-      } else {
-        enqueueSnackbar(err?.message || `${reportLabel} failed`, { variant: 'error' });
-      }
+      enqueueSnackbar(err?.message || `${reportLabel} failed`, { variant: 'error' });
       if (!previewWindow.closed) {
         try {
-          const doc = previewWindow.document;
-          doc.open();
-          doc.write(
-            `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${String(err?.message || '')}</p></body></html>`
-          );
-          doc.close();
+          previewWindow.close();
         } catch (writeErr) {
-          console.warn('[MGT] preview error page', writeErr);
+          console.warn('[MGT] preview close', writeErr);
         }
       }
     } finally {
@@ -344,11 +339,7 @@ function BusinessSummaryOrderPanel({ order, customers, suppliers, loadingDropdow
       enqueueSnackbar(`${reportLabel} downloaded`, { variant: 'success' });
     } catch (err) {
       console.error('[MGT] Business Summary Order Wise PDF (download)', err);
-      if (err?.code === 'NO_DATA') {
-        enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
-      } else {
-        enqueueSnackbar(err?.message || `${reportLabel} failed`, { variant: 'error' });
-      }
+      enqueueSnackbar(err?.message || `${reportLabel} failed`, { variant: 'error' });
     } finally {
       setLoadingReport(false);
     }
@@ -606,10 +597,9 @@ function BusinessSummaryForm() {
 
   const fetchReportPayload = useCallback(async () => {
     const { fromDate, toDate } = filters;
-    const rawRows = await fetchBusinessSummaryReportRows({ fromDate, toDate }, mgtAuthHeaders());
-    if (!rawRows.length) {
-      return null;
-    }
+    const rawRows = await fetchMgtReportRowsOrEmpty(() =>
+      fetchBusinessSummaryReportRows({ fromDate, toDate }, mgtAuthHeaders())
+    );
     return {
       fromDate,
       toDate,
@@ -632,11 +622,6 @@ function BusinessSummaryForm() {
       setBusy(true);
       try {
         const data = await fetchReportPayload();
-        if (!data || !Array.isArray(data.rows) || data.rows.length === 0) {
-          const err = new Error('No data found for the selected filters.');
-          err.code = 'NO_DATA';
-          throw err;
-        }
         const blob = await buildBusinessSummaryPdfBlob(data, { fromDate, toDate });
         openBusinessSummaryPdf(mode, blob);
         enqueueSnackbar(
@@ -645,13 +630,9 @@ function BusinessSummaryForm() {
         );
       } catch (err) {
         console.error('[BusinessSummary] pdf', err);
-        if (err?.code === 'NO_DATA') {
-          enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
-        } else {
-          enqueueSnackbar(err?.message || 'Could not generate the Business Summary PDF.', {
-            variant: 'error',
-          });
-        }
+        enqueueSnackbar(err?.message || 'Could not generate the Business Summary PDF.', {
+          variant: 'error',
+        });
       } finally {
         setBusy(false);
       }
@@ -900,22 +881,20 @@ function StatusWiseOrderPanel({
    */
   const fetchReportPayload = useCallback(async () => {
     const { fromDate, toDate, status, customer, supplier, merchandiser, po } = filters;
-    const rawRows = await fetchOpenOrderReportRows(
-      {
-        status,
-        fromDate,
-        toDate,
-        customerId: customer,
-        supplierId: supplier,
-        marchandiserId: merchandiser,
-        refPOID: po,
-      },
-      mgtAuthHeaders()
+    const rawRows = await fetchMgtReportRowsOrEmpty(() =>
+      fetchOpenOrderReportRows(
+        {
+          status,
+          fromDate,
+          toDate,
+          customerId: customer,
+          supplierId: supplier,
+          marchandiserId: merchandiser,
+          refPOID: po,
+        },
+        mgtAuthHeaders()
+      )
     );
-
-    if (!rawRows.length) {
-      return null;
-    }
 
     const meta = { fromDate, toDate, status };
     return buildStatusWiseVendorOrderPdfPayload(rawRows, meta);
@@ -933,23 +912,8 @@ function StatusWiseOrderPanel({
   const buildVariantBlob = useCallback(
     async (m) => {
       const data = await fetchReportPayload();
-      if (!data) {
-        const err = new Error('No data found for the selected filters.');
-        err.code = 'NO_DATA';
-        throw err;
-      }
       if (order === 'supplier-first') {
-        if (!Array.isArray(data.groups) || data.groups.length === 0) {
-          const err = new Error('No data found for the selected filters.');
-          err.code = 'NO_DATA';
-          throw err;
-        }
         return buildStatusWiseVendorOrderReportPdfBlob(data, { ...m, statusWiseOrderGrid: true });
-      }
-      if (!Array.isArray(data.groups) || data.groups.length === 0) {
-        const err = new Error('No data found for the selected filters.');
-        err.code = 'NO_DATA';
-        throw err;
       }
       return buildStatusWiseOrderReportPdfBlob(data, m);
     },
@@ -1009,21 +973,12 @@ function StatusWiseOrderPanel({
       enqueueSnackbar(`${reportLabel} opened in a new tab`, { variant: 'success' });
     } catch (err) {
       console.error(`[MGT] ${reportLabel} PDF`, err);
-      if (err?.code === 'NO_DATA') {
-        enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
-      } else {
-        enqueueSnackbar(err?.message || `${reportLabel} PDF failed`, { variant: 'error' });
-      }
+      enqueueSnackbar(err?.message || `${reportLabel} PDF failed`, { variant: 'error' });
       if (!previewWindow.closed) {
         try {
-          const doc = previewWindow.document;
-          doc.open();
-          doc.write(
-            `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${String(err?.message || '')}</p></body></html>`
-          );
-          doc.close();
+          previewWindow.close();
         } catch (writeErr) {
-          console.warn('[MGT] preview error page', writeErr);
+          console.warn('[MGT] preview close', writeErr);
         }
       }
     } finally {
@@ -1044,11 +999,7 @@ function StatusWiseOrderPanel({
       enqueueSnackbar(`${reportLabel} downloaded`, { variant: 'success' });
     } catch (err) {
       console.error(`[MGT] ${reportLabel} PDF (download)`, err);
-      if (err?.code === 'NO_DATA') {
-        enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
-      } else {
-        enqueueSnackbar(err?.message || `${reportLabel} PDF failed`, { variant: 'error' });
-      }
+      enqueueSnackbar(err?.message || `${reportLabel} PDF failed`, { variant: 'error' });
     } finally {
       setLoadingReport(false);
     }
@@ -1500,22 +1451,20 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
   /** Open Order Report — same OpenOrderReport API as Status Wise; status is always Confirmed. */
   const fetchOpenOrderPayload = useCallback(async () => {
     const { fromDate, toDate, customer, supplier, merchandiser, po } = filters;
-    const rawRows = await fetchOpenOrderReportRows(
-      {
-        status: 'Confirmed',
-        fromDate,
-        toDate,
-        customerId: customer,
-        supplierId: supplier,
-        marchandiserId: merchandiser,
-        refPOID: po,
-      },
-      mgtAuthHeaders()
+    const rawRows = await fetchMgtReportRowsOrEmpty(() =>
+      fetchOpenOrderReportRows(
+        {
+          status: 'Confirmed',
+          fromDate,
+          toDate,
+          customerId: customer,
+          supplierId: supplier,
+          marchandiserId: merchandiser,
+          refPOID: po,
+        },
+        mgtAuthHeaders()
+      )
     );
-
-    if (!rawRows.length) {
-      return null;
-    }
 
     const meta = { fromDate, toDate, status: 'Confirmed' };
     return buildStatusWiseVendorOrderPdfPayload(rawRows, meta);
@@ -1557,22 +1506,6 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
 
     try {
       const data = await fetchOpenOrderPayload();
-      if (!data) {
-        enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
-        if (!previewWindow.closed) {
-          try {
-            const doc = previewWindow.document;
-            doc.open();
-            doc.write(
-              '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>No data</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;">No data found for the selected filters.</p></body></html>'
-            );
-            doc.close();
-          } catch (writeErr) {
-            console.warn('[MGT] preview no-data page', writeErr);
-          }
-        }
-        return;
-      }
       const blob = await buildOpenOrderReportPdfBlob(data, { fromDate, toDate });
       if (previewWindow.closed) {
         enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
@@ -1587,14 +1520,9 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
       enqueueSnackbar(err?.message || 'Open Order Report PDF failed', { variant: 'error' });
       if (!previewWindow.closed) {
         try {
-          const doc = previewWindow.document;
-          doc.open();
-          doc.write(
-            `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${String(err?.message || '')}</p></body></html>`
-          );
-          doc.close();
+          previewWindow.close();
         } catch (writeErr) {
-          console.warn('[MGT] preview error page', writeErr);
+          console.warn('[MGT] preview close', writeErr);
         }
       }
     }
@@ -1608,10 +1536,6 @@ function OpenOrderReportPanel({ order, panelTitle, customers, suppliers, merchan
     }
     try {
       const data = await fetchOpenOrderPayload();
-      if (!data) {
-        enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
-        return;
-      }
       const blob = await buildOpenOrderReportPdfBlob(data, { fromDate, toDate });
       openOpenOrderReportPdf('pdf', blob);
       enqueueSnackbar(`Open Order Report (${variant}) downloaded`, { variant: 'success' });
@@ -1975,19 +1899,17 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
 
   const fetchShippedOrderPayload = useCallback(async () => {
     const { fromDate, toDate, customer, supplier } = filters;
-    const rawRows = await fetchShippedOrderReportRows(
-      {
-        fromDate,
-        toDate,
-        customerId: customer,
-        supplierId: supplier,
-      },
-      mgtAuthHeaders()
+    const rawRows = await fetchMgtReportRowsOrEmpty(() =>
+      fetchShippedOrderReportRows(
+        {
+          fromDate,
+          toDate,
+          customerId: customer,
+          supplierId: supplier,
+        },
+        mgtAuthHeaders()
+      )
     );
-
-    if (!rawRows.length) {
-      return null;
-    }
 
     return buildShippedOrderReportPdfPayload(rawRows, { fromDate, toDate });
   }, [filters.customer, filters.supplier, filters.fromDate, filters.toDate]);
@@ -2020,22 +1942,6 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
 
     try {
       const data = await fetchShippedOrderPayload();
-      if (!data) {
-        enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
-        if (!previewWindow.closed) {
-          try {
-            const doc = previewWindow.document;
-            doc.open();
-            doc.write(
-              '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>No data</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;">No data found for the selected filters.</p></body></html>'
-            );
-            doc.close();
-          } catch (writeErr) {
-            console.warn('[MGT] preview no-data page', writeErr);
-          }
-        }
-        return;
-      }
       const blob = await buildShippedOrderReportPdfBlob(data, { fromDate, toDate });
       if (previewWindow.closed) {
         enqueueSnackbar('The preview tab was closed before the PDF finished loading.', {
@@ -2050,14 +1956,9 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
       enqueueSnackbar(err?.message || 'Shipped Order Report PDF failed', { variant: 'error' });
       if (!previewWindow.closed) {
         try {
-          const doc = previewWindow.document;
-          doc.open();
-          doc.write(
-            `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${String(err?.message || '')}</p></body></html>`
-          );
-          doc.close();
+          previewWindow.close();
         } catch (writeErr) {
-          console.warn('[MGT] preview error page', writeErr);
+          console.warn('[MGT] preview close', writeErr);
         }
       }
     }
@@ -2071,10 +1972,6 @@ function ShippedOrderReportPanel({ order, panelTitle, customers, suppliers, load
     }
     try {
       const data = await fetchShippedOrderPayload();
-      if (!data) {
-        enqueueSnackbar('No data found for the selected filters.', { variant: 'warning' });
-        return;
-      }
       const blob = await buildShippedOrderReportPdfBlob(data, { fromDate, toDate });
       openShippedOrderReportPdf('pdf', blob);
       enqueueSnackbar(`Shipped Order Report (${variant}) downloaded`, { variant: 'success' });

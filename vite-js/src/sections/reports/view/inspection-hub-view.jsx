@@ -43,6 +43,13 @@ import {
   DEFECT_REPORT_PDF_FILENAME,
   DEFECT_REPORT_TAB_TITLE,
 } from 'src/sections/reports/utils/defect-report-pdf-export';
+import {
+  buildDefectComparisonReportPdfBlob,
+  openDefectComparisonReportPdf,
+  DEFECT_COMPARISON_PDF_FILENAME,
+  DEFECT_COMPARISON_REPORT_DEMO,
+  DEFECT_COMPARISON_TAB_TITLE,
+} from 'src/sections/reports/utils/defect-comparison-report-pdf-export';
 
 // ----------------------------------------------------------------------
 // Shared inspection auth headers — mirrors the WIP / Shipment hubs.
@@ -524,6 +531,42 @@ function pickDefectReportField(obj, ...keys) {
   return match != null ? obj[match] : undefined;
 }
 
+function defectReportRowSupplierKey(raw) {
+  return pickDefectReportField(
+    raw,
+    'VenderLibraryID',
+    'venderLibraryID',
+    'venderLibraryId',
+    'SupplierID',
+    'supplierId',
+    'SupplierId'
+  );
+}
+
+/** Keep only rows that match the selected supplier and report type — never fallback to other types. */
+function filterDefectReportRawRows(rawRows, orderBy, supplierId) {
+  let rows = Array.isArray(rawRows) ? rawRows : [];
+
+  if (supplierId && supplierId !== ALL) {
+    const sid = String(supplierId);
+    const hasSupplierField = rows.some((r) => defectReportRowSupplierKey(r) != null);
+    if (hasSupplierField) {
+      rows = rows.filter((r) => String(defectReportRowSupplierKey(r) ?? '') === sid);
+    }
+  }
+
+  const type = String(orderBy ?? 'DEFECT').trim().toUpperCase();
+  if (type === 'CRITICAL') {
+    rows = rows.filter((r) => Number(pickDefectReportField(r, 'Critical', 'critical') ?? 0) > 0);
+  } else if (type === 'MAJOR') {
+    rows = rows.filter((r) => Number(pickDefectReportField(r, 'Major', 'major') ?? 0) > 0);
+  } else if (type === 'MINOR') {
+    rows = rows.filter((r) => Number(pickDefectReportField(r, 'Minor', 'minor') ?? 0) > 0);
+  }
+
+  return rows;
+}
+
 function mapDefectReportApiRowToPdfRow(raw, index) {
   const r = raw && typeof raw === 'object' ? raw : {};
   return {
@@ -699,14 +742,20 @@ function DefectReportForm() {
       filters.orderBy,
       inspectionAuthHeaders()
     );
-    const rows = Array.isArray(rawRows) ? rawRows : [];
+    const rows = filterDefectReportRawRows(rawRows, filters.orderBy, filters.supplier);
     return buildDefectReportPdfPayload(
       rows,
       filters.fromDate,
       filters.toDate,
       resolveSupplierLabel()
     );
-  }, [filters.fromDate, filters.toDate, filters.orderBy, resolveSupplierLabel]);
+  }, [
+    filters.fromDate,
+    filters.toDate,
+    filters.orderBy,
+    filters.supplier,
+    resolveSupplierLabel,
+  ]);
 
   const runPdfExport = useCallback(
     async (mode) => {
@@ -994,6 +1043,106 @@ function DefectComparisonReportForm() {
     [enqueueSnackbar]
   );
 
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = DEFECT_COMPARISON_TAB_TITLE;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, []);
+
+  const resolveSupplierLabel = useCallback(
+    (side) => {
+      const key = side === 'A' ? 'supplierA' : 'supplierB';
+      if (filters[key] === ALL) return 'All Supplier';
+      const hit = suppliers.find((r) => milestoneSupplierKey(r) === filters[key]);
+      return hit ? milestoneSupplierLabel(hit) : 'All Supplier';
+    },
+    [filters, suppliers]
+  );
+
+  const resolveCustomerLabel = useCallback(
+    (side) => {
+      const key = side === 'A' ? 'customerA' : 'customerB';
+      if (filters[key] === ALL) return 'All Customer';
+      const hit = customers.find((r) => milestoneCustomerKey(r) === filters[key]);
+      return hit ? milestoneCustomerLabel(hit) : 'All Customer';
+    },
+    [filters, customers]
+  );
+
+  const resolveYearLabel = useCallback(
+    (side) => {
+      const key = side === 'A' ? 'yearA' : 'yearB';
+      if (filters[key] === YEAR_PLACEHOLDER) return DEFECT_COMPARISON_REPORT_DEMO.scopeA.yearLabel;
+      return String(filters[key]);
+    },
+    [filters]
+  );
+
+  /** Hardcoded demo rows/totals for now; scope labels reflect current filters. */
+  const buildComparisonPayload = useCallback(() => {
+    const scopeBase = DEFECT_COMPARISON_REPORT_DEMO.scopeA;
+    const buildScope = (side) => {
+      const styleKey = side === 'A' ? 'styleA' : 'styleB';
+      const poKey = side === 'A' ? 'poA' : 'poB';
+      return {
+        ...scopeBase,
+        supplierLabel: resolveSupplierLabel(side),
+        yearLabel: resolveYearLabel(side),
+        customerLabel: resolveCustomerLabel(side),
+        styleLabel: filters[styleKey] === STYLE_ALL ? 'All Styles' : filters[styleKey],
+        poLabel: filters[poKey] === PO_ALL ? 'All PO' : filters[poKey],
+      };
+    };
+    return {
+      ...DEFECT_COMPARISON_REPORT_DEMO,
+      scopeA: buildScope('A'),
+      scopeB: buildScope('B'),
+    };
+  }, [filters, resolveSupplierLabel, resolveCustomerLabel, resolveYearLabel]);
+
+  const runPdfExport = useCallback(
+    async (mode) => {
+      if (generatingPdf) return;
+      const previewWindow = mode === 'view' ? window.open('about:blank') : null;
+      setGeneratingPdf(true);
+      try {
+        const payload = buildComparisonPayload();
+        const blob = await buildDefectComparisonReportPdfBlob(payload);
+        if (mode === 'view' && previewWindow) {
+          const namedFile =
+            typeof File !== 'undefined'
+              ? new File([blob], DEFECT_COMPARISON_PDF_FILENAME, { type: 'application/pdf' })
+              : new Blob([blob], { type: 'application/pdf' });
+          const url = URL.createObjectURL(namedFile);
+          previewWindow.location.replace(url);
+          setTimeout(() => URL.revokeObjectURL(url), 120_000);
+          return;
+        }
+        openDefectComparisonReportPdf(mode, blob);
+      } catch (err) {
+        console.error('[DefectComparison] PDF build failed', err);
+        if (previewWindow) {
+          try {
+            previewWindow.close();
+          } catch {
+            /* ignore */
+          }
+        }
+        enqueueSnackbar('Could not build Comparison Defect Report PDF', { variant: 'error' });
+      } finally {
+        setGeneratingPdf(false);
+      }
+    },
+    [generatingPdf, enqueueSnackbar, buildComparisonPayload]
+  );
+
+  const handleViewReport = useCallback(() => runPdfExport('view'), [runPdfExport]);
+  const handleDownloadPdf = useCallback(() => runPdfExport('pdf'), [runPdfExport]);
+
   /** Customer + Supplier lists — fetched once and shared by both sides. */
   useEffect(() => {
     const base = getMilestoneSummaryDropdownApiBase();
@@ -1258,19 +1407,21 @@ function DefectComparisonReportForm() {
               variant="contained"
               color="primary"
               size="medium"
-              onClick={() => toast('View Report: connect API when backend is ready.')}
+              onClick={handleViewReport}
+              disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              View Report
+              {generatingPdf ? 'Building…' : 'View Report'}
             </Button>
             <Button
               variant="contained"
               color="primary"
               size="medium"
-              onClick={() => toast('Download PDF: connect API when backend is ready.')}
+              onClick={handleDownloadPdf}
+              disabled={generatingPdf}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              Download PDF
+              {generatingPdf ? 'Building…' : 'Download PDF'}
             </Button>
             <Button
               variant="contained"

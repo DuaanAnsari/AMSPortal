@@ -15,10 +15,6 @@ const PDF_VIEW_ZOOM_HASH = '#zoom=110';
  * @param {{ fromDate?: string; toDate?: string }} [meta]
  */
 export async function buildShippedOrderReportPdfBlob(data, meta = {}) {
-  if (!data || !Array.isArray(data.groups) || data.groups.length === 0) {
-    throw new Error('No data found for the selected filters.');
-  }
-
   return buildStatusWiseVendorOrderReportPdfBlob(data, {
     ...meta,
     title: SHIPPED_ORDER_TITLE,

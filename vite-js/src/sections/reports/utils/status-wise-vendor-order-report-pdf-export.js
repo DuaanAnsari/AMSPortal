@@ -542,13 +542,14 @@ function ensureRowFits(doc, y, rowH, pageBodyBottom, flushSegmentFrame, startPag
  * grouped by supplier with PO Qty / Value / LDP Value subtotals and a grand total.
  */
 async function buildStatusWiseVendorOrderGridPdfBlob(data, meta = {}) {
-  if (!data || !Array.isArray(data.groups) || data.groups.length === 0) {
-    throw new Error('No data found for the selected filters.');
-  }
+  const payload =
+    data && Array.isArray(data.groups)
+      ? data
+      : { groups: [], fromDate: meta.fromDate, toDate: meta.toDate };
 
   const headerMeta = {
-    fromDate: meta.fromDate || data.fromDate,
-    toDate: meta.toDate || data.toDate,
+    fromDate: meta.fromDate || payload.fromDate,
+    toDate: meta.toDate || payload.toDate,
   };
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
@@ -580,7 +581,7 @@ async function buildStatusWiseVendorOrderGridPdfBlob(data, meta = {}) {
 
   const grandTotals = { poQty: 0, value: 0, ldpValue: 0 };
 
-  data.groups.forEach((group) => {
+  payload.groups.forEach((group) => {
     group.rows.forEach((row) => {
       ensureRowFits(doc, y, DATA_ROW_H, pageBodyBottom, flushSegmentFrame, startPage);
       y = drawOrderReportDataRow(doc, y, innerLeft, widths, row);
@@ -619,10 +620,11 @@ export async function buildStatusWiseVendorOrderReportPdfBlob(data, meta = {}) {
     return buildStatusWiseVendorOrderGridPdfBlob(data, meta);
   }
 
+  // Empty `groups` is valid — title/header/table render; only fall back to demo when groups omitted.
   const payload =
-    data && Array.isArray(data.groups) && data.groups.length > 0
+    data && Array.isArray(data.groups)
       ? data
-      : STATUS_WISE_VENDOR_ORDER_REPORT_DEMO;
+      : { groups: [], fromDate: meta.fromDate, toDate: meta.toDate };
   const headerMeta = {
     fromDate: meta.fromDate || payload.fromDate,
     toDate: meta.toDate || payload.toDate,

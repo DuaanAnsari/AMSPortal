@@ -558,21 +558,7 @@ export async function buildLdpFobPdfBlobFromRows(rawRows, options = {}, debug = 
   const bottomLimit = PAGE_H - 36;
   const bannerMetricsCache = new Map();
 
-  if (!mergedRaw.length) {
-    const emptyRow = {
-      supplier: '—',
-      po: '—',
-      style: '—',
-      description: 'No data for selected filters.',
-      sizes: '—',
-      qty: '—',
-      deliveryDate: '—',
-      factoryShipDate: '—',
-      fob: '—',
-      ldp: '—',
-    };
-    drawDataRow(doc, y, emptyRow, layout, buildDataRowPrep(doc, emptyRow, layout));
-  } else {
+  if (mergedRaw.length > 0) {
     let prevCustomerKey = null;
 
     for (let i = 0; i < drawItems.length; i += 1) {

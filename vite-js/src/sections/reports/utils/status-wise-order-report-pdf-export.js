@@ -508,13 +508,13 @@ function drawFooter(doc, pageIdx, totalPages) {
 }
 
 function resolveOrderReportPayload(data) {
-  if (data && Array.isArray(data.groups) && data.groups.length > 0) {
+  if (data && Array.isArray(data.groups)) {
     return { payload: data, mode: 'grouped' };
   }
-  if (data && Array.isArray(data.rows) && data.rows.length > 0) {
+  if (data && Array.isArray(data.rows)) {
     return { payload: data, mode: 'flat' };
   }
-  return { payload: STATUS_WISE_ORDER_REPORT_DEMO, mode: 'flat' };
+  return { payload: { groups: [], rows: [] }, mode: 'flat' };
 }
 
 function ensureRowFits(doc, y, rowH, pageBodyBottom, flushSegmentFrame, startPage) {

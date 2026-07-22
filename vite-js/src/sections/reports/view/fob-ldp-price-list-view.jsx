@@ -66,14 +66,6 @@ function writePdfPreviewPlaceholder(previewWindow) {
   }
 }
 
-function escapeHtml(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 /** Ensures client-built PDF blob is non-empty and starts with %PDF (browser can render it). */
 async function assertValidPdfBlob(blob) {
   if (!(blob instanceof Blob)) {
@@ -92,6 +84,17 @@ async function assertValidPdfBlob(blob) {
 function joinApiUrl(base, path) {
   const p = path.startsWith('/') ? path : `/${path}`;
   return `${base}${p}`;
+}
+
+/** Shipment reports pattern — API no-data / validation failures yield [] (blank PDF, not an error). */
+async function fetchLdpFobReportRowsOrEmpty(params, headers) {
+  try {
+    const rows = await fetchLdpFobReportRows(params, headers);
+    return Array.isArray(rows) ? rows : [];
+  } catch (err) {
+    console.warn('[FOB/LDP] report fetch returned no rows', err);
+    return [];
+  }
 }
 
 function normalizeArrayPayload(data) {
@@ -204,7 +207,7 @@ export default function FobLdpPriceListView() {
 
         console.time('API Request');
         const apiStart = performance.now();
-        const raw = await fetchLdpFobReportRows(
+        const raw = await fetchLdpFobReportRowsOrEmpty(
           {
             fromDate: filters.fromDate,
             toDate: filters.toDate,
@@ -265,10 +268,7 @@ export default function FobLdpPriceListView() {
           setTimeout(() => URL.revokeObjectURL(blobUrl), 600_000);
           timingMarks.render = Math.round(performance.now() - renderStart);
           console.timeEnd('Report Render');
-          enqueueSnackbar(
-            raw.length ? 'PDF opened in new tab' : 'PDF opened (no row data for selected filters)',
-            { variant: 'success' }
-          );
+          enqueueSnackbar('PDF opened in new tab', { variant: 'success' });
         } else {
           openLdpFobDemoDownload(mode, pdfBlob, null, {
             pdfFilename: LDP_FOB_PRICE_LIST_PDF_FILENAME,
@@ -277,24 +277,13 @@ export default function FobLdpPriceListView() {
         }
       } catch (err) {
         console.error('[FOB/LDP] export', err);
-        const msg =
-          err?.response?.data?.message ||
-          err?.response?.data?.Message ||
-          (typeof err?.response?.data === 'string' ? err.response.data : null) ||
-          err?.message ||
-          'Report failed';
-        enqueueSnackbar(msg, { variant: 'error' });
+        enqueueSnackbar(err?.message || 'Report failed', { variant: 'error' });
 
         if (mode === 'view' && opts.previewWindow && !opts.previewWindow.closed) {
           try {
-            const doc = opts.previewWindow.document;
-            doc.open();
-            doc.write(
-              `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${escapeHtml(msg)}</p></body></html>`
-            );
-            doc.close();
+            opts.previewWindow.close();
           } catch (writeErr) {
-            console.warn('[FOB/LDP] preview error page', writeErr);
+            console.warn('[FOB/LDP] preview close', writeErr);
           }
         }
       } finally {

@@ -229,6 +229,17 @@ async function assertValidMilestonePdfBlob(blob) {
   }
 }
 
+/** Shipment reports pattern — API no-data / validation failures yield [] (blank PDF, not an error). */
+async function fetchWipReportRowsOrEmpty(fetchRows) {
+  try {
+    const rows = await fetchRows();
+    return Array.isArray(rows) ? rows : [];
+  } catch (err) {
+    console.warn('[WIP] report fetch returned no rows', err);
+    return [];
+  }
+}
+
 /**
  * Apply Customer / Supplier / Merchandiser filters to API rows on the client side.
  * Backend `/api/Report/GetMilestoneReport` does not accept those params, so we narrow here.
@@ -359,16 +370,18 @@ async function runMilestoneSummaryPdfFromFilters(enqueueSnackbar, filters, mode,
   };
 
   try {
-    const raw = await fetchMilestoneReportRows(
-      {
-        reportType: filters.reportType,
-        productPortfolio: filters.productPortfolio,
-        reportSubType: filters.reportVariant,
-        fromDate,
-        toDate,
-        portfolios: dropdowns.portfolios || [],
-      },
-      wipLdpFobAuthHeaders()
+    const raw = await fetchWipReportRowsOrEmpty(() =>
+      fetchMilestoneReportRows(
+        {
+          reportType: filters.reportType,
+          productPortfolio: filters.productPortfolio,
+          reportSubType: filters.reportVariant,
+          fromDate,
+          toDate,
+          portfolios: dropdowns.portfolios || [],
+        },
+        wipLdpFobAuthHeaders()
+      )
     );
 
     /** Client-side narrowing — API returns the full set; empty match → empty grid (no rows). */
@@ -413,34 +426,19 @@ async function runMilestoneSummaryPdfFromFilters(enqueueSnackbar, filters, mode,
 
     enqueueSnackbar(
       mode === 'view'
-        ? filtered.length
-          ? 'Milestone Summary PDF opened in a new tab'
-          : 'Milestone Summary PDF opened (no rows)'
-        : filtered.length
-          ? 'Milestone Summary PDF downloaded'
-          : 'Downloaded PDF (no rows)',
+        ? 'Milestone Summary PDF opened in a new tab'
+        : 'Milestone Summary PDF downloaded',
       { variant: 'success' }
     );
   } catch (err) {
     console.error('[WIP] Milestone Summary PDF', err);
-    const msg =
-      err?.response?.data?.message ||
-      err?.response?.data?.Message ||
-      (typeof err?.response?.data === 'string' ? err.response.data : null) ||
-      err?.message ||
-      'Milestone Summary report failed';
-    enqueueSnackbar(msg, { variant: 'error' });
+    enqueueSnackbar(err?.message || 'Milestone Summary report failed', { variant: 'error' });
 
     if (mode === 'view' && opts.previewWindow && !opts.previewWindow.closed) {
       try {
-        const doc = opts.previewWindow.document;
-        doc.open();
-        doc.write(
-          `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${escapeHtmlMilestonePreview(msg)}</p></body></html>`
-        );
-        doc.close();
+        opts.previewWindow.close();
       } catch (writeErr) {
-        console.warn('[Milestone Summary] preview error page', writeErr);
+        console.warn('[Milestone Summary] preview close', writeErr);
       }
     }
   }
@@ -747,14 +745,15 @@ async function runFactoryWipPdfFromFilters(enqueueSnackbar, filters, mode, opts 
       return;
     }
 
-    const raw = await fetchFactoryWipReportRows({ fromDate, toDate }, headers);
+    const raw = await fetchWipReportRowsOrEmpty(() =>
+      fetchFactoryWipReportRows({ fromDate, toDate }, headers)
+    );
     const filtered = filterFactoryWipRowsByUiFilters(raw, filters, {
       customerLabel: customerLabelForFilter,
       supplierLabel: supplierLabelForFilter,
       merchandiserLabel: merchandiserLabelForFilter,
     });
     const pdfGroups = mapWipPdfRowGroupsFromRaw(filtered, mapApiRowToFactoryWipPdfRow);
-    const pdfRowCount = pdfGroups.reduce((n, g) => n + (g.colorRows?.length || 0), 0);
 
     const pdf = await buildFactoryWipPdfBlobFromRows(pdfGroups, meta);
     await assertValidMilestonePdfBlob(pdf);
@@ -784,16 +783,11 @@ async function runFactoryWipPdfFromFilters(enqueueSnackbar, filters, mode, opts 
     }
 
     enqueueSnackbar(
-      mode === 'view'
-        ? pdfRowCount
-          ? 'Factory WIP PDF opened in a new tab'
-          : 'Factory WIP PDF opened (no rows)'
-        : pdfRowCount
-          ? 'Factory WIP PDF downloaded'
-          : 'Downloaded PDF (no rows)',
+      mode === 'view' ? 'Factory WIP PDF opened in a new tab' : 'Factory WIP PDF downloaded',
       { variant: 'success' }
     );
   } catch (err) {
+    console.error('[WIP] Factory WIP PDF', err);
     const msg =
       err?.response?.data?.message ||
       err?.response?.data?.Message ||
@@ -805,12 +799,7 @@ async function runFactoryWipPdfFromFilters(enqueueSnackbar, filters, mode, opts 
 
     if (mode === 'view' && previewWindow && !previewWindow.closed) {
       try {
-        const doc = previewWindow.document;
-        doc.open();
-        doc.write(
-          `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${escapeHtmlMilestonePreview(msg)}</p></body></html>`
-        );
-        doc.close();
+        previewWindow.close();
       } catch {
         /* ignore */
       }
@@ -903,14 +892,15 @@ async function runCustomerWipPdfFromFilters(enqueueSnackbar, filters, mode, drop
   const headers = wipLdpFobAuthHeaders();
 
   try {
-    const raw = await fetchFactoryWipReportRows({ fromDate, toDate }, headers);
+    const raw = await fetchWipReportRowsOrEmpty(() =>
+      fetchFactoryWipReportRows({ fromDate, toDate }, headers)
+    );
     const filtered = filterCustomerWipRowsByUiFilters(raw, filters, {
       customerLabel: customerLabelForFilter,
       supplierLabel: supplierLabelForFilter,
       merchandiserLabel: merchandiserLabelForFilter,
     });
     const pdfGroups = mapWipPdfRowGroupsFromRaw(filtered, mapApiRowToCustomerWipPdfRow);
-    const pdfRowCount = pdfGroups.reduce((n, g) => n + (g.colorRows?.length || 0), 0);
     const blob = await buildCustomerWipPdfBlobFromRows(pdfGroups, meta);
     await assertValidMilestonePdfBlob(blob);
 
@@ -936,35 +926,18 @@ async function runCustomerWipPdfFromFilters(enqueueSnackbar, filters, mode, drop
     }
 
     enqueueSnackbar(
-      mode === 'view'
-        ? pdfRowCount
-          ? 'Customer WIP PDF opened in a new tab'
-          : 'Customer WIP PDF opened (no rows)'
-        : pdfRowCount
-          ? 'Customer WIP PDF downloaded'
-          : 'Downloaded PDF (no rows)',
-      { variant: pdfRowCount ? 'success' : 'warning' }
+      mode === 'view' ? 'Customer WIP PDF opened in a new tab' : 'Customer WIP PDF downloaded',
+      { variant: 'success' }
     );
   } catch (err) {
     console.error('[WIP] Customer WIP PDF', err);
-    const msg =
-      err?.response?.data?.message ||
-      err?.response?.data?.Message ||
-      (typeof err?.response?.data === 'string' ? err.response.data : null) ||
-      err?.message ||
-      'Customer WIP PDF failed';
-    enqueueSnackbar(msg, { variant: 'error' });
+    enqueueSnackbar(err?.message || 'Customer WIP PDF failed', { variant: 'error' });
 
     if (mode === 'view' && opts.previewWindow && !opts.previewWindow.closed) {
       try {
-        const doc = opts.previewWindow.document;
-        doc.open();
-        doc.write(
-          `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${escapeHtmlMilestonePreview(msg)}</p></body></html>`
-        );
-        doc.close();
+        opts.previewWindow.close();
       } catch (writeErr) {
-        console.warn('[Customer WIP] preview error page', writeErr);
+        console.warn('[Customer WIP] preview close', writeErr);
       }
     }
   }
@@ -1049,7 +1022,9 @@ async function runAmsWipPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns
   const headers = wipLdpFobAuthHeaders();
 
   try {
-    const raw = await fetchFactoryWipReportRows({ fromDate, toDate }, headers);
+    const raw = await fetchWipReportRowsOrEmpty(() =>
+      fetchFactoryWipReportRows({ fromDate, toDate }, headers)
+    );
     if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
       console.log('[AMS WIP] API rows fetched:', raw.length, raw[0] ? { sampleKeys: Object.keys(raw[0]) } : null);
@@ -1060,7 +1035,6 @@ async function runAmsWipPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns
       merchandiserLabel: merchandiserLabelForFilter,
     });
     const pdfGroups = mapWipPdfRowGroupsFromRaw(filtered, mapApiRowToAmsWipPdfRow);
-    const pdfRowCount = pdfGroups.reduce((n, g) => n + (g.colorRows?.length || 0), 0);
     const blob = await buildAmsWipPdfBlobFromRows(pdfGroups, meta);
     await assertValidMilestonePdfBlob(blob);
 
@@ -1086,35 +1060,18 @@ async function runAmsWipPdfFromFilters(enqueueSnackbar, filters, mode, dropdowns
     }
 
     enqueueSnackbar(
-      mode === 'view'
-        ? pdfRowCount
-          ? 'AMS WIP PDF opened in a new tab'
-          : 'AMS WIP PDF opened (no rows)'
-        : pdfRowCount
-          ? 'AMS WIP PDF downloaded'
-          : 'Downloaded PDF (no rows)',
-      { variant: pdfRowCount ? 'success' : 'warning' }
+      mode === 'view' ? 'AMS WIP PDF opened in a new tab' : 'AMS WIP PDF downloaded',
+      { variant: 'success' }
     );
   } catch (err) {
     console.error('[WIP] AMS WIP PDF', err);
-    const msg =
-      err?.response?.data?.message ||
-      err?.response?.data?.Message ||
-      (typeof err?.response?.data === 'string' ? err.response.data : null) ||
-      err?.message ||
-      'AMS WIP PDF failed';
-    enqueueSnackbar(msg, { variant: 'error' });
+    enqueueSnackbar(err?.message || 'AMS WIP PDF failed', { variant: 'error' });
 
     if (mode === 'view' && opts.previewWindow && !opts.previewWindow.closed) {
       try {
-        const doc = opts.previewWindow.document;
-        doc.open();
-        doc.write(
-          `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>PDF could not load</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fff;color:#333;"><p style="padding:24px;"><strong>Could not open PDF</strong></p><p style="padding:0 24px 24px;">${escapeHtmlMilestonePreview(msg)}</p></body></html>`
-        );
-        doc.close();
+        opts.previewWindow.close();
       } catch (writeErr) {
-        console.warn('[AMS WIP] preview error page', writeErr);
+        console.warn('[AMS WIP] preview close', writeErr);
       }
     }
   }
