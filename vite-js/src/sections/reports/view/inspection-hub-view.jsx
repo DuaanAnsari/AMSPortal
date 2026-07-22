@@ -974,11 +974,11 @@ function DefectReportForm() {
 // Defect Comparison Report
 // ----------------------------------------------------------------------
 
-/** Year list: current year ± 5 (newest first) — shared with the Comparison form. */
+/** Year list: 1900 through current year + 10 (newest first) — Comparison Defect Report. */
 function buildYearOptions() {
   const now = new Date().getFullYear();
-  const start = now - 5;
-  const end = now + 5;
+  const end = now + 10;
+  const start = 1900;
   const years = [];
   for (let y = end; y >= start; y -= 1) years.push(y);
   return years;
@@ -987,6 +987,196 @@ function buildYearOptions() {
 const YEAR_PLACEHOLDER = '__select__';
 const STYLE_ALL = 'all';
 const PO_ALL = 'all';
+
+function unwrapDiscrepancyComparisonList(data) {
+  const list = unwrapDefectReportList(data);
+  if (list.length > 0) return list;
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    if (pickDefectReportField(data, 'Defect', 'defect') != null) return [data];
+  }
+  return [];
+}
+
+function resolveDefectComparisonYear(yearFilter) {
+  if (yearFilter === YEAR_PLACEHOLDER) return String(new Date().getFullYear());
+  return String(yearFilter ?? '');
+}
+
+function resolveDefectComparisonStyleNo(styleFilter) {
+  if (!styleFilter || styleFilter === STYLE_ALL) return 'All Styles';
+  return String(styleFilter);
+}
+
+function resolveDefectComparisonPoId(poFilter) {
+  if (!poFilter || poFilter === PO_ALL) return '0';
+  return String(poFilter).trim();
+}
+
+function buildDefectComparisonScopeTotalsFromApiRow(first, sideB = false) {
+  if (!first) {
+    return {
+      totalPos: 0,
+      totalPoQty: 0,
+      totalInspections: 0,
+      totalInspectionQty: 0,
+      totalOnTimeShipped: 0,
+      totalDelayShipped: 0,
+    };
+  }
+  if (sideB) {
+    return {
+      totalPos: Number(pickDefectReportField(first, 'POCount2', 'poCount2') ?? 0),
+      totalPoQty: Number(pickDefectReportField(first, 'POQty2', 'poQty2') ?? 0),
+      totalInspections: Number(
+        pickDefectReportField(first, 'InspectionCount2', 'inspectionCount2') ?? 0
+      ),
+      totalInspectionQty: Number(pickDefectReportField(first, 'InspQty2', 'inspQty2') ?? 0),
+      totalOnTimeShipped: Number(
+        pickDefectReportField(first, 'OnTimeOrder2', 'onTimeOrder2') ?? 0
+      ),
+      totalDelayShipped: Number(
+        pickDefectReportField(first, 'DelayOrders2', 'delayOrders2') ?? 0
+      ),
+    };
+  }
+  return {
+    totalPos: Number(pickDefectReportField(first, 'POCount', 'poCount') ?? 0),
+    totalPoQty: Number(pickDefectReportField(first, 'POQty', 'poQty') ?? 0),
+    totalInspections: Number(
+      pickDefectReportField(first, 'InspectionCount', 'inspectionCount') ?? 0
+    ),
+    totalInspectionQty: Number(pickDefectReportField(first, 'InspQty', 'inspQty') ?? 0),
+    totalOnTimeShipped: Number(pickDefectReportField(first, 'OnTimeOrder', 'onTimeOrder') ?? 0),
+    totalDelayShipped: Number(pickDefectReportField(first, 'DelayOrders', 'delayOrders') ?? 0),
+  };
+}
+
+function mapDefectComparisonApiRowToPdfRow(raw, index) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  return {
+    sno: index + 1,
+    defect: String(pickDefectReportField(r, 'Defect', 'defect') ?? ''),
+    criticalA: Number(pickDefectReportField(r, 'Critical', 'critical') ?? 0),
+    majorA: Number(pickDefectReportField(r, 'Major', 'major') ?? 0),
+    minorA: Number(pickDefectReportField(r, 'Minor', 'minor') ?? 0),
+    criticalB: Number(pickDefectReportField(r, 'Critical2', 'critical2') ?? 0),
+    majorB: Number(pickDefectReportField(r, 'Major2', 'major2') ?? 0),
+    minorB: Number(pickDefectReportField(r, 'Minor2', 'minor2') ?? 0),
+  };
+}
+
+function buildDefectComparisonGrandTotalFromRows(rows) {
+  return (rows || []).reduce(
+    (acc, row) => ({
+      criticalA: acc.criticalA + Number(row.criticalA ?? 0),
+      majorA: acc.majorA + Number(row.majorA ?? 0),
+      minorA: acc.minorA + Number(row.minorA ?? 0),
+      criticalB: acc.criticalB + Number(row.criticalB ?? 0),
+      majorB: acc.majorB + Number(row.majorB ?? 0),
+      minorB: acc.minorB + Number(row.minorB ?? 0),
+    }),
+    { criticalA: 0, majorA: 0, minorA: 0, criticalB: 0, majorB: 0, minorB: 0 }
+  );
+}
+
+/** Shipment reports pattern — API no-data / failures yield [] (blank PDF, not an error). */
+async function fetchDefectComparisonReportRowsOrEmpty(fetchRows) {
+  try {
+    const rows = await fetchRows();
+    return Array.isArray(rows) ? rows : [];
+  } catch (err) {
+    console.warn('[DefectComparison] report fetch returned no rows', err);
+    return [];
+  }
+}
+
+async function fetchDiscrepancyComparisonReportRows(params, headers = {}) {
+  const base = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+  if (!base) {
+    throw new Error('VITE_API_BASE_URL is not set');
+  }
+
+  const q = new URLSearchParams({
+    year1: String(params.year1 ?? ''),
+    styleNo1: String(params.styleNo1 ?? 'All Styles'),
+    poId1: String(params.poId1 ?? '0'),
+    year2: String(params.year2 ?? ''),
+    styleNo2: String(params.styleNo2 ?? 'All Styles'),
+    poId2: String(params.poId2 ?? '0'),
+  });
+
+  const url = `${base}/api/Report/DiscrepancyComparisonReport?${q.toString()}`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    if (res.status === 404 || res.status === 204) return [];
+    try {
+      const errBody = await res.json();
+      const msg = String(errBody?.message ?? errBody?.Message ?? '')
+        .trim()
+        .toLowerCase();
+      if (
+        msg.includes('no data') ||
+        msg.includes('not found') ||
+        msg.includes('no record')
+      ) {
+        return [];
+      }
+    } catch {
+      /* not a no-data response — fall through to existing error handling */
+    }
+    throw new Error(`DiscrepancyComparisonReport API failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const msg = String(data.message ?? data.Message ?? '')
+      .trim()
+      .toLowerCase();
+    if (msg.includes('no data') || msg.includes('not found') || msg.includes('no record')) {
+      return [];
+    }
+  }
+  return unwrapDiscrepancyComparisonList(data);
+}
+
+function buildDefectComparisonReportPdfPayload(rawRows, meta = {}) {
+  const rows = (rawRows || []).map(mapDefectComparisonApiRowToPdfRow);
+  const first = rawRows?.[0];
+
+  const buildScope = (side) => ({
+    supplierLabel: meta[`supplierLabel${side}`] || 'All Supplier',
+    yearLabel: meta[`yearLabel${side}`] || '',
+    customerLabel: meta[`customerLabel${side}`] || 'All Customer',
+    styleLabel: meta[`styleLabel${side}`] || 'All Styles',
+    poLabel: meta[`poLabel${side}`] || 'All PO',
+    totals: buildDefectComparisonScopeTotalsFromApiRow(first, side === 'B'),
+  });
+
+  return {
+    scopeA: buildScope('A'),
+    scopeB: buildScope('B'),
+    grandTotal: buildDefectComparisonGrandTotalFromRows(rows),
+    rows,
+  };
+}
+
+function buildDefectComparisonEmptyPdfPayload(meta = {}) {
+  const emptyTotals = buildDefectComparisonScopeTotalsFromApiRow(null);
+  const buildScope = (side) => ({
+    supplierLabel: meta[`supplierLabel${side}`] || 'All Supplier',
+    yearLabel: meta[`yearLabel${side}`] || '',
+    customerLabel: meta[`customerLabel${side}`] || 'All Customer',
+    styleLabel: meta[`styleLabel${side}`] || 'All Styles',
+    poLabel: meta[`poLabel${side}`] || 'All PO',
+    totals: emptyTotals,
+  });
+  return {
+    scopeA: buildScope('A'),
+    scopeB: buildScope('B'),
+    grandTotal: { criticalA: 0, majorA: 0, minorA: 0, criticalB: 0, majorB: 0, minorB: 0 },
+    rows: [],
+  };
+}
 
 /**
  * "Comparison Defect Report" form.
@@ -1082,27 +1272,40 @@ function DefectComparisonReportForm() {
     [filters]
   );
 
-  /** Hardcoded demo rows/totals for now; scope labels reflect current filters. */
-  const buildComparisonPayload = useCallback(() => {
-    const scopeBase = DEFECT_COMPARISON_REPORT_DEMO.scopeA;
-    const buildScope = (side) => {
+  /** Build scope labels from filters; row/totals data comes from DiscrepancyComparisonReport API. */
+  const buildComparisonFilterMeta = useCallback(() => {
+    const buildSideMeta = (side) => {
       const styleKey = side === 'A' ? 'styleA' : 'styleB';
       const poKey = side === 'A' ? 'poA' : 'poB';
       return {
-        ...scopeBase,
-        supplierLabel: resolveSupplierLabel(side),
-        yearLabel: resolveYearLabel(side),
-        customerLabel: resolveCustomerLabel(side),
-        styleLabel: filters[styleKey] === STYLE_ALL ? 'All Styles' : filters[styleKey],
-        poLabel: filters[poKey] === PO_ALL ? 'All PO' : filters[poKey],
+        [`supplierLabel${side}`]: resolveSupplierLabel(side),
+        [`yearLabel${side}`]: resolveYearLabel(side),
+        [`customerLabel${side}`]: resolveCustomerLabel(side),
+        [`styleLabel${side}`]:
+          filters[styleKey] === STYLE_ALL ? 'All Styles' : filters[styleKey],
+        [`poLabel${side}`]: filters[poKey] === PO_ALL ? 'All PO' : filters[poKey],
       };
     };
-    return {
-      ...DEFECT_COMPARISON_REPORT_DEMO,
-      scopeA: buildScope('A'),
-      scopeB: buildScope('B'),
-    };
+    return { ...buildSideMeta('A'), ...buildSideMeta('B') };
   }, [filters, resolveSupplierLabel, resolveCustomerLabel, resolveYearLabel]);
+
+  const fetchDefectComparisonReportPayload = useCallback(async () => {
+    const meta = buildComparisonFilterMeta();
+    const rawRows = await fetchDefectComparisonReportRowsOrEmpty(() =>
+      fetchDiscrepancyComparisonReportRows(
+        {
+          year1: resolveDefectComparisonYear(filters.yearA),
+          styleNo1: resolveDefectComparisonStyleNo(filters.styleA),
+          poId1: resolveDefectComparisonPoId(filters.poA),
+          year2: resolveDefectComparisonYear(filters.yearB),
+          styleNo2: resolveDefectComparisonStyleNo(filters.styleB),
+          poId2: resolveDefectComparisonPoId(filters.poB),
+        },
+        inspectionAuthHeaders()
+      )
+    );
+    return buildDefectComparisonReportPdfPayload(rawRows, meta);
+  }, [filters, buildComparisonFilterMeta]);
 
   const runPdfExport = useCallback(
     async (mode) => {
@@ -1110,7 +1313,13 @@ function DefectComparisonReportForm() {
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
-        const payload = buildComparisonPayload();
+        let payload;
+        try {
+          payload = await fetchDefectComparisonReportPayload();
+        } catch (err) {
+          console.warn('[DefectComparison] payload fetch failed — blank report', err);
+          payload = buildDefectComparisonEmptyPdfPayload(buildComparisonFilterMeta());
+        }
         const blob = await buildDefectComparisonReportPdfBlob(payload);
         if (mode === 'view' && previewWindow) {
           const namedFile =
@@ -1125,19 +1334,32 @@ function DefectComparisonReportForm() {
         openDefectComparisonReportPdf(mode, blob);
       } catch (err) {
         console.error('[DefectComparison] PDF build failed', err);
-        if (previewWindow) {
-          try {
-            previewWindow.close();
-          } catch {
-            /* ignore */
+        try {
+          const fallbackBlob = await buildDefectComparisonReportPdfBlob(
+            buildDefectComparisonEmptyPdfPayload(buildComparisonFilterMeta())
+          );
+          if (mode === 'view' && previewWindow) {
+            const url = URL.createObjectURL(fallbackBlob);
+            previewWindow.location.replace(url);
+            setTimeout(() => URL.revokeObjectURL(url), 120_000);
+            return;
+          }
+          openDefectComparisonReportPdf(mode, fallbackBlob);
+        } catch (fallbackErr) {
+          console.error('[DefectComparison] fallback PDF failed', fallbackErr);
+          if (previewWindow) {
+            try {
+              previewWindow.close();
+            } catch {
+              /* ignore */
+            }
           }
         }
-        enqueueSnackbar('Could not build Comparison Defect Report PDF', { variant: 'error' });
       } finally {
         setGeneratingPdf(false);
       }
     },
-    [generatingPdf, enqueueSnackbar, buildComparisonPayload]
+    [generatingPdf, fetchDefectComparisonReportPayload, buildComparisonFilterMeta]
   );
 
   const handleViewReport = useCallback(() => runPdfExport('view'), [runPdfExport]);

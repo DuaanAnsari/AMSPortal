@@ -505,9 +505,27 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  * @returns {Promise<Blob>}
  */
 export async function buildDefectComparisonReportPdfBlob(data = {}) {
+  const emptyGrandTotal = {
+    criticalA: 0,
+    majorA: 0,
+    minorA: 0,
+    criticalB: 0,
+    majorB: 0,
+    minorB: 0,
+  };
+
+  // Empty `rows` is valid — headers/table still render; only fall back to demo when rows omitted.
   const payload =
-    data && Array.isArray(data.rows) && data.rows.length > 0
-      ? data
+    data && Array.isArray(data.rows)
+      ? {
+          printDate: data.printDate,
+          printTime: data.printTime,
+          printedOn: data.printedOn,
+          scopeA: data.scopeA || DEMO_SCOPE,
+          scopeB: data.scopeB || DEMO_SCOPE,
+          grandTotal: { ...emptyGrandTotal, ...(data.grandTotal || {}) },
+          rows: data.rows,
+        }
       : DEFECT_COMPARISON_REPORT_DEMO;
 
   const now = new Date();
@@ -520,7 +538,7 @@ export async function buildDefectComparisonReportPdfBlob(data = {}) {
   };
 
   const grandTotal = {
-    ...DEFECT_COMPARISON_REPORT_DEMO.grandTotal,
+    ...emptyGrandTotal,
     ...(payload.grandTotal || {}),
     ...(data.grandTotal || {}),
   };

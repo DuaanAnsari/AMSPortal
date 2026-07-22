@@ -8,7 +8,6 @@ import {
   TextField,
   Button,
   Grid,
-  MenuItem,
   IconButton,
   InputAdornment,
   CircularProgress,
@@ -298,7 +297,6 @@ export default function CreateUserPage() {
 
               <FormField label="Designation">
                 <TextField
-                  select
                   fullWidth
                   size="small"
                   variant="outlined"
@@ -306,12 +304,7 @@ export default function CreateUserPage() {
                   value={formData.designation}
                   onChange={handleChange}
                   sx={FIELD_SX}
-                >
-                  <MenuItem value="">Select</MenuItem>
-                  <MenuItem value="Shipment">Shipment</MenuItem>
-                  <MenuItem value="Supplier">Supplier</MenuItem>
-                  <MenuItem value="QA">QA</MenuItem>
-                </TextField>
+                />
               </FormField>
 
               <FormField label="Role">
