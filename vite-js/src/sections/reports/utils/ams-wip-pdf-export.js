@@ -308,9 +308,10 @@ function drawQtyStackCell(doc, x, y, w, h, row, opts = {}) {
 
   const pad = 3;
   const rx = x + w - pad;
+  const rgb = getRowPdfTextRgb(row);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(5.6);
-  doc.setTextColor(RED[0], RED[1], RED[2]);
+  doc.setTextColor(rgb[0], rgb[1], rgb[2]);
 
   // Labeled stack — one line each (PO / Ship / Bal).
   const lines = [
@@ -327,7 +328,7 @@ function drawQtyStackCell(doc, x, y, w, h, row, opts = {}) {
 }
 
 /** Three horizontal bands: customer ship date / label / factory date (reference PDF). */
-function drawShipmentTripleCell(doc, x, y, w, h, lines, opts = {}) {
+function drawShipmentTripleCell(doc, x, y, w, h, lines, textRgb = RED, opts = {}) {
   const { skipBorder = false } = opts;
   drawCellBorder(doc, x, y, w, h, skipBorder);
   const a = Array.isArray(lines) && lines.length >= 3 ? lines : ['', '', ''];
@@ -339,7 +340,7 @@ function drawShipmentTripleCell(doc, x, y, w, h, lines, opts = {}) {
   doc.line(x, y2, x + w, y2);
 
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(RED[0], RED[1], RED[2]);
+  doc.setTextColor(textRgb[0], textRgb[1], textRgb[2]);
   doc.setFontSize(5.3);
   const centers = [(y + y1) / 2, (y1 + y2) / 2, (y2 + y + h) / 2];
   [0, 1, 2].forEach((idx) => {
@@ -520,7 +521,7 @@ function drawMergedLeadCellsAms(doc, xs, y, widths, h, rowRaw) {
   i += 1;
   drawQtyStackCell(doc, xs[i], y, widths[i], h, row, skip);
   i += 1;
-  drawShipmentTripleCell(doc, xs[i], y, widths[i], h, row.shipmentLines, skip);
+  drawShipmentTripleCell(doc, xs[i], y, widths[i], h, row.shipmentLines, rgb, skip);
   i += 1;
   drawCenterTextCell(doc, xs[i], y, widths[i], h, row.mos, 5.8, rgb, skip);
   i += 1;
@@ -531,8 +532,9 @@ function drawMergedLeadCellsAms(doc, xs, y, widths, h, rowRaw) {
 
 function drawColorTailRowAms(doc, xs, yRow, widths, rowRaw, mergeCount, rowH) {
   const row = normalizeRow(rowRaw);
+  const rgb = getRowPdfTextRgb(row);
   const colorLines = getWipColorQtyCellRenderLines(row);
-  drawMultilineCell(doc, xs[mergeCount], yRow, widths[mergeCount], rowH, colorLines, 'center', WIP_PDF_FONT_COLOR_QTY);
+  drawMultilineCell(doc, xs[mergeCount], yRow, widths[mergeCount], rowH, colorLines, 'center', WIP_PDF_FONT_COLOR_QTY, rgb);
   drawMilestoneAndProdTail(doc, xs, yRow, widths, row, mergeCount + 1, rowH);
 }
 
