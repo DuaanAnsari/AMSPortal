@@ -93,7 +93,8 @@ export default function PrintInvoicePage() {
                 const cargoIdParam = cargoId && !Number.isNaN(Number(cargoId)) ? `?cargoId=${cargoId}` : '';
 
                 const response = await fetch(
-                    `${API_BASE_URL}/api/Report/PrintInvoicePDF/${encodeURIComponent(invoiceNo)}${cargoIdParam}`,
+                    `${API_BASE_URL}/api/Report/PrintInvoicePDF/${encodeURIComponent(invoiceNo)}`,
+                    // `${API_BASE_URL}/api/Report/PrintInvoicePDF/${encodeURIComponent(invoiceNo)}${cargoIdParam}`,
                     { headers }
                 );
 
