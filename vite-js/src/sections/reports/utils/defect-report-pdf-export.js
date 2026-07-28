@@ -32,6 +32,7 @@ const SUMMARY_ROWS = 3;
 const SUMMARY_BAND_H = SUMMARY_CELL_H * SUMMARY_ROWS;
 const TABLE_HEADER_H = 22;
 const DATA_ROW_H = 18;
+const TOTAL_ROW_H = 18;
 const FOOTER_H = 32;
 
 const HEADER_FILL = [255, 255, 255];
@@ -434,6 +435,46 @@ function drawDataRow(doc, y, x0, widths, row) {
   return y + DATA_ROW_H;
 }
 
+function sumDefectReportColumnTotals(rows) {
+  return (rows || []).reduce(
+    (acc, row) => ({
+      critical: acc.critical + Number(row.critical ?? 0),
+      major: acc.major + Number(row.major ?? 0),
+      minor: acc.minor + Number(row.minor ?? 0),
+    }),
+    { critical: 0, major: 0, minor: 0 }
+  );
+}
+
+function drawTotalRow(doc, y, x0, widths, columnTotals) {
+  const xs = colXs(x0, widths);
+  const mergedW = widths[0] + widths[1];
+  strokeRect(doc, xs[0], y, mergedW, TOTAL_ROW_H);
+  textInRect(doc, xs[0], y, mergedW, TOTAL_ROW_H, 'TOTAL', {
+    align: 'center',
+    bold: true,
+    fontSize: 9,
+    pad: 3,
+    maxLines: 1,
+  });
+
+  const totalKeys = ['critical', 'major', 'minor'];
+  totalKeys.forEach((key, idx) => {
+    const colIdx = idx + 2;
+    const x = xs[colIdx];
+    const w = widths[colIdx];
+    strokeRect(doc, x, y, w, TOTAL_ROW_H);
+    textInRect(doc, x, y, w, TOTAL_ROW_H, formatInt(columnTotals[key]), {
+      align: 'center',
+      bold: true,
+      fontSize: 8,
+      pad: 4,
+      maxLines: 1,
+    });
+  });
+  return y + TOTAL_ROW_H;
+}
+
 // ----------------------------------------------------------------------
 // Footer
 // ----------------------------------------------------------------------
@@ -542,6 +583,15 @@ export async function buildDefectReportPdfBlob(data = {}) {
     }
     y = drawDataRow(doc, y, innerLeft, widths, row);
   });
+
+  // Total row only when data exists — blank (no-data) reports stay header-only.
+  if (rows.length > 0) {
+    if (y + TOTAL_ROW_H > pageBodyBottom) {
+      doc.addPage([PAGE_W, PAGE_H], 'p');
+      startPage();
+    }
+    y = drawTotalRow(doc, y, innerLeft, widths, sumDefectReportColumnTotals(rows));
+  }
 
   const total = doc.internal.getNumberOfPages();
   for (let p = 1; p <= total; p += 1) {

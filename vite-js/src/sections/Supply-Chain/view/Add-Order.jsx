@@ -1399,6 +1399,7 @@ export default function CompletePurchaseOrderForm() {
     setError,
     clearErrors,
     trigger,
+    reset,
   } = methods;
 
   const assortmentValue = watch('assortment');
@@ -2136,9 +2137,11 @@ export default function CompletePurchaseOrderForm() {
   }, [setValue]);
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchCommission = async () => {
       if (!selectedCustomer) {
-        setValue('commission', 0);
+        if (!cancelled) setValue('commission', 0);
         return;
       }
 
@@ -2154,8 +2157,9 @@ export default function CompletePurchaseOrderForm() {
             `${API_BASE_URL}/api/MyOrders/GetCommission/${selectedCustomerObj.customerID}`,
             { headers }
           );
+          if (cancelled) return;
           const commissionData = res.data;
-          if (commissionData && commissionData.commission) {
+          if (commissionData && commissionData.commission != null && commissionData.commission !== '') {
             setValue('commission', parseFloat(commissionData.commission));
           } else {
             setValue('commission', 0);
@@ -2163,11 +2167,15 @@ export default function CompletePurchaseOrderForm() {
         }
       } catch (err) {
         console.error('Commission fetch error:', err);
-        setValue('commission', 0);
+        if (!cancelled) setValue('commission', 0);
       }
     };
 
     fetchCommission();
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedCustomer, customerOptions, setValue]);
 
   const handlePortfolioChange = async (portfolioID) => {
@@ -2820,7 +2828,7 @@ export default function CompletePurchaseOrderForm() {
       });
         
         // Reset form after successful submission
-        methods.reset(defaultValues);
+        reset(defaultValues);
         setSavedItemData(null);
 
         // Redirect to My Orders page
@@ -3103,19 +3111,24 @@ export default function CompletePurchaseOrderForm() {
               <Grid item xs={12} sm={6}>
                 <Controller
                   name="commission"
+                  control={control}
                   render={({ field }) => (
                     <TextField
                       {...field}
                       label="Commission (%)"
                       type="number"
                       fullWidth
-                      InputProps={{ readOnly: true }}
+                      inputProps={{ step: '0.01', min: 0 }}
                       helperText="Auto-filled from selected customer"
-                      value={
-                        field.value !== undefined && field.value !== ''
-                          ? Number(field.value).toFixed(2)
-                          : ''
-                      }
+                      value={field.value === '' || field.value == null ? '' : field.value}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        field.onChange(raw === '' ? '' : Number(raw));
+                      }}
+                      onBlur={(e) => {
+                        const raw = e.target.value;
+                        field.onChange(raw === '' ? 0 : safeParseFloat(raw));
+                      }}
                     />
                   )}
                 />
@@ -4174,7 +4187,10 @@ export default function CompletePurchaseOrderForm() {
                   type="button" 
                   variant="outlined" 
                   color="primary"
-                  onClick={() => navigate('/dashboard/supply-chain')}
+                  onClick={() => {
+                    reset(defaultValues);
+                    navigate('/dashboard/supply-chain');
+                  }}
                 >
                   Cancel
                 </Button>

@@ -319,13 +319,9 @@ function drawDataRow(doc, y, x0, widths, row) {
     const raw = row[col.key];
     if (raw === undefined || raw === null || raw === '') return;
 
-    // Color column renders the name in its matching ink.
-    const color = col.key === 'color' ? inkForColorName(raw) : [0, 0, 0];
-
     textInRect(doc, x, y, w, DATA_ROW_H, raw, {
       align: col.align,
       fontSize: 6.6,
-      color,
       pad: 2.5,
       maxLines: 3,
     });

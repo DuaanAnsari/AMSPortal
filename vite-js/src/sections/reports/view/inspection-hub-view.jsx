@@ -21,6 +21,7 @@ import { useSnackbar } from 'src/components/snackbar';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 
 import {
+  fetchYearsBySupplier,
   fetchMilestoneSummaryDropdowns,
   getMilestoneSummaryDropdownApiBase,
   milestoneCustomerKey,
@@ -1012,8 +1013,15 @@ function resolveDefectComparisonPoId(poFilter) {
   return String(poFilter).trim();
 }
 
-function buildDefectComparisonScopeTotalsFromApiRow(first, sideB = false) {
-  if (!first) {
+/** Supplier / Customer → API id; All → `0` (never omit so backend cannot widen to all). */
+function resolveDefectComparisonFilterId(value) {
+  if (!value || value === ALL) return '0';
+  return String(value).trim();
+}
+
+/** Summary Header totals from DiscrepancyComparisonReportHeader — side1 → left, side2 → right. */
+function buildDefectComparisonScopeTotalsFromHeader(header, sideB = false) {
+  if (!header) {
     return {
       totalPos: 0,
       totalPoQty: 0,
@@ -1025,44 +1033,95 @@ function buildDefectComparisonScopeTotalsFromApiRow(first, sideB = false) {
   }
   if (sideB) {
     return {
-      totalPos: Number(pickDefectReportField(first, 'POCount2', 'poCount2') ?? 0),
-      totalPoQty: Number(pickDefectReportField(first, 'POQty2', 'poQty2') ?? 0),
-      totalInspections: Number(
-        pickDefectReportField(first, 'InspectionCount2', 'inspectionCount2') ?? 0
+      totalPos: Number(pickDefectReportField(header, 'TotalNoOfPOs2', 'totalNoOfPOs2') ?? 0),
+      totalPoQty: Number(
+        pickDefectReportField(header, 'TotalPOQuantity2', 'totalPOQuantity2') ?? 0
       ),
-      totalInspectionQty: Number(pickDefectReportField(first, 'InspQty2', 'inspQty2') ?? 0),
+      totalInspections: Number(
+        pickDefectReportField(header, 'TotalNoOfInspection2', 'totalNoOfInspection2') ?? 0
+      ),
+      totalInspectionQty: Number(
+        pickDefectReportField(header, 'TotalInspectionQuantity2', 'totalInspectionQuantity2') ?? 0
+      ),
       totalOnTimeShipped: Number(
-        pickDefectReportField(first, 'OnTimeOrder2', 'onTimeOrder2') ?? 0
+        pickDefectReportField(header, 'TotalNoOfOnTimeShipped2', 'totalNoOfOnTimeShipped2') ?? 0
       ),
       totalDelayShipped: Number(
-        pickDefectReportField(first, 'DelayOrders2', 'delayOrders2') ?? 0
+        pickDefectReportField(header, 'TotalNoOfDelayShipped2', 'totalNoOfDelayShipped2') ?? 0
       ),
     };
   }
   return {
-    totalPos: Number(pickDefectReportField(first, 'POCount', 'poCount') ?? 0),
-    totalPoQty: Number(pickDefectReportField(first, 'POQty', 'poQty') ?? 0),
+    totalPos: Number(pickDefectReportField(header, 'TotalNoOfPOs1', 'totalNoOfPOs1') ?? 0),
+    totalPoQty: Number(pickDefectReportField(header, 'TotalPOQuantity1', 'totalPOQuantity1') ?? 0),
     totalInspections: Number(
-      pickDefectReportField(first, 'InspectionCount', 'inspectionCount') ?? 0
+      pickDefectReportField(header, 'TotalNoOfInspection1', 'totalNoOfInspection1') ?? 0
     ),
-    totalInspectionQty: Number(pickDefectReportField(first, 'InspQty', 'inspQty') ?? 0),
-    totalOnTimeShipped: Number(pickDefectReportField(first, 'OnTimeOrder', 'onTimeOrder') ?? 0),
-    totalDelayShipped: Number(pickDefectReportField(first, 'DelayOrders', 'delayOrders') ?? 0),
+    totalInspectionQty: Number(
+      pickDefectReportField(header, 'TotalInspectionQuantity1', 'totalInspectionQuantity1') ?? 0
+    ),
+    totalOnTimeShipped: Number(
+      pickDefectReportField(header, 'TotalNoOfOnTimeShipped1', 'totalNoOfOnTimeShipped1') ?? 0
+    ),
+    totalDelayShipped: Number(
+      pickDefectReportField(header, 'TotalNoOfDelayShipped1', 'totalNoOfDelayShipped1') ?? 0
+    ),
   };
 }
 
-function mapDefectComparisonApiRowToPdfRow(raw, index) {
-  const r = raw && typeof raw === 'object' ? raw : {};
-  return {
-    sno: index + 1,
-    defect: String(pickDefectReportField(r, 'Defect', 'defect') ?? ''),
-    criticalA: Number(pickDefectReportField(r, 'Critical', 'critical') ?? 0),
-    majorA: Number(pickDefectReportField(r, 'Major', 'major') ?? 0),
-    minorA: Number(pickDefectReportField(r, 'Minor', 'minor') ?? 0),
-    criticalB: Number(pickDefectReportField(r, 'Critical2', 'critical2') ?? 0),
-    majorB: Number(pickDefectReportField(r, 'Major2', 'major2') ?? 0),
-    minorB: Number(pickDefectReportField(r, 'Minor2', 'minor2') ?? 0),
+/**
+ * Map one side's API rows onto that side's PDF columns only.
+ * Uses side-1 fields (Critical/Major/Minor/…) — caller fetches each side independently
+ * so a no-match side stays blank and never inherits the other side's (or All) data.
+ */
+function mapDefectComparisonSideRowsToPartial(rawRows, side) {
+  const isB = side === 'B';
+  return (rawRows || []).map((raw) => {
+    const r = raw && typeof raw === 'object' ? raw : {};
+    const defect = String(pickDefectReportField(r, 'Defect', 'defect') ?? '');
+    const critical = Number(pickDefectReportField(r, 'Critical', 'critical') ?? 0);
+    const major = Number(pickDefectReportField(r, 'Major', 'major') ?? 0);
+    const minor = Number(pickDefectReportField(r, 'Minor', 'minor') ?? 0);
+    if (isB) {
+      return { defect, criticalA: 0, majorA: 0, minorA: 0, criticalB: critical, majorB: major, minorB: minor };
+    }
+    return { defect, criticalA: critical, majorA: major, minorA: minor, criticalB: 0, majorB: 0, minorB: 0 };
+  });
+}
+
+/** Merge independent Left/Right fetches by defect name. Empty side contributes zeros only. */
+function mergeDefectComparisonSidePartials(partialsA, partialsB) {
+  const map = new Map();
+
+  const upsert = (partial) => {
+    const defect = String(partial.defect ?? '');
+    const key = defect.trim().toLowerCase() || `\0${map.size}`;
+    const existing = map.get(key) || {
+      defect,
+      criticalA: 0,
+      majorA: 0,
+      minorA: 0,
+      criticalB: 0,
+      majorB: 0,
+      minorB: 0,
+    };
+    if (!existing.defect && defect) existing.defect = defect;
+    existing.criticalA += Number(partial.criticalA ?? 0);
+    existing.majorA += Number(partial.majorA ?? 0);
+    existing.minorA += Number(partial.minorA ?? 0);
+    existing.criticalB += Number(partial.criticalB ?? 0);
+    existing.majorB += Number(partial.majorB ?? 0);
+    existing.minorB += Number(partial.minorB ?? 0);
+    map.set(key, existing);
   };
+
+  (partialsA || []).forEach(upsert);
+  (partialsB || []).forEach(upsert);
+
+  return Array.from(map.values()).map((row, index) => ({
+    sno: index + 1,
+    ...row,
+  }));
 }
 
 function buildDefectComparisonGrandTotalFromRows(rows) {
@@ -1090,20 +1149,49 @@ async function fetchDefectComparisonReportRowsOrEmpty(fetchRows) {
   }
 }
 
+function buildDiscrepancyComparisonReportQueryParams(params) {
+  return {
+    year1: String(params.year1 ?? ''),
+    styleNo1: String(params.styleNo1 ?? 'All Styles'),
+    poId1: String(params.poId1 ?? '0'),
+    supplierId1: String(params.supplierId1 ?? '0'),
+    customerId1: String(params.customerId1 ?? '0'),
+    year2: String(params.year2 ?? ''),
+    styleNo2: String(params.styleNo2 ?? 'All Styles'),
+    poId2: String(params.poId2 ?? '0'),
+    supplierId2: String(params.supplierId2 ?? '0'),
+    customerId2: String(params.customerId2 ?? '0'),
+  };
+}
+
+/** Per-side Report query — both API slots mirror the same scope (matches Report row fetch). */
+function buildDefectComparisonMirroredReportQueryParams(sideParams) {
+  const year = String(sideParams.year ?? '');
+  const styleNo = String(sideParams.styleNo ?? 'All Styles');
+  const poId = String(sideParams.poId ?? '0');
+  const supplierId = String(sideParams.supplierId ?? '0');
+  const customerId = String(sideParams.customerId ?? '0');
+  return buildDiscrepancyComparisonReportQueryParams({
+    year1: year,
+    styleNo1: styleNo,
+    poId1: poId,
+    supplierId1: supplierId,
+    customerId1: customerId,
+    year2: year,
+    styleNo2: styleNo,
+    poId2: poId,
+    supplierId2: supplierId,
+    customerId2: customerId,
+  });
+}
+
 async function fetchDiscrepancyComparisonReportRows(params, headers = {}) {
   const base = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
   if (!base) {
     throw new Error('VITE_API_BASE_URL is not set');
   }
 
-  const q = new URLSearchParams({
-    year1: String(params.year1 ?? ''),
-    styleNo1: String(params.styleNo1 ?? 'All Styles'),
-    poId1: String(params.poId1 ?? '0'),
-    year2: String(params.year2 ?? ''),
-    styleNo2: String(params.styleNo2 ?? 'All Styles'),
-    poId2: String(params.poId2 ?? '0'),
-  });
+  const q = new URLSearchParams(buildDiscrepancyComparisonReportQueryParams(params));
 
   const url = `${base}/api/Report/DiscrepancyComparisonReport?${q.toString()}`;
   const res = await fetch(url, { headers });
@@ -1139,9 +1227,87 @@ async function fetchDiscrepancyComparisonReportRows(params, headers = {}) {
   return unwrapDiscrepancyComparisonList(data);
 }
 
-function buildDefectComparisonReportPdfPayload(rawRows, meta = {}) {
-  const rows = (rawRows || []).map(mapDefectComparisonApiRowToPdfRow);
-  const first = rawRows?.[0];
+/**
+ * Summary Header — Swagger accepts only year/style/po per side (no supplier/customer).
+ */
+async function fetchDiscrepancyComparisonReportHeader(params, headers = {}) {
+  const base = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+  if (!base) {
+    throw new Error('VITE_API_BASE_URL is not set');
+  }
+
+  const q = new URLSearchParams({
+    year1: String(params.year1 ?? ''),
+    styleNo1: String(params.styleNo1 ?? 'All Styles'),
+    poId1: String(params.poId1 ?? '0'),
+    year2: String(params.year2 ?? ''),
+    styleNo2: String(params.styleNo2 ?? 'All Styles'),
+    poId2: String(params.poId2 ?? '0'),
+  });
+
+  const url = `${base}/api/Report/DiscrepancyComparisonReportHeader?${q.toString()}`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    if (res.status === 404 || res.status === 204) return null;
+    try {
+      const errBody = await res.json();
+      const msg = String(errBody?.message ?? errBody?.Message ?? '')
+        .trim()
+        .toLowerCase();
+      if (
+        msg.includes('no data') ||
+        msg.includes('not found') ||
+        msg.includes('no record')
+      ) {
+        return null;
+      }
+    } catch {
+      /* not a no-data response — fall through to existing error handling */
+    }
+    throw new Error(`DiscrepancyComparisonReportHeader API failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const msg = String(data.message ?? data.Message ?? '')
+      .trim()
+      .toLowerCase();
+    if (msg.includes('no data') || msg.includes('not found') || msg.includes('no record')) {
+      return null;
+    }
+  }
+  return data && typeof data === 'object' && !Array.isArray(data) ? data : null;
+}
+
+async function fetchDiscrepancyComparisonReportHeaderOrEmpty(params, headers = {}) {
+  try {
+    return await fetchDiscrepancyComparisonReportHeader(params, headers);
+  } catch (err) {
+    console.warn('[DefectComparison] header fetch returned no data', err);
+    return null;
+  }
+}
+
+/**
+ * Fetch one comparison side with its exact filters mirrored on both API sides.
+ * Empty / no-match → [] for that side only (never widen to All).
+ */
+async function fetchDiscrepancyComparisonSideRows(sideParams, headers = {}) {
+  return fetchDefectComparisonReportRowsOrEmpty(() =>
+    fetchDiscrepancyComparisonReportRows(
+      buildDefectComparisonMirroredReportQueryParams(sideParams),
+      headers
+    )
+  );
+}
+
+function buildDefectComparisonReportPdfPayload(rawRowsA, rawRowsB, meta = {}, headerData = null) {
+  const listA = Array.isArray(rawRowsA) ? rawRowsA : [];
+  const listB = Array.isArray(rawRowsB) ? rawRowsB : [];
+  const rows = mergeDefectComparisonSidePartials(
+    mapDefectComparisonSideRowsToPartial(listA, 'A'),
+    mapDefectComparisonSideRowsToPartial(listB, 'B')
+  );
 
   const buildScope = (side) => ({
     supplierLabel: meta[`supplierLabel${side}`] || 'All Supplier',
@@ -1149,7 +1315,7 @@ function buildDefectComparisonReportPdfPayload(rawRows, meta = {}) {
     customerLabel: meta[`customerLabel${side}`] || 'All Customer',
     styleLabel: meta[`styleLabel${side}`] || 'All Styles',
     poLabel: meta[`poLabel${side}`] || 'All PO',
-    totals: buildDefectComparisonScopeTotalsFromApiRow(first, side === 'B'),
+    totals: buildDefectComparisonScopeTotalsFromHeader(headerData, side === 'B'),
   });
 
   return {
@@ -1161,7 +1327,7 @@ function buildDefectComparisonReportPdfPayload(rawRows, meta = {}) {
 }
 
 function buildDefectComparisonEmptyPdfPayload(meta = {}) {
-  const emptyTotals = buildDefectComparisonScopeTotalsFromApiRow(null);
+  const emptyTotals = buildDefectComparisonScopeTotalsFromHeader(null);
   const buildScope = (side) => ({
     supplierLabel: meta[`supplierLabel${side}`] || 'All Supplier',
     yearLabel: meta[`yearLabel${side}`] || '',
@@ -1222,7 +1388,11 @@ function DefectComparisonReportForm() {
   const [poNumbersB, setPoNumbersB] = useState([]);
   const [loadingPoNumbersB, setLoadingPoNumbersB] = useState(false);
 
-  const yearOptions = useMemo(buildYearOptions, []);
+  const defaultYearOptions = useMemo(buildYearOptions, []);
+  const [yearOptionsA, setYearOptionsA] = useState(defaultYearOptions);
+  const [loadingYearOptionsA, setLoadingYearOptionsA] = useState(false);
+  const [yearOptionsB, setYearOptionsB] = useState(defaultYearOptions);
+  const [loadingYearOptionsB, setLoadingYearOptionsB] = useState(false);
 
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
@@ -1272,7 +1442,7 @@ function DefectComparisonReportForm() {
     [filters]
   );
 
-  /** Build scope labels from filters; row/totals data comes from DiscrepancyComparisonReport API. */
+  /** Build scope labels from filters; table rows from Report API, summary from Header API. */
   const buildComparisonFilterMeta = useCallback(() => {
     const buildSideMeta = (side) => {
       const styleKey = side === 'A' ? 'styleA' : 'styleB';
@@ -1291,20 +1461,41 @@ function DefectComparisonReportForm() {
 
   const fetchDefectComparisonReportPayload = useCallback(async () => {
     const meta = buildComparisonFilterMeta();
-    const rawRows = await fetchDefectComparisonReportRowsOrEmpty(() =>
-      fetchDiscrepancyComparisonReportRows(
+    const headers = inspectionAuthHeaders();
+
+    const sideAParams = {
+      year: resolveDefectComparisonYear(filters.yearA),
+      styleNo: resolveDefectComparisonStyleNo(filters.styleA),
+      poId: resolveDefectComparisonPoId(filters.poA),
+      supplierId: resolveDefectComparisonFilterId(filters.supplierA),
+      customerId: resolveDefectComparisonFilterId(filters.customerA),
+    };
+    const sideBParams = {
+      year: resolveDefectComparisonYear(filters.yearB),
+      styleNo: resolveDefectComparisonStyleNo(filters.styleB),
+      poId: resolveDefectComparisonPoId(filters.poB),
+      supplierId: resolveDefectComparisonFilterId(filters.supplierB),
+      customerId: resolveDefectComparisonFilterId(filters.customerB),
+    };
+
+    // Report rows + Header summary in parallel; no-match side stays blank (no All-data fallback).
+    const [rawRowsA, rawRowsB, headerData] = await Promise.all([
+      fetchDiscrepancyComparisonSideRows(sideAParams, headers),
+      fetchDiscrepancyComparisonSideRows(sideBParams, headers),
+      fetchDiscrepancyComparisonReportHeaderOrEmpty(
         {
-          year1: resolveDefectComparisonYear(filters.yearA),
-          styleNo1: resolveDefectComparisonStyleNo(filters.styleA),
-          poId1: resolveDefectComparisonPoId(filters.poA),
-          year2: resolveDefectComparisonYear(filters.yearB),
-          styleNo2: resolveDefectComparisonStyleNo(filters.styleB),
-          poId2: resolveDefectComparisonPoId(filters.poB),
+          year1: sideAParams.year,
+          styleNo1: sideAParams.styleNo,
+          poId1: sideAParams.poId,
+          year2: sideBParams.year,
+          styleNo2: sideBParams.styleNo,
+          poId2: sideBParams.poId,
         },
-        inspectionAuthHeaders()
-      )
-    );
-    return buildDefectComparisonReportPdfPayload(rawRows, meta);
+        headers
+      ),
+    ]);
+
+    return buildDefectComparisonReportPdfPayload(rawRowsA, rawRowsB, meta, headerData);
   }, [filters, buildComparisonFilterMeta]);
 
   const runPdfExport = useCallback(
@@ -1419,6 +1610,69 @@ function DefectComparisonReportForm() {
     });
   }, [customers, suppliers]);
 
+  const subscribeYearFetch = useCallback((supplierVal, setYears, setLoading) => {
+    if (supplierVal === ALL) {
+      setYears(defaultYearOptions);
+      setLoading(false);
+      return () => {};
+    }
+
+    const controller = new AbortController();
+    (async () => {
+      setLoading(true);
+      try {
+        const years = await fetchYearsBySupplier(
+          supplierVal,
+          inspectionAuthHeaders(),
+          controller.signal
+        );
+        if (controller.signal.aborted) return;
+        setYears(Array.isArray(years) ? years : []);
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        console.error('[DefectComparison] years by supplier', err);
+        setYears([]);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [defaultYearOptions]);
+
+  useEffect(
+    () => subscribeYearFetch(filters.supplierA, setYearOptionsA, setLoadingYearOptionsA),
+    [filters.supplierA, subscribeYearFetch]
+  );
+
+  useEffect(
+    () => subscribeYearFetch(filters.supplierB, setYearOptionsB, setLoadingYearOptionsB),
+    [filters.supplierB, subscribeYearFetch]
+  );
+
+  useEffect(() => {
+    setFilters((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      if (
+        prev.supplierA !== ALL &&
+        prev.yearA !== YEAR_PLACEHOLDER &&
+        !yearOptionsA.includes(Number(prev.yearA))
+      ) {
+        next.yearA = YEAR_PLACEHOLDER;
+        changed = true;
+      }
+      if (
+        prev.supplierB !== ALL &&
+        prev.yearB !== YEAR_PLACEHOLDER &&
+        !yearOptionsB.includes(Number(prev.yearB))
+      ) {
+        next.yearB = YEAR_PLACEHOLDER;
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [filters.supplierA, filters.supplierB, yearOptionsA, yearOptionsB]);
+
   /**
    * Build the per-side PO# fetcher used by both effects below. Returns a
    * cleanup that aborts the in-flight request when the deps change.
@@ -1494,6 +1748,8 @@ function DefectComparisonReportForm() {
     const poKey = isA ? 'poA' : 'poB';
     const poNumbers = isA ? poNumbersA : poNumbersB;
     const loadingPo = isA ? loadingPoNumbersA : loadingPoNumbersB;
+    const yearOptions = isA ? yearOptionsA : yearOptionsB;
+    const loadingYears = isA ? loadingYearOptionsA : loadingYearOptionsB;
 
     return (
       <>
@@ -1530,6 +1786,7 @@ function DefectComparisonReportForm() {
             onChange={handleSelect(yearKey)}
             sx={selectSx}
             displayEmpty
+            disabled={loadingYears}
           >
             <MenuItem value={YEAR_PLACEHOLDER}>Select</MenuItem>
             {yearOptions.map((y) => (

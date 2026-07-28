@@ -146,6 +146,12 @@ function shipmentFilterIdOrZero(value) {
   return s;
 }
 
+function shipmentFilterTextOrEmpty(value) {
+  const s = String(value ?? '').trim();
+  if (!s || s.toLowerCase() === ALL) return '';
+  return s;
+}
+
 function unwrapShipmentTrackingList(data) {
   if (Array.isArray(data)) return data;
   if (data == null) return [];
@@ -549,6 +555,12 @@ async function fetchShipmentTrackingReportRows(params, headers = {}) {
     fromDate: String(params.fromDate || ''),
     toDate: String(params.toDate || ''),
     marchandiserId: shipmentFilterIdOrZero(params.marchandiserId),
+    customerId: shipmentFilterIdOrZero(params.customerId),
+    supplierId: shipmentFilterIdOrZero(params.supplierId),
+    ponNo: shipmentFilterTextOrEmpty(params.ponNo),
+    styleNo: shipmentFilterTextOrEmpty(params.styleNo),
+    mode: shipmentFilterTextOrEmpty(params.mode),
+    containerNo: shipmentFilterTextOrEmpty(params.containerNo),
   });
 
   const url = `${base}/api/Report/ShipmentTrackingReport?${q.toString()}`;
@@ -662,12 +674,18 @@ function ShipmentTrackingReportForm() {
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const fetchShipmentTrackingPayload = useCallback(async () => {
-    const { fromDate, toDate, merchandiser } = filters;
+    const { fromDate, toDate, merchandiser, customer, supplier, poNo, styleNo, shipmentMode, containerNo } = filters;
     const rawRows = await fetchShipmentTrackingReportRows(
       {
         fromDate,
         toDate,
         marchandiserId: merchandiser,
+        customerId: customer,
+        supplierId: supplier,
+        ponNo: poNo,
+        styleNo,
+        mode: shipmentMode,
+        containerNo,
       },
       shipmentAuthHeaders()
     );
@@ -675,7 +693,17 @@ function ShipmentTrackingReportForm() {
     const rows = Array.isArray(rawRows) ? rawRows : [];
 
     return buildShipmentTrackingReportPdfPayload(rows);
-  }, [filters.merchandiser, filters.fromDate, filters.toDate]);
+  }, [
+    filters.containerNo,
+    filters.customer,
+    filters.fromDate,
+    filters.merchandiser,
+    filters.poNo,
+    filters.shipmentMode,
+    filters.styleNo,
+    filters.supplier,
+    filters.toDate,
+  ]);
 
   /**
    * Fetch ShipmentTrackingReport (ENV base URL), map API fields onto the existing

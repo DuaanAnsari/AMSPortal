@@ -30,6 +30,8 @@ const PATH_MERCHANTS =
 
 const PATH_PRODUCT_PORTFOLIO =
   import.meta.env.VITE_REPORT_MILESTONE_PRODUCT_PORTFOLIO_PATH || '/api/MyOrders/GetProductPortfolio';
+const PATH_YEARS_BY_SUPPLIER =
+  import.meta.env.VITE_REPORT_YEARS_BY_SUPPLIER_PATH || '/api/Report/GetYearsBySupplier';
 
 function joinApiUrl(base, path) {
   const p = path.startsWith('/') ? path : `/${path}`;
@@ -141,4 +143,17 @@ export async function fetchMilestoneSummaryDropdowns(headers = {}) {
       portfolios: pRes.status === 'rejected' ? pRes.reason : null,
     },
   };
+}
+
+export async function fetchYearsBySupplier(supplierId, headers = {}, signal) {
+  const base = getMilestoneSummaryDropdownApiBase();
+  if (!base || supplierId == null || supplierId === '') return [];
+
+  const url = new URL(joinApiUrl(base, PATH_YEARS_BY_SUPPLIER));
+  url.searchParams.set('supplierId', String(supplierId));
+
+  const res = await axios.get(url.toString(), { headers, signal });
+  return normalizeArrayPayload(res?.data)
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
 }

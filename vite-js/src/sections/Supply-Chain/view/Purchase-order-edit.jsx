@@ -1610,7 +1610,7 @@ export default function CompletePurchaseOrderFormEdit() {
             orderType: orderData.pOtype || '',
             transactions: orderData.transactions || '',
             version: orderData.version || '',
-            commission: orderData.commission || 0,
+            commission: orderData.commission ?? 0,
             vendorCommission: orderData.vendorCommission || 0,
 
             // Dates - Using the mappings you provided
@@ -2068,6 +2068,7 @@ export default function CompletePurchaseOrderFormEdit() {
     payload.pOtype = form.orderType || apiData.pOtype || '';
     payload.transactions = form.transactions || apiData.transactions || '';
     payload.version = form.version || apiData.version || '';
+    payload.commission = safeParseFloat(form.commission);
 
     // Dates
     payload.placementDate = toIsoOrExisting(form.placementDate, apiData.placementDate);
@@ -2639,18 +2640,24 @@ export default function CompletePurchaseOrderFormEdit() {
                   <Grid item xs={12} sm={6}>
                     <Controller
                       name="commission"
+                      control={control}
                       render={({ field }) => (
                         <TextField
                           {...field}
                           label="Commission (%)"
                           type="number"
                           fullWidth
+                          inputProps={{ step: '0.01', min: 0 }}
                           helperText="Auto-filled from selected customer"
-                          value={
-                            field.value !== undefined && field.value !== ''
-                              ? Number(field.value).toFixed(2)
-                              : ''
-                          }
+                          value={field.value === '' || field.value == null ? '' : field.value}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            field.onChange(raw === '' ? '' : Number(raw));
+                          }}
+                          onBlur={(e) => {
+                            const raw = e.target.value;
+                            field.onChange(raw === '' ? 0 : safeParseFloat(raw));
+                          }}
                         />
                       )}
                     />
