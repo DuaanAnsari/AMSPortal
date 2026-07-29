@@ -75,6 +75,7 @@ import {
   buildCsWiseSdrPdfBlob,
   openCsWiseSdrPdf,
 } from 'src/sections/reports/utils/cs-wise-sdr-pdf-export';
+import { useUserReportOptions } from 'src/sections/reports/utils/use-user-report-options';
 
 // ----------------------------------------------------------------------
 
@@ -96,7 +97,6 @@ export const INQUIRY_REPORT_OPTIONS = [
   { id: 'sample-development-report-cs-wise', label: 'Sample Development Report CS Wise' },
 ];
 
-const DEFAULT_REPORT_ID = 'inquiry-report-for-customer';
 const REPORT_QUERY_KEY = 'report';
 
 const ALL = 'all';
@@ -3052,22 +3052,25 @@ function renderInquiryReportPanel(activeReportId, pageTitle) {
 export default function InquiryHubView() {
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const reportMenuOptions = useUserReportOptions('Inquiry', INQUIRY_REPORT_OPTIONS);
+  const menuDefaultReportId = reportMenuOptions[0]?.id ?? '';
+
   const reportFromUrl = searchParams.get(REPORT_QUERY_KEY);
   const activeReportId = useMemo(() => {
-    const valid = INQUIRY_REPORT_OPTIONS.some((o) => o.id === reportFromUrl);
-    return valid ? reportFromUrl : DEFAULT_REPORT_ID;
-  }, [reportFromUrl]);
+    const valid = reportMenuOptions.some((o) => o.id === reportFromUrl);
+    return valid ? reportFromUrl : menuDefaultReportId;
+  }, [reportFromUrl, reportMenuOptions, menuDefaultReportId]);
 
   useEffect(() => {
-    if (!reportFromUrl || !INQUIRY_REPORT_OPTIONS.some((o) => o.id === reportFromUrl)) {
-      setSearchParams({ [REPORT_QUERY_KEY]: DEFAULT_REPORT_ID }, { replace: true });
+    if (!menuDefaultReportId) return;
+    if (!reportFromUrl || !reportMenuOptions.some((o) => o.id === reportFromUrl)) {
+      setSearchParams({ [REPORT_QUERY_KEY]: menuDefaultReportId }, { replace: true });
     }
-  }, [reportFromUrl, setSearchParams]);
+  }, [reportFromUrl, setSearchParams, reportMenuOptions, menuDefaultReportId]);
 
   const selectedOption = useMemo(
-    () =>
-      INQUIRY_REPORT_OPTIONS.find((o) => o.id === activeReportId) ?? INQUIRY_REPORT_OPTIONS[0],
-    [activeReportId]
+    () => reportMenuOptions.find((o) => o.id === activeReportId) ?? reportMenuOptions[0],
+    [activeReportId, reportMenuOptions]
   );
 
   const handleReportChange = (e) => {
@@ -3136,7 +3139,7 @@ export default function InquiryHubView() {
               },
             }}
           >
-            {INQUIRY_REPORT_OPTIONS.map((opt) => (
+            {reportMenuOptions.map((opt) => (
               <MenuItem key={opt.id} value={opt.id}>
                 {opt.label}
               </MenuItem>
@@ -3145,7 +3148,7 @@ export default function InquiryHubView() {
         </FormControl>
       </Card>
 
-      {renderInquiryReportPanel(activeReportId, selectedOption.label)}
+      {activeReportId ? renderInquiryReportPanel(activeReportId, selectedOption?.label ?? '') : null}
     </Container>
   );
 }

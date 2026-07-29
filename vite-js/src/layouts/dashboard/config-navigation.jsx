@@ -1,448 +1,309 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+
+import SettingsIcon from '@mui/icons-material/Settings';
 
 import { paths } from 'src/routes/paths';
 
-import { useTranslate } from 'src/locales';
+import axios from 'src/utils/axios';
 
-import Label from 'src/components/label';
-import Iconify from 'src/components/iconify';
 import SvgColor from 'src/components/svg-color';
-import SettingsIcon from '@mui/icons-material/Settings';
 
 // ----------------------------------------------------------------------
 
 const icon = (name) => (
   <SvgColor src={`/assets/icons/navbar/${name}.svg`} sx={{ width: 1, height: 1 }} />
-  // OR
-  // <Iconify icon="fluent:mail-24-filled" />
-  // https://icon-sets.iconify.design/solar/
-  // https://www.streamlinehq.com/icons
 );
 
 const ICONS = {
-  job: icon('ic_job'),
-  blog: icon('ic_blog'),
-  chat: icon('ic_chat'),
-  mail: icon('ic_mail'),
   user: icon('ic_user'),
   file: icon('ic_file'),
-  lock: icon('ic_lock'),
-  tour: icon('ic_tour'),
   order: icon('ic_order'),
-  label: icon('ic_label'),
-  blank: icon('ic_blank'),
-  kanban: icon('ic_kanban'),
   folder: icon('ic_folder'),
   banking: icon('ic_banking'),
   booking: icon('ic_booking'),
-  invoice: icon('ic_invoice'),
   product: icon('ic_product'),
-  calendar: icon('ic_calendar'),
-  disabled: icon('ic_disabled'),
-  external: icon('ic_external'),
-  menuItem: icon('ic_menu_item'),
-  ecommerce: icon('ic_ecommerce'),
   analytics: icon('ic_analytics'),
   dashboard: icon('ic_dashboard'),
+  menuItem: icon('ic_menu_item'),
 };
 
-// ----------------------------------------------------------------------
+const MENU_ENDPOINT = '/api/MyOrders/GetUserMenus';
+const NOT_FOUND_PATH = paths.page404;
 
-const QA_MANAGER_DESIGNATION = 'QA Manager';
+const cleanMenuName = (name) =>
+  String(name ?? '')
+    .replace(/[\r\n]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
 
-/** `userCode` from login (e.g. username QD1) — same inspection-focused sidebar as QA Manager. */
-const QD1_USER_CODE = 'QD1';
+const normalizeName = (name) => cleanMenuName(name).toLowerCase();
 
-function isQd1UserCode() {
-  if (typeof window === 'undefined') return false;
-  const code = localStorage.getItem('userCode')?.trim().toUpperCase() ?? '';
-  return code === QD1_USER_CODE;
+const createNameMap = (entries) =>
+  Object.fromEntries(entries.map(([name, value]) => [normalizeName(name), value]));
+
+const ROUTE_BY_NAME = createNameMap([
+  ['Home', paths.dashboard.root],
+  ['Dashboard', paths.dashboard.root],
+  ['App', paths.dashboard.root],
+  ['My Customers', paths.dashboard.general.customers],
+  ['Customers', paths.dashboard.general.customers],
+  ['My Suppliers', paths.dashboard.general.supplier],
+  ['Supplier', paths.dashboard.general.supplier],
+  ['QA BI', paths.dashboard.general.banking],
+  ['Booking', paths.dashboard.general.booking],
+  ['SOPs', paths.dashboard.general.file],
+  ['File', paths.dashboard.general.file],
+  ['New Container Loading', paths.dashboard.containerLoading],
+  ['Container Loading', paths.dashboard.containerLoading],
+  ['Inspection', paths.dashboard.masterOrderForQDSheet],
+  ['Inspection Report', paths.dashboard.qaInspectionView],
+  ['Sample Inspection Report', paths.dashboard.supplyChain.sampleInspectionReport],
+  ['Size Specs', paths.dashboard.supplyChain.sizeSpecsView],
+
+  ['Supply Chain', paths.dashboard.supplyChain.root],
+  ['My Orders', paths.dashboard.supplyChain.root],
+  ['TNA Chart', paths.dashboard.supplyChain.tnaChart],
+  ['Quick Search', paths.dashboard.supplyChain.cards],
+  ['My Shipments', paths.dashboard.supplyChain.list],
+  ['Merchandisers Backlog', paths.dashboard.supplyChain.merchandiserBacklog],
+  ['Cancellations', paths.dashboard.supplyChain.cancellations],
+  ['Order Tracking', paths.dashboard.supplyChain.orderTracking],
+  ['Merchant Inquiry', paths.dashboard.supplyChain.merchantInquiry],
+  ['Order Detail', paths.dashboard.supplyChain.orderDetail],
+  ['Sampling Program', paths.dashboard.supplyChain.samplingProgram],
+
+  ['Power Tools', paths.dashboard.powerTool.root],
+  ['Process Board', paths.dashboard.powerTool.processBoard],
+  ['Product Categories', paths.dashboard.powerTool.productCategories],
+  ['Product Group', paths.dashboard.powerTool.productGroup],
+  ['Booked Exchange Rate', paths.dashboard.powerTool.bookedExchangeRate],
+  ['Shipped Exchange Rate', paths.dashboard.powerTool.shippedExchangeRate],
+  ['Size Range Database', paths.dashboard.powerTool.sizeRangeDatabase],
+  ['Advance Payment', paths.dashboard.powerTool.advancePayment],
+  ['ICR Form', paths.dashboard.powerTool.icrForm],
+  ['Po Mix Qty', paths.dashboard.powerTool.qrView],
+  ['View Users', paths.dashboard.powerTool.viewUsers],
+  ['Cost Sheet View', paths.dashboard.powerTool.costSheetView],
+  ['Courier Packaging', paths.dashboard.powerTool.courierPackagingView],
+  ['Courier Packages', paths.dashboard.powerTool.courierPackagingView],
+  ['Packaging View', paths.dashboard.powerTool.courierPackagingView],
+  ['Consignee', paths.dashboard.powerTool.consigneeView],
+  ['Container handling', paths.dashboard.powerTool.containerHandling],
+  ['Measurement Points', paths.dashboard.powerTool.measurementPoints],
+
+  ['Profile Setting', paths.dashboard.profileSetting.root],
+  ['Create User', paths.dashboard.profileSetting.createUser],
+
+  ['Reports', paths.dashboard.reports.root],
+  ['FOB LDP PRICE LIST', paths.dashboard.reports.fobLdpPriceList],
+]);
+
+const REPORT_CATEGORY_PATHS = createNameMap([
+  ['WIP', paths.dashboard.reports.wip],
+  ['Inquiry', paths.dashboard.reports.inquiry],
+  ['MGT', paths.dashboard.reports.mgt],
+  ['Shipment', paths.dashboard.reports.shipment],
+  ['Other', paths.dashboard.reports.other],
+  ['Inspection', paths.dashboard.reports.inspection],
+]);
+
+const REPORT_ITEM_IDS = {
+  [normalizeName('WIP')]: createNameMap([
+    ['Milestone Summary', 'milestone-summary'],
+    ['Factory WIP Report', 'factory-wip'],
+    ['Customer WIP Report', 'customer-wip'],
+    ['AMS WIP Report', 'ams-wip'],
+    ['SALT WIP Report', 'salt-wip'],
+    ['Customised Customer WIP', 'customised-customer-wip'],
+  ]),
+  [normalizeName('Inquiry')]: createNameMap([
+    ['Inquiry Report For Customer', 'inquiry-report-for-customer'],
+    ['Photo Shoot Sample For Customer', 'photo-shoot-sample-for-customer'],
+    ['Inquiry Report For Factory', 'inquiry-report-for-factory'],
+    ['Photo Shoot Sample For Factory', 'photo-shoot-sample-for-factory'],
+    ['Sample Development Report', 'sample-development-report'],
+    ['Merchant Inquiry Sheet', 'merchant-inquiry-sheet'],
+    ['Sample Development Report only Dispatch', 'sample-development-report-only-dispatch'],
+    ['Sample Development Report CS Wise', 'sample-development-report-cs-wise'],
+  ]),
+  [normalizeName('MGT')]: createNameMap([
+    ['Business Summary Order wise', 'business-summary-order-wise'],
+    ['Business Summary', 'business-summary'],
+    ['Status Wise Order Report', 'status-wise-order-report'],
+    ['Open Order Report', 'open-order-report'],
+    ['Shipped Order Report', 'shipped-order-report'],
+  ]),
+  [normalizeName('Shipment')]: createNameMap([
+    ['Shipment & Tracking Report', 'shipment-tracking-report'],
+    ['Commision Invoice Report', 'commision-invoice-report'],
+    ['Commission Invoice Report', 'commision-invoice-report'],
+    ['SHIPMENT HISTORY REPORT', 'shipment-history-report'],
+    ['AFTER SHIPMENT REPORT', 'after-shipment-report'],
+    ['SHIPMENT DELAY REPORT', 'shipment-delay-report'],
+    ['Product Comparision', 'product-comparision'],
+    ['Product Comparison', 'product-comparision'],
+    ['Shipped Delay Or OnTime Report', 'shipped-delay-or-ontime-report'],
+    ['Shipped Not Close Status Report', 'shipped-not-close-status-report'],
+  ]),
+  [normalizeName('Other')]: createNameMap([
+    ['User Foot Print', 'user-foot-print'],
+    ['User Login Detail', 'user-login-detail'],
+    ['Quick Orders Overview Report', 'quick-orders-overview-report'],
+    ['DPG Report', 'dpg-report'],
+    ['Production History Report', 'production-history-report'],
+    ['Supplier Marchand Report', 'supplier-marchand-report'],
+    ['Order Detail Report', 'order-detail-report'],
+    ['Merchandiser Progress Report', 'merchandiser-progress-report'],
+  ]),
+  [normalizeName('Inspection')]: createNameMap([
+    ['Inspection Status Report', 'inspection-status-report'],
+    ['Inspection Daily Status Report', 'inspection-status-report'],
+    ['Inspection Report', 'inspection-report'],
+    ['Sample Inspection Report', 'sample-inspection-report'],
+    ['Defect Report', 'defect-report'],
+    ['Defect Comparison Report', 'defect-comparison-report'],
+  ]),
+};
+
+const REPORT_ITEM_PATHS = Object.fromEntries(
+  Object.entries(REPORT_ITEM_IDS).flatMap(([category, items]) =>
+    Object.entries(items).map(([name, reportId]) => [
+      name,
+      category === normalizeName('Inspection')
+        ? paths.dashboard.reports.inspectionReport(reportId)
+        : `${REPORT_CATEGORY_PATHS[category]}?report=${encodeURIComponent(reportId)}`,
+    ])
+  )
+);
+
+const ICON_BY_NAME = createNameMap([
+  ['Home', ICONS.dashboard],
+  ['Dashboard', ICONS.dashboard],
+  ['My Customers', ICONS.user],
+  ['Customers', ICONS.user],
+  ['My Suppliers', ICONS.order],
+  ['Supplier', ICONS.order],
+  ['QA BI', ICONS.banking],
+  ['SOPs', ICONS.folder],
+  ['Supply Chain', ICONS.booking],
+  ['Power Tools', <SettingsIcon />],
+  ['Profile Setting', ICONS.user],
+  ['New Container Loading', ICONS.order],
+  ['Container Loading', ICONS.order],
+  ['Courier Packages', ICONS.folder],
+  ['Evaluation Form', ICONS.file],
+  ['Reports', ICONS.analytics],
+  ['Costing', ICONS.product],
+]);
+
+function findReportCategory(ancestors) {
+  if (!ancestors.some((name) => normalizeName(name) === normalizeName('Reports'))) {
+    return null;
+  }
+
+  return [...ancestors]
+    .reverse()
+    .map(normalizeName)
+    .find((name) => REPORT_CATEGORY_PATHS[name]);
 }
 
-/** Shared items: QA Manager + QD1 user. */
-function getQualityInspectionNavItems(t) {
-  return [
-    { title: 'Home', path: paths.dashboard.root, icon: ICONS.dashboard },
-    {
-      title: 'Container Loading',
-      path: paths.dashboard.containerLoading,
-      icon: ICONS.order,
-    },
-    { title: 'SOPs', path: paths.dashboard.general.file, icon: ICONS.folder },
-    { title: 'Inspection', path: paths.dashboard.masterOrderForQDSheet, icon: ICONS.analytics },
-    {
-      title: 'Inspection Report',
-      path: paths.dashboard.qaInspectionView,
-      icon: ICONS.invoice,
-    },
-    {
-      title: 'Sample Inspection Report',
-      path: paths.dashboard.supplyChain.sampleInspectionReport,
-      icon: ICONS.label,
-    },
-    { title: 'Size Specs', path: paths.dashboard.supplyChain.sizeSpecsView, icon: ICONS.file },
-  ];
+function resolvePath(name, ancestors) {
+  const normalizedName = normalizeName(name);
+  const reportCategory = findReportCategory(ancestors);
+
+  if (reportCategory) {
+    const reportId = REPORT_ITEM_IDS[reportCategory]?.[normalizedName];
+    if (reportId) {
+      if (reportCategory === normalizeName('Inspection')) {
+        return paths.dashboard.reports.inspectionReport(reportId);
+      }
+      return `${REPORT_CATEGORY_PATHS[reportCategory]}?report=${encodeURIComponent(reportId)}`;
+    }
+  }
+
+  const isInsideReports = ancestors.some(
+    (ancestor) => normalizeName(ancestor) === normalizeName('Reports')
+  );
+  if (isInsideReports && REPORT_CATEGORY_PATHS[normalizedName]) {
+    return REPORT_CATEGORY_PATHS[normalizedName];
+  }
+
+  return ROUTE_BY_NAME[normalizedName] ?? REPORT_ITEM_PATHS[normalizedName] ?? NOT_FOUND_PATH;
 }
 
-/** Sidebar for `userCode` QD1 (from login). */
-function getQd1Nav(t) {
-  return [{ subheader: t(''), items: getQualityInspectionNavItems(t) }];
+function getMenuChildren(value) {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => {
+      if (typeof item === 'string') return [[item, {}]];
+      if (item && typeof item === 'object' && !Array.isArray(item)) return Object.entries(item);
+      return [];
+    });
+  }
+
+  return value && typeof value === 'object' ? Object.entries(value) : [];
 }
 
-/** Sidebar for designation "QA Manager" (from login `userInfo.designation`). */
-function getQaManagerNav(t) {
-  return [{ subheader: t(''), items: getQualityInspectionNavItems(t) }];
+function buildMenuItem([title, value], ancestors = [], depth = 0) {
+  const cleanedTitle = cleanMenuName(title);
+  const isReportCategory =
+    ancestors.some((ancestor) => normalizeName(ancestor) === normalizeName('Reports')) &&
+    Boolean(REPORT_CATEGORY_PATHS[normalizeName(cleanedTitle)]);
+  const entries = isReportCategory ? [] : getMenuChildren(value);
+  const item = {
+    title: cleanedTitle,
+    path: resolvePath(cleanedTitle, ancestors),
+  };
+
+  if (depth === 0) {
+    item.icon = ICON_BY_NAME[normalizeName(cleanedTitle)] ?? ICONS.menuItem;
+  }
+  if (entries.length) {
+    item.children = entries.map((entry) =>
+      buildMenuItem(entry, [...ancestors, cleanedTitle], depth + 1)
+    );
+  }
+
+  return item;
 }
 
 // ----------------------------------------------------------------------
 
 export function useNavData() {
-  const { t } = useTranslate();
+  const [menu, setMenu] = useState({});
 
-  const data = useMemo(() => {
-    const designation =
-      typeof window !== 'undefined' ? localStorage.getItem('designation')?.trim() ?? '' : '';
-    if (isQd1UserCode()) {
-      return getQd1Nav(t);
-    }
-    if (designation === QA_MANAGER_DESIGNATION) {
-      return getQaManagerNav(t);
-    }
-    return [
-      // OVERVIEW
-      // ----------------------------------------------------------------------
+  useEffect(() => {
+    let active = true;
+
+    const loadMenu = async () => {
+      try {
+        const response = await axios.get(MENU_ENDPOINT);
+        if (active) {
+          setMenu(
+            response.data && typeof response.data === 'object' && !Array.isArray(response.data)
+              ? response.data
+              : {}
+          );
+        }
+      } catch (error) {
+        console.error('Unable to load sidebar menu:', error);
+        if (active) setMenu({});
+      }
+    };
+
+    loadMenu();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return useMemo(
+    () => [
       {
-        subheader: t(''),
-        items: [
-          {
-            title: t('app'),
-            path: paths.dashboard.root,
-            icon: ICONS.dashboard,
-          },
-          {
-            title: 'Customers', // ya t('customers') agar translation use ho raha hai
-            path: paths.dashboard.general.customers, // path change karna hoga
-            icon: ICONS.user, // ya ICONS.users ya koi customers ke liye suitable icon
-          },
-          {
-            title: 'Supplier',
-            path: paths.dashboard.general.supplier,
-            icon: ICONS.order,
-          },
-          {
-            title: t('QA BI'),
-            path: paths.dashboard.general.banking,
-            icon: ICONS.banking,
-          },
-          {
-            title: t('booking'),
-            path: paths.dashboard.general.booking,
-            icon: ICONS.booking,
-          },
-          {
-            title: t('file'),
-            path: paths.dashboard.general.file,
-            icon: ICONS.file,
-          },
-        ],
+        subheader: '',
+        items: Object.entries(menu).map((entry) => buildMenuItem(entry)),
       },
-
-      // MANAGEMENT
-      // ----------------------------------------------------------------------
-      {
-        subheader: t(''),
-        items: [
-          // USER
-          {
-            title: t('Supply Chain'),
-            path: paths.dashboard.supplyChain.root,
-            icon: ICONS.booking,
-            children: [
-              { title: t('My Orders'), path: paths.dashboard.supplyChain.root },
-              { title: t('TNA Chart'), path: paths.dashboard.supplyChain.tnaChart },
-              { title: t('Quick Search'), path: paths.dashboard.supplyChain.cards },
-              { title: t('My Shipments'), path: paths.dashboard.supplyChain.list },
-              { title: t('Merchandisers Backlog'), path: paths.dashboard.supplyChain.merchandiserBacklog },
-              { title: t('Cancellations'), path: paths.dashboard.supplyChain.cancellations },
-              { title: t('Order Tracking'), path: paths.dashboard.supplyChain.orderTracking },
-              { title: t('Merchant Inquiry'), path: paths.dashboard.supplyChain.merchantInquiry },
-              { title: t('Order Detail'), path: paths.dashboard.supplyChain.orderDetail },
-              { title: t('Sampling Program'), path: paths.dashboard.supplyChain.samplingProgram },
-              { title: t('Sample Inspection Report'), path: paths.dashboard.supplyChain.sampleInspectionReport },
-              { title: t('Inspection Report'), path: paths.dashboard.qaInspectionView },
-              // { title: t('Edit Order'), path: paths.dashboard.supplyChain.editOrder },
-
-              // { title: t('Purchase Order PDF'), path: paths.dashboard.supplyChain.purchaseOrderPDF },
-              // { title: t('Milestone'), path: paths.dashboard.supplyChain.milestone },
-              // { title: t('Cancellations'), path: paths.dashboard.user.demo.edit },
-              // { title: t('Oder Tracking'), path: paths.dashboard.user.account },
-            ],
-          },
-
-          {
-            title: t('Power Tools'),
-            path: paths.dashboard.powerTool.root,
-            icon: <SettingsIcon />,
-            children: [
-              { title: t('Process Board'), path: paths.dashboard.powerTool.processBoard },
-              { title: t('Product Categories'), path: paths.dashboard.powerTool.productCategories },
-              { title: t('Product Group'), path: paths.dashboard.powerTool.productGroup },
-              {
-                title: t('Booked Exchange Rate'),
-                path: paths.dashboard.powerTool.bookedExchangeRate,
-              },
-              {
-                title: t('Shipped Exchange Rate'),
-                path: paths.dashboard.powerTool.shippedExchangeRate,
-              },
-              {
-                title: t('Size Range Database'),
-                path: paths.dashboard.powerTool.sizeRangeDatabase,
-              },
-              { title: t('Advance Payment'), path: paths.dashboard.powerTool.advancePayment },
-              { title: t('ICR Form'), path: paths.dashboard.powerTool.icrForm },
-              { title: t('Po Mix Qty'), path: paths.dashboard.powerTool.qrView },
-              { title: t('View Users'), path: paths.dashboard.powerTool.viewUsers },
-              { title: t('Cost Sheet View'), path: paths.dashboard.powerTool.costSheetView },
-              { title: t('Courier Packaging'), path: paths.dashboard.powerTool.courierPackagingView },
-              { title: t('Consignee'), path: paths.dashboard.powerTool.consigneeView },
-              { title: t('Container handling'), path: paths.dashboard.powerTool.containerHandling },
-              { title: t('Measurement Points'), path: paths.dashboard.powerTool.measurementPoints },
-            ],
-          },
-
-          {
-            title: 'Profile Setting',
-            path: paths.dashboard.profileSetting.root,
-            icon: ICONS.user,
-            children: [
-              { title: 'Create User', path: paths.dashboard.profileSetting.createUser },
-            ],
-          },
-
-          {
-            title: 'Reports',
-            path: paths.dashboard.reports.root,
-            icon: ICONS.analytics,
-            children: [
-              { title: 'FOB LDP PRICE LIST', path: paths.dashboard.reports.fobLdpPriceList },
-              { title: 'WIP', path: paths.dashboard.reports.wip },
-              { title: 'INQUIRY', path: paths.dashboard.reports.inquiry },
-              { title: 'MGT', path: paths.dashboard.reports.mgt },
-              { title: 'SHIPMENT', path: paths.dashboard.reports.shipment },
-              { title: 'OTHER', path: paths.dashboard.reports.other },
-              { title: 'INSPECTION', path: paths.dashboard.reports.inspection },
-            ],
-          },
-
-          // // PRODUCT
-          // {
-          //   title: t('product'),
-          //   path: paths.dashboard.product.root,
-          //   icon: ICONS.product,
-          //   children: [
-          //     { title: t('list'), path: paths.dashboard.product.root },
-          //     {
-          //       title: t('details'),
-          //       path: paths.dashboard.product.demo.details,
-          //     },
-          //     { title: t('create'), path: paths.dashboard.product.new },
-          //     { title: t('edit'), path: paths.dashboard.product.demo.edit },
-          //   ],
-          // },
-
-          // // ORDER
-          // {
-          //   title: t('order'),
-          //   path: paths.dashboard.order.root,
-          //   icon: ICONS.order,
-          //   children: [
-          //     { title: t('list'), path: paths.dashboard.order.root },
-          //     { title: t('details'), path: paths.dashboard.order.demo.details },
-          //   ],
-          // },
-
-          // // INVOICE
-          // {
-          //   title: t('invoice'),
-          //   path: paths.dashboard.invoice.root,
-          //   icon: ICONS.invoice,
-          //   children: [
-          //     { title: t('list'), path: paths.dashboard.invoice.root },
-          //     {
-          //       title: t('details'),
-          //       path: paths.dashboard.invoice.demo.details,
-          //     },
-          //     { title: t('create'), path: paths.dashboard.invoice.new },
-          //     { title: t('edit'), path: paths.dashboard.invoice.demo.edit },
-          //   ],
-          // },
-
-          // BLOG
-          // {
-          //   title: t('blog'),
-          //   path: paths.dashboard.post.root,
-          //   icon: ICONS.blog,
-          //   children: [
-          //     { title: t('list'), path: paths.dashboard.post.root },
-          //     { title: t('details'), path: paths.dashboard.post.demo.details },
-          //     { title: t('create'), path: paths.dashboard.post.new },
-          //     { title: t('edit'), path: paths.dashboard.post.demo.edit },
-          //   ],
-          // },
-
-          // // JOB
-          // {
-          //   title: t('job'),
-          //   path: paths.dashboard.job.root,
-          //   icon: ICONS.job,
-          //   children: [
-          //     { title: t('list'), path: paths.dashboard.job.root },
-          //     { title: t('details'), path: paths.dashboard.job.demo.details },
-          //     { title: t('create'), path: paths.dashboard.job.new },
-          //     { title: t('edit'), path: paths.dashboard.job.demo.edit },
-          //   ],
-          // },
-
-          // // TOUR
-          // {
-          //   title: t('tour'),
-          //   path: paths.dashboard.tour.root,
-          //   icon: ICONS.tour,
-          //   children: [
-          //     { title: t('list'), path: paths.dashboard.tour.root },
-          //     { title: t('details'), path: paths.dashboard.tour.demo.details },
-          //     { title: t('create'), path: paths.dashboard.tour.new },
-          //     { title: t('edit'), path: paths.dashboard.tour.demo.edit },
-          //   ],
-          // },
-
-          // // FILE MANAGER
-          // {
-          //   title: t('file_manager'),
-          //   path: paths.dashboard.fileManager,
-          //   icon: ICONS.folder,
-          // },
-
-          // MAIL
-          //     {
-          //       title: t('mail'),
-          //       path: paths.dashboard.mail,
-          //       icon: ICONS.mail,
-          //       info: <Label color="error">+32</Label>,
-          //     },
-
-          //     // CHAT
-          //     {
-          //       title: t('chat'),
-          //       path: paths.dashboard.chat,
-          //       icon: ICONS.chat,
-          //     },
-
-          //     // CALENDAR
-          //     {
-          //       title: t('calendar'),
-          //       path: paths.dashboard.calendar,
-          //       icon: ICONS.calendar,
-          //     },
-
-          //     // KANBAN
-          //     {
-          //       title: t('kanban'),
-          //       path: paths.dashboard.kanban,
-          //       icon: ICONS.kanban,
-          //     },
-          //   ],
-          // },
-
-          // // DEMO MENU STATES
-          // {
-          //   subheader: t(t('other_cases')),
-          //   items: [
-          //     {
-          //       // default roles : All roles can see this entry.
-          //       // roles: ['user'] Only users can see this item.
-          //       // roles: ['admin'] Only admin can see this item.
-          //       // roles: ['admin', 'manager'] Only admin/manager can see this item.
-          //       // Reference from 'src/guards/RoleBasedGuard'.
-          //       title: t('item_by_roles'),
-          //       path: paths.dashboard.permission,
-          //       icon: ICONS.lock,
-          //       roles: ['admin', 'manager'],
-          //       caption: t('only_admin_can_see_this_item'),
-          //     },
-          //     {
-          //       title: t('menu_level'),
-          //       path: '#/dashboard/menu_level',
-          //       icon: ICONS.menuItem,
-          //       children: [
-          //         {
-          //           title: t('menu_level_1a'),
-          //           path: '#/dashboard/menu_level/menu_level_1a',
-          //         },
-          //         {
-          //           title: t('menu_level_1b'),
-          //           path: '#/dashboard/menu_level/menu_level_1b',
-          //           children: [
-          //             {
-          //               title: t('menu_level_2a'),
-          //               path: '#/dashboard/menu_level/menu_level_1b/menu_level_2a',
-          //             },
-          //             {
-          //               title: t('menu_level_2b'),
-          //               path: '#/dashboard/menu_level/menu_level_1b/menu_level_2b',
-          //               children: [
-          //                 {
-          //                   title: t('menu_level_3a'),
-          //                   path: '#/dashboard/menu_level/menu_level_1b/menu_level_2b/menu_level_3a',
-          //                 },
-          //                 {
-          //                   title: t('menu_level_3b'),
-          //                   path: '#/dashboard/menu_level/menu_level_1b/menu_level_2b/menu_level_3b',
-          //                 },
-          //               ],
-          //             },
-          //           ],
-          //         },
-          //       ],
-          //     },
-          //     {
-          //       title: t('item_disabled'),
-          //       path: '#disabled',
-          //       icon: ICONS.disabled,
-          //       disabled: true,
-          //     },
-          //     {
-          //       title: t('item_label'),
-          //       path: '#label',
-          //       icon: ICONS.label,
-          //       info: (
-          //         <Label color="info" startIcon={<Iconify icon="solar:bell-bing-bold-duotone" />}>
-          //           NEW
-          //         </Label>
-          //       ),
-          //     },
-          //     {
-          //       title: t('item_caption'),
-          //       path: '#caption',
-          //       icon: ICONS.menuItem,
-          //       caption:
-          //         'Quisque malesuada placerat nisl. In hac habitasse platea dictumst. Cras id dui. Pellentesque commodo eros a enim. Morbi mollis tellus ac sapien.',
-          //     },
-          //     {
-          //       title: t('item_external_link'),
-          //       path: 'https://www.google.com/',
-          //       icon: ICONS.external,
-          //     },
-          //     {
-          //       title: t('blank'),
-          //       path: paths.dashboard.blank,
-          //       icon: ICONS.blank,
-          //     },
-        ],
-      },
-    ];
-  }, [t]);
-
-  return data;
+    ],
+    [menu]
+  );
 }

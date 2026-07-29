@@ -79,6 +79,7 @@ import {
   OPEN_ORDER_DOCUMENT_TITLE,
   OPEN_ORDER_PDF_FILENAME,
 } from 'src/sections/reports/utils/open-order-report-pdf-export';
+import { useUserReportOptions } from 'src/sections/reports/utils/use-user-report-options';
 import {
   buildShippedOrderReportPdfPayload,
   fetchShippedOrderReportRows,
@@ -100,7 +101,6 @@ export const MGT_REPORT_OPTIONS = [
   { id: 'shipped-order-report', label: 'Shipped Order Report' },
 ];
 
-const DEFAULT_REPORT_ID = 'business-summary-order-wise';
 const REPORT_QUERY_KEY = 'report';
 
 const ALL = 'all';
@@ -2256,21 +2256,24 @@ function renderMgtReportPanel(activeReportId, pageTitle) {
 export default function MgtHubView() {
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const reportMenuOptions = useUserReportOptions('MGT', MGT_REPORT_OPTIONS);
+  const menuDefaultReportId = reportMenuOptions[0]?.id ?? '';
   const reportFromUrl = searchParams.get(REPORT_QUERY_KEY);
   const activeReportId = useMemo(() => {
-    const valid = MGT_REPORT_OPTIONS.some((o) => o.id === reportFromUrl);
-    return valid ? reportFromUrl : DEFAULT_REPORT_ID;
-  }, [reportFromUrl]);
+    const valid = reportMenuOptions.some((o) => o.id === reportFromUrl);
+    return valid ? reportFromUrl : menuDefaultReportId;
+  }, [reportFromUrl, reportMenuOptions, menuDefaultReportId]);
 
   useEffect(() => {
-    if (!reportFromUrl || !MGT_REPORT_OPTIONS.some((o) => o.id === reportFromUrl)) {
-      setSearchParams({ [REPORT_QUERY_KEY]: DEFAULT_REPORT_ID }, { replace: true });
+    if (!menuDefaultReportId) return;
+    if (!reportFromUrl || !reportMenuOptions.some((o) => o.id === reportFromUrl)) {
+      setSearchParams({ [REPORT_QUERY_KEY]: menuDefaultReportId }, { replace: true });
     }
-  }, [reportFromUrl, setSearchParams]);
+  }, [reportFromUrl, setSearchParams, reportMenuOptions, menuDefaultReportId]);
 
   const selectedOption = useMemo(
-    () => MGT_REPORT_OPTIONS.find((o) => o.id === activeReportId) ?? MGT_REPORT_OPTIONS[0],
-    [activeReportId]
+    () => reportMenuOptions.find((o) => o.id === activeReportId) ?? reportMenuOptions[0],
+    [activeReportId, reportMenuOptions]
   );
 
   const handleReportChange = (e) => {
@@ -2339,7 +2342,7 @@ export default function MgtHubView() {
               },
             }}
           >
-            {MGT_REPORT_OPTIONS.map((opt) => (
+            {reportMenuOptions.map((opt) => (
               <MenuItem key={opt.id} value={opt.id}>
                 {opt.label}
               </MenuItem>
@@ -2348,7 +2351,7 @@ export default function MgtHubView() {
         </FormControl>
       </Card>
 
-      {renderMgtReportPanel(activeReportId, selectedOption.label)}
+      {activeReportId ? renderMgtReportPanel(activeReportId, selectedOption?.label ?? '') : null}
     </Container>
   );
 }

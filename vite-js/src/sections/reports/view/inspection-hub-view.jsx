@@ -51,6 +51,7 @@ import {
   DEFECT_COMPARISON_REPORT_DEMO,
   DEFECT_COMPARISON_TAB_TITLE,
 } from 'src/sections/reports/utils/defect-comparison-report-pdf-export';
+import { useUserReportOptions } from 'src/sections/reports/utils/use-user-report-options';
 
 // ----------------------------------------------------------------------
 // Shared inspection auth headers — mirrors the WIP / Shipment hubs.
@@ -81,7 +82,6 @@ export const INSPECTION_REPORT_OPTIONS = [
   { id: 'defect-comparison-report', label: 'Defect Comparison Report' },
 ];
 
-const DEFAULT_REPORT_ID = 'inspection-status-report';
 const REPORT_QUERY_KEY = 'report';
 
 const ALL = 'all';
@@ -1934,13 +1934,17 @@ export function DefectComparisonReportRoute() {
   return <DefectComparisonReportForm />;
 }
 
-function resolveInspectionActiveReportId(pathname) {
+function getInspectionPathSlug(pathname) {
   const prefix = `${paths.dashboard.reports.inspection}/`;
-  if (pathname.startsWith(prefix)) {
-    const slug = pathname.slice(prefix.length).split('/')[0];
-    if (INSPECTION_REPORT_OPTIONS.some((o) => o.id === slug)) return slug;
-  }
-  return DEFAULT_REPORT_ID;
+  if (!pathname.startsWith(prefix)) return '';
+  return pathname.slice(prefix.length).split('/')[0] || '';
+}
+
+function resolveInspectionActiveReportId(pathname, menuOptions) {
+  const options = menuOptions ?? [];
+  const slug = getInspectionPathSlug(pathname);
+  if (slug && options.some((o) => o.id === slug)) return slug;
+  return options[0]?.id ?? '';
 }
 
 // ----------------------------------------------------------------------
@@ -1950,18 +1954,31 @@ export default function InspectionHubView() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
+  const reportMenuOptions = useUserReportOptions('Inspection', INSPECTION_REPORT_OPTIONS);
+  const menuDefaultReportId = reportMenuOptions[0]?.id ?? '';
+
   const activeReportId = useMemo(
-    () => resolveInspectionActiveReportId(location.pathname),
-    [location.pathname]
+    () => resolveInspectionActiveReportId(location.pathname, reportMenuOptions),
+    [location.pathname, reportMenuOptions]
   );
 
   useEffect(() => {
     const legacyReport = searchParams.get(REPORT_QUERY_KEY);
-    if (!legacyReport || !INSPECTION_REPORT_OPTIONS.some((o) => o.id === legacyReport)) {
+    if (!legacyReport || !reportMenuOptions.some((o) => o.id === legacyReport)) {
       return;
     }
     navigate(paths.dashboard.reports.inspectionReport(legacyReport), { replace: true });
-  }, [searchParams, navigate]);
+  }, [searchParams, navigate, reportMenuOptions]);
+
+  // Role-limited menus: index / disallowed slug must open the allowed default
+  // (QA Inspection Records for roleId 3 / 43) — never leave Daily Status mounted.
+  useEffect(() => {
+    if (!menuDefaultReportId) return;
+    const slug = getInspectionPathSlug(location.pathname);
+    if (slug && reportMenuOptions.some((o) => o.id === slug)) return;
+    if (slug === menuDefaultReportId) return;
+    navigate(paths.dashboard.reports.inspectionReport(menuDefaultReportId), { replace: true });
+  }, [location.pathname, navigate, reportMenuOptions, menuDefaultReportId]);
 
   const handleReportChange = (e) => {
     const next = e.target.value;
@@ -2029,7 +2046,7 @@ export default function InspectionHubView() {
               },
             }}
           >
-            {INSPECTION_REPORT_OPTIONS.map((opt) => (
+            {reportMenuOptions.map((opt) => (
               <MenuItem key={opt.id} value={opt.id}>
                 {opt.label}
               </MenuItem>

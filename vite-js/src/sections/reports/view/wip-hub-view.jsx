@@ -76,6 +76,7 @@ import {
   milestoneSupplierKey,
   milestoneSupplierLabel,
 } from 'src/sections/reports/utils/milestone-summary-dropdown-api';
+import { useUserReportOptions } from 'src/sections/reports/utils/use-user-report-options';
 
 // ----------------------------------------------------------------------
 
@@ -88,7 +89,6 @@ export const WIP_REPORT_OPTIONS = [
   { id: 'customised-customer-wip', label: 'Customised Customer WIP' },
 ];
 
-const DEFAULT_REPORT_ID = 'milestone-summary';
 const REPORT_QUERY_KEY = 'report';
 
 const ALL = 'all';
@@ -4257,21 +4257,25 @@ function renderWipReportPanel(activeReportId, pageTitle) {
 export default function WipHubView() {
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const reportMenuOptions = useUserReportOptions('WIP', WIP_REPORT_OPTIONS);
+  const menuDefaultReportId = reportMenuOptions[0]?.id ?? '';
+
   const reportFromUrl = searchParams.get(REPORT_QUERY_KEY);
   const activeReportId = useMemo(() => {
-    const valid = WIP_REPORT_OPTIONS.some((o) => o.id === reportFromUrl);
-    return valid ? reportFromUrl : DEFAULT_REPORT_ID;
-  }, [reportFromUrl]);
+    const valid = reportMenuOptions.some((o) => o.id === reportFromUrl);
+    return valid ? reportFromUrl : menuDefaultReportId;
+  }, [reportFromUrl, reportMenuOptions, menuDefaultReportId]);
 
   useEffect(() => {
-    if (!reportFromUrl || !WIP_REPORT_OPTIONS.some((o) => o.id === reportFromUrl)) {
-      setSearchParams({ [REPORT_QUERY_KEY]: DEFAULT_REPORT_ID }, { replace: true });
+    if (!menuDefaultReportId) return;
+    if (!reportFromUrl || !reportMenuOptions.some((o) => o.id === reportFromUrl)) {
+      setSearchParams({ [REPORT_QUERY_KEY]: menuDefaultReportId }, { replace: true });
     }
-  }, [reportFromUrl, setSearchParams]);
+  }, [reportFromUrl, setSearchParams, reportMenuOptions, menuDefaultReportId]);
 
   const selectedOption = useMemo(
-    () => WIP_REPORT_OPTIONS.find((o) => o.id === activeReportId) ?? WIP_REPORT_OPTIONS[0],
-    [activeReportId]
+    () => reportMenuOptions.find((o) => o.id === activeReportId) ?? reportMenuOptions[0],
+    [activeReportId, reportMenuOptions]
   );
 
   const handleReportChange = (e) => {
@@ -4279,10 +4283,11 @@ export default function WipHubView() {
     setSearchParams({ [REPORT_QUERY_KEY]: next }, { replace: true });
   };
 
-  const pageTitle =
-    selectedOption.id === 'milestone-summary'
-      ? 'Milestone Summary Page'
-      : `${selectedOption.label}`;
+  let pageTitle = '';
+  if (selectedOption) {
+    pageTitle =
+      selectedOption.id === 'milestone-summary' ? 'Milestone Summary Page' : selectedOption.label;
+  }
 
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 3 }, px: { xs: 2, sm: 3 } }}>
@@ -4342,7 +4347,7 @@ export default function WipHubView() {
               },
             }}
           >
-            {WIP_REPORT_OPTIONS.map((opt) => (
+            {reportMenuOptions.map((opt) => (
               <MenuItem key={opt.id} value={opt.id}>
                 {opt.label}
               </MenuItem>
@@ -4351,7 +4356,7 @@ export default function WipHubView() {
         </FormControl>
       </Card>
 
-      {renderWipReportPanel(activeReportId, pageTitle)}
+      {activeReportId ? renderWipReportPanel(activeReportId, pageTitle) : null}
     </Container>
   );
 }
