@@ -81,6 +81,9 @@ function FormField({ label, children }) {
 
 const REGISTER_ENDPOINT = '/api/Auth/register';
 const ROLES_ENDPOINT = '/api/Auth/roles';
+const STRONG_PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s]).{8,}$/;
+const PASSWORD_VALIDATION_MESSAGE =
+  'Password must contain at least 8 characters, one uppercase letter, one lowercase letter, one number and one special character.';
 
 export default function CreateUserPage() {
   const navigate = useNavigate();
@@ -91,6 +94,7 @@ export default function CreateUserPage() {
   const [rolesLoading, setRolesLoading] = useState(false);
   const [roles, setRoles] = useState([]);
   const [formData, setFormData] = useState(INITIAL_FORM);
+  const [passwordError, setPasswordError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -129,6 +133,9 @@ export default function CreateUserPage() {
       ...prev,
       [name]: value,
     }));
+    if (name === 'password' && passwordError) {
+      setPasswordError(STRONG_PASSWORD_PATTERN.test(value) ? '' : PASSWORD_VALIDATION_MESSAGE);
+    }
   };
 
   const handleCancel = () => {
@@ -136,6 +143,12 @@ export default function CreateUserPage() {
   };
 
   const handleSave = async () => {
+    if (!STRONG_PASSWORD_PATTERN.test(formData.password)) {
+      setPasswordError(PASSWORD_VALIDATION_MESSAGE);
+      return;
+    }
+
+    setPasswordError('');
     setIsSubmitting(true);
 
     try {
@@ -155,6 +168,7 @@ export default function CreateUserPage() {
 
       enqueueSnackbar('User created successfully', { variant: 'success' });
       setFormData(INITIAL_FORM);
+      setPasswordError('');
       setShowPassword(false);
     } catch (error) {
       enqueueSnackbar(getLoginErrorMessage(error), { variant: 'error' });
@@ -272,6 +286,8 @@ export default function CreateUserPage() {
                   type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={handleChange}
+                  error={Boolean(passwordError)}
+                  helperText={passwordError}
                   sx={FIELD_SX}
                   InputProps={{
                     endAdornment: (
