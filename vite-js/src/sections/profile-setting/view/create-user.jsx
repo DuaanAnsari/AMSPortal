@@ -234,6 +234,7 @@ export default function CreateUserPage() {
                   size="small"
                   variant="outlined"
                   name="name"
+                  autoComplete="off"
                   value={formData.name}
                   onChange={handleChange}
                   sx={FIELD_SX}
@@ -246,6 +247,7 @@ export default function CreateUserPage() {
                   size="small"
                   variant="outlined"
                   name="username"
+                  autoComplete="off"
                   value={formData.username}
                   onChange={handleChange}
                   sx={FIELD_SX}
@@ -259,6 +261,7 @@ export default function CreateUserPage() {
                   variant="outlined"
                   name="email"
                   type="email"
+                  autoComplete="off"
                   value={formData.email}
                   onChange={handleChange}
                   sx={FIELD_SX}
@@ -271,6 +274,7 @@ export default function CreateUserPage() {
                   size="small"
                   variant="outlined"
                   name="phoneNumber"
+                  autoComplete="off"
                   value={formData.phoneNumber}
                   onChange={handleChange}
                   sx={FIELD_SX}
@@ -284,6 +288,7 @@ export default function CreateUserPage() {
                   variant="outlined"
                   name="password"
                   type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
                   value={formData.password}
                   onChange={handleChange}
                   error={Boolean(passwordError)}
@@ -317,6 +322,7 @@ export default function CreateUserPage() {
                   size="small"
                   variant="outlined"
                   name="designation"
+                  autoComplete="off"
                   value={formData.designation}
                   onChange={handleChange}
                   sx={FIELD_SX}
@@ -345,6 +351,11 @@ export default function CreateUserPage() {
                     <TextField
                       {...params}
                       variant="outlined"
+                      autoComplete="off"
+                      inputProps={{
+                        ...params.inputProps,
+                        autoComplete: 'off',
+                      }}
                       sx={FIELD_SX}
                       InputProps={{
                         ...params.InputProps,
@@ -367,6 +378,7 @@ export default function CreateUserPage() {
                   variant="outlined"
                   name="managerId"
                   type="number"
+                  autoComplete="off"
                   value={formData.managerId}
                   onChange={handleChange}
                   sx={FIELD_SX}
