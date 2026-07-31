@@ -28,7 +28,7 @@ const ICONS = {
 };
 
 const MENU_ENDPOINT = '/api/MyOrders/GetUserMenus';
-const NOT_FOUND_PATH = paths.page404;
+const NOT_FOUND_PATH = paths.underConstruction;
 
 const cleanMenuName = (name) =>
   String(name ?? '')

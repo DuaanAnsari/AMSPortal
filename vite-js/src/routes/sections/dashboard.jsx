@@ -187,6 +187,7 @@ const DefectComparisonReportRoute = lazy(() =>
 );
 const InquiryHubPage = lazy(() => import('src/sections/reports/view/inquiry-hub-view'));
 const OtherHubPage = lazy(() => import('src/sections/reports/view/other-hub-view'));
+const UnderConstructionPage = lazy(() => import('src/pages/under-construction'));
 
 // BLOG
 const BlogPostsPage = lazy(() => import('src/pages/dashboard/post/list'));
@@ -366,6 +367,10 @@ export const dashboardRoutes = [
       {
         path: 'reports/other',
         element: <OtherHubPage />,
+      },
+      {
+        path: 'under-construction',
+        element: <UnderConstructionPage />,
       },
 
       // {

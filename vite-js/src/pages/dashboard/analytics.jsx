@@ -1,6 +1,6 @@
 import { Helmet } from 'react-helmet-async';
 
-import { OverviewAnalyticsView } from 'src/sections/overview/analytics/view';
+import { UnderConstructionView } from 'src/sections/error';
 
 // ----------------------------------------------------------------------
 
@@ -11,7 +11,7 @@ export default function OverviewAnalyticsPage() {
         <title> Dashboard: Analytics</title>
       </Helmet>
 
-      <OverviewAnalyticsView />
+      <UnderConstructionView />
     </>
   );
 }

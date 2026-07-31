@@ -18,6 +18,7 @@ const ROOTS = {
 
 export const paths = {
   comingSoon: '/coming-soon',
+  underConstruction: `${ROOTS.DASHBOARD}/under-construction`,
   maintenance: '/maintenance',
   pricing: '/pricing',
   payment: '/payment',
