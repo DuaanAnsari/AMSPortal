@@ -65,6 +65,55 @@ const SENTINEL_DATES = new Set([
 ]);
 const isRealDate = (v) => !!v && !SENTINEL_DATES.has(v);
 
+/** Old TNAChartView BindGrid: PP Sample freeze field locks (Role + ProcessID). */
+const PP_FREEZE_PROCESS_IDS_NON_VENDOR = new Set([
+  20, 71, 110, 74, 25, 112, 19, 30, 49, 81, 114, 131, 23,
+]);
+const PP_FREEZE_PROCESS_IDS_VENDOR = new Set([74, 25, 112, 19, 30, 49, 81, 114, 131, 23]);
+const VENDOR_QA_ROLE_IDS = new Set([21, 44, 45, 47]);
+const PP_SAMPLE_PROCESS_IDS = new Set([14, 65]);
+const PP_FREEZE_FIELD_SUFFIXES = new Set([
+  'status',
+  'qtycompleted',
+  'estimateddate',
+  'actualdate',
+  'approvaldatee',
+]);
+
+function getTnaFieldSuffix(field = '') {
+  const f = String(field).toLowerCase();
+  const suffixes = [
+    'prefilledremarks',
+    'units',
+    'status',
+    'qtycompleted',
+    'idealdate',
+    'actualdate',
+    'approvaldatee',
+    'estimateddate',
+  ];
+  const hit = suffixes.find((s) => f.endsWith(`_${s}`));
+  return hit || '';
+}
+
+/** Returns true when Old AMS would set Enabled=False on the cell. */
+function isTnaPpFreezeLocked({ roleId, processId, freezeCond, fieldSuffix }) {
+  if (!PP_FREEZE_FIELD_SUFFIXES.has(String(fieldSuffix || '').toLowerCase())) return false;
+  const pid = Number(processId);
+  const rid = Number(roleId);
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+
+  // Role 21/44/45/47 + Process 14/65 → always freeze those fields
+  if (VENDOR_QA_ROLE_IDS.has(rid) && PP_SAMPLE_PROCESS_IDS.has(pid)) return true;
+
+  const ppUnapproved = !isRealDate(freezeCond);
+  if (!ppUnapproved) return false;
+
+  if (!VENDOR_QA_ROLE_IDS.has(rid) && PP_FREEZE_PROCESS_IDS_NON_VENDOR.has(pid)) return true;
+  if (VENDOR_QA_ROLE_IDS.has(rid) && PP_FREEZE_PROCESS_IDS_VENDOR.has(pid)) return true;
+  return false;
+}
+
 // Helper: Normalize process name to a safe JavaScript key
 const getSafeKey = (proc, suffix) => {
   if (!proc) return '';
@@ -366,6 +415,13 @@ export default function TNAChartPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Old AMS TNAChartView Session("RoleID")
+  const roleId = Number(localStorage.getItem('roleId') || 0);
+  const canShowNotApplicableProcess = roleId === 1 || roleId === 42 || roleId === 49;
+  const canShowNotApplicable = roleId === 1 || roleId === 3 || roleId === 43 || roleId === 49;
+  const canEditAssignMerchant = roleId === 1 || roleId === 3 || roleId === 49;
+  const canEditAssignProdOrShip = roleId === 1 || roleId === 49;
+
   const gridRef = useRef(null);
   const dragScrollRef = useRef({ active: false, wasDragged: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
   const fullColDefsRef = useRef([]); // stores unfiltered column defs for dynamic visibility
@@ -471,6 +527,7 @@ export default function TNAChartPage() {
     productionFollowup: '',
     prodPersonID: null,
     shippingPerson: 'MEHWISH RIAZ',
+    shipPersonID: null,
     productionStatus: 'N/A',
   });
 
@@ -979,7 +1036,18 @@ export default function TNAChartPage() {
             if (raw == null || raw === '') return '';
             return normalizeTnaDateCellValue(raw, String(raw));
           };
-          const notEditableIfNoProcess = (params) => !!params.data?.[existsKey];
+          const notEditableIfNoProcess = (params) => {
+            if (!params.data?.[existsKey]) return false;
+            const field = params.colDef?.field || '';
+            const suffix = getTnaFieldSuffix(field);
+            const processId = params.data?.[safeKey('processID')];
+            const freezeCond =
+              params.data?.[safeKey('freezeCondPPSample')] ?? params.data?.freezeCondPPSample;
+            if (isTnaPpFreezeLocked({ roleId, processId, freezeCond, fieldSuffix: suffix })) {
+              return false;
+            }
+            return true;
+          };
           const noProcessCellStyle = (params) => {
             const base = {};
             if (!params.data?.[existsKey]) {
@@ -1183,7 +1251,8 @@ export default function TNAChartPage() {
           row[safe('qtyCompleted')] =
             item.qtyCompleted ?? item.QtyCompleted ?? '';
           row[safe('freezeCondPPSample')] = formatGridDate(parseApiDateToDate(item.freezeCondPPSample)) || null;
-          // IDs / sequence per process for UpdateTNA
+          // IDs / sequence per process for UpdateTNA + Role freeze locks
+          row[safe('processID')] = item.processID ?? item.ProcessID ?? 0;
           row[safe('tnaChartID')] = item.tnaChartID ?? item.tnaChartId ?? 0;
           row[safe('sequence')] = item.sequence ?? 0;
         }
@@ -1341,7 +1410,18 @@ export default function TNAChartPage() {
             if (raw == null || raw === '') return '';
             return normalizeTnaDateCellValue(raw, String(raw));
           };
-          const notEditableIfNoProcess = (params) => !!params.data?.[existsKey];
+          const notEditableIfNoProcess = (params) => {
+            if (!params.data?.[existsKey]) return false;
+            const field = params.colDef?.field || '';
+            const suffix = getTnaFieldSuffix(field);
+            const processId = params.data?.[safeKey('processID')];
+            const freezeCond =
+              params.data?.[safeKey('freezeCondPPSample')] ?? params.data?.freezeCondPPSample;
+            if (isTnaPpFreezeLocked({ roleId, processId, freezeCond, fieldSuffix: suffix })) {
+              return false;
+            }
+            return true;
+          };
           const noProcessCellStyle = (params) => {
             const base = {};
             if (!params.data?.[existsKey]) {
@@ -1508,6 +1588,7 @@ export default function TNAChartPage() {
           row[safe('preFilledRemarks')] = item.preFilledRemarks || item.PreFilledRemarks || item.prefilledRemarks || '';
           row[safe('qtyCompleted')] = item.qtyCompleted ?? item.QtyCompleted ?? '';
           row[safe('freezeCondPPSample')] = formatGridDate(parseApiDateToDate(item.freezeCondPPSample)) || null;
+          row[safe('processID')] = item.processID ?? item.ProcessID ?? 0;
           row[safe('tnaChartID')] = item.tnaChartID ?? item.tnaChartId ?? 0;
           row[safe('sequence')] = item.sequence ?? 0;
         }
@@ -2163,6 +2244,8 @@ export default function TNAChartPage() {
 
     const resolvedProdId =
       Number.isFinite(prodPersonIds[0]) && prodPersonIds[0] > 0 ? prodPersonIds[0] : null;
+    const resolvedShipId =
+      Number.isFinite(shipPersonIds[0]) && shipPersonIds[0] > 0 ? shipPersonIds[0] : null;
 
     setAssignForm((prev) => ({
       ...prev,
@@ -2172,6 +2255,7 @@ export default function TNAChartPage() {
       productionFollowup: prodName,
       prodPersonID: resolvedProdId,
       shippingPerson: shipName,
+      shipPersonID: resolvedShipId,
       productionStatus: productionStatusFromApi || 'N/A',
     }));
   }, [merchAssistantOptions, qaList, printQaList, productionList, shippingList]);
@@ -2192,6 +2276,7 @@ export default function TNAChartPage() {
       productionFollowup: '',
       prodPersonID: null,
       shippingPerson: 'MEHWISH RIAZ',
+      shipPersonID: null,
       productionStatus: 'N/A',
     });
     setAssignTeamModalOpen(true);
@@ -2215,6 +2300,7 @@ export default function TNAChartPage() {
       productionFollowup: '',
       prodPersonID: null,
       shippingPerson: 'MEHWISH RIAZ',
+      shipPersonID: null,
       productionStatus: 'N/A',
     });
     setAssignTeamModalOpen(true);
@@ -2673,7 +2759,22 @@ export default function TNAChartPage() {
                     '_approvaldatee',
                     '_estimateddate',
                   ];
-                  return editableSuffixes.some((suffix) => field.endsWith(suffix));
+                  const f = field.toLowerCase();
+                  if (!editableSuffixes.some((suffix) => f.endsWith(suffix))) return false;
+                  const suffix = getTnaFieldSuffix(field);
+                  const lastUnderscore = f.lastIndexOf(`_${suffix}`);
+                  const procSafe = lastUnderscore > 0 ? field.slice(0, lastUnderscore) : '';
+                  const processId =
+                    params.data?.[`${procSafe}_processid`] ??
+                    params.data?.[`${procSafe}_processID`];
+                  const freezeCond =
+                    params.data?.[`${procSafe}_freezecondppsample`] ??
+                    params.data?.[`${procSafe}_freezeCondPPSample`] ??
+                    params.data?.freezeCondPPSample;
+                  if (isTnaPpFreezeLocked({ roleId, processId, freezeCond, fieldSuffix: suffix })) {
+                    return false;
+                  }
+                  return true;
                 },
               }}
               enableRangeSelection
@@ -2720,9 +2821,11 @@ export default function TNAChartPage() {
         <Button variant="contained" color="primary" sx={{ minWidth: 160 }} onClick={handleOpenAsignTeam}>
           Assign Team
         </Button>
-        <Button variant="contained" color="primary" sx={{ minWidth: 160 }} onClick={handleNotApplicable}>
-          Not Applicable
-        </Button>
+        {canShowNotApplicable && (
+          <Button variant="contained" color="primary" sx={{ minWidth: 160 }} onClick={handleNotApplicable}>
+            Not Applicable
+          </Button>
+        )}
         {modifiedRows.size > 0 && (
           <Button
             variant="contained"
@@ -2741,14 +2844,16 @@ export default function TNAChartPage() {
             )}
           </Button>
         )}
-        <Button
-          variant="contained"
-          color="primary"
-          sx={{ minWidth: 220 }}
-          onClick={handleShowNotApplicable}
-        >
-          Show Not Applicable Process
-        </Button>
+        {canShowNotApplicableProcess && (
+          <Button
+            variant="contained"
+            color="primary"
+            sx={{ minWidth: 220 }}
+            onClick={handleShowNotApplicable}
+          >
+            Show Not Applicable Process
+          </Button>
+        )}
       </Box>
 
       <Dialog
@@ -2851,7 +2956,7 @@ export default function TNAChartPage() {
               disableCloseOnSelect
               options={merchAssistantOptionsWithNA}
               value={assignForm.merchandiserAssistant}
-              disabled={assignViewOnly}
+              disabled={assignViewOnly || !canEditAssignMerchant}
               loading={assignOptionsLoading}
               onChange={(event, newValue) => {
                 // If user selects N/A, keep only N/A; otherwise remove N/A.
@@ -2979,7 +3084,10 @@ export default function TNAChartPage() {
                 null
               }
               loading={assignOptionsLoading}
-              disabled={assignViewOnly}
+              disabled={
+                assignViewOnly ||
+                (Number(assignForm.prodPersonID) > 0 && !canEditAssignProdOrShip)
+              }
               onChange={(event, newValue) => {
                 setAssignForm((prev) => ({
                   ...prev,
@@ -2997,10 +3105,20 @@ export default function TNAChartPage() {
             <Autocomplete
               options={shippingList.map((x) => x.userName)}
               value={assignForm.shippingPerson || null}
-              disabled={assignViewOnly}
+              disabled={
+                assignViewOnly ||
+                (Number(assignForm.shipPersonID) > 0 && !canEditAssignProdOrShip)
+              }
               loading={assignOptionsLoading}
               onChange={(event, newValue) => {
-                setAssignForm((prev) => ({ ...prev, shippingPerson: newValue || '' }));
+                const hit = shippingList.find(
+                  (x) => normalizeText(x?.userName) === normalizeText(newValue)
+                );
+                setAssignForm((prev) => ({
+                  ...prev,
+                  shippingPerson: newValue || '',
+                  shipPersonID: extractNumericId(hit),
+                }));
               }}
               renderInput={(params) => <TextField {...params} label="Shipping Person" size="medium" />}
               isOptionEqualToValue={(option, value) => option === value}

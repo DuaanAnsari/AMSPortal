@@ -179,6 +179,10 @@ export default function CourierPackagingViewPage() {
   const { enqueueSnackbar } = useSnackbar();
   const defaults = useMemo(() => monthRangeDefaults(), []);
 
+  // Old AMS MerchandisingView: Action/Remove column only for RoleID = 1
+  const roleId = Number(localStorage.getItem('roleId') || 0);
+  const canDeleteCourier = roleId === 1;
+
   const [rows, setRows] = useState([]);
   const [reorderedRows, setReorderedRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -459,31 +463,35 @@ export default function CourierPackagingViewPage() {
       { field: 'courierName', headerName: 'Courier Name', flex: 1, minWidth: 110 },
       { field: 'account', headerName: 'Account', flex: 0.8, minWidth: 80 },
       { field: 'awbl', headerName: 'AWBL #', flex: 1, minWidth: 100 },
-      {
-        field: 'delete',
-        headerName: 'Delete',
-        width: 80,
-        sortable: false,
-        filterable: false,
-        align: 'center',
-        headerAlign: 'center',
-        renderCell: () => (
-          <Tooltip title="Delete" arrow>
-            <IconButton
-              size="small"
-              aria-label="Delete"
-              sx={{
-                p: 0.6,
-                color: 'error.main',
-                borderRadius: 1,
-                '&:hover': { bgcolor: 'error.lighter' },
-              }}
-            >
-              <Iconify icon="solar:trash-bin-trash-bold" width={22} height={22} />
-            </IconButton>
-          </Tooltip>
-        ),
-      },
+      ...(canDeleteCourier
+        ? [
+            {
+              field: 'delete',
+              headerName: 'Delete',
+              width: 80,
+              sortable: false,
+              filterable: false,
+              align: 'center',
+              headerAlign: 'center',
+              renderCell: () => (
+                <Tooltip title="Delete" arrow>
+                  <IconButton
+                    size="small"
+                    aria-label="Delete"
+                    sx={{
+                      p: 0.6,
+                      color: 'error.main',
+                      borderRadius: 1,
+                      '&:hover': { bgcolor: 'error.lighter' },
+                    }}
+                  >
+                    <Iconify icon="solar:trash-bin-trash-bold" width={22} height={22} />
+                  </IconButton>
+                </Tooltip>
+              ),
+            },
+          ]
+        : []),
       {
         field: 'edit',
         headerName: 'Edit',
@@ -536,8 +544,7 @@ export default function CourierPackagingViewPage() {
                       borderColor: 'error.main',
                       '& .MuiSvgIcon-root': { color: 'inherit' },
                     },
-                    '&.Mui-disabled': { opacity: 0.85 },
-                  }}
+                    '&.Mui-disabled': { opacity: 0.85 },                  }}
                 >
                   {busy ? (
                     <CircularProgress color="inherit" size={22} thickness={4} />
@@ -551,7 +558,7 @@ export default function CourierPackagingViewPage() {
         },
       },
     ],
-    [handleEditNavigate, handlePdfView, handleDragStart, handleDragEnter, handleDrop, pdfRowId]
+    [canDeleteCourier, handleEditNavigate, handlePdfView, handleDragStart, handleDragEnter, handleDrop, pdfRowId]
   );
 
   return (

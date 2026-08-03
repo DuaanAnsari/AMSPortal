@@ -30,6 +30,34 @@ import { LoadingButton } from '@mui/lab';
 
 // ----------------------------------------------------------------------
 
+// Old AMS CargoReleaseNew.aspx.vb FreezeFieldsForRole48 — RoleID = 48
+const getUserRoleId = () => {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem('roleId');
+  if (!raw) return null;
+  const n = parseInt(raw, 10);
+  return Number.isNaN(n) ? null : n;
+};
+
+/** Fields Old left enabled (FreezeFieldsForRole48 commented disable lines). */
+const ROLE48_STILL_EDITABLE = new Set([
+  'actualEta',
+  'revisedEta',
+  'actualEtw',
+  'revisedEtw',
+  'containerReleaseDate',
+  'goodsClearedDate',
+  'containerDeliveryDate',
+  'warehouseName',
+  'truckerName',
+  'updateSheetRemarks',
+]);
+
+const isRole48FieldLocked = (field) => {
+  if (getUserRoleId() !== 48) return false;
+  return !ROLE48_STILL_EDITABLE.has(field);
+};
+
 const defaultFormValues = {
   icNo: '',
   invoice: '',
@@ -160,6 +188,7 @@ const extractSupplierIdDeep = (input) => {
 export default function ShipmentReleaseAddPage() {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+  const isRole48Locked = getUserRoleId() === 48;
   const [form, setForm] = useState(defaultFormValues);
   const [poDialogOpen, setPoDialogOpen] = useState(false);
   const [poSearch, setPoSearch] = useState('');
@@ -214,6 +243,7 @@ export default function ShipmentReleaseAddPage() {
   }, []);
 
   const handleChange = (field) => (event) => {
+    if (isRole48FieldLocked(field)) return;
     setForm((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
@@ -674,7 +704,21 @@ export default function ShipmentReleaseAddPage() {
           </Button>
         </Box>
 
-        <Grid container spacing={3}>
+        <Grid
+          container
+          spacing={3}
+          sx={
+            isRole48Locked
+              ? {
+                  // Old FreezeFieldsForRole48: lock inputs/actions; exceptions via data-role48-keep
+                  '& .MuiInputBase-root, & .MuiButton-root, & .MuiIconButton-root, & .MuiAutocomplete-root':
+                    { pointerEvents: 'none', opacity: 0.85 },
+                  '& [data-role48-keep] .MuiInputBase-root, & [data-role48-keep].MuiButton-root, & [data-role48-keep] .MuiButton-root, & [data-role48-keep].MuiIconButton-root':
+                    { pointerEvents: 'auto', opacity: 1 },
+                }
+              : undefined
+          }
+        >
           {/* Row 1: IC # / Invoice / Date */}
           <Grid item xs={12} sm={4}>
             <TextField
@@ -683,6 +727,7 @@ export default function ShipmentReleaseAddPage() {
               value={form.icNo || ''}
               onChange={handleChange('icNo')}
               size="small"
+              disabled={isRole48FieldLocked('icNo')}
             />
           </Grid>
           <Grid item xs={12} sm={4}>
@@ -692,6 +737,7 @@ export default function ShipmentReleaseAddPage() {
               value={form.invoice || ''}
               onChange={handleChange('invoice')}
               size="small"
+              disabled={isRole48FieldLocked('invoice')}
             />
           </Grid>
           <Grid item xs={12} sm={4}>
@@ -703,6 +749,7 @@ export default function ShipmentReleaseAddPage() {
               onChange={handleChange('date')}
               size={'small'}
               InputLabelProps={{ shrink: true }}
+              disabled={isRole48FieldLocked('date')}
             />
           </Grid>
 
@@ -993,7 +1040,7 @@ export default function ShipmentReleaseAddPage() {
           </Grid>
 
           {/* Row: Actual/Revised ETA & Expected ETW */}
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={4} data-role48-keep>
             <TextField
               fullWidth
               type="date"
@@ -1004,7 +1051,7 @@ export default function ShipmentReleaseAddPage() {
               InputLabelProps={{ shrink: true }}
             />
           </Grid>
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={4} data-role48-keep>
             <TextField
               fullWidth
               type="date"
@@ -1024,11 +1071,12 @@ export default function ShipmentReleaseAddPage() {
               onChange={handleChange('expectedEtw')}
               size="small"
               InputLabelProps={{ shrink: true }}
+              disabled={isRole48FieldLocked('expectedEtw')}
             />
           </Grid>
 
           {/* Row: Actual/ Revised ETW / Container Release Date */}
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={4} data-role48-keep>
             <TextField
               fullWidth
               type="date"
@@ -1039,7 +1087,7 @@ export default function ShipmentReleaseAddPage() {
               InputLabelProps={{ shrink: true }}
             />
           </Grid>
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={4} data-role48-keep>
             <TextField
               fullWidth
               type="date"
@@ -1050,7 +1098,7 @@ export default function ShipmentReleaseAddPage() {
               InputLabelProps={{ shrink: true }}
             />
           </Grid>
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={4} data-role48-keep>
             <TextField
               fullWidth
               type="date"
@@ -1063,7 +1111,7 @@ export default function ShipmentReleaseAddPage() {
           </Grid>
 
           {/* Row: Goods Cleared / Docs to Broker / Container Delivery Date */}
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={4} data-role48-keep>
             <TextField
               fullWidth
               type="date"
@@ -1085,7 +1133,7 @@ export default function ShipmentReleaseAddPage() {
               InputLabelProps={{ shrink: true }}
             />
           </Grid>
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={4} data-role48-keep>
             <TextField
               fullWidth
               type="date"
@@ -1144,7 +1192,7 @@ export default function ShipmentReleaseAddPage() {
               InputLabelProps={{ shrink: true }}
             />
           </Grid>
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={4} data-role48-keep>
             <TextField
               fullWidth
               label="Warehouse Name"
@@ -1153,7 +1201,7 @@ export default function ShipmentReleaseAddPage() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={4} data-role48-keep>
             <TextField
               fullWidth
               label="Trucker Name"
@@ -1164,7 +1212,7 @@ export default function ShipmentReleaseAddPage() {
           </Grid>
 
           {/* Row: Update Sheet Remarks */}
-          <Grid item xs={12}>
+          <Grid item xs={12} data-role48-keep>
             <TextField
               fullWidth
               label="Update Sheet Remarks"
@@ -1550,8 +1598,8 @@ export default function ShipmentReleaseAddPage() {
           )}
         </Grid>
 
-        {/* Actions */}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4 }}>
+        {/* Actions — Old Role 48 keeps Save/Cancel enabled */}
+        <Box data-role48-keep sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4 }}>
           <LoadingButton
             variant="contained"
             onClick={handleSave}

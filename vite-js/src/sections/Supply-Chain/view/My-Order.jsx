@@ -147,15 +147,22 @@ const getUserRoleId = () => {
   return null;
 };
 
-// Check if user has restricted access based on role IDs
+// Old AMS PurchaseorderView.aspx.vb — RoleID-only (SupplierId skipped)
+// Grid: hide View / PDF / Copy / Revised for RoleID 21, 44, 45, 30 (not 41/43)
+const GRID_RESTRICTED_ROLE_IDS = [21, 44, 45, 30];
+// Add button: hide for RoleID 21, 44, 45, 30, 41, 43
+const ADD_HIDDEN_ROLE_IDS = [21, 44, 45, 30, 41, 43];
+
 const hasRestrictedAccess = () => {
   const userRoleId = getUserRoleId();
-
   if (!userRoleId) return false;
+  return GRID_RESTRICTED_ROLE_IDS.includes(userRoleId);
+};
 
-  const restrictedRoles = [21, 44, 45, 30];
-
-  return restrictedRoles.includes(userRoleId);
+const isAddOrderHidden = () => {
+  const userRoleId = getUserRoleId();
+  if (!userRoleId) return false;
+  return ADD_HIDDEN_ROLE_IDS.includes(userRoleId);
 };
 
 // Dynamic TABLE_HEAD based on user role
@@ -376,8 +383,9 @@ export default function PurchaseOrderView() {
   const [merchAssistantName, setMerchAssistantName] = useState('');
   const [merchAssistantLoading, setMerchAssistantLoading] = useState(false);
 
-  // Check restricted access
+  // Check restricted access (Old AMS RoleID grid + Add rules)
   const isRestrictedUser = hasRestrictedAccess();
+  const hideAddOrder = isAddOrderHidden();
 
   // Dynamic table head based on user role
   const TABLE_HEAD = getTableHead(isRestrictedUser);
@@ -1052,14 +1060,16 @@ export default function PurchaseOrderView() {
                   </Button>
                 )}
 
-                <Button
-                  variant="contained"
-                  startIcon={<Iconify icon="eva:plus-fill" width={20} />}
-                  onClick={() => navigate('/dashboard/supply-chain/add-order')}
-                  sx={{ whiteSpace: 'nowrap' }}
-                >
-                  Add Order
-                </Button>
+                {!hideAddOrder && (
+                  <Button
+                    variant="contained"
+                    startIcon={<Iconify icon="eva:plus-fill" width={20} />}
+                    onClick={() => navigate('/dashboard/supply-chain/add-order')}
+                    sx={{ whiteSpace: 'nowrap' }}
+                  >
+                    Add Order
+                  </Button>
+                )}
               </Box>
             </Grid>
           </Grid>

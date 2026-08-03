@@ -32,6 +32,17 @@ import {
 
 // ----------------------------------------------------------------------
 
+// Old AMS CargoReleaseView.aspx.vb Page_Load — RoleID = 48 hides Add
+const getUserRoleId = () => {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem('roleId');
+  if (!raw) return null;
+  const n = parseInt(raw, 10);
+  return Number.isNaN(n) ? null : n;
+};
+
+const isAddShipmentHidden = () => getUserRoleId() === 48;
+
 const TABLE_HEAD = [
   { id: 'shipDate', label: 'Ship.Date', width: 150 },
   { id: 'invoiceNo', label: 'Invoice No', width: 120 },
@@ -106,6 +117,7 @@ const TABLE_ROW_SX = {
 
 export default function ShipmentReleaseFilters() {
   const navigate = useNavigate();
+  const hideAddShipment = isAddShipmentHidden();
   const [filters, setFilters] = useState(() => ({ ...DEFAULT_FILTERS }));
   const [tableData, setTableData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -530,27 +542,29 @@ export default function ShipmentReleaseFilters() {
               >
                 Clear
               </Button>
-              <Button
-                variant="contained"
-                color="primary"
-                size="small"
-                sx={{
-                  px: 3,
-                  minWidth: 140,
-                  height: 40,
-                  fontWeight: 600,
-                  textTransform: 'none',
-                  borderRadius: 999,
-                  boxShadow: '0 4px 10px rgba(15, 23, 42, 0.3)',
-                  backgroundColor: '#171616',
-                  '&:hover': {
-                    backgroundColor: '#000000',
-                  },
-                }}
-                onClick={() => navigate('/dashboard/supply-chain/shipment-release/add')}
-              >
-                Add Shipment
-              </Button>
+              {!hideAddShipment && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="small"
+                  sx={{
+                    px: 3,
+                    minWidth: 140,
+                    height: 40,
+                    fontWeight: 600,
+                    textTransform: 'none',
+                    borderRadius: 999,
+                    boxShadow: '0 4px 10px rgba(15, 23, 42, 0.3)',
+                    backgroundColor: '#171616',
+                    '&:hover': {
+                      backgroundColor: '#000000',
+                    },
+                  }}
+                  onClick={() => navigate('/dashboard/supply-chain/shipment-release/add')}
+                >
+                  Add Shipment
+                </Button>
+              )}
             </Box>
           </Grid>
         </Grid>

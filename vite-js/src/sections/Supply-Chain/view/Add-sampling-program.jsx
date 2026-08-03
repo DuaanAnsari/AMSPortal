@@ -62,7 +62,12 @@ export default function SamplingProgramForm() {
         <Grid container spacing={3}>
           <Grid item xs={12} md={4}>
             <Typography>Sampling Program No</Typography>
-            <TextField fullWidth size="medium" value="SPN-0002" />
+            <TextField
+              fullWidth
+              size="medium"
+              value="SPN-0002"
+              InputProps={{ readOnly: true }}
+            />
           </Grid>
 
           <Grid item xs={12} md={4}>

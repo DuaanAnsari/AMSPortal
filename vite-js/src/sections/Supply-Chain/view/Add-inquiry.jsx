@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -12,9 +13,24 @@ import {
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 
+// Old AMS InquiryAdd.aspx.vb — Page_Load UserId = 28
+const getUserId = () => {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem('userId');
+  if (!raw) return null;
+  const n = parseInt(raw, 10);
+  return Number.isNaN(n) ? null : n;
+};
+
+/** UserId = 28 → hide Delivery Date + Order Qty (Page_Load L33–43) */
+const isUserId28 = () => getUserId() === 28;
+
 const AddInquiry = () => {
   const navigate = useNavigate();
   const purple = '#3b2a64';
+
+  // InquiryAdd.aspx.vb Page_Load: UserId = 28 hides Delivery Date + Order Qty
+  const hideDeliveryAndOrderQty = isUserId28();
 
   const [customer, setCustomer] = useState('');
   const [supplier, setSupplier] = useState('');
@@ -271,21 +287,25 @@ const AddInquiry = () => {
           <Grid item xs={12} md={4}>
             <TextField fullWidth label="Inquiry Qty" />
           </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              label="Delivery Date"
-              type="date"
-              InputLabelProps={{ shrink: true }}
-            />
-          </Grid>
+          {!hideDeliveryAndOrderQty && (
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                label="Delivery Date"
+                type="date"
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+          )}
 
           <Grid item xs={12} md={4}>
             <TextField fullWidth label="GSM" />
           </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField fullWidth label="Order Qtys" />
-          </Grid>
+          {!hideDeliveryAndOrderQty && (
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth label="Order Qtys" />
+            </Grid>
+          )}
           <Grid item xs={12} md={4}>
             <TextField fullWidth label="Size" />
           </Grid>

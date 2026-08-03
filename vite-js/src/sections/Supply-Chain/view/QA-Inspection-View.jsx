@@ -12,7 +12,6 @@ import Paper from '@mui/material/Paper';
 import Alert from '@mui/material/Alert';
 import Tooltip from '@mui/material/Tooltip';
 import MenuItem from '@mui/material/MenuItem';
-import Checkbox from '@mui/material/Checkbox';
 import IconButton from '@mui/material/IconButton';
 import EditIcon from '@mui/icons-material/Edit';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
@@ -32,9 +31,28 @@ import { pdf } from '@react-pdf/renderer';
 
 const INSP_TYPES = ['ALL', 'IPC', 'MPC', 'Pre-Final', 'Final'];
 
+// Old AMS QAInspViewNew.aspx.vb Page_Load — hide Edit for RoleID 1, 3, 43
+const EDIT_HIDDEN_ROLE_IDS = [1, 3, 43];
+
+const getUserRoleId = () => {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem('roleId');
+  if (!raw) return null;
+  const n = parseInt(raw, 10);
+  return Number.isNaN(n) ? null : n;
+};
+
+const isEditColumnHiddenByRole = () => {
+  const roleId = getUserRoleId();
+  if (roleId == null) return false;
+  return EDIT_HIDDEN_ROLE_IDS.includes(roleId);
+};
+
 export default function QAInspectionView({ embedded = false }) {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+
+  const hideEditByRole = useMemo(() => isEditColumnHiddenByRole(), []);
 
   const [filters, setFilters] = useState({
     poNo: '',
@@ -90,17 +108,6 @@ export default function QAInspectionView({ embedded = false }) {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchFilters]);
-
-  const handleApprove = async (id, currentVal) => {
-    if (currentVal) return; // already approved
-    try {
-      await qdApi.post(`/QAInspection/approve/${id}`);
-      enqueueSnackbar('Inspection approved successfully');
-      fetchData(); // reload
-    } catch (e) {
-      enqueueSnackbar(e?.response?.data?.message || 'Approval failed', { variant: 'error' });
-    }
-  };
 
   const handleFilterChange = (name, value) => {
     setFilters((prev) => ({ ...prev, [name]: value }));
@@ -197,33 +204,44 @@ export default function QAInspectionView({ embedded = false }) {
           </Tooltip>
         ),
       },
-      {
-        field: 'edit',
-        headerName: 'Edit',
-        width: 80,
-        sortable: false,
-        filterable: false,
-        align: 'center',
-        headerAlign: 'center',
-        renderCell: (params) => (
-          <Tooltip title="Edit Inspection">
-            <IconButton
-              size="small"
-              color="primary"
-              onClick={() =>
-                navigate(
-                  `${paths.dashboard.qdInspection}?poid=${params.row.poid}&inspType=${params.row.inspectionType}&qdInspectionMstId=${params.row.qdInspectionMstID}`
-                )
-              }
-            >
-              <EditIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        ),
-      },
+      // Old AMS BindGrid: EmailBit=True → hlEdit.Visible=False; Page_Load: Role 1/3/43 hide Edit column
+      ...(hideEditByRole
+        ? []
+        : [
+            {
+              field: 'edit',
+              headerName: 'Edit',
+              width: 80,
+              sortable: false,
+              filterable: false,
+              align: 'center',
+              headerAlign: 'center',
+              renderCell: (params) => {
+                const emailed = Boolean(params.row.emailBit ?? params.row.EmailBit);
+                if (emailed) {
+                  return null;
+                }
+                return (
+                  <Tooltip title="Edit Inspection">
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={() =>
+                        navigate(
+                          `${paths.dashboard.qdInspection}?poid=${params.row.poid}&inspType=${params.row.inspectionType}&qdInspectionMstId=${params.row.qdInspectionMstID}`
+                        )
+                      }
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                );
+              },
+            },
+          ]),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [navigate, pdfLoadingId]
+    [navigate, pdfLoadingId, hideEditByRole]
   );
 
   const pageContent = (

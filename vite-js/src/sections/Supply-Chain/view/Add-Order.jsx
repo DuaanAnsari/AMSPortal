@@ -52,6 +52,105 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
 import DeleteIcon from '@mui/icons-material/Delete';
 
+// Old AMS PurchaseOrderAdd.aspx.vb — active permission helpers (UserID + RoleID)
+const PRIVILEGED_USER_IDS = [1, 42];
+const PRIVILEGED_ROLE_IDS = [1, 49];
+const COMMISSION_ROLE_IDS = [1, 49];
+const RATE_EDIT_USER_IDS = [1, 3, 6, 16, 55];
+const RATE_EDIT_ROLE_IDS = [1, 49];
+const GRID_PARTIAL_LOCK_ROLE_IDS = [3, 43];
+
+const getUserRoleId = () => {
+  if (typeof window === 'undefined') return null;
+  const roleId = localStorage.getItem('roleId');
+  if (!roleId) return null;
+  const parsed = parseInt(roleId, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+/** Same storage key used elsewhere in New AMS (e.g. courier-packaging). Login must populate it for UserID rules. */
+const getUserId = () => {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem('userId');
+  if (!raw) return null;
+  const parsed = parseInt(raw, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const isPrivilegedPoUser = () => {
+  const userId = getUserId();
+  const roleId = getUserRoleId();
+  if (userId != null && PRIVILEGED_USER_IDS.includes(userId)) return true;
+  if (roleId != null && PRIVILEGED_ROLE_IDS.includes(roleId)) return true;
+  return false;
+};
+
+const canEditCommissionField = () => {
+  const roleId = getUserRoleId();
+  return roleId != null && COMMISSION_ROLE_IDS.includes(roleId);
+};
+
+const canEditRateFields = () => {
+  const userId = getUserId();
+  const roleId = getUserRoleId();
+  if (userId != null && RATE_EDIT_USER_IDS.includes(userId)) return true;
+  if (roleId != null && RATE_EDIT_ROLE_IDS.includes(roleId)) return true;
+  return false;
+};
+
+const isGridPartialLockRole = () => {
+  const roleId = getUserRoleId();
+  return roleId != null && GRID_PARTIAL_LOCK_ROLE_IDS.includes(roleId);
+};
+
+/**
+ * DisableGrid() field locks for detail rows.
+ * Privileged: only LDP Value locked + Colorway by copy mode.
+ * Role 3|43: barcode/qty/rates/carton locked; ratio+weights stay editable.
+ * Else: those + ratio + gross/net locked.
+ */
+const getDetailGridFieldLocks = ({ isCopyMode, isPrivileged }) => {
+  const colorwayDisabled = !isCopyMode;
+  const ldpValueDisabled = true;
+
+  if (isPrivileged) {
+    return {
+      colorwayDisabled,
+      ldpValueDisabled,
+      barcodeDisabled: false,
+      ratioDisabled: false,
+      quantityDisabled: false,
+      itemPriceDisabled: false,
+      valueDisabled: false,
+      vendorPriceDisabled: false,
+      ldpPriceDisabled: false,
+      cartonQtyDisabled: false,
+      grossWeightDisabled: false,
+      netWeightDisabled: false,
+      removeHidden: false,
+      priceColsHidden: false,
+    };
+  }
+
+  const partial = isGridPartialLockRole();
+  return {
+    colorwayDisabled,
+    ldpValueDisabled,
+    barcodeDisabled: true,
+    ratioDisabled: !partial,
+    quantityDisabled: true,
+    itemPriceDisabled: true,
+    valueDisabled: true,
+    vendorPriceDisabled: true,
+    ldpPriceDisabled: true,
+    cartonQtyDisabled: true,
+    grossWeightDisabled: !partial,
+    netWeightDisabled: !partial,
+    removeHidden: true,
+    priceColsHidden: true,
+  };
+};
+
 // -------------------- Full Screen Image Preview Dialog --------------------
 function FullScreenImagePreview({ open, imageUrl, onClose }) {
   return (
@@ -1328,7 +1427,7 @@ const normalizeShipmentModes = (list = []) =>
     .filter((d) => d.id && d.name);
 
 // -------------------- Merchant Multiple Select Component --------------------
-function MerchantMultipleSelect({ name, label, options, loading, error }) {
+function MerchantMultipleSelect({ name, label, options, loading, error, disabled = false }) {
   const { control } = useFormContext();
 
   return (
@@ -1336,11 +1435,12 @@ function MerchantMultipleSelect({ name, label, options, loading, error }) {
       name={name}
       control={control}
       render={({ field, fieldState }) => (
-        <FormControl fullWidth error={!!fieldState.error}>
+        <FormControl fullWidth error={!!fieldState.error} disabled={disabled}>
           <InputLabel>{label}</InputLabel>
           <Select
             {...field}
             multiple
+            disabled={disabled}
             input={<OutlinedInput label={label} />}
             renderValue={(selected) => {
               if (!selected || selected.length === 0) return '';
@@ -1384,6 +1484,14 @@ export default function CompletePurchaseOrderForm() {
   const location = useLocation();
   const copyFromPo = location.state?.copyFromPo || null;
   const copyFromPoId = location.state?.copyFromPoId || copyFromPo?.id || null;
+  const isCopyMode = Boolean(copyFromPoId);
+  // Old AMS: UserID 1|42 OR RoleID 1|49 → privileged (no disableonview; price/remove cols visible)
+  const isPrivileged = isPrivilegedPoUser();
+  const isFormViewLocked = !isPrivileged; // disableonview()
+  const canEditCommission = canEditCommissionField();
+  const canEditRates = canEditRateFields();
+  const gridLocks = getDetailGridFieldLocks({ isCopyMode, isPrivileged });
+  const showPoDetailPriceActions = !gridLocks.priceColsHidden;
   const methods = useForm({
     resolver: yupResolver(Schema),
     defaultValues,
@@ -2961,7 +3069,7 @@ export default function CompletePurchaseOrderForm() {
                         {...field}
                         label={item.label}
                         fullWidth
-                        disabled={item.name === 'amsRef'}
+                        disabled={isFormViewLocked || item.name === 'amsRef'}
                         error={!!fieldState.error}
                         helperText={
                           fieldState.error?.message ||
@@ -2986,6 +3094,7 @@ export default function CompletePurchaseOrderForm() {
                       label="Customer"
                       fullWidth
                       select
+                      disabled={isFormViewLocked}
                       error={!!fieldState.error}
                       helperText={fieldState.error?.message || (customerError ? 'Unable to load customers' : '')}
                       value={field.value || ''}
@@ -3017,6 +3126,7 @@ export default function CompletePurchaseOrderForm() {
                       label="Supplier"
                       fullWidth
                       select
+                      disabled={isFormViewLocked}
                       error={!!fieldState.error}
                       helperText={fieldState.error?.message || (supplierError ? 'Unable to load suppliers' : '')}
                       value={field.value || ''}
@@ -3043,6 +3153,7 @@ export default function CompletePurchaseOrderForm() {
                   label="Merchant"
                   options={merchantOptions}
                   loading={merchantLoading}
+                  disabled={isFormViewLocked}
                 />
               </Grid>
 
@@ -3092,6 +3203,7 @@ export default function CompletePurchaseOrderForm() {
                         label={label}
                         fullWidth
                         select
+                        disabled={isFormViewLocked}
                         error={!!fieldState?.error}
                         helperText={fieldState?.error?.message}
                         value={field.value || ''}
@@ -3118,6 +3230,7 @@ export default function CompletePurchaseOrderForm() {
                       label="Commission (%)"
                       type="number"
                       fullWidth
+                      disabled={!canEditCommission}
                       inputProps={{ step: '0.01', min: 0 }}
                       helperText="Auto-filled from selected customer"
                       value={field.value === '' || field.value == null ? '' : field.value}
@@ -3138,7 +3251,13 @@ export default function CompletePurchaseOrderForm() {
                 <Controller
                   name="vendorCommission"
                   render={({ field }) => (
-                    <TextField {...field} label="Vendor Commission (%)" type="number" fullWidth />
+                    <TextField
+                      {...field}
+                      label="Vendor Commission (%)"
+                      type="number"
+                      fullWidth
+                      disabled={isFormViewLocked}
+                    />
                   )}
                 />
               </Grid>
@@ -3169,6 +3288,7 @@ export default function CompletePurchaseOrderForm() {
                           label={label}
                           type="date"
                           fullWidth
+                          disabled={isFormViewLocked}
                           InputLabelProps={{ shrink: true }}
                           error={!!fieldState.error}
                           helperText={fieldState.error?.message}
@@ -3204,6 +3324,7 @@ export default function CompletePurchaseOrderForm() {
                 <Grid item xs={12} sm={6}>
                   <Controller name="buyerShipInitial" control={control} render={({ field, fieldState }) => (
                     <TextField {...field} label="Buyer Ship. Dt. (Initial)" type="date" fullWidth InputLabelProps={{ shrink: true }}
+                      disabled={isFormViewLocked}
                       error={!!fieldState.error} helperText={fieldState.error?.message}
                       onChange={(e) => {
                         field.onChange(e);
@@ -3229,6 +3350,7 @@ export default function CompletePurchaseOrderForm() {
                 <Grid item xs={12} sm={6}>
                   <Controller name="buyerShipLast" control={control} render={({ field, fieldState }) => (
                     <TextField {...field} label="Buyer Ship. Dt. (Last)" type="date" fullWidth InputLabelProps={{ shrink: true }}
+                      disabled={isFormViewLocked}
                       error={!!fieldState.error} helperText={fieldState.error?.message}
                       onChange={(e) => {
                         field.onChange(e);
@@ -3254,6 +3376,7 @@ export default function CompletePurchaseOrderForm() {
                 <Grid item xs={12} sm={4}>
                   <Controller name="vendorShipInitial" control={control} render={({ field, fieldState }) => (
                     <TextField {...field} label="Vendor Ship. Dt. (Initial)" type="date" fullWidth InputLabelProps={{ shrink: true }}
+                      disabled={isFormViewLocked}
                       error={!!fieldState.error} helperText={fieldState.error?.message}
                       onChange={(e) => {
                         field.onChange(e);
@@ -3279,6 +3402,7 @@ export default function CompletePurchaseOrderForm() {
                 <Grid item xs={12} sm={4}>
                   <Controller name="vendorShipLast" control={control} render={({ field, fieldState }) => (
                     <TextField {...field} label="Vendor Ship. Dt. (Last)" type="date" fullWidth InputLabelProps={{ shrink: true }}
+                      disabled={isFormViewLocked}
                       error={!!fieldState.error} helperText={fieldState.error?.message}
                       onChange={(e) => {
                         field.onChange(e);
@@ -3296,6 +3420,7 @@ export default function CompletePurchaseOrderForm() {
                 <Grid item xs={12} sm={4}>
                   <Controller name="finalInspectionDate" control={control} render={({ field, fieldState }) => (
                     <TextField {...field} label="Final Inspection Date" type="date" fullWidth InputLabelProps={{ shrink: true }}
+                      disabled={isFormViewLocked}
                       error={!!fieldState.error} helperText={fieldState.error?.message}
                       onChange={(e) => {
                         field.onChange(e);
@@ -3351,12 +3476,13 @@ export default function CompletePurchaseOrderForm() {
                   name="productPortfolio"
                   control={control}
                   render={({ field }) => (
-                    <FormControl fullWidth>
+                    <FormControl fullWidth disabled={isFormViewLocked}>
                       <InputLabel>Product Portfolio</InputLabel>
                       <Select
                         {...field}
                         label="Product Portfolio"
                         value={field.value || ''}
+                        disabled={isFormViewLocked}
                         onChange={(e) => handlePortfolioChange(e.target.value)}
                       >
                         <MenuItem value="">Select Portfolio</MenuItem>
@@ -3380,12 +3506,13 @@ export default function CompletePurchaseOrderForm() {
                   name="productCategory"
                   control={control}
                   render={({ field }) => (
-                    <FormControl fullWidth>
+                    <FormControl fullWidth disabled={isFormViewLocked}>
                       <InputLabel>Product Category</InputLabel>
                       <Select
                         {...field}
                         label="Product Category"
                         value={field.value || ''}
+                        disabled={isFormViewLocked}
                         onChange={(e) => handleCategoryChange(e.target.value)}
                       >
                         <MenuItem value="">Select Category</MenuItem>
@@ -3409,9 +3536,9 @@ export default function CompletePurchaseOrderForm() {
                   name="productGroup"
                   control={control}
                   render={({ field }) => (
-                    <FormControl fullWidth>
+                    <FormControl fullWidth disabled={isFormViewLocked}>
                       <InputLabel>Product Group</InputLabel>
-                      <Select {...field} label="Product Group" value={field.value || ''}>
+                      <Select {...field} label="Product Group" value={field.value || ''} disabled={isFormViewLocked}>
                         <MenuItem value="">Select Group</MenuItem>
                         {loadingGroup ? (
                           <MenuItem disabled>Loading...</MenuItem>
@@ -3430,18 +3557,18 @@ export default function CompletePurchaseOrderForm() {
 
               {/* Rest of the product information fields */}
               <Grid item xs={12} sm={4}>
-                <Controller name="season" render={({ field }) => <TextField {...field} fullWidth label="Season" />} />
+                <Controller name="season" render={({ field }) => <TextField {...field} fullWidth label="Season" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Controller name="tolQuantity" render={({ field }) => <TextField {...field} fullWidth label="Tol. Quantity" />} />
+                <Controller name="tolQuantity" render={({ field }) => <TextField {...field} fullWidth label="Tol. Quantity" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={4}>
                 <Controller
                   name="set"
                   render={({ field }) => (
-                    <FormControl fullWidth>
+                    <FormControl fullWidth disabled={isFormViewLocked}>
                       <InputLabel>Set</InputLabel>
-                      <Select {...field} label="Set" value={field.value || ''}>
+                      <Select {...field} label="Set" value={field.value || ''} disabled={isFormViewLocked}>
                         <MenuItem value="Set">Set</MenuItem>
                         <MenuItem value="PCS">PCS</MenuItem>
                         <MenuItem value="KG">KG</MenuItem>
@@ -3452,42 +3579,42 @@ export default function CompletePurchaseOrderForm() {
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Controller name="fabric" render={({ field }) => <TextField {...field} fullWidth label="Fabric" />} />
+                <Controller name="fabric" render={({ field }) => <TextField {...field} fullWidth label="Fabric" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Controller name="item" render={({ field }) => <TextField {...field} fullWidth label="Item" />} />
+                <Controller name="item" render={({ field }) => <TextField {...field} fullWidth label="Item" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Controller name="qualityComposition" render={({ field }) => <TextField {...field} fullWidth label="Quality / Composition" />} />
+                <Controller name="qualityComposition" render={({ field }) => <TextField {...field} fullWidth label="Quality / Composition" disabled={isFormViewLocked} />} />
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Controller name="gsm" render={({ field }) => <TextField {...field} fullWidth label="GSM" />} />
+                <Controller name="gsm" render={({ field }) => <TextField {...field} fullWidth label="GSM" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Controller name="design" render={({ field }) => <TextField {...field} fullWidth label="Design" />} />
+                <Controller name="design" render={({ field }) => <TextField {...field} fullWidth label="Design" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Controller name="otherFabric" render={({ field }) => <TextField {...field} fullWidth label="Other Fabric" />} />
+                <Controller name="otherFabric" render={({ field }) => <TextField {...field} fullWidth label="Other Fabric" disabled={isFormViewLocked} />} />
               </Grid>
 
               <Grid item xs={12} sm={6}>
-                <Controller name="gsmOF" render={({ field }) => <TextField {...field} fullWidth label="GSM (O.F)" />} />
+                <Controller name="gsmOF" render={({ field }) => <TextField {...field} fullWidth label="GSM (O.F)" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={6}>
-                <Controller name="construction" render={({ field }) => <TextField {...field} fullWidth label="Construction" />} />
+                <Controller name="construction" render={({ field }) => <TextField {...field} fullWidth label="Construction" disabled={isFormViewLocked} />} />
               </Grid>
 
               <Grid item xs={12} sm={6}>
-                <Controller name="poSpecialOperation" render={({ field }) => <TextField {...field} fullWidth label="PO Special Operation" />} />
+                <Controller name="poSpecialOperation" render={({ field }) => <TextField {...field} fullWidth label="PO Special Operation" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={6}>
                 <Controller
                   name="status"
                   render={({ field }) => (
-                    <FormControl fullWidth>
+                    <FormControl fullWidth disabled={isFormViewLocked}>
                       <InputLabel>Status</InputLabel>
-                      <Select {...field} label="Status" value={field.value || ''}>
+                      <Select {...field} label="Status" value={field.value || ''} disabled={isFormViewLocked}>
                         <MenuItem value="Confirmed">Confirmed</MenuItem>
                         <MenuItem value="Cancel">Cancel</MenuItem>
                         <MenuItem value="Close">Close</MenuItem>
@@ -3498,22 +3625,22 @@ export default function CompletePurchaseOrderForm() {
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Controller name="poSpecialTreatment" render={({ field }) => <TextField {...field} fullWidth label="PO Special Treatment" />} />
+                <Controller name="poSpecialTreatment" render={({ field }) => <TextField {...field} fullWidth label="PO Special Treatment" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Controller name="styleSource" render={({ field }) => <TextField {...field} fullWidth label="Style Source" />} />
+                <Controller name="styleSource" render={({ field }) => <TextField {...field} fullWidth label="Style Source" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Controller name="brand" render={({ field }) => <TextField {...field} fullWidth label="Brand" />} />
+                <Controller name="brand" render={({ field }) => <TextField {...field} fullWidth label="Brand" disabled={isFormViewLocked} />} />
               </Grid>
 
               <Grid item xs={12} sm={4}>
                 <Controller
                   name="assortment"
                   render={({ field }) => (
-                    <FormControl fullWidth>
+                    <FormControl fullWidth disabled={isFormViewLocked}>
                       <InputLabel>Assortment</InputLabel>
-                      <Select {...field} label="Assortment" value={field.value || ''}>
+                      <Select {...field} label="Assortment" value={field.value || ''} disabled={isFormViewLocked}>
                         <MenuItem value="Solid">Solid</MenuItem>
                         <MenuItem value="Ratio">Ratio</MenuItem>
                       </Select>
@@ -3529,16 +3656,16 @@ export default function CompletePurchaseOrderForm() {
                       {...field}
                       fullWidth
                       label="Ratio"
-                      disabled={assortmentValue === 'Solid'}
+                      disabled={isFormViewLocked || assortmentValue === 'Solid'}
                     />
                   )}
                 />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Controller name="cartonMarking" render={({ field }) => <TextField {...field} fullWidth label="Carton Marking" />} />
+                <Controller name="cartonMarking" render={({ field }) => <TextField {...field} fullWidth label="Carton Marking" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Controller name="poSpecialInstructions" render={({ field }) => <TextField {...field} fullWidth label="PO Special Instructions" />} />
+                <Controller name="poSpecialInstructions" render={({ field }) => <TextField {...field} fullWidth label="PO Special Instructions" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={4}>
                 <Controller
@@ -3548,22 +3675,23 @@ export default function CompletePurchaseOrderForm() {
                       {...field}
                       fullWidth
                       label="Washing Care Label Instructions"
+                      disabled={isFormViewLocked}
                     />
                   )}
                 />
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Controller name="importantNote" render={({ field }) => <TextField {...field} fullWidth label="Important Note" />} />
+                <Controller name="importantNote" render={({ field }) => <TextField {...field} fullWidth label="Important Note" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Controller name="moreInfo" render={({ field }) => <TextField {...field} fullWidth label="More Info" />} />
+                <Controller name="moreInfo" render={({ field }) => <TextField {...field} fullWidth label="More Info" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Controller name="samplingRequirements" render={({ field }) => <TextField {...field} fullWidth label="Sampling Requirements" />} />
+                <Controller name="samplingRequirements" render={({ field }) => <TextField {...field} fullWidth label="Sampling Requirements" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Controller name="pcsPerCarton" render={({ field }) => <TextField {...field} fullWidth label="Pcs Per Carton" />} />
+                <Controller name="pcsPerCarton" render={({ field }) => <TextField {...field} fullWidth label="Pcs Per Carton" disabled={isFormViewLocked} />} />
               </Grid>
               
               {/* Item Description at Shipping Invoice Field */}
@@ -3576,24 +3704,25 @@ export default function CompletePurchaseOrderForm() {
                       {...field}
                       fullWidth
                       label="Item Description at shipping invoice"
+                      disabled={isFormViewLocked}
                     />
                   )}
                 />
               </Grid>
 
               <Grid item xs={12} sm={2}>
-                <Controller name="grossWeight" render={({ field }) => <TextField {...field} fullWidth label="Gross Weight" />} />
+                <Controller name="grossWeight" render={({ field }) => <TextField {...field} fullWidth label="Gross Weight" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={2}>
-                <Controller name="netWeight" render={({ field }) => <TextField {...field} fullWidth label="Net Weight" />} />
+                <Controller name="netWeight" render={({ field }) => <TextField {...field} fullWidth label="Net Weight" disabled={isFormViewLocked} />} />
               </Grid>
               <Grid item xs={12} sm={2}>
                 <Controller
                   name="unit"
                   render={({ field }) => (
-                    <FormControl fullWidth>
+                    <FormControl fullWidth disabled={isFormViewLocked}>
                       <InputLabel>Unit</InputLabel>
-                      <Select {...field} label="Unit" value={field.value || ''}>
+                      <Select {...field} label="Unit" value={field.value || ''} disabled={isFormViewLocked}>
                         <MenuItem value="KG">KG</MenuItem>
                         <MenuItem value="DZN">DZN</MenuItem>
                         <MenuItem value="LBS">LBS</MenuItem>
@@ -3606,7 +3735,7 @@ export default function CompletePurchaseOrderForm() {
                 <Controller
                   name="packingList"
                   control={control}
-                  render={({ field }) => <TextField {...field} fullWidth label="Packing List" />}
+                  render={({ field }) => <TextField {...field} fullWidth label="Packing List" disabled={isFormViewLocked} />}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -3618,6 +3747,7 @@ export default function CompletePurchaseOrderForm() {
                       {...field}
                       fullWidth
                       label="Emb & Embellishment"
+                      disabled={isFormViewLocked}
                     />
                   )}
                 />
@@ -3628,14 +3758,14 @@ export default function CompletePurchaseOrderForm() {
                   name="inquiryNo"
                   control={control}
                   render={({ field }) => (
-                    <FormControl fullWidth>
+                    <FormControl fullWidth disabled={isFormViewLocked}>
                       <InputLabel>Inquiry No</InputLabel>
                       {inquiryLoading ? (
                         <CircularProgress size={24} />
                       ) : inquiryError ? (
                         <Typography color="error">{inquiryError}</Typography>
                       ) : (
-                        <Select {...field} label="Inquiry No" value={field.value || ''}>
+                        <Select {...field} label="Inquiry No" value={field.value || ''} disabled={isFormViewLocked}>
                           {inquiryOptions.map((inq) => (
                             <MenuItem key={`${inq.inquiryMstID}-${inq.sampleNo}`} value={inq.sampleNo}>
                               {inq.sampleNo}
@@ -3652,7 +3782,7 @@ export default function CompletePurchaseOrderForm() {
                 <Controller
                   name="buyerCustomer"
                   control={control}
-                  render={({ field }) => <TextField {...field} fullWidth label="Buyer Customer" />}
+                  render={({ field }) => <TextField {...field} fullWidth label="Buyer Customer" disabled={isFormViewLocked} />}
                 />
               </Grid>
             </Grid>
@@ -3672,9 +3802,9 @@ export default function CompletePurchaseOrderForm() {
                   <Controller
                     name="currency"
                     render={({ field }) => (
-                      <FormControl fullWidth>
+                      <FormControl fullWidth disabled={isFormViewLocked}>
                         <InputLabel>Currency</InputLabel>
-                        <Select {...field} label="Currency" value={field.value || ''}>
+                        <Select {...field} label="Currency" value={field.value || ''} disabled={isFormViewLocked}>
                           <MenuItem value="Dollar">Dollar</MenuItem>
                           <MenuItem value="PKR">PKR</MenuItem>
                           <MenuItem value="Euro">Euro</MenuItem>
@@ -3688,7 +3818,7 @@ export default function CompletePurchaseOrderForm() {
                   <Controller
                     name="exchangeRate"
                     render={({ field }) => (
-                      <TextField {...field} fullWidth label="Exchange Rate (to USD)" type="number" />
+                      <TextField {...field} fullWidth label="Exchange Rate (to USD)" type="number" disabled={isFormViewLocked} />
                     )}
                   />
                 </Grid>
@@ -3696,16 +3826,16 @@ export default function CompletePurchaseOrderForm() {
                 <Grid item xs={12} sm={4}>
                   <Controller
                     name="style"
-                    render={({ field }) => <TextField {...field} fullWidth label="Style" />}
+                    render={({ field }) => <TextField {...field} fullWidth label="Style" disabled={isFormViewLocked} />}
                   />
                 </Grid>
               </Grid>
 
               <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 3 }}>
-                <Button variant="contained" color="primary" onClick={handleOpenItemDialog}>
+                <Button variant="contained" color="primary" onClick={handleOpenItemDialog} disabled={isFormViewLocked}>
                   Add Item Details
                 </Button>
-                <Button variant="contained" color="primary" onClick={handleShowSelections}>
+                <Button variant="contained" color="primary" onClick={handleShowSelections} disabled={isFormViewLocked}>
                   {showSelections ? 'Hide Selections' : 'Show Selections'}
                 </Button>
               </Stack>
@@ -3743,13 +3873,19 @@ export default function CompletePurchaseOrderForm() {
                           <TableCell>PO Quantity</TableCell>
                           <TableCell>Item Price</TableCell>
                           <TableCell>Value</TableCell>
-                          <TableCell>Vendor Price</TableCell>
-                          <TableCell>LDP Price</TableCell>
-                          <TableCell>LDP Value</TableCell>
+                          {showPoDetailPriceActions && (
+                            <>
+                              <TableCell>Vendor Price</TableCell>
+                              <TableCell>LDP Price</TableCell>
+                              <TableCell>LDP Value</TableCell>
+                            </>
+                          )}
                           <TableCell>Carton Qty</TableCell>
                           <TableCell>Gross Weight</TableCell>
                           <TableCell>Net Weight</TableCell>
-                          <TableCell align="center">Remove</TableCell>
+                          {showPoDetailPriceActions && (
+                            <TableCell align="center">Remove</TableCell>
+                          )}
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -3767,6 +3903,7 @@ export default function CompletePurchaseOrderForm() {
                               <TextField
                                 value={row.colorway || ''}
                                 size="small"
+                                disabled={gridLocks.colorwayDisabled}
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'colorway', e.target.value)
                                 }
@@ -3780,6 +3917,7 @@ export default function CompletePurchaseOrderForm() {
                               <TextField
                                 value={row.barcode || ''}
                                 size="small"
+                                disabled={gridLocks.barcodeDisabled}
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'barcode', e.target.value)
                                 }
@@ -3790,6 +3928,7 @@ export default function CompletePurchaseOrderForm() {
                               <TextField
                                 value={row.ratio || ''}
                                 size="small"
+                                disabled={gridLocks.ratioDisabled}
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'ratio', e.target.value)
                                 }
@@ -3811,6 +3950,7 @@ export default function CompletePurchaseOrderForm() {
                                 value={row.quantity ?? 0}
                                 type="number"
                                 size="small"
+                                disabled={gridLocks.quantityDisabled}
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'quantity', e.target.value)
                                 }
@@ -3832,6 +3972,8 @@ export default function CompletePurchaseOrderForm() {
                                 value={row.itemPrice ?? 0}
                                 type="number"
                                 size="small"
+                                disabled={gridLocks.itemPriceDisabled}
+                                InputProps={{ readOnly: !canEditRates }}
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'itemPrice', e.target.value)
                                 }
@@ -3849,55 +3991,63 @@ export default function CompletePurchaseOrderForm() {
                               />
                             </TableCell>
                             <TableCell>{(row.value ?? 0).toFixed(2)}</TableCell>
-                            <TableCell>
-                              <TextField
-                                value={row.vendorPrice ?? 0}
-                                type="number"
-                                size="small"
-                                onChange={(e) =>
-                                  handleSelectionRowChange(index, 'vendorPrice', e.target.value)
-                                }
-                                onFocus={(e) => {
-                                  if (e.target.value === '0' || e.target.value === 0) {
-                                    e.target.select();
-                                  }
-                                }}
-                                onKeyDown={(e) => {
-                                  if ((e.target.value === '0' || e.target.value === 0) && e.key !== 'Tab' && e.key !== 'Enter' && e.key !== 'Escape' && e.key !== 'Backspace' && e.key !== 'Delete') {
-                                    e.target.value = '';
-                                  }
-                                }}
-                                sx={{ width: 80 }}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <TextField
-                                value={row.ldpPrice ?? 0}
-                                type="number"
-                                size="small"
-                                onChange={(e) =>
-                                  handleSelectionRowChange(index, 'ldpPrice', e.target.value)
-                                }
-                                onFocus={(e) => {
-                                  if (e.target.value === '0' || e.target.value === 0) {
-                                    e.target.select();
-                                  }
-                                }}
-                                onKeyDown={(e) => {
-                                  if ((e.target.value === '0' || e.target.value === 0) && e.key !== 'Tab' && e.key !== 'Enter' && e.key !== 'Escape' && e.key !== 'Backspace' && e.key !== 'Delete') {
-                                    e.target.value = '';
-                                  }
-                                }}
-                                sx={{ width: 80 }}
-                              />
-                            </TableCell>
-                            <TableCell>{(row.ldpValue ?? 0).toFixed(2)}</TableCell>
+                            {showPoDetailPriceActions && (
+                              <>
+                                <TableCell>
+                                  <TextField
+                                    value={row.vendorPrice ?? 0}
+                                    type="number"
+                                    size="small"
+                                    disabled={gridLocks.vendorPriceDisabled}
+                                    InputProps={{ readOnly: !canEditRates }}
+                                    onChange={(e) =>
+                                      handleSelectionRowChange(index, 'vendorPrice', e.target.value)
+                                    }
+                                    onFocus={(e) => {
+                                      if (e.target.value === '0' || e.target.value === 0) {
+                                        e.target.select();
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if ((e.target.value === '0' || e.target.value === 0) && e.key !== 'Tab' && e.key !== 'Enter' && e.key !== 'Escape' && e.key !== 'Backspace' && e.key !== 'Delete') {
+                                        e.target.value = '';
+                                      }
+                                    }}
+                                    sx={{ width: 80 }}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <TextField
+                                    value={row.ldpPrice ?? 0}
+                                    type="number"
+                                    size="small"
+                                    disabled={gridLocks.ldpPriceDisabled}
+                                    onChange={(e) =>
+                                      handleSelectionRowChange(index, 'ldpPrice', e.target.value)
+                                    }
+                                    onFocus={(e) => {
+                                      if (e.target.value === '0' || e.target.value === 0) {
+                                        e.target.select();
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if ((e.target.value === '0' || e.target.value === 0) && e.key !== 'Tab' && e.key !== 'Enter' && e.key !== 'Escape' && e.key !== 'Backspace' && e.key !== 'Delete') {
+                                        e.target.value = '';
+                                      }
+                                    }}
+                                    sx={{ width: 80 }}
+                                  />
+                                </TableCell>
+                                <TableCell>{(row.ldpValue ?? 0).toFixed(2)}</TableCell>
+                              </>
+                            )}
                             <TableCell>{row.cartonQty ?? 0}</TableCell>
                             <TableCell>
                               <TextField
                                 value={row.grossWeight ?? 0}
                                 type="number"
                                 size="small"
+                                disabled={gridLocks.grossWeightDisabled}
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'grossWeight', e.target.value)
                                 }
@@ -3919,6 +4069,7 @@ export default function CompletePurchaseOrderForm() {
                                 value={row.netWeight ?? 0}
                                 type="number"
                                 size="small"
+                                disabled={gridLocks.netWeightDisabled}
                                 onChange={(e) =>
                                   handleSelectionRowChange(index, 'netWeight', e.target.value)
                                 }
@@ -3935,15 +4086,17 @@ export default function CompletePurchaseOrderForm() {
                                 sx={{ width: 80 }}
                               />
                             </TableCell>
-                            <TableCell align="center">
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleSelectionRowRemove(index)}
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </TableCell>
+                            {showPoDetailPriceActions && (
+                              <TableCell align="center">
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => handleSelectionRowRemove(index)}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </TableCell>
+                            )}
                           </TableRow>
                         ))}
                       </TableBody>
@@ -3986,14 +4139,14 @@ export default function CompletePurchaseOrderForm() {
                     name="paymentMode"
                     control={control}
                     render={({ field }) => (
-                      <FormControl fullWidth>
+                      <FormControl fullWidth disabled={isFormViewLocked}>
                         <InputLabel>Payment Mode</InputLabel>
                         {paymentLoading ? (
                           <CircularProgress size={24} />
                         ) : paymentError ? (
                           <Typography color="error">{paymentError}</Typography>
                         ) : (
-                          <Select {...field} label="Payment Mode" value={field.value || ''}>
+                          <Select {...field} label="Payment Mode" value={field.value || ''} disabled={isFormViewLocked}>
                             {paymentOptions.length > 0 ? (
                               paymentOptions.map((p) => (
                               <MenuItem key={p.id} value={p.id}>
@@ -4018,9 +4171,9 @@ export default function CompletePurchaseOrderForm() {
                     name="shipmentTerm"
                     control={control}
                     render={({ field }) => (
-                      <FormControl fullWidth>
+                      <FormControl fullWidth disabled={isFormViewLocked}>
                         <InputLabel>Shipment Term</InputLabel>
-                          <Select {...field} label="Shipment Term" value={field.value || ''}>
+                          <Select {...field} label="Shipment Term" value={field.value || ''} disabled={isFormViewLocked}>
                           <MenuItem value="4">CNF</MenuItem>
                           <MenuItem value="5">FOB</MenuItem>
                           </Select>
@@ -4032,7 +4185,7 @@ export default function CompletePurchaseOrderForm() {
                 <Grid item xs={12} sm={3}>
                   <Controller
                     name="destination"
-                    render={({ field }) => <TextField {...field} fullWidth label="Destination" />}
+                    render={({ field }) => <TextField {...field} fullWidth label="Destination" disabled={isFormViewLocked} />}
                   />
                 </Grid>
 
@@ -4041,9 +4194,9 @@ export default function CompletePurchaseOrderForm() {
                     name="shipmentMode"
                     control={control}
                     render={({ field }) => (
-                      <FormControl fullWidth>
+                      <FormControl fullWidth disabled={isFormViewLocked}>
                         <InputLabel>Shipment Mode</InputLabel>
-                          <Select {...field} label="Shipment Mode" value={field.value || ''}>
+                          <Select {...field} label="Shipment Mode" value={field.value || ''} disabled={isFormViewLocked}>
                           <MenuItem value="1">Air</MenuItem>
                           <MenuItem value="7">Sea</MenuItem>
                           <MenuItem value="8">courier</MenuItem>
@@ -4055,7 +4208,7 @@ export default function CompletePurchaseOrderForm() {
                 <Grid item xs={12} sm={3}>
                   <Controller
                     name="naField"
-                    render={({ field }) => <TextField {...field} fullWidth label="N/A" />}
+                    render={({ field }) => <TextField {...field} fullWidth label="N/A" disabled={isFormViewLocked} />}
                   />
                 </Grid>
               </Grid>
@@ -4107,14 +4260,14 @@ export default function CompletePurchaseOrderForm() {
                     name="bankID"
                     control={control}
                     render={({ field }) => (
-                      <FormControl fullWidth>
+                      <FormControl fullWidth disabled={isFormViewLocked}>
                         <InputLabel>Bank</InputLabel>
                         {bankLoading ? (
                           <CircularProgress size={24} />
                         ) : bankError ? (
                           <Typography color="error">{bankError}</Typography>
                         ) : (
-                          <Select {...field} label="Bank" value={field.value || ''}>
+                          <Select {...field} label="Bank" value={field.value || ''} disabled={isFormViewLocked}>
                             {bankOptions.map((b) => (
                               <MenuItem key={b.id} value={b.id}>
                                 {b.name}
@@ -4131,7 +4284,7 @@ export default function CompletePurchaseOrderForm() {
                   <Controller
                     name="titleOfAccount"
                     render={({ field }) => (
-                      <TextField {...field} label="Title Of Account" fullWidth />
+                      <TextField {...field} label="Title Of Account" fullWidth disabled={isFormViewLocked} />
                     )}
                   />
                 </Grid>
@@ -4139,28 +4292,28 @@ export default function CompletePurchaseOrderForm() {
                 <Grid item xs={12} sm={4}>
                   <Controller
                     name="bankName"
-                    render={({ field }) => <TextField {...field} label="Bank Name" fullWidth />}
+                    render={({ field }) => <TextField {...field} label="Bank Name" fullWidth disabled={isFormViewLocked} />}
                   />
                 </Grid>
 
                 <Grid item xs={12} sm={4}>
                   <Controller
                     name="bankBranch"
-                    render={({ field }) => <TextField {...field} label="Bank Branch" fullWidth />}
+                    render={({ field }) => <TextField {...field} label="Bank Branch" fullWidth disabled={isFormViewLocked} />}
                   />
                 </Grid>
 
                 <Grid item xs={12} sm={4}>
                   <Controller
                     name="accountNo"
-                    render={({ field }) => <TextField {...field} label="Account No." fullWidth />}
+                    render={({ field }) => <TextField {...field} label="Account No." fullWidth disabled={isFormViewLocked} />}
                   />
                 </Grid>
 
                 <Grid item xs={12} sm={4}>
                   <Controller
                     name="routingNo"
-                    render={({ field }) => <TextField {...field} label="Routing No." fullWidth />}
+                    render={({ field }) => <TextField {...field} label="Routing No." fullWidth disabled={isFormViewLocked} />}
                   />
                 </Grid>
               </Grid>

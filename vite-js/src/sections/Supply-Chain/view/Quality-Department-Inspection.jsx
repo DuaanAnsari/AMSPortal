@@ -1065,6 +1065,9 @@ export default function QualityDepartmentInspectionView() {
   );
   const [saving, setSaving] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
+  // Old AMS QualityDepartmentPopup BindGrid: DraftBit=True → btnDraft hide + FreezeFieldsOnEdit (UserID≠26)
+  // UserID 26 bypass needs localStorage.userId (not available from login) — freeze applied for all finalized.
+  const [isFinalizedLocked, setIsFinalizedLocked] = useState(false);
   const [measurementTypes, setMeasurementTypes] = useState([]);
   const [measurementTypeId, setMeasurementTypeId] = useState('');
   const [specRows, setSpecRows] = useState([]);
@@ -1329,6 +1332,16 @@ export default function QualityDepartmentInspectionView() {
   const bindDef = data?.bindGridDefaults ?? data?.BindGridDefaults;
   const mstId = isExplicitEditMode ? (data?.qdInspectionMstId ?? data?.QdInspectionMstId) : null;
   const snap = isExplicitEditMode ? (data?.savedInspection ?? data?.SavedInspection) : null;
+
+  // Old AMS BindGrid: If DraftBit = True Then btnDraft.Visible = False (+ FreezeFieldsOnEdit)
+  useEffect(() => {
+    if (!isExplicitEditMode || !snap) {
+      setIsFinalizedLocked(false);
+      return;
+    }
+    const bit = snap.draftBit ?? snap.DraftBit;
+    setIsFinalizedLocked(bit === true || bit === 1 || bit === '1' || bit === 'True');
+  }, [isExplicitEditMode, snap]);
 
   const inspectionEmailInfo = useMemo(
     () => resolveInspectionEmailInfo(data, h, snap, mstId),
@@ -2500,6 +2513,7 @@ export default function QualityDepartmentInspectionView() {
                       value={form.inspectionDate ?? ''}
                       onChange={(e) => setF('inspectionDate', e.target.value)}
                       InputLabelProps={{ shrink: true }}
+                      disabled={isFinalizedLocked}
                     />
                   </Grid>
                   <Grid xs={12} sm={6} md={3}>
@@ -3132,6 +3146,7 @@ export default function QualityDepartmentInspectionView() {
                               value={form.packDrop?.[row.dropKey] ?? row.options[0]}
                               onChange={(e) => setPackDrop(row.dropKey, e.target.value)}
                               InputLabelProps={{ shrink: true }}
+                              disabled={isFinalizedLocked && row.key === 'polyBag'}
                               sx={{ '& .MuiInputBase-root': { height: 40 } }}
                             >
                               {row.options.map((o) => (
@@ -3177,6 +3192,7 @@ export default function QualityDepartmentInspectionView() {
                       label="Type"
                       sx={{ maxWidth: 400 }}
                       value={measurementTypeId}
+                      disabled={isFinalizedLocked}
                       onChange={(e) => {
                         const v = e.target.value;
                         setMeasurementTypeId(v);
@@ -3755,9 +3771,11 @@ export default function QualityDepartmentInspectionView() {
                   </Button>
                 </>
               )}
-              <Button variant="outlined" disabled={saving} onClick={() => handleSave(false)}>
-                {saving ? 'Saving…' : 'Draft'}
-              </Button>
+              {!isFinalizedLocked && (
+                <Button variant="outlined" disabled={saving} onClick={() => handleSave(false)}>
+                  {saving ? 'Saving…' : 'Draft'}
+                </Button>
+              )}
               <Button 
                 variant="soft" 
                 color="info" 
