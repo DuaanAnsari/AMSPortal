@@ -1068,6 +1068,7 @@ export default function QualityDepartmentInspectionView() {
   // Old AMS QualityDepartmentPopup BindGrid: DraftBit=True → btnDraft hide + FreezeFieldsOnEdit (UserID≠26)
   // UserID 26 bypass needs localStorage.userId (not available from login) — freeze applied for all finalized.
   const [isFinalizedLocked, setIsFinalizedLocked] = useState(false);
+  const roleId = Number(localStorage.getItem('roleId') || 0);
   const [measurementTypes, setMeasurementTypes] = useState([]);
   const [measurementTypeId, setMeasurementTypeId] = useState('');
   const [specRows, setSpecRows] = useState([]);
@@ -1342,6 +1343,10 @@ export default function QualityDepartmentInspectionView() {
     const bit = snap.draftBit ?? snap.DraftBit;
     setIsFinalizedLocked(bit === true || bit === 1 || bit === '1' || bit === 'True');
   }, [isExplicitEditMode, snap]);
+
+  // Old AMS QualityDepartmentPopup.aspx: Role 21 opens Edit from QAInspViewNew; when lisDraft/DraftBit=True,
+  // JS freezeFieldsOnEdit() makes nearly all fields readonly. Role 21 Edit = view-only (no update).
+  const isRole21FinalizedViewOnly = roleId === 21 && isExplicitEditMode && isFinalizedLocked;
 
   const inspectionEmailInfo = useMemo(
     () => resolveInspectionEmailInfo(data, h, snap, mstId),
@@ -1952,6 +1957,9 @@ export default function QualityDepartmentInspectionView() {
   };
 
   const handleSave = async (isMainSave) => {
+    // Role 21 + finalized Edit: Old freezeFieldsOnEdit path — no updates
+    if (isRole21FinalizedViewOnly) return;
+
     setSaving(true);
     try {
       const body = buildQdSavePayload(form, discRows, mstId, isMainSave, dtlRows);
@@ -2212,6 +2220,7 @@ export default function QualityDepartmentInspectionView() {
     });
 
   const saveSpecs = async () => {
+    if (isRole21FinalizedViewOnly) return;
     if (!mstId || !measurementTypeId) {
       enqueueSnackbar('Save master and select measurement type first.', { variant: 'error' });
       return;
@@ -2379,6 +2388,7 @@ export default function QualityDepartmentInspectionView() {
               exclusive
               onChange={handleInspTypeChange}
               size="small"
+              disabled={isRole21FinalizedViewOnly}
               sx={{ flexWrap: 'wrap' }}
             >
               {['IPC', 'MPC', 'Pre-Final'].map((t) => (
@@ -2465,6 +2475,18 @@ export default function QualityDepartmentInspectionView() {
               </Stepper>
             </Box>
 
+            {/* Old AMS freezeFieldsOnEdit (DraftBit/lisDraft=True): Role 21 Edit = full field lock */}
+            <Box
+              sx={
+                isRole21FinalizedViewOnly
+                  ? {
+                      pointerEvents: 'none',
+                      userSelect: 'none',
+                      opacity: 0.92,
+                    }
+                  : undefined
+              }
+            >
             {activeStep === 0 && (
               <SectionCard title="INSPECTION INFORMATION">
                 <Grid container spacing={2}>
@@ -3725,6 +3747,7 @@ export default function QualityDepartmentInspectionView() {
                 </SectionCard>
               </>
             )}
+            </Box>
 
             {/* Step navigation buttons */}
             <Box
@@ -3766,9 +3789,11 @@ export default function QualityDepartmentInspectionView() {
                   <Button variant="contained" color="success" onClick={() => setEmailInfoOpen(true)}>
                     Show / Add Email Info
                   </Button>
-                  <Button variant="contained" disabled={saving} onClick={() => handleSave(true)}>
-                    {saving ? 'Saving…' : 'Save'}
-                  </Button>
+                  {!isRole21FinalizedViewOnly && (
+                    <Button variant="contained" disabled={saving} onClick={() => handleSave(true)}>
+                      {saving ? 'Saving…' : 'Save'}
+                    </Button>
+                  )}
                 </>
               )}
               {!isFinalizedLocked && (
