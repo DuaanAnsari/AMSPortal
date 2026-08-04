@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
 
@@ -7,6 +7,7 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
+import Checkbox from '@mui/material/Checkbox';
 import Chip from '@mui/material/Chip';
 import Container from '@mui/material/Container';
 import FormControl from '@mui/material/FormControl';
@@ -14,8 +15,8 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import FormHelperText from '@mui/material/FormHelperText';
 import FormLabel from '@mui/material/FormLabel';
 import Grid from '@mui/material/Grid';
-import IconButton from '@mui/material/IconButton';
 import InputLabel from '@mui/material/InputLabel';
+import ListItemText from '@mui/material/ListItemText';
 import MenuItem from '@mui/material/MenuItem';
 import OutlinedInput from '@mui/material/OutlinedInput';
 import Radio from '@mui/material/Radio';
@@ -28,7 +29,8 @@ import Typography from '@mui/material/Typography';
 import { useSnackbar } from 'src/components/snackbar';
 import { useSettingsContext } from 'src/components/settings';
 import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
-import Iconify from 'src/components/iconify';
+import { buildSupplierCreatePayload, createSupplierWithUser } from './supplier-add.api';
+import axios from 'src/utils/axios';
 
 // ----------------------------------------------------------------------
 
@@ -50,12 +52,14 @@ const defaultForm = {
   supplierStatus: 'Active',
   name: '',
   shortName: '',
-  vendorCategoryId: '',
+  username: '',
+  password: '',
+  vendorCategoryId: 'Potential',
   vendorCode: '',
   address: '',
   street: '',
   town: '',
-  cityId: '',
+  cityId: 1,
   contactPerson: '',
   designation: '',
   phoneNumberPrincipal: '',
@@ -67,7 +71,7 @@ const defaultForm = {
   merchandiserEmail2: '',
   merchandiserEmail3: '',
   productGroupIds: [],
-  verticalIntegrationIds: [],
+  verticalIntegrationIds: [38],
   managementApproval: '',
   socialCompliance: '',
   supplyChain: '',
@@ -90,15 +94,42 @@ export default function SupplierAddPage() {
 
   const [form, setForm] = useState(defaultForm);
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [productGroups, setProductGroups] = useState([]);
 
   const roleId = Number(localStorage.getItem('roleId') || 0);
   const canSave = roleId === 1 || roleId === 49;
 
-  // Old AMS binds these from server-side sources; no matching API endpoints were found.
-  const vendorCategories = useMemo(() => [], []);
-  const cities = useMemo(() => [], []);
-  const productGroups = useMemo(() => [], []);
-  const verticalIntegrations = useMemo(() => [], []);
+  const vendorCategories = useMemo(() => [{ value: 'Potential', label: 'Potential' }], []);
+  const cities = useMemo(() => [{ value: 1, label: 'Karachi' }], []);
+  const verticalIntegrations = useMemo(() => [{ value: 38, label: 'Manufacturing' }], []);
+
+  useEffect(() => {
+    let active = true;
+
+    const fetchProductGroups = async () => {
+      try {
+        const { data } = await axios.get('/api/MyOrders/GetProductGroupDD');
+        if (!active) return;
+        const rows = Array.isArray(data) ? data : data ? [data] : [];
+        setProductGroups(
+          rows.map((item) => ({
+            value: item?.VVIID ?? '',
+            label: item?.Name ?? '',
+          }))
+        );
+      } catch {
+        if (!active) return;
+        setProductGroups([]);
+      }
+    };
+
+    fetchProductGroups();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleChange = (field) => (event) => {
     const value = event?.target?.value;
@@ -111,7 +142,22 @@ export default function SupplierAddPage() {
     return /^\w+([-.+']\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*$/.test(value);
   };
 
-  const handleSave = () => {
+  const getPasswordError = (value) => {
+    const password = String(value || '');
+    const hasMinLength = password.length >= 8;
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSpecial = /[!@#$%^&*()_+\-=[\]{}|;':",./<>?]/.test(password);
+
+    if (hasMinLength && hasUppercase && hasLowercase && hasNumber && hasSpecial) {
+      return '';
+    }
+
+    return 'Password must contain:\n- Minimum 8 characters\n- One uppercase letter\n- One lowercase letter\n- One number\n- One special character';
+  };
+
+  const handleSave = async () => {
     const nextErrors = {};
 
     if (form.productGroupIds.length === 0) {
@@ -122,6 +168,9 @@ export default function SupplierAddPage() {
       nextErrors.verticalIntegrationIds = 'At least one Vertical Integration must be selected.';
     }
 
+    const passwordError = getPasswordError(form.password);
+    if (passwordError) nextErrors.password = passwordError;
+
     if (!validateEmail(form.ceoEmail)) nextErrors.ceoEmail = 'Invalid email address.';
     if (!validateEmail(form.merchandiserEmail)) nextErrors.merchandiserEmail = 'Invalid email address.';
     if (!validateEmail(form.merchandiserEmail2)) nextErrors.merchandiserEmail2 = 'Invalid email address.';
@@ -131,7 +180,29 @@ export default function SupplierAddPage() {
 
     if (Object.keys(nextErrors).length > 0) return;
 
-    enqueueSnackbar('Create Supplier API available nahi mili. UI ready hai.', { variant: 'warning' });
+    const payload = buildSupplierCreatePayload(form);
+
+    try {
+      setSaving(true);
+      await createSupplierWithUser(payload);
+      enqueueSnackbar('Supplier created successfully.', { variant: 'success' });
+      setTimeout(() => {
+        navigate('/dashboard/supplier');
+      }, 3000);
+    } catch (err) {
+      const message =
+        (typeof err === 'string' && err) ||
+        err?.message ||
+        err?.Message ||
+        err?.title ||
+        err?.error ||
+        (typeof err?.response?.data === 'string' && err.response.data) ||
+        err?.response?.data?.message ||
+        err?.response?.data?.Message ||
+        'Failed to create supplier.';
+      enqueueSnackbar(message, { variant: 'error' });
+      setSaving(false);
+    }
   };
 
   const renderMultiSelectValue = (selectedValues, options) =>
@@ -147,6 +218,24 @@ export default function SupplierAddPage() {
         })}
       </Box>
     );
+
+  const renderProductGroupValue = (selectedValues) => {
+    if (!selectedValues?.length) {
+      return (
+        <Typography variant="body2" color="text.secondary">
+          Select Product Group
+        </Typography>
+      );
+    }
+
+    if (selectedValues.length > 5) {
+      return `${selectedValues.length} items selected`;
+    }
+
+    return selectedValues
+      .map((value) => productGroups.find((item) => String(item.value) === String(value))?.label || value)
+      .join(', ');
+  };
 
   return (
     <>
@@ -170,11 +259,6 @@ export default function SupplierAddPage() {
             Old AMS role validation: Save is available only for RoleID 1 and 49.
           </Alert>
         )}
-
-        <Alert severity="info" sx={{ mb: 3 }}>
-          Create Supplier API and lookup APIs for Vendor Category, City, Product Group, and Vertical
-          Integration were not found. Form UI is ready and Save currently shows a notice only.
-        </Alert>
 
         <Stack spacing={3}>
           <SectionCard title="Basic Information">
@@ -211,6 +295,14 @@ export default function SupplierAddPage() {
                 />
               </Grid>
               <Grid item xs={12} md={4}>
+                <TextField
+                  label="Username"
+                  fullWidth
+                  value={form.username}
+                  onChange={handleChange('username')}
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
                 <FormControl fullWidth>
                   <InputLabel>Vendor Category</InputLabel>
                   <Select
@@ -224,17 +316,34 @@ export default function SupplierAddPage() {
                       </MenuItem>
                     ))}
                   </Select>
-                  <FormHelperText>No API found for vendor categories.</FormHelperText>
                 </FormControl>
               </Grid>
 
+              <Grid item xs={12} md={4}>
+                <TextField
+                  label="Password"
+                  type="text"
+                  fullWidth
+                  value={form.password}
+                  onChange={handleChange('password')}
+                  error={!!errors.password}
+                  helperText={
+                    errors.password ? (
+                      <Box component="span" sx={{ display: 'block', whiteSpace: 'pre-line' }}>
+                        {errors.password}
+                      </Box>
+                    ) : (
+                      ' '
+                    )
+                  }
+                />
+              </Grid>
               <Grid item xs={12} md={4}>
                 <TextField
                   label="Vendor Code"
                   fullWidth
                   value={form.vendorCode}
                   onChange={handleChange('vendorCode')}
-                  InputProps={{ readOnly: true }}
                 />
               </Grid>
               <Grid item xs={12} md={4}>
@@ -258,31 +367,16 @@ export default function SupplierAddPage() {
                 <TextField label="Town" fullWidth value={form.town} onChange={handleChange('town')} />
               </Grid>
               <Grid item xs={12} md={4}>
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                  <FormControl fullWidth>
-                    <InputLabel>City</InputLabel>
-                    <Select value={form.cityId} label="City" onChange={handleChange('cityId')}>
-                      {cities.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                          {option.label}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                    <FormHelperText>No hardcoded city values found in Old AMS; dropdown remains DB/API-driven.</FormHelperText>
-                  </FormControl>
-
-                  <IconButton
-                    aria-label="Add City"
-                    sx={{ mt: 1 }}
-                    onClick={() =>
-                      enqueueSnackbar('Old AMS city add flow is API/database-driven; no hardcoded city list found.', {
-                        variant: 'info',
-                      })
-                    }
-                  >
-                    <Iconify icon="mingcute:add-line" />
-                  </IconButton>
-                </Box>
+                <FormControl fullWidth>
+                  <InputLabel>City</InputLabel>
+                  <Select value={form.cityId} label="City" onChange={handleChange('cityId')}>
+                    {cities.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField
@@ -380,18 +474,20 @@ export default function SupplierAddPage() {
                   <InputLabel>Product Group</InputLabel>
                   <Select
                     multiple
+                    displayEmpty
                     value={form.productGroupIds}
                     onChange={handleChange('productGroupIds')}
                     input={<OutlinedInput label="Product Group" />}
-                    renderValue={(selected) => renderMultiSelectValue(selected, productGroups)}
+                    renderValue={renderProductGroupValue}
                   >
                     {productGroups.map((option) => (
                       <MenuItem key={option.value} value={option.value}>
-                        {option.label}
+                        <Checkbox checked={form.productGroupIds.indexOf(option.value) > -1} />
+                        <ListItemText primary={option.label} />
                       </MenuItem>
                     ))}
                   </Select>
-                  <FormHelperText>{errors.productGroupIds || 'No API found for product groups.'}</FormHelperText>
+                  <FormHelperText>{errors.productGroupIds || ' '}</FormHelperText>
                 </FormControl>
               </Grid>
 
@@ -411,9 +507,7 @@ export default function SupplierAddPage() {
                       </MenuItem>
                     ))}
                   </Select>
-                  <FormHelperText>
-                    {errors.verticalIntegrationIds || 'No API found for vertical integrations.'}
-                  </FormHelperText>
+                  <FormHelperText>{errors.verticalIntegrationIds || ' '}</FormHelperText>
                 </FormControl>
               </Grid>
             </Grid>
@@ -550,14 +644,6 @@ export default function SupplierAddPage() {
                 </FormControl>
               </Grid>
 
-              {canSave && (
-                <Grid item xs={12}>
-                  <Alert severity="info" sx={{ mt: 1 }}>
-                    Old AMS also exposes certificate management from this page for save-allowed roles, but no
-                    matching frontend/API workflow was found here.
-                  </Alert>
-                </Grid>
-              )}
             </Grid>
           </SectionCard>
 
@@ -573,8 +659,8 @@ export default function SupplierAddPage() {
               Cancel
             </Button>
             {canSave && (
-              <Button variant="contained" onClick={handleSave}>
-                Save
+              <Button variant="contained" onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving...' : 'Save'}
               </Button>
             )}
           </Box>
