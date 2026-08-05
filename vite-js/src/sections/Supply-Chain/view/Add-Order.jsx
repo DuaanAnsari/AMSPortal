@@ -2589,6 +2589,7 @@ export default function CompletePurchaseOrderForm() {
       size: String(row.size ?? ''),
       itemPrice: Number(row.itemPrice || 0),
       sizeRangeDBID: Number(row.sizeRangeDBID || 0),
+      sizeRange: row.sizeRange || '',
       productCode: row.productCode || '',
     }));
 
@@ -2824,7 +2825,10 @@ export default function CompletePurchaseOrderForm() {
       
       const apiData = await mapFormDataToAPI(data);
       
-      console.log('📤 Sending to API:', apiData);
+      console.log('=== Add Order Payload ===', apiData);
+      console.log('Details:', apiData?.details);
+      console.log('Styles:', apiData?.styles);
+      console.log('Items:', apiData?.items);
       
       const response = await axios.post(
         `${API_BASE_URL}/api/MyOrders/AddPurchaseOrder`,
@@ -2857,7 +2861,17 @@ export default function CompletePurchaseOrderForm() {
           ...item,
         }));
 
-        console.log('📤 Sending PO Details to API:', detailsPayload);
+        console.log('=== Add Order Payload ===', detailsPayload);
+        console.log('Details:', detailsPayload);
+        detailsPayload.forEach((mappedRow, index) => {
+          const sourceRow = savedItemData.rows[index];
+          console.log(`[Add Order Detail Row ${index}] sizeRange:`, mappedRow?.sizeRange, '| sizeRangeDBID:', mappedRow?.sizeRangeDBID);
+          if (mappedRow?.sizeRange === undefined || mappedRow?.sizeRange === null || mappedRow?.sizeRange === '') {
+            console.log('Row Before Mapping:', sourceRow);
+            console.log('row.sizeRange:', sourceRow?.sizeRange);
+            console.log('row.sizeRangeDBID:', sourceRow?.sizeRangeDBID);
+          }
+        });
 
         const detailsResponse = await axios.post(
           `${API_BASE_URL}/api/MyOrders/AddPurchaseOrderDetails?poId=${createdPoId}`,

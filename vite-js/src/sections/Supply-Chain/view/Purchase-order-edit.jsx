@@ -767,7 +767,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
     totalValue: 0,
     totalLdpValue: 0,
   });
-  const { handleSubmit, control, reset } = useForm({
+  const { handleSubmit, control, reset, setValue } = useForm({
     defaultValues: {
       styleNo: '',
       colorway: '',
@@ -775,6 +775,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       itemPrice: '',
       ldpPrice: '',
       sizeRange: '',
+      sizeRangeDBID: 0,
     },
   });
 
@@ -794,9 +795,33 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
         const res = await axios.get(`${API_BASE_URL}/api/MyOrders/GetSizeRange`, { headers });
 
         if (Array.isArray(res.data)) {
-          setSizeRangeData(res.data);
-          const uniqueSizeRanges = [...new Set(res.data.map(item => item.sizeRange))];
-          setSizeRangeOptions(uniqueSizeRanges);
+          // Normalize to include DB ID so we can post it later (same as Add-Order)
+          const normalized = res.data
+            .map((item) => ({
+              id: Number(
+                item.sizeRangeDBID ??
+                item.sizeRangeDbId ??
+                item.sizeRangeID ??
+                item.sizeRangeId ??
+                item.id ??
+                0
+              ),
+              sizeRange: String(item.sizeRange ?? '').trim(),
+              sizes: item.sizes,
+            }))
+            .filter((x) => x.sizeRange && x.sizeRange !== '');
+
+          setSizeRangeData(normalized);
+
+          // Remove duplicates based on sizeRange value (keep full objects with id)
+          const uniqueMap = new Map();
+          normalized.forEach((x) => {
+            if (!uniqueMap.has(x.sizeRange)) {
+              uniqueMap.set(x.sizeRange, x);
+            }
+          });
+
+          setSizeRangeOptions(Array.from(uniqueMap.values()));
         } else {
           setSizeRangeData([]);
           setSizeRangeOptions([]);
@@ -835,6 +860,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       colorway: data.colorway || '',
       productCode: data.productCode || '',
       sizeRange: data.sizeRange || '',
+      sizeRangeDBID: Number(data.sizeRangeDBID || 0),
       size,
       quantity: 0,
       itemPrice: parseFloat(data.itemPrice) || 0,
@@ -852,6 +878,7 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
       itemPrice: data.itemPrice || '',
       ldpPrice: data.ldpPrice || '',
       sizeRange: '',
+      sizeRangeDBID: 0,
     });
     setFormError('');
   };
@@ -1009,8 +1036,17 @@ function ItemDetailsDialog({ open, onClose, onSaveData }) {
                   <Autocomplete
                     options={sizeRangeOptions}
                     loading={loadingSizeRanges}
-                    value={field.value || ''}
-                    onChange={(_, newValue) => field.onChange(newValue || '')}
+                    getOptionLabel={(option) => String(option?.sizeRange || '')}
+                    isOptionEqualToValue={(option, value) =>
+                      option?.id === value?.id || option?.sizeRange === value?.sizeRange
+                    }
+                    value={sizeRangeOptions.find((opt) => opt.sizeRange === field.value) || null}
+                    onChange={(_, newValue) => {
+                      const nextLabel = newValue?.sizeRange || '';
+                      const nextId = Number(newValue?.id || 0);
+                      field.onChange(nextLabel);
+                      setValue('sizeRangeDBID', nextId, { shouldValidate: true });
+                    }}
                     renderInput={(params) => (
                       <TextField
                         {...params}
@@ -1342,6 +1378,7 @@ export default function CompletePurchaseOrderFormEdit() {
       size: String(row.size ?? ''),
       itemPrice: Number(row.itemPrice || 0),
       sizeRangeDBID: Number(row.sizeRangeDBID ?? 0),
+      sizeRange: row.sizeRange || '',
       productCode: row.productCode || '',
     }));
 
@@ -1995,6 +2032,18 @@ export default function CompletePurchaseOrderFormEdit() {
         ...item,
       }));
 
+      console.log('=== Edit Order Payload ===', payload);
+      console.log('Details:', payload);
+      payload.forEach((mappedRow, index) => {
+        const sourceRow = rowsToAddCalculated[index];
+        console.log(`[Edit Order Detail Row ${index}] sizeRange:`, mappedRow?.sizeRange, '| sizeRangeDBID:', mappedRow?.sizeRangeDBID);
+        if (mappedRow?.sizeRange === undefined || mappedRow?.sizeRange === null || mappedRow?.sizeRange === '') {
+          console.log('Row Before Mapping:', sourceRow);
+          console.log('row.sizeRange:', sourceRow?.sizeRange);
+          console.log('row.sizeRangeDBID:', sourceRow?.sizeRangeDBID);
+        }
+      });
+
       // Include poId in query for explicit linkage with this Purchase Order
       await apiClient.post(`/MyOrders/AddPurchaseOrderDetails?poId=${id}`, payload);
 
@@ -2105,10 +2154,18 @@ export default function CompletePurchaseOrderFormEdit() {
         size: row.size || '',
         itemPrice: Number(row.itemPrice ?? 0),
         sizeRangeDBID: Number(row.sizeRangeDBID ?? 0),
+        sizeRange: row.sizeRange || '',
         productCode: row.productCode || '',
       };
 
-      console.log(`Updating style row ${row.styleId} for PO ${id}`, payload);
+      console.log('=== Edit Order Payload ===', payload);
+      console.log('Styles:', payload);
+      console.log(`[Edit Order UpdateStyle] sizeRange:`, payload?.sizeRange, '| sizeRangeDBID:', payload?.sizeRangeDBID);
+      if (payload?.sizeRange === undefined || payload?.sizeRange === null || payload?.sizeRange === '') {
+        console.log('Row Before Mapping:', row);
+        console.log('row.sizeRange:', row.sizeRange);
+        console.log('row.sizeRangeDBID:', row.sizeRangeDBID);
+      }
       await apiClient.post(`/Milestone/UpdateStyle?poid=${id}&styleId=${row.styleId}`, payload);
 
     } catch (error) {
@@ -2370,6 +2427,7 @@ export default function CompletePurchaseOrderFormEdit() {
       size: row.size || '',
       itemPrice: Number(row.itemPrice ?? 0),
       sizeRangeDBID: Number(row.sizeRangeDBID ?? 0),
+      sizeRange: row.sizeRange || '',
       productCode: row.productCode || '',
     }));
   };
@@ -2387,6 +2445,11 @@ export default function CompletePurchaseOrderFormEdit() {
         showSnackbar('Unable to build update payload. Please reload the page.', 'error');
         return;
       }
+
+      console.log('=== Edit Order Payload ===', payload);
+      console.log('Details:', payload?.details);
+      console.log('Styles:', payload?.styles);
+      console.log('Items:', payload?.items);
 
       await apiClient.post(`/MyOrders/UpdatePurchaseOrder?poid=${id}`, payload);
 
@@ -2419,8 +2482,18 @@ export default function CompletePurchaseOrderFormEdit() {
             size: row.size || '',
             itemPrice: Number(row.itemPrice ?? 0),
             sizeRangeDBID: Number(row.sizeRangeDBID ?? 0),
+            sizeRange: row.sizeRange || '',
             productCode: row.productCode || '',
           };
+
+          console.log('=== Edit Order Payload ===', stylePayload);
+          console.log('Styles:', stylePayload);
+          console.log(`[Edit Order Save UpdateStyle] sizeRange:`, stylePayload?.sizeRange, '| sizeRangeDBID:', stylePayload?.sizeRangeDBID);
+          if (stylePayload?.sizeRange === undefined || stylePayload?.sizeRange === null || stylePayload?.sizeRange === '') {
+            console.log('Row Before Mapping:', row);
+            console.log('row.sizeRange:', row.sizeRange);
+            console.log('row.sizeRangeDBID:', row.sizeRangeDBID);
+          }
 
           try {
             await apiClient.post(
