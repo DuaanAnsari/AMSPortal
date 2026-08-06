@@ -124,7 +124,20 @@ export default function SupplierAddPage() {
       }
     };
 
+    const fetchNextVendorCode = async () => {
+      try {
+        const { data } = await axios.get('/api/MyOrders/GetNextVendorCode');
+        if (!active) return;
+        if (data && data.venderCode) {
+          setForm((prev) => ({ ...prev, vendorCode: data.venderCode }));
+        }
+      } catch (err) {
+        console.error('Failed to fetch next vendor code:', err);
+      }
+    };
+
     fetchProductGroups();
+    fetchNextVendorCode();
 
     return () => {
       active = false;
@@ -184,7 +197,12 @@ export default function SupplierAddPage() {
 
     try {
       setSaving(true);
-      await createSupplierWithUser(payload);
+      const response = await createSupplierWithUser(payload);
+      const generatedVendorCode =
+        response?.venderCode ?? response?.VenderCode ?? response?.vendorCode ?? '';
+      if (generatedVendorCode) {
+        setForm((prev) => ({ ...prev, vendorCode: generatedVendorCode }));
+      }
       enqueueSnackbar('Supplier created successfully.', { variant: 'success' });
       setTimeout(() => {
         navigate('/dashboard/supplier');
@@ -343,7 +361,7 @@ export default function SupplierAddPage() {
                   label="Vendor Code"
                   fullWidth
                   value={form.vendorCode}
-                  onChange={handleChange('vendorCode')}
+                  disabled
                 />
               </Grid>
               <Grid item xs={12} md={4}>

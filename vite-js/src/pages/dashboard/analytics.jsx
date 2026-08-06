@@ -83,16 +83,16 @@ export default function OverviewAnalyticsPage() {
     setFetchError('');
 
     try {
-      const { data } = await axios.get('/api/MyOrders/GetSupplier');
+      const { data } = await axios.get('/api/MyOrders/GetVendors');
       const arr = Array.isArray(data) ? data : data ? [data] : [];
 
       const mapped = arr.map((item, index) => ({
-        id: item?.venderLibraryID ?? `${index}`,
-        vendorCode: item?.venderLibraryID ?? '',
-        shortName: '',
+        id: item?.venderCode ?? `${index}`,
+        vendorCode: item?.venderCode ?? '',
+        shortName: item?.shortName ?? '',
         name: item?.venderName ?? '',
-        status: '',
-        city: '',
+        status: item?.status ?? '',
+        city: item?.city ?? '',
         certification: '',
       }));
 

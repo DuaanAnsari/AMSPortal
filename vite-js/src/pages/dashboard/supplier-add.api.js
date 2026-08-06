@@ -12,7 +12,6 @@ export function buildSupplierCreatePayload(form) {
     supplierStatus: form.supplierStatus || '',
     venderName: form.name || '',
     venderCategoryID: toNumber(form.vendorCategoryId),
-    venderCode: form.vendorCode || '',
     venderAddress: form.address || '',
     town: form.town || '',
     street: form.street || '',
