@@ -70,7 +70,7 @@ const PP_FREEZE_PROCESS_IDS_NON_VENDOR = new Set([
   20, 71, 110, 74, 25, 112, 19, 30, 49, 81, 114, 131, 23,
 ]);
 const PP_FREEZE_PROCESS_IDS_VENDOR = new Set([74, 25, 112, 19, 30, 49, 81, 114, 131, 23]);
-const VENDOR_QA_ROLE_IDS = new Set([21, 44, 45, 47]);
+const VENDOR_QA_ROLE_IDS = new Set([21, 44, 45, 47, 50]);
 const PP_SAMPLE_PROCESS_IDS = new Set([14, 65]);
 const PP_FREEZE_FIELD_SUFFIXES = new Set([
   'status',
@@ -417,10 +417,10 @@ export default function TNAChartPage() {
 
   // Old AMS TNAChartView Session("RoleID")
   const roleId = Number(localStorage.getItem('roleId') || 0);
-  const canShowNotApplicableProcess = roleId === 1 || roleId === 42 || roleId === 49;
-  const canShowNotApplicable = roleId === 1 || roleId === 3 || roleId === 43 || roleId === 49;
-  const canEditAssignMerchant = roleId === 1 || roleId === 3 || roleId === 49;
-  const canEditAssignProdOrShip = roleId === 1 || roleId === 49;
+  const canShowNotApplicableProcess = roleId === 1 || roleId === 42 || roleId === 49 || roleId === 50;
+  const canShowNotApplicable = roleId === 1 || roleId === 3 || roleId === 43 || roleId === 49 || roleId === 50;
+  const canEditAssignMerchant = roleId === 1 || roleId === 3 || roleId === 49 || roleId === 50;
+  const canEditAssignProdOrShip = roleId === 1 || roleId === 49 || roleId === 50;
 
   const gridRef = useRef(null);
   const dragScrollRef = useRef({ active: false, wasDragged: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });

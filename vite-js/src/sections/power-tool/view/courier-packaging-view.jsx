@@ -181,7 +181,7 @@ export default function CourierPackagingViewPage() {
 
   // Old AMS MerchandisingView: Action/Remove column only for RoleID = 1
   const roleId = Number(localStorage.getItem('roleId') || 0);
-  const canDeleteCourier = roleId === 1;
+  const canDeleteCourier = roleId === 1 || roleId === 50;
 
   const [rows, setRows] = useState([]);
   const [reorderedRows, setReorderedRows] = useState([]);

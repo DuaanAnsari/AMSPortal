@@ -98,7 +98,7 @@ export default function SupplierAddPage() {
   const [productGroups, setProductGroups] = useState([]);
 
   const roleId = Number(localStorage.getItem('roleId') || 0);
-  const canSave = roleId === 1 || roleId === 49;
+  const canSave = roleId === 1 || roleId === 49 || roleId === 50;
 
   const vendorCategories = useMemo(() => [{ value: 'Potential', label: 'Potential' }], []);
   const cities = useMemo(() => [{ value: 1, label: 'Karachi' }], []);
