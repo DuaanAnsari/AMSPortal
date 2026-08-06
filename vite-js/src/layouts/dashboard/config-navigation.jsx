@@ -54,11 +54,16 @@ const ROUTE_BY_NAME = createNameMap([
   ['SOPs', paths.dashboard.general.file],
   ['File', paths.dashboard.general.file],
   ['New Container Loading', paths.dashboard.containerLoading],
-  ['Container Loading', paths.dashboard.containerLoading],
+  // Removed 'Container Loading' from here so it acts as a pure dropdown folder (no path)
   ['Inspection', paths.dashboard.masterOrderForQDSheet],
   ['Inspection Report', paths.dashboard.qaInspectionView],
   ['Sample Inspection Report', paths.dashboard.supplyChain.sampleInspectionReport],
   ['Size Specs', paths.dashboard.supplyChain.sizeSpecsView],
+  ['MasterOrderForQDSheet', paths.dashboard.masterOrderForQDSheet],
+  ['qa-inspection-view', paths.dashboard.qaInspectionView],
+  ['sample-inspection-report', paths.dashboard.supplyChain.sampleInspectionReport],
+  ['size-specs-view', paths.dashboard.supplyChain.sizeSpecsView],
+  ['container-loading', paths.dashboard.containerLoading],
 
   ['Supply Chain', paths.dashboard.supplyChain.root],
   ['My Orders', paths.dashboard.supplyChain.root],
@@ -278,11 +283,128 @@ export function useNavData() {
       try {
         const response = await axios.get(MENU_ENDPOINT);
         if (active) {
-          setMenu(
-            response.data && typeof response.data === 'object' && !Array.isArray(response.data)
-              ? response.data
-              : {}
-          );
+          let data = response.data && typeof response.data === 'object' && !Array.isArray(response.data)
+            ? response.data
+            : {};
+
+          const roleId = Number(localStorage.getItem('roleId') || 0);
+          console.log('--- NAV DEBUG ---', { roleId, dataKeys: Object.keys(data) });
+          if (roleId === 50 && Object.keys(data).length > 0) {
+            data = JSON.parse(JSON.stringify(data));
+
+            // Helper to recursively remove specific items from all nested arrays/objects
+            const removeItem = (obj, itemToRemove) => {
+               if (Array.isArray(obj)) {
+                  for (let i = obj.length - 1; i >= 0; i--) {
+                     if (typeof obj[i] === 'string' && obj[i].toLowerCase() === itemToRemove.toLowerCase()) {
+                        obj.splice(i, 1);
+                     } else if (typeof obj[i] === 'object' && obj[i] !== null) {
+                        removeItem(obj[i], itemToRemove);
+                     }
+                  }
+               } else if (typeof obj === 'object' && obj !== null) {
+                  for (const k of Object.keys(obj)) {
+                     if (typeof obj[k] === 'string' && obj[k].toLowerCase() === itemToRemove.toLowerCase()) {
+                        delete obj[k];
+                     } else if (typeof obj[k] === 'object' && obj[k] !== null) {
+                        removeItem(obj[k], itemToRemove);
+                     }
+                  }
+               }
+            };
+
+            const childItemsToRemove = [
+               'container-loading',
+               'new container loading',
+               'container loading',
+               'masterorderforqdsheet', 
+               'inspection',
+               'qa-inspection-view',
+               'inspection report',
+               'sample-inspection-report', 
+               'sample inspection report',
+               'size-specs-view',
+               'size specs'
+            ];
+
+            // 1. Remove the target pages from anywhere else in the menu completely (children)
+            childItemsToRemove.forEach(item => removeItem(data, item));
+
+            // Also delete if they got added as top-level keys by the API (acting as single main menu items)
+            // We do NOT delete 'new container loading' so we preserve the dropdown if it was sent by API.
+            for (const key of Object.keys(data)) {
+               const lKey = key.trim().toLowerCase();
+               if (
+                  lKey === 'masterorderforqdsheet' ||
+                  lKey === 'inspection' ||
+                  lKey === 'qa-inspection-view' ||
+                  lKey === 'inspection report' ||
+                  lKey === 'sample-inspection-report' ||
+                  lKey === 'sample inspection report' ||
+                  lKey === 'size-specs-view' ||
+                  lKey === 'size specs' ||
+                  lKey === 'container-loading'
+               ) {
+                  delete data[key];
+               }
+            }
+
+            // 2. Ensure 'Container Loading' dropdown exists and has 'container-loading'
+            // We'll use "Container Loading" as the key. If the API sent "New Container Loading", we can rename it.
+            let existingCLKey = Object.keys(data).find(k => {
+               const l = k.trim().toLowerCase();
+               return l === 'container loading' || l === 'new container loading';
+            });
+            
+            let clDropdownItems = [];
+            if (existingCLKey && data[existingCLKey]) {
+                clDropdownItems = Array.isArray(data[existingCLKey]) ? data[existingCLKey] : [];
+                delete data[existingCLKey]; // Delete the old key so we can standardize to 'Container Loading'
+            }
+
+            if (!clDropdownItems.includes('container-loading')) {
+                clDropdownItems.push('container-loading');
+            }
+
+            // 3. Reconstruct the data object to place 'Inspection' directly BELOW 'Power Tool'
+            const newData = {};
+            const powerToolsKey = Object.keys(data).find(k => {
+              const l = k.trim().toLowerCase();
+              return l === 'power tools' || l === 'power tool';
+            });
+
+            for (const key of Object.keys(data)) {
+               newData[key] = data[key];
+               if (key === powerToolsKey) {
+                  // Insert Inspection right after Power Tools as a top-level dropdown
+                  newData['Inspection'] = [
+                    'MasterOrderForQDSheet',
+                    'qa-inspection-view',
+                    'sample-inspection-report',
+                    'size-specs-view'
+                  ];
+               }
+            }
+
+            // Also insert Container Loading at the end if it wasn't processed in the loop
+            if (clDropdownItems.length > 0) {
+               newData['Container Loading'] = clDropdownItems;
+            }
+
+            // Fallback if Power Tool was somehow not in the data
+            if (!powerToolsKey) {
+               newData['Inspection'] = [
+                  'MasterOrderForQDSheet',
+                  'qa-inspection-view',
+                  'sample-inspection-report',
+                  'size-specs-view'
+               ];
+            }
+
+            data = newData;
+          }
+
+          setMenu(data);
         }
       } catch (error) {
         console.error('Unable to load sidebar menu:', error);
