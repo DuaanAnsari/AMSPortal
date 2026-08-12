@@ -51,6 +51,7 @@ import LoadingButton from '@mui/lab/LoadingButton';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { fetchPoFilesOnce } from '../utils/purchase-order-po-files-api';
 
 // Old AMS PurchaseOrderAdd.aspx.vb — active permission helpers (UserID + RoleID)
 const PRIVILEGED_USER_IDS = [1, 42];
@@ -1361,6 +1362,14 @@ const defaultValues = {
   bankID: '',
   titleOfAccount: '',
   accountNo: '',
+
+  // Reference & Attachment
+  originalPurchaseOrder: null,
+  processOrderConfirmation: null,
+  finalSpecs: null,
+  productImage: null,
+  ppComment: null,
+  sizeSetComment: null,
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -1779,8 +1788,28 @@ export default function CompletePurchaseOrderForm() {
 
         const order = data;
 
+        // Files are stored separately from the PO header.  Keep their GetPOFiles
+        // URLs in the form so they are visible in the copied PO and can later be
+        // copied to the newly-created PO during UploadPOFiles.
+        let copiedPoFiles = {};
+        try {
+          const { grouped } = await fetchPoFilesOnce(copyFromPoId);
+          copiedPoFiles = {
+            originalPurchaseOrder: grouped.originalPurchaseOrder?.[0]?.fileUrl || null,
+            processOrderConfirmation: grouped.processOrderConfirmation?.[0]?.fileUrl || null,
+            finalSpecs: grouped.finalSpecs?.[0]?.fileUrl || null,
+            productImage: grouped.productImage?.[0]?.fileUrl || null,
+            ppComment: grouped.ppComment?.[0]?.fileUrl || null,
+            sizeSetComment: grouped.sizeSetComment?.[0]?.fileUrl || null,
+          };
+        } catch (filesError) {
+          // A missing/unavailable attachment must not prevent copying the PO.
+          console.error('Error loading files for copied purchase order:', filesError);
+        }
+
         const prefilled = {
           ...defaultValues,
+          ...copiedPoFiles,
 
           // Basic Order Info
           masterPo: order.masterPO || order.masterPo || '',
@@ -2629,8 +2658,11 @@ export default function CompletePurchaseOrderForm() {
     // Convert all files to base64
     const convertFileToBase64 = async (file) => {
       if (!file) return '';
-      // If it's already a string (base64 or URL), just return it
+      // Copied attachments are remote GetPOFiles URLs. They are uploaded after
+      // AddPurchaseOrder creates the new PO, so never send their URL as image
+      // data in the header payload.
       if (typeof file === 'string') {
+        if (isValidPoAttachmentUrl(file)) return '';
         // If it's a data URL, strip the prefix for API compatibility if needed
         // Most APIs expect just the base64 part
         if (file.includes('base64,')) {
@@ -2895,28 +2927,55 @@ export default function CompletePurchaseOrderForm() {
           const formData = new FormData();
           let hasFiles = false;
 
-          if (data.originalPurchaseOrder instanceof File) {
-            formData.append('orginalpurchaseorder', data.originalPurchaseOrder);
+          // A copied PO initially holds GetPOFiles URLs. Download each retained
+          // URL as a File, then upload it exactly as a newly selected attachment.
+          const getUploadableFile = async (value, fallbackName) => {
+            if (value instanceof File || !isValidPoAttachmentUrl(value)) return value;
+
+            const token = localStorage.getItem('accessToken');
+            const response = await axios.get(value, {
+              responseType: 'blob',
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+              timeout: 60000,
+            });
+            const urlName = new URL(value).pathname.split('/').pop()?.split('?')[0];
+            return new File([response.data], urlName || fallbackName, {
+              type: response.data.type || 'application/octet-stream',
+            });
+          };
+
+          const sourceFiles = await Promise.all([
+            getUploadableFile(data.originalPurchaseOrder, 'original-purchase-order'),
+            getUploadableFile(data.productImage, 'product-image'),
+            getUploadableFile(data.processOrderConfirmation, 'process-order-confirmation'),
+            getUploadableFile(data.ppComment, 'pp-comment'),
+            getUploadableFile(data.finalSpecs, 'final-specs'),
+            getUploadableFile(data.sizeSetComment, 'size-set-comment'),
+          ]);
+          const [originalPurchaseOrder, productImage, processOrderConfirmation, ppComment, finalSpecs, sizeSetComment] = sourceFiles;
+
+          if (originalPurchaseOrder instanceof File) {
+            formData.append('orginalpurchaseorder', originalPurchaseOrder);
             hasFiles = true;
           }
-          if (data.productImage instanceof File) {
-            formData.append('productImage', data.productImage);
+          if (productImage instanceof File) {
+            formData.append('productImage', productImage);
             hasFiles = true;
           }
-          if (data.processOrderConfirmation instanceof File) {
-            formData.append('process', data.processOrderConfirmation);
+          if (processOrderConfirmation instanceof File) {
+            formData.append('process', processOrderConfirmation);
             hasFiles = true;
           }
-          if (data.ppComment instanceof File) {
-            formData.append('ppImage', data.ppComment);  // fixed: was 'pplImage', API expects 'ppImage'
+          if (ppComment instanceof File) {
+            formData.append('ppImage', ppComment);  // fixed: was 'pplImage', API expects 'ppImage'
             hasFiles = true;
           }
-          if (data.finalSpecs instanceof File) {
-            formData.append('finalSpecs', data.finalSpecs);
+          if (finalSpecs instanceof File) {
+            formData.append('finalSpecs', finalSpecs);
             hasFiles = true;
           }
-          if (data.sizeSetComment instanceof File) {
-            formData.append('sizeSet', data.sizeSetComment);
+          if (sizeSetComment instanceof File) {
+            formData.append('sizeSet', sizeSetComment);
             hasFiles = true;
           }
 

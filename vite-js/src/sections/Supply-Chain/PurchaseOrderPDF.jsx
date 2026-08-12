@@ -499,7 +499,7 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
   receivedDate: (poData.creationDate && !poData.creationDate.startsWith('1900-01-01'))
     ? new Date(poData.creationDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
     : '',
-  attn: poData.contactPersonVendor || '',
+  attn: poData.supplierName || '',
   addressLeft: poData.venderAddress || '',
   trackingCode: poData.venderCode || '',
   brand: poData.brand || '',
