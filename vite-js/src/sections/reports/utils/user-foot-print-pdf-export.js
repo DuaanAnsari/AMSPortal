@@ -387,8 +387,29 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  * @returns {Promise<Blob>}
  */
 export async function buildUserFootPrintPdfBlob(data = {}) {
+  const items = Array.isArray(data.items) ? data.items : [];
   const payload =
-    data && Array.isArray(data.items) && data.items.length > 0 ? data : USER_FOOT_PRINT_DEMO;
+    items.length > 0
+      ? {
+          ...USER_FOOT_PRINT_DEMO,
+          ...data,
+          items: items.map((item, index) => ({
+            serial: String(index + 1),
+            userName: item?.UserName ?? item?.userName ?? '',
+            poNo: item?.PONO ?? item?.poNo ?? '',
+            process: item?.ProcessType ?? item?.process ?? '',
+            updateDate:
+              item?.CreationDate ??
+              item?.creationDate ??
+              item?.UpdateDate ??
+              item?.updateDate ??
+              '',
+            pageName: item?.PageName ?? item?.pageName ?? '',
+            buttonPressed: item?.ButtonType ?? item?.buttonPressed ?? '',
+            remarks: item?.Remarks ?? item?.remarks ?? '',
+          })),
+        }
+      : USER_FOOT_PRINT_DEMO;
 
   const meta = {
     fromDate: payload.fromDate || data.fromDate || USER_FOOT_PRINT_DEMO.fromDate,
@@ -397,6 +418,10 @@ export async function buildUserFootPrintPdfBlob(data = {}) {
   };
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'p' });
+  doc.setProperties({
+    title: 'User Foot Print Report',
+    subject: 'User Foot Print Report',
+  });
   const logoDataUrl = await loadLogoDataUrl();
 
   const tableX = H_MARGIN;

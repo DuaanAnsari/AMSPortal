@@ -1,9 +1,9 @@
 import jsPDF from 'jspdf';
 
 /**
- * "Production History" — portrait PDF matching the legacy AMS print mock-up.
+ * "Production History Report" — portrait PDF matching the legacy AMS print mock-up.
  *
- *   - Header : logo top-left; "Production History" top-right (bold navy,
+ *   - Header : logo top-left; "Production History Report" top-right (bold navy,
  *     underlined); address + new telephone (02134937216 & 02134946005).
  *   - Meta grid : PONO # / Customer / Supplier (left) — STYLE # / PO Qty /
  *     Shipment Date (B) (right).
@@ -108,7 +108,7 @@ function drawPage1Header(doc, logoDataUrl) {
     }
   }
 
-  const titleText = 'Production History';
+  const titleText = 'Production History Report';
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
@@ -326,6 +326,10 @@ export async function buildProductionHistoryPdfBlob(data = {}) {
   const printedOn = data.printedOn || formatPrintedOnLong();
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'p' });
+  doc.setProperties({
+    title: 'Production History Report',
+    subject: 'Production History Report',
+  });
   const logoDataUrl = await loadLogoDataUrl();
 
   const tableX = H_MARGIN;

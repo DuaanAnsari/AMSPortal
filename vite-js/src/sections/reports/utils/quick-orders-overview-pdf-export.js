@@ -413,7 +413,7 @@ function drawPage1Header(doc, logoDataUrl) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
   doc.setTextColor(0, 0, 0);
-  doc.text('AMS - Quick Orders Overview', PAGE_W / 2, addressY1 + 4, {
+  doc.text('Quick Orders Overview', PAGE_W / 2, addressY1 + 4, {
     align: 'center',
     baseline: 'middle',
   });
@@ -645,7 +645,7 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  */
 export async function buildQuickOrdersOverviewPdfBlob(data = {}) {
   const payload =
-    data && Array.isArray(data.customers) && data.customers.length > 0
+    data && Array.isArray(data.customers)
       ? data
       : QUICK_ORDERS_OVERVIEW_DEMO;
 
@@ -654,6 +654,10 @@ export async function buildQuickOrdersOverviewPdfBlob(data = {}) {
   };
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
+  doc.setProperties({
+    title: 'Quick Orders Overview',
+    subject: 'Quick Orders Overview',
+  });
   const logoDataUrl = await loadLogoDataUrl();
 
   const tableX = H_MARGIN;

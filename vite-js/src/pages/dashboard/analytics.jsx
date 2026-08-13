@@ -40,9 +40,7 @@ import {
 import Scrollbar from 'src/components/scrollbar';
 import Label from 'src/components/label';
 import Iconify from 'src/components/iconify';
-import { ConfirmDialog } from 'src/components/custom-dialog';
 import CustomPopover, { usePopover } from 'src/components/custom-popover';
-import { useBoolean } from 'src/hooks/use-boolean';
 
 import UserTableFiltersResult from 'src/sections/Supply-Chain/user-table-filters-result';
 
@@ -57,7 +55,8 @@ const TABLE_HEAD = [
   { id: 'status', label: 'Status', width: 120 },
   { id: 'city', label: 'City', width: 160 },
   { id: 'certification', label: 'Certification', width: 180 },
-  { id: '', width: 88 },
+  { id: 'edit', label: 'Edit', width: 88 },
+  { id: 'select', label: 'Select', width: 88 },
 ];
 
 const defaultFilters = {
@@ -88,6 +87,13 @@ export default function OverviewAnalyticsPage() {
 
       const mapped = arr.map((item, index) => ({
         id: item?.venderCode ?? `${index}`,
+        supplierId:
+          item?.venderLibraryID ??
+          item?.VenderLibraryID ??
+          item?.vendorId ??
+          item?.VendorId ??
+          item?.venderCode ??
+          `${index}`,
         vendorCode: item?.venderCode ?? '',
         shortName: item?.shortName ?? '',
         name: item?.venderName ?? '',
@@ -228,18 +234,12 @@ export default function OverviewAnalyticsPage() {
                   rowCount={dataFiltered.length}
                   numSelected={table.selected.length}
                   onSort={table.onSort}
-                  onSelectAllRows={(checked) =>
-                    table.onSelectAllRows(
-                      checked,
-                      dataFiltered.map((row) => row.id)
-                    )
-                  }
                 />
 
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={TABLE_HEAD.length + 1} align="center" sx={{ py: 4 }}>
+                      <TableCell colSpan={TABLE_HEAD.length} align="center" sx={{ py: 4 }}>
                         <CircularProgress size={22} sx={{ mr: 1 }} />
                         Loading...
                       </TableCell>
@@ -256,8 +256,11 @@ export default function OverviewAnalyticsPage() {
                           row={row}
                           selected={table.selected.includes(row.id)}
                           onSelectRow={() => table.onSelectRow(row.id)}
-                          onEditRow={() => {}}
-                          onDeleteRow={() => {}}
+                          onEditRow={() =>
+                            navigate(`/dashboard/supplier/${encodeURIComponent(row.supplierId)}/edit`, {
+                              state: { supplier: row },
+                            })
+                          }
                         />
                       ))
                   )}
@@ -376,78 +379,26 @@ function SupplierTableToolbar({ filters, onFilters, onAddSupplier }) {
   );
 }
 
-function SupplierTableRow({ row, selected, onEditRow, onSelectRow, onDeleteRow }) {
-  const confirm = useBoolean();
-  const quickEdit = useBoolean();
-  const popover = usePopover();
-
+function SupplierTableRow({ row, selected, onEditRow, onSelectRow }) {
   return (
-    <>
-      <TableRow hover selected={selected}>
-        <TableCell padding="checkbox">
-          <Checkbox checked={selected} onClick={onSelectRow} />
-        </TableCell>
-
-        <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.vendorCode}</TableCell>
-        <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.shortName}</TableCell>
-        <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.name}</TableCell>
-        <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.status}</TableCell>
-        <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.city}</TableCell>
-        <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.certification}</TableCell>
-
-        <TableCell align="right" sx={{ px: 1, whiteSpace: 'nowrap' }}>
-          <Tooltip title="Quick Edit" placement="top" arrow>
-            <IconButton color={quickEdit.value ? 'inherit' : 'default'} onClick={quickEdit.onTrue}>
-              <Iconify icon="solar:pen-bold" />
-            </IconButton>
-          </Tooltip>
-
-          <IconButton color={popover.open ? 'inherit' : 'default'} onClick={popover.onOpen}>
-            <Iconify icon="eva:more-vertical-fill" />
-          </IconButton>
-        </TableCell>
-      </TableRow>
-
-      <CustomPopover
-        open={popover.open}
-        onClose={popover.onClose}
-        arrow="right-top"
-        sx={{ width: 140 }}
-      >
-        <MenuItem
-          onClick={() => {
-            confirm.onTrue();
-            popover.onClose();
-          }}
-          sx={{ color: 'error.main' }}
-        >
-          <Iconify icon="solar:trash-bin-trash-bold" />
-          Delete
-        </MenuItem>
-
-        <MenuItem
-          onClick={() => {
-            onEditRow();
-            popover.onClose();
-          }}
-        >
-          <Iconify icon="solar:pen-bold" />
+    <TableRow hover selected={selected}>
+      <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.vendorCode}</TableCell>
+      <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.shortName}</TableCell>
+      <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.name}</TableCell>
+      <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.status}</TableCell>
+      <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.city}</TableCell>
+      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+        <TextField size="small" />
+      </TableCell>
+      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+        <Button variant="text" size="small" onClick={onEditRow}>
           Edit
-        </MenuItem>
-      </CustomPopover>
-
-      <ConfirmDialog
-        open={confirm.value}
-        onClose={confirm.onFalse}
-        title="Delete"
-        content="Are you sure want to delete?"
-        action={
-          <Button variant="contained" color="error" onClick={onDeleteRow}>
-            Delete
-          </Button>
-        }
-      />
-    </>
+        </Button>
+      </TableCell>
+      <TableCell padding="checkbox">
+        <Checkbox checked={selected} onClick={onSelectRow} />
+      </TableCell>
+    </TableRow>
   );
 }
 

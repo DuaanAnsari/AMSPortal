@@ -7,6 +7,8 @@ import {
   Card,
   Grid,
   Button,
+  Autocomplete,
+  CircularProgress,
   Select,
   MenuItem,
   Container,
@@ -152,6 +154,7 @@ const USER_FOOT_PRINT_PAGES = ['TNA Chart', 'Inspection'];
  */
 function UserFootPrintForm() {
   const { enqueueSnackbar } = useSnackbar();
+  const pageTitle = 'User Foot Print Report';
 
   const [filters, setFilters] = useState({
     page: USER_FOOT_PRINT_PAGES[0],
@@ -162,6 +165,34 @@ function UserFootPrintForm() {
 
   const [merchants, setMerchants] = useState([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
+  const [loadingReport, setLoadingReport] = useState(false);
+
+  const getApiBase = useCallback(
+    () => String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, ''),
+    []
+  );
+
+  const formatApiDate = useCallback((value) => {
+    if (!value) return '';
+    const [year, month, day] = String(value).split('-');
+    if (!year || !month || !day) return String(value);
+    return `${Number(year)}-${Number(month)}-${Number(day)}`;
+  }, []);
+
+  const normalizeFootPrintRows = useCallback((data) => {
+    const rows = Array.isArray(data) ? data : data ? [data] : [];
+    return rows.map((row, index) => ({
+      FootPrintAllID: row?.FootPrintAllID ?? row?.footPrintAllID ?? row?.footprintAllID ?? index + 1,
+      CreationDate: row?.CreationDate ?? row?.creationDate ?? '',
+      UserID: row?.UserID ?? row?.userID ?? row?.userId ?? '',
+      PageName: row?.PageName ?? row?.pageName ?? '',
+      PONO: row?.PONO ?? row?.pono ?? '',
+      ButtonType: row?.ButtonType ?? row?.buttonType ?? '',
+      ProcessType: row?.ProcessType ?? row?.processType ?? '',
+      Remarks: row?.Remarks ?? row?.remarks ?? '',
+      UserName: row?.UserName ?? row?.userName ?? '',
+    }));
+  }, []);
 
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
@@ -202,12 +233,32 @@ function UserFootPrintForm() {
   const runPdfExport = useCallback(
     async (mode) => {
       if (generatingPdf) return;
+      const base = getApiBase();
+      if (!base) {
+        enqueueSnackbar('API URL missing: set VITE_API_BASE_URL', { variant: 'error' });
+        return;
+      }
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
+        const params = new URLSearchParams();
+        params.set('fromDate', formatApiDate(filters.fromDate));
+        params.set('toDate', formatApiDate(filters.toDate));
+        params.set('pageName', filters.page);
+
+        setLoadingReport(true);
+        const res = await fetch(`${base}/api/Report/FootPrintReport?${params.toString()}`, {
+          headers: otherAuthHeaders(),
+        });
+        if (!res.ok) {
+          throw new Error(`FootPrintReport ${res.status}`);
+        }
+        const data = await res.json();
+        const items = normalizeFootPrintRows(data);
         const blob = await buildUserFootPrintPdfBlob({
           fromDate: toPdfDate(filters.fromDate),
           toDate: toPdfDate(filters.toDate),
+          items,
         });
         if (mode === 'view' && previewWindow) {
           const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
@@ -225,12 +276,26 @@ function UserFootPrintForm() {
             /* ignore */
           }
         }
-        enqueueSnackbar('Could not build User Foot Print PDF', { variant: 'error' });
+        enqueueSnackbar(
+          err?.message || err?.response?.data?.message || 'Could not build User Foot Print PDF',
+          { variant: 'error' }
+        );
       } finally {
+        setLoadingReport(false);
         setGeneratingPdf(false);
       }
     },
-    [filters.fromDate, filters.toDate, generatingPdf, toPdfDate, enqueueSnackbar]
+    [
+      filters.fromDate,
+      filters.toDate,
+      filters.page,
+      formatApiDate,
+      getApiBase,
+      generatingPdf,
+      normalizeFootPrintRows,
+      toPdfDate,
+      enqueueSnackbar,
+    ]
   );
 
   useEffect(() => {
@@ -278,7 +343,7 @@ function UserFootPrintForm() {
   return (
     <Card variant="outlined" sx={cardSx}>
       <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary', mb: 3 }}>
-        User Foot Print Report
+        {pageTitle}
       </Typography>
 
       <Grid container spacing={{ xs: 2, sm: 3 }}>
@@ -408,6 +473,11 @@ const USER_LOGIN_REPORT_TYPES = [
   { id: 'expand', label: 'Expand Version' },
 ];
 
+const USER_LOGIN_REPORT_TYPE_API_MAP = {
+  summarised: 'Summarised Version',
+  expand: 'Expand Version',
+};
+
 /**
  * "User Login Detail Report" form — second entry in the OTHER hub.
  *
@@ -427,14 +497,66 @@ function UserLoginDetailForm() {
 
   const [filters, setFilters] = useState({
     user: ALL,
-    reportType: 'expand',
+    reportType: 'summarised',
     fromDate: '2026-01-01',
     toDate: '2026-12-31',
   });
 
   const [merchants, setMerchants] = useState([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
+  const [loadingReport, setLoadingReport] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  const getApiBase = useCallback(
+    () => String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, ''),
+    []
+  );
+
+  const formatApiDate = useCallback((value) => {
+    if (!value) return '';
+    const [year, month, day] = String(value).split('-');
+    if (!year || !month || !day) return String(value);
+    return `${Number(year)}-${Number(month)}-${Number(day)}`;
+  }, []);
+
+  const normalizeSummaryRows = useCallback((data) => {
+    const rows = Array.isArray(data) ? data : data ? [data] : [];
+    return rows.map((row, index) => ({
+      userName: row?.userName ?? row?.UserName ?? '',
+      count:
+        row?.numberOfTimesLogged ??
+        row?.NumberOfTimesLogged ??
+        row?.count ??
+        row?.Count ??
+        index + 1,
+    }));
+  }, []);
+
+  const normalizeExpandGroups = useCallback((data) => {
+    const rows = Array.isArray(data) ? data : data ? [data] : [];
+    const grouped = rows.reduce((acc, row) => {
+      const userName = row?.userName ?? row?.UserName ?? '';
+      const key = userName || `row-${acc.length}`;
+      const group = acc.find((entry) => entry.user === key);
+      const item = {
+        userName,
+        loginDate: row?.loginDate ?? row?.LoginDate ?? '',
+        loginTime: row?.loginTime ?? row?.LoginTime ?? '',
+        logoutDate: row?.logoutDate ?? row?.LogoutDate ?? '',
+        logoutTime: row?.logoutTime ?? row?.LogoutTime ?? '',
+        timeDif: row?.timeDif ?? row?.TimeDif ?? row?.timeDiff ?? row?.TimeDiff ?? '',
+      };
+
+      if (group) {
+        group.items.push(item);
+      } else {
+        acc.push({ user: key, items: [item] });
+      }
+      return acc;
+    }, []);
+
+    return grouped;
+  }, []);
 
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
@@ -454,28 +576,76 @@ function UserLoginDetailForm() {
 
   const runPdfExport = useCallback(
     async (mode) => {
+      const base = getApiBase();
+      if (!base) {
+        enqueueSnackbar('API URL missing: set VITE_API_BASE_URL', { variant: 'error' });
+        return;
+      }
+
       try {
+        setLoadingReport(true);
         setGeneratingPdf(true);
-        const isSummary = filters.reportType === 'summarised';
+        const params = new URLSearchParams();
+        params.set('fromDate', formatApiDate(filters.fromDate));
+        params.set('toDate', formatApiDate(filters.toDate));
+        const reportTypeApiValue = USER_LOGIN_REPORT_TYPE_API_MAP[filters.reportType] || 'Summarised Version';
+        params.set('reportType', reportTypeApiValue);
+
+        const res = await fetch(`${base}/api/Report/UserLoginDetailReport?${params.toString()}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(localStorage.getItem('accessToken')
+              ? { Authorization: `Bearer ${localStorage.getItem('accessToken')}` }
+              : {}),
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error(`UserLoginDetailReport ${res.status}`);
+        }
+
+        const data = await res.json();
         const meta = {
           fromDate: toPdfDate(filters.fromDate),
           toDate: toPdfDate(filters.toDate),
         };
-        const blob = isSummary
-          ? await buildUserLoginDetailSummaryPdfBlob(meta)
-          : await buildUserLoginDetailPdfBlob(meta);
-        const filename = isSummary
-          ? 'User-Login-Detail-Summarised.pdf'
-          : 'User-Login-Detail.pdf';
-        openUserLoginDetailPdf(mode === 'pdf' ? 'pdf' : 'view', blob, filename);
+        if (filters.reportType === 'expand') {
+          const groups = normalizeExpandGroups(data);
+          const blob = await buildUserLoginDetailPdfBlob({
+            ...meta,
+            groups,
+          });
+          openUserLoginDetailPdf(mode === 'pdf' ? 'pdf' : 'view', blob, 'User-Login-Detail-Expand.pdf');
+        } else {
+          const items = normalizeSummaryRows(data);
+          const blob = await buildUserLoginDetailSummaryPdfBlob({
+            ...meta,
+            items,
+          });
+          openUserLoginDetailPdf(mode === 'pdf' ? 'pdf' : 'view', blob, 'User-Login-Detail-Summarised.pdf');
+        }
       } catch (err) {
         console.error('[UserLoginDetail] pdf', err);
-        enqueueSnackbar('Could not generate User Login Detail PDF', { variant: 'error' });
+        enqueueSnackbar(
+          err?.message || err?.response?.data?.message || 'Could not generate User Login Detail PDF',
+          { variant: 'error' }
+        );
       } finally {
+        setLoadingReport(false);
         setGeneratingPdf(false);
       }
     },
-    [filters.fromDate, filters.toDate, filters.reportType, toPdfDate, enqueueSnackbar]
+    [
+      enqueueSnackbar,
+      formatApiDate,
+      getApiBase,
+      normalizeExpandGroups,
+      normalizeSummaryRows,
+      filters.fromDate,
+      filters.toDate,
+      filters.reportType,
+      toPdfDate,
+    ]
   );
 
   useEffect(() => {
@@ -519,6 +689,14 @@ function UserLoginDetailForm() {
       return stillThere ? prev : { ...prev, user: ALL };
     });
   }, [merchants]);
+
+  useEffect(() => {
+    const nextTitle = 'User Login Detail Report';
+    const raf = window.requestAnimationFrame(() => {
+      document.title = nextTitle;
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, []);
 
   return (
     <Card variant="outlined" sx={cardSx}>
@@ -612,21 +790,21 @@ function UserLoginDetailForm() {
               variant="contained"
               color="primary"
               size="medium"
-              disabled={generatingPdf}
+              disabled={generatingPdf || loadingReport}
               onClick={() => runPdfExport('view')}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              View Report
+              {generatingPdf || loadingReport ? 'Building…' : 'View Report'}
             </Button>
             <Button
               variant="contained"
               color="primary"
               size="medium"
-              disabled={generatingPdf}
+              disabled={generatingPdf || loadingReport}
               onClick={() => runPdfExport('pdf')}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              Download PDF
+              {generatingPdf || loadingReport ? 'Building…' : 'Download PDF'}
             </Button>
             <Button
               variant="contained"
@@ -693,6 +871,11 @@ function QuickOrdersOverviewForm() {
   const [loadingPoList, setLoadingPoList] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  const getApiBase = useCallback(
+    () => String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, ''),
+    []
+  );
+
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
   };
@@ -709,23 +892,155 @@ function QuickOrdersOverviewForm() {
     return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
   }, []);
 
+  const formatApiDate = useCallback((value) => {
+    if (!value) return '';
+    const [year, month, day] = String(value).split('-');
+    if (!year || !month || !day) return String(value);
+    return `${Number(year)}-${Number(month)}-${Number(day)}`;
+  }, []);
+
+  const normalizeQuickOrdersRows = useCallback((data) => {
+    const rows = Array.isArray(data) ? data : data ? [data] : [];
+
+    return rows.map((row) => ({
+      CustomerID: row?.CustomerID ?? row?.customerId ?? row?.customerID ?? '',
+      CustomerName: row?.CustomerName ?? row?.customerName ?? '',
+      PrincipalName: row?.PrincipalName ?? row?.principalName ?? '',
+      VenderLibraryID: row?.VenderLibraryID ?? row?.venderLibraryID ?? row?.vendorLibraryID ?? '',
+      VenderName: row?.VenderName ?? row?.venderName ?? row?.vendorName ?? '',
+      PONO: row?.PONO ?? row?.poNo ?? '',
+      ItemDescriptionShippingInvoice:
+        row?.ItemDescriptionShippingInvoice ?? row?.itemDescriptionShippingInvoice ?? '',
+      ShipmentDate: row?.ShipmentDate ?? row?.shipmentDate ?? '',
+      ShipMode: row?.ShipMode ?? row?.shipMode ?? '',
+      OrderQtyUnits: row?.OrderQtyUnits ?? row?.orderQtyUnits ?? '',
+      Style: row?.Style ?? row?.style ?? '',
+      FitSample: row?.FitSample ?? row?.fitSample ?? '',
+      PPSample: row?.PPSample ?? row?.ppSample ?? '',
+      Cutting: row?.Cutting ?? row?.cutting ?? '',
+      Stitching: row?.Stitching ?? row?.stitching ?? '',
+      Packing: row?.Packing ?? row?.packing ?? '',
+      Remarks: row?.Remarks ?? row?.remarks ?? '',
+      ShippedQty: row?.ShippedQty ?? row?.shippedQty ?? '',
+    }));
+  }, []);
+
+  const buildGroupedQuickOrdersData = useCallback(
+    (rows) => {
+      const customerMap = new Map();
+
+      rows.forEach((row) => {
+        const customerName = row.CustomerName || 'Unknown Customer';
+        const vendorName = row.VenderName || 'Unknown Supplier';
+        const customerKey = `${row.CustomerID ?? customerName}`;
+        const supplierKey = `${row.VenderLibraryID ?? vendorName}`;
+
+        if (!customerMap.has(customerKey)) {
+          customerMap.set(customerKey, {
+            name: customerName,
+            totalQty: 0,
+            suppliers: [],
+          });
+        }
+
+        const customer = customerMap.get(customerKey);
+        customer.totalQty += Number(row.OrderQtyUnits || 0);
+
+        let supplier = customer.suppliers.find((item) => item.key === supplierKey);
+        if (!supplier) {
+          supplier = { key: supplierKey, name: vendorName, totalQty: 0, items: [] };
+          customer.suppliers.push(supplier);
+        }
+
+        supplier.totalQty += Number(row.OrderQtyUnits || 0);
+        const orderQty = row.OrderQtyUnits ?? '';
+        const shippedQty = row.ShippedQty ?? '';
+        const balanceQty =
+          orderQty === '' && shippedQty === ''
+            ? ''
+            : Number(orderQty || 0) - Number(shippedQty || 0);
+        const sampleApproval = [row.FitSample, row.PPSample].filter((value) => value !== '' && value != null).join('\n');
+        supplier.items.push({
+          poNo: row.PONO,
+          styNo: row.Style,
+          itemDesc: row.ItemDescriptionShippingInvoice,
+          shipmentDate: row.ShipmentDate ? toPdfDate(row.ShipmentDate) : '',
+          shipDate: row.ShipmentDate ? toPdfDate(row.ShipmentDate) : '',
+          shipMode: row.ShipMode,
+          orderQty,
+          sampleApproval,
+          cutting: row.Cutting,
+          stitching: row.Stitching,
+          packing: row.Packing,
+          shippedQty,
+          orderQtyTotal: orderQty,
+          balanceQty,
+          remarks: row.Remarks,
+        });
+      });
+
+      return Array.from(customerMap.values()).map((customer) => ({
+        ...customer,
+        suppliers: customer.suppliers.map(({ key, ...supplier }) => supplier),
+      }));
+    },
+    [toPdfDate]
+  );
+
   const runPdfExport = useCallback(
     async (mode) => {
+      const base = getApiBase();
+      if (!base) {
+        enqueueSnackbar('API URL missing: set VITE_API_BASE_URL', { variant: 'error' });
+        return;
+      }
+
       try {
         setGeneratingPdf(true);
+        const params = new URLSearchParams();
+        params.set('fromDate', formatApiDate(filters.fromDate));
+        params.set('toDate', formatApiDate(filters.toDate));
+
+        const res = await fetch(`${base}/api/Report/AMSQuickOrdersOverview?${params.toString()}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(localStorage.getItem('accessToken')
+              ? { Authorization: `Bearer ${localStorage.getItem('accessToken')}` }
+              : {}),
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error(`AMSQuickOrdersOverview ${res.status}`);
+        }
+
+        const data = await res.json();
+        const rows = normalizeQuickOrdersRows(data);
         const blob = await buildQuickOrdersOverviewPdfBlob({
           fromDate: toPdfDate(filters.fromDate),
           toDate: toPdfDate(filters.toDate),
+          customers: buildGroupedQuickOrdersData(rows),
         });
         openQuickOrdersOverviewPdf(mode === 'pdf' ? 'pdf' : 'view', blob);
       } catch (err) {
         console.error('[QuickOrdersOverview] pdf', err);
-        enqueueSnackbar('Could not generate Quick Orders Overview PDF', { variant: 'error' });
+        enqueueSnackbar(err?.message || 'Could not generate Quick Orders Overview PDF', {
+          variant: 'error',
+        });
       } finally {
         setGeneratingPdf(false);
       }
     },
-    [filters.fromDate, filters.toDate, toPdfDate, enqueueSnackbar]
+    [
+      buildGroupedQuickOrdersData,
+      enqueueSnackbar,
+      filters.fromDate,
+      filters.toDate,
+      formatApiDate,
+      getApiBase,
+      normalizeQuickOrdersRows,
+      toPdfDate,
+    ]
   );
 
   useEffect(() => {
@@ -821,6 +1136,14 @@ function QuickOrdersOverviewForm() {
       return poList.includes(prev.poNo) ? prev : { ...prev, poNo: ALL };
     });
   }, [poList]);
+
+  useEffect(() => {
+    const nextTitle = 'Quick Orders Overview';
+    const raf = window.requestAnimationFrame(() => {
+      document.title = nextTitle;
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, []);
 
   const dropdownDisabled = loadingDropdowns && merchants.length === 0;
 
@@ -1031,14 +1354,54 @@ function DpgReportForm() {
   const [filters, setFilters] = useState({
     merchandiser: ALL,
     customer: ALL,
-    fromDate: '2024-01-01',
-    toDate: '2024-12-30',
+    fromDate: '2026-01-01',
+    toDate: '2026-12-31',
   });
 
   const [merchants, setMerchants] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  const getApiBase = useCallback(
+    () => String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, ''),
+    []
+  );
+
+  const formatApiDate = useCallback((value) => {
+    if (!value) return '';
+    const [year, month, day] = String(value).split('-');
+    if (!year || !month || !day) return String(value);
+    return `${Number(year)}-${Number(month)}-${Number(day)}`;
+  }, []);
+
+  const normalizeDpgRows = useCallback((data) => {
+    const rows = Array.isArray(data) ? data : data ? [data] : [];
+    return rows.map((row) => ({
+      factory: row?.CustomerName ?? '',
+      poNo: row?.PONO ?? '',
+      styling: row?.Currency ?? '',
+      content: row?.Country ?? '',
+      styNo: row?.POID ?? '',
+      descGoods: row?.InvoiceNo ?? row?.BillNo ?? '',
+      gsm: row?.VenderLibraryID ?? '',
+      sizes: row?.Username ?? row?.userid ?? '',
+      ordQty: row?.BookedQTY ?? row?.ReleaseQty ?? '',
+      dlvr: row?.ShipmentDate ?? '',
+      fobCost: row?.ShipValue ?? '',
+      comPct: row?.Exchangerate ?? '',
+      cPct: row?.ReleaseQty1 ?? '',
+      frt: row?.InvoiceValue ?? '',
+      duty: row?.InvoiceDate ?? '',
+      dutyPct: row?.Tolerance ?? '',
+      totalCost: row?.ReleaseQty ?? '',
+      ldp: row?.Mode ?? '',
+      tLdp: row?.CarrierName ?? '',
+      gp: row?.VoyageFlight ?? '',
+      tGp: row?.VenderName ?? '',
+      gpPct: row?.VenderName ?? '',
+    }));
+  }, []);
 
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
@@ -1057,11 +1420,37 @@ function DpgReportForm() {
 
   const runPdfExport = useCallback(
     async (mode) => {
+      const base = getApiBase();
+      if (!base) {
+        enqueueSnackbar('API URL missing: set VITE_API_BASE_URL', { variant: 'error' });
+        return;
+      }
+
       try {
         setGeneratingPdf(true);
+        const params = new URLSearchParams();
+        params.set('fromDate', formatApiDate(filters.fromDate));
+        params.set('toDate', formatApiDate(filters.toDate));
+
+        const res = await fetch(`${base}/api/Report/CostingReport?${params.toString()}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(localStorage.getItem('accessToken')
+              ? { Authorization: `Bearer ${localStorage.getItem('accessToken')}` }
+              : {}),
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error(`CostingReport ${res.status}`);
+        }
+
+        const data = await res.json();
+        const rows = normalizeDpgRows(data);
         const blob = await buildDpgReportPdfBlob({
-          fromDate: toPdfDate(filters.fromDate),
-          toDate: toPdfDate(filters.toDate),
+          fromDate: filters.fromDate,
+          toDate: filters.toDate,
+          rows,
         });
         openDpgReportPdf(mode === 'pdf' ? 'pdf' : 'view', blob);
       } catch (err) {
@@ -1071,7 +1460,7 @@ function DpgReportForm() {
         setGeneratingPdf(false);
       }
     },
-    [filters.fromDate, filters.toDate, toPdfDate, enqueueSnackbar]
+    [enqueueSnackbar, filters.fromDate, filters.toDate, formatApiDate, getApiBase, normalizeDpgRows, toPdfDate]
   );
 
   useEffect(() => {
@@ -1288,14 +1677,84 @@ function DpgReportForm() {
 function ProductionHistoryReportForm() {
   const { enqueueSnackbar } = useSnackbar();
   const [poNo, setPoNo] = useState('');
+  const [poOptions, setPoOptions] = useState([]);
+  const [loadingPoOptions, setLoadingPoOptions] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  const getApiBase = useCallback(
+    () => String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, ''),
+    []
+  );
+
+  const formatApiDate = useCallback((value) => {
+    if (!value) return '';
+    const [year, month, day] = String(value).split('-');
+    if (!year || !month || !day) return String(value);
+    return `${Number(year)}-${Number(month)}-${Number(day)}`;
+  }, []);
+
+  const toPdfDate = useCallback((isoLike) => {
+    if (!isoLike) return '';
+    const d = new Date(isoLike);
+    if (Number.isNaN(d.getTime())) return isoLike;
+    return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+  }, []);
+
+  const normalizeProductionHistoryRows = useCallback(
+    (data) => {
+      const rows = Array.isArray(data) ? data : data ? [data] : [];
+      return rows.map((row) => ({
+        activityDate: row?.CreationDate ? toPdfDate(row.CreationDate) : '',
+        process: row?.Process ?? '',
+        remarks: row?.Remarks ?? '',
+      }));
+    },
+    [toPdfDate]
+  );
 
   const runPdfExport = useCallback(
     async (mode) => {
+      const base = getApiBase();
+      if (!base) {
+        enqueueSnackbar('API URL missing: set VITE_API_BASE_URL', { variant: 'error' });
+        return;
+      }
+
       try {
         setGeneratingPdf(true);
+        const selectedPono = poNo.trim();
+        const params = new URLSearchParams();
+        if (selectedPono) {
+          params.set('Pono', selectedPono);
+        }
+
+        const res = await fetch(`${base}/api/Report/ProductionHistoryReport?${params.toString()}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(localStorage.getItem('accessToken')
+              ? { Authorization: `Bearer ${localStorage.getItem('accessToken')}` }
+              : {}),
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error(`ProductionHistoryReport ${res.status}`);
+        }
+
+        const data = await res.json();
+        const apiRows = Array.isArray(data) ? data : data ? [data] : [];
+        const rows = normalizeProductionHistoryRows(apiRows);
+
+        const first = apiRows[0] || {};
         const blob = await buildProductionHistoryPdfBlob({
-          poNo: poNo.trim(),
+          poNo: selectedPono,
+          customer: first?.CustomerName ?? '',
+          supplier: first?.VenderName ?? '',
+          styleNo: first?.StyleNO ?? first?.Style ?? '',
+          poQty: first?.POQty ?? first?.OrderQtyUnits ?? '',
+          shipmentDate: first?.ShipDateBuyer ? toPdfDate(first.ShipDateBuyer) : '',
+          lastUpdateText: first?.Remarks ? `Last Update of Production : ${first.Remarks}` : undefined,
+          rows,
         });
         openProductionHistoryPdf(mode === 'pdf' ? 'pdf' : 'view', blob);
       } catch (err) {
@@ -1305,8 +1764,49 @@ function ProductionHistoryReportForm() {
         setGeneratingPdf(false);
       }
     },
-    [poNo, enqueueSnackbar]
+    [enqueueSnackbar, getApiBase, normalizeProductionHistoryRows, poNo, toPdfDate]
   );
+
+  useEffect(() => {
+    const base = getApiBase();
+    if (!base) {
+      enqueueSnackbar('API URL missing: set VITE_API_BASE_URL', { variant: 'warning' });
+      return undefined;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setLoadingPoOptions(true);
+      try {
+        const res = await fetch(`${base}/api/MyOrders/Getpono`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(localStorage.getItem('accessToken')
+              ? { Authorization: `Bearer ${localStorage.getItem('accessToken')}` }
+              : {}),
+          },
+        });
+        if (!res.ok) throw new Error(`Getpono ${res.status}`);
+        const data = await res.json();
+        if (cancelled) return;
+        const list = Array.isArray(data) ? data : data ? [data] : [];
+        setPoOptions(
+          list
+            .map((row) => String(row?.pono ?? row?.PONO ?? '').trim())
+            .filter(Boolean)
+        );
+      } catch (err) {
+        console.error('[ProductionHistory] PO list', err);
+        if (!cancelled) enqueueSnackbar('Could not load PO numbers', { variant: 'error' });
+      } finally {
+        if (!cancelled) setLoadingPoOptions(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enqueueSnackbar, getApiBase]);
 
   return (
     <Card variant="outlined" sx={cardSx}>
@@ -1331,13 +1831,31 @@ function ProductionHistoryReportForm() {
         <Typography variant="subtitle2" sx={sectionLabelSx}>
           PO No :
         </Typography>
-        <TextField
-          fullWidth
-          size="small"
-          value={poNo}
-          onChange={(e) => setPoNo(e.target.value)}
-          placeholder=""
-          sx={selectSx}
+        <Autocomplete
+          freeSolo
+          options={poOptions}
+          inputValue={poNo}
+          onInputChange={(_, value) => setPoNo(value)}
+          onChange={(_, value) => setPoNo(String(value ?? ''))}
+          loading={loadingPoOptions}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              fullWidth
+              size="small"
+              placeholder=""
+              sx={selectSx}
+              InputProps={{
+                ...params.InputProps,
+                endAdornment: (
+                  <>
+                    {loadingPoOptions ? <CircularProgress color="inherit" size={16} /> : null}
+                    {params.InputProps.endAdornment}
+                  </>
+                ),
+              }}
+            />
+          )}
         />
         <Box
           sx={{
@@ -1420,6 +1938,27 @@ function SupplierMarchandReportForm() {
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  const getApiBase = useCallback(
+    () => String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, ''),
+    []
+  );
+
+  const formatApiDate = useCallback((value) => {
+    if (!value) return '';
+    const [year, month, day] = String(value).split('-');
+    if (!year || !month || !day) return String(value);
+    return `${Number(year)}-${Number(month)}-${Number(day)}`;
+  }, []);
+
+  const normalizeSupplierMarchandRows = useCallback((data) => {
+    const rows = Array.isArray(data) ? data : data ? [data] : [];
+    return rows.map((row) => ({
+      supplier: row?.VenderName ?? row?.venderName ?? '',
+      merchand: row?.Marchand ?? row?.marchand ?? '',
+      orders: row?.PONO ?? row?.pono ?? '',
+    }));
+  }, []);
+
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
   };
@@ -1430,9 +1969,37 @@ function SupplierMarchandReportForm() {
 
   const runPdfExport = useCallback(
     async (mode) => {
+      const base = getApiBase();
+      if (!base) {
+        enqueueSnackbar('API URL missing: set VITE_API_BASE_URL', { variant: 'error' });
+        return;
+      }
+
       try {
         setGeneratingPdf(true);
-        const blob = await buildSupplierMarchandReportPdfBlob({});
+        const params = new URLSearchParams();
+        params.set('fromDate', formatApiDate(filters.fromDate));
+        params.set('toDate', formatApiDate(filters.toDate));
+
+        const res = await fetch(`${base}/api/Report/SupplierMarchandReport?${params.toString()}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(localStorage.getItem('accessToken')
+              ? { Authorization: `Bearer ${localStorage.getItem('accessToken')}` }
+              : {}),
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error(`SupplierMarchandReport ${res.status}`);
+        }
+
+        const data = await res.json();
+        const rows = normalizeSupplierMarchandRows(data);
+        const blob = await buildSupplierMarchandReportPdfBlob({
+          rows,
+          printedOn: undefined,
+        });
         openSupplierMarchandReportPdf(mode === 'pdf' ? 'pdf' : 'view', blob);
       } catch (err) {
         console.error('[SupplierMarchand] pdf', err);
@@ -1441,7 +2008,7 @@ function SupplierMarchandReportForm() {
         setGeneratingPdf(false);
       }
     },
-    [enqueueSnackbar]
+    [enqueueSnackbar, filters.fromDate, filters.toDate, formatApiDate, getApiBase, normalizeSupplierMarchandRows]
   );
 
   useEffect(() => {
@@ -1656,6 +2223,7 @@ function OrderDetailReportForm() {
 
   const [portfolios, setPortfolios] = useState([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
+  const [loadingReport, setLoadingReport] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const handleSelect = (name) => (e) => {
@@ -1812,21 +2380,21 @@ function OrderDetailReportForm() {
               variant="contained"
               color="primary"
               size="medium"
-              disabled={generatingPdf}
+              disabled={generatingPdf || loadingReport}
               onClick={() => runPdfExport('view')}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'View Report'}
+              {generatingPdf || loadingReport ? 'Building…' : 'View Report'}
             </Button>
             <Button
               variant="contained"
               color="primary"
               size="medium"
-              disabled={generatingPdf}
+              disabled={generatingPdf || loadingReport}
               onClick={() => runPdfExport('pdf')}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              {generatingPdf ? 'Building…' : 'Download PDF'}
+              {generatingPdf || loadingReport ? 'Building…' : 'Download PDF'}
             </Button>
             <Button
               variant="contained"

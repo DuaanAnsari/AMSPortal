@@ -273,6 +273,10 @@ export async function buildDpgReportPdfBlob(data = {}) {
       : [firstPercentRow(), ...Array.from({ length: EMPTY_BODY_ROWS }, () => emptyRow())];
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
+  doc.setProperties({
+    title: 'DPG REPORT',
+    subject: 'DPG REPORT',
+  });
   const logoDataUrl = await loadLogoDataUrl();
 
   const tableX = H_MARGIN;

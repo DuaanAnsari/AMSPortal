@@ -447,6 +447,10 @@ export async function buildUserLoginDetailPdfBlob(data = {}) {
   };
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'p' });
+  doc.setProperties({
+    title: 'User Login Detail Report',
+    subject: 'User Login Detail Report',
+  });
   const logoDataUrl = await loadLogoDataUrl();
 
   const tableX = H_MARGIN;
@@ -615,6 +619,10 @@ export async function buildUserLoginDetailSummaryPdfBlob(data = {}) {
   };
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'p' });
+  doc.setProperties({
+    title: 'User Login Detail Report',
+    subject: 'User Login Detail Report',
+  });
   const logoDataUrl = await loadLogoDataUrl();
 
   const tableX = H_MARGIN;

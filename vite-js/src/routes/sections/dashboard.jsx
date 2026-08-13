@@ -19,6 +19,7 @@ const IndexPage = lazy(() => import('src/pages/dashboard/app'));
 const OverviewEcommercePage = lazy(() => import('src/pages/dashboard/ecommerce'));
 const OverviewAnalyticsPage = lazy(() => import('src/pages/dashboard/analytics'));
 const SupplierAddPage = lazy(() => import('src/pages/dashboard/supplier-add'));
+const SupplierEditPage = lazy(() => import('src/pages/dashboard/supplier-edit'));
 const OverviewBankingPage = lazy(() => import('src/pages/dashboard/banking'));
 const OverviewBookingPage = lazy(() => import('src/pages/dashboard/booking'));
 const OverviewFilePage = lazy(() => import('src/pages/dashboard/file'));
@@ -242,6 +243,7 @@ export const dashboardRoutes = [
       { path: 'customers', element: <OverviewEcommercePage /> },
       { path: 'supplier', element: <OverviewAnalyticsPage /> },
       { path: 'supplier/add', element: <SupplierAddPage /> },
+      { path: 'supplier/:id/edit', element: <SupplierEditPage /> },
       { path: 'banking', element: <OverviewBankingPage /> },
       { path: 'booking', element: <OverviewBookingPage /> },
       { path: 'file', element: <OverviewFilePage /> },

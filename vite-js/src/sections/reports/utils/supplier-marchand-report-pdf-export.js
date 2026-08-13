@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 
 /**
- * "SUPPLIER MERCHAND REPORT" — portrait PDF (legacy print mock-up).
+ * "Supplier - Merchandiser Report" — portrait PDF (legacy print mock-up).
  *
  *   - Header : AMS logo + address + telephone 02134937216 & 02134946005.
  *   - Title : centred, bold, uppercase navy, underlined.
@@ -127,7 +127,7 @@ function drawPageHeader(doc, logoDataUrl) {
   );
   doc.text('Telephone # : 02134937216 & 02134946005', x, ay + 12, { baseline: 'top' });
 
-  const titleText = 'SUPPLIER MERCHAND REPORT';
+  const titleText = 'Supplier - Merchandiser Report';
   const titleY = ay + 30;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
@@ -235,6 +235,10 @@ export async function buildSupplierMarchandReportPdfBlob(data = {}) {
   const printedOn = data.printedOn || formatPrintedDash();
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'p' });
+  doc.setProperties({
+    title: 'Supplier - Merchandiser Report',
+    subject: 'Supplier - Merchandiser Report',
+  });
   const logoDataUrl = await loadLogoDataUrl();
 
   const tableX = H_MARGIN;
