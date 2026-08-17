@@ -39,18 +39,6 @@ const COL_WEIGHTS = { supplier: 230, merchand: 190, orders: 80 };
 const TABLE_HEADER_H = 22;
 const DATA_ROW_H = 21;
 
-const DEMO_ROWS = [
-  { supplier: 'Ayyoub Apparels', merchand: 'MUHAMMAD SHAHZAIB', orders: '28' },
-  { supplier: 'Comfort apparel', merchand: 'MUHAMMAD SHAHZAIB', orders: '49' },
-  { supplier: 'ZR APPAREL', merchand: 'MUHAMMAD SHAHZAIB', orders: '79' },
-  { supplier: 'Jedco brands, inc', merchand: 'MUHAMMAD SHAHZAIB', orders: '52' },
-  { supplier: 'MV SPORTS', merchand: 'MUHAMMAD SHAHZAIB', orders: '36' },
-  { supplier: 'STARTEX INDUSTRIES', merchand: 'MUHAMMAD SHAHZAIB', orders: '41' },
-  { supplier: 'LONE ROCK', merchand: 'MUHAMMAD SHAHZAIB', orders: '63' },
-  { supplier: 'Ayyoub Apparels', merchand: 'MUHAMMAD SHAHZAIB', orders: '22' },
-  { supplier: 'Comfort apparel', merchand: 'MUHAMMAD SHAHZAIB', orders: '91' },
-];
-
 async function loadLogoDataUrl() {
   try {
     const res = await fetch(LOGO_PATH);
@@ -231,7 +219,7 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  * @returns {Promise<Blob>}
  */
 export async function buildSupplierMarchandReportPdfBlob(data = {}) {
-  const rows = Array.isArray(data.rows) && data.rows.length > 0 ? data.rows : DEMO_ROWS;
+  const rows = Array.isArray(data.rows) ? data.rows : [];
   const printedOn = data.printedOn || formatPrintedDash();
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'p' });

@@ -1954,11 +1954,65 @@ function SupplierMarchandReportForm() {
   const normalizeSupplierMarchandRows = useCallback((data) => {
     const rows = Array.isArray(data) ? data : data ? [data] : [];
     return rows.map((row) => ({
+      merchandiserId: row?.MarchandID ?? row?.marchandID ?? row?.MarchandId ?? row?.UserID ?? row?.userID ?? row?.UserId ?? row?.id ?? row?.ID ?? '',
+      supplierId: row?.VenderLibraryID ?? row?.venderLibraryID ?? row?.venderLibraryId ?? row?.SupplierID ?? row?.supplierID ?? row?.SupplierId ?? '',
+      merchandiserName: row?.Marchand ?? row?.marchand ?? row?.UserName ?? row?.userName ?? '',
+      supplierName: row?.VenderName ?? row?.venderName ?? row?.SupplierName ?? row?.supplierName ?? '',
       supplier: row?.VenderName ?? row?.venderName ?? '',
       merchand: row?.Marchand ?? row?.marchand ?? '',
       orders: row?.PONO ?? row?.pono ?? '',
     }));
   }, []);
+
+  const filterSupplierMarchandRows = useCallback(
+    (rows) => {
+      const selectedMerchantId = String(filters.merchandiser || '').trim();
+      const selectedSupplierId = String(filters.supplier || '').trim();
+
+      const selectedMerchantLabel =
+        selectedMerchantId !== ALL
+          ? String(
+              milestoneMerchantLabel(merchants.find((row) => milestoneMerchantKey(row) === selectedMerchantId)) ||
+                ''
+            )
+              .trim()
+              .toLowerCase()
+          : '';
+
+      const selectedSupplierLabel =
+        selectedSupplierId !== ALL
+          ? String(
+              milestoneSupplierLabel(suppliers.find((row) => milestoneSupplierKey(row) === selectedSupplierId)) ||
+                ''
+            )
+              .trim()
+              .toLowerCase()
+          : '';
+
+      return rows.filter((row) => {
+        if (selectedMerchantId !== ALL) {
+          const rowMerchantId = String(row?.merchandiserId ?? row?.MerchandiserID ?? row?.MerchantID ?? row?.UserID ?? row?.userID ?? row?.UserId ?? row?.id ?? row?.ID ?? '').trim();
+          const rowMerchantName = String(row?.merchandiserName ?? row?.Marchand ?? row?.marchand ?? row?.UserName ?? row?.userName ?? '').trim().toLowerCase();
+          const matchesMerchant =
+            (rowMerchantId && rowMerchantId === selectedMerchantId) ||
+            (selectedMerchantLabel && rowMerchantName === selectedMerchantLabel);
+          if (!matchesMerchant) return false;
+        }
+
+        if (selectedSupplierId !== ALL) {
+          const rowSupplierId = String(row?.supplierId ?? row?.SupplierID ?? row?.supplierID ?? row?.VenderLibraryID ?? row?.venderLibraryID ?? row?.venderLibraryId ?? '').trim();
+          const rowSupplierName = String(row?.supplierName ?? row?.VenderName ?? row?.venderName ?? row?.SupplierName ?? row?.supplierName ?? '').trim().toLowerCase();
+          const matchesSupplier =
+            (rowSupplierId && rowSupplierId === selectedSupplierId) ||
+            (selectedSupplierLabel && rowSupplierName === selectedSupplierLabel);
+          if (!matchesSupplier) return false;
+        }
+
+        return true;
+      });
+    },
+    [filters.merchandiser, filters.supplier, merchants, suppliers]
+  );
 
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
@@ -1996,7 +2050,7 @@ function SupplierMarchandReportForm() {
         }
 
         const data = await res.json();
-        const rows = normalizeSupplierMarchandRows(data);
+        const rows = filterSupplierMarchandRows(normalizeSupplierMarchandRows(data));
         const blob = await buildSupplierMarchandReportPdfBlob({
           rows,
           printedOn: undefined,
@@ -2009,7 +2063,15 @@ function SupplierMarchandReportForm() {
         setGeneratingPdf(false);
       }
     },
-    [enqueueSnackbar, filters.fromDate, filters.toDate, formatApiDate, getApiBase, normalizeSupplierMarchandRows]
+    [
+      enqueueSnackbar,
+      filters.fromDate,
+      filters.toDate,
+      formatApiDate,
+      getApiBase,
+      normalizeSupplierMarchandRows,
+      filterSupplierMarchandRows,
+    ]
   );
 
   useEffect(() => {
