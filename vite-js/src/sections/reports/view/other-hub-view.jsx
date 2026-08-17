@@ -2226,6 +2226,11 @@ function OrderDetailReportForm() {
   const [loadingReport, setLoadingReport] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  const getApiBase = useCallback(
+    () => String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, ''),
+    []
+  );
+
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
   };
@@ -2234,11 +2239,61 @@ function OrderDetailReportForm() {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
   };
 
+  const normalizeOrderDetails = useCallback((data) => {
+    const rows = Array.isArray(data) ? data : data ? [data] : [];
+    
+    const mappedRows = rows.map((r) => ({
+      productCode: r.ProductCode ?? '',
+      description: r.ItemDescription ?? '',
+      color: r.ColorQTY ?? '',
+      labDip: r.Lab_Dip_Ap ?? '',
+      mainCare: r.MainCareLabel ?? '',
+      hangtag: r.Hangtag ?? '',
+      strikeOff: r.Print_Emb_Strike_off_Ap ?? '',
+      ppSample: r.PP_Ap ?? '',
+      topSample: r.TopSample ?? '',
+      licenserSample: r.LicenserSample ?? '',
+      qty: r.BookedQuantity ?? r.QNTY ?? 0,
+      poImage: r.POImage ?? '',
+    }));
+    
+    const first = rows[0] || {};
+    return {
+      orderLabel: first.StyleNo ? `Style No: ${first.StyleNo}` : (first.pono ? `PO No: ${first.pono}` : ''),
+      supplierLabel: first.vendername ?? '',
+      rows: mappedRows,
+    };
+  }, []);
+
   const runPdfExport = useCallback(
     async (mode) => {
+      const base = getApiBase();
+      if (!base) {
+        enqueueSnackbar('API URL missing: set VITE_API_BASE_URL', { variant: 'error' });
+        return;
+      }
+      if (!filters.style) {
+        enqueueSnackbar('Please select or type a Style No', { variant: 'warning' });
+        return;
+      }
+
       try {
         setGeneratingPdf(true);
-        const blob = await buildOrderDetailReportPdfBlob({});
+        const params = new URLSearchParams();
+        params.set('PONo', filters.style);
+
+        const res = await fetch(`${base}/api/Report/POColorWiseReport?${params.toString()}`, {
+          headers: otherAuthHeaders(),
+        });
+
+        if (!res.ok) {
+          throw new Error(`POColorWiseReport ${res.status}`);
+        }
+
+        const data = await res.json();
+        const normalized = normalizeOrderDetails(data);
+
+        const blob = await buildOrderDetailReportPdfBlob(normalized);
         openOrderDetailReportPdf(mode === 'pdf' ? 'pdf' : 'view', blob);
       } catch (err) {
         console.error('[OrderDetailReport] pdf', err);
@@ -2247,11 +2302,11 @@ function OrderDetailReportForm() {
         setGeneratingPdf(false);
       }
     },
-    [enqueueSnackbar]
+    [enqueueSnackbar, filters.style, getApiBase, normalizeOrderDetails]
   );
 
   useEffect(() => {
-    const base = getMilestoneSummaryDropdownApiBase();
+    const base = getApiBase();
     if (!base) {
       enqueueSnackbar('API URL missing: set VITE_API_BASE_URL for Style list', { variant: 'warning' });
       return undefined;
@@ -2261,9 +2316,18 @@ function OrderDetailReportForm() {
     (async () => {
       setLoadingDropdowns(true);
       try {
-        const res = await fetchMilestoneSummaryDropdowns(otherAuthHeaders());
+        const res = await fetch(`${base}/api/Report/StyleNo`, {
+          headers: otherAuthHeaders(),
+        });
+        if (!res.ok) throw new Error(`StyleNo ${res.status}`);
+        const data = await res.json();
         if (cancelled) return;
-        setPortfolios(res.portfolios);
+        
+        const validStyles = data
+          .map((d) => d.StyleNo?.trim())
+          .filter((s) => s && s !== '&nbsp');
+          
+        setPortfolios(validStyles);
       } catch (err) {
         console.error('[OrderDetailReport] dropdowns', err);
         if (!cancelled) enqueueSnackbar('Could not load style list', { variant: 'error' });
@@ -2275,13 +2339,9 @@ function OrderDetailReportForm() {
     return () => {
       cancelled = true;
     };
-  }, [enqueueSnackbar]);
+  }, [enqueueSnackbar, getApiBase]);
 
-  useEffect(() => {
-    if (filters.style === '' || filters.style === ALL) return;
-    const ok = portfolios.some((row) => milestonePortfolioKey(row) === filters.style);
-    if (!ok) setFilters((prev) => ({ ...prev, style: '' }));
-  }, [portfolios, filters.style]);
+
 
   const dropdownDisabled = loadingDropdowns && portfolios.length === 0;
 
@@ -2296,44 +2356,31 @@ function OrderDetailReportForm() {
           <Typography variant="subtitle2" sx={sectionLabelSx}>
             Style :
           </Typography>
-          <FormControl fullWidth size="small">
-            <Select
-              displayEmpty
-              value={filters.style}
-              onChange={handleSelect('style')}
-              sx={selectSx}
-              disabled={dropdownDisabled}
-              renderValue={(selected) => {
-                if (selected === '' || selected == null) {
-                  return (
-                    <Typography variant="body2" color="text.secondary">
-                      Select Style
-                    </Typography>
-                  );
-                }
-                if (selected === ALL) {
-                  return 'All styles';
-                }
-                const row = portfolios.find((p) => milestonePortfolioKey(p) === selected);
-                return row ? milestonePortfolioLabel(row) : String(selected);
-              }}
-            >
-              <MenuItem value="" disabled>
-                <em>Select Style</em>
-              </MenuItem>
-              <MenuItem value={ALL}>All styles</MenuItem>
-              {portfolios
-                .filter((row) => milestonePortfolioKey(row))
-                .map((row) => {
-                  const val = milestonePortfolioKey(row);
-                  return (
-                    <MenuItem key={val} value={val}>
-                      {milestonePortfolioLabel(row)}
-                    </MenuItem>
-                  );
-                })}
-            </Select>
-          </FormControl>
+          <Autocomplete
+            freeSolo
+            options={portfolios}
+            value={filters.style}
+            onInputChange={(_, value) => setFilters((prev) => ({ ...prev, style: value }))}
+            onChange={(_, value) => setFilters((prev) => ({ ...prev, style: value ?? '' }))}
+            disabled={dropdownDisabled}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                size="small"
+                placeholder="Select or type Style No"
+                sx={selectSx}
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {loadingDropdowns ? <CircularProgress color="inherit" size={16} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+          />
         </Grid>
 
         <Grid item xs={6} md={4}>
@@ -2520,14 +2567,64 @@ function MerchandiserProgressReportForm() {
       ? customers.length === 0
       : suppliers.length === 0);
 
+  const getApiBase = useCallback(
+    () => String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, ''),
+    []
+  );
+
+  const formatApiDate = useCallback((value) => {
+    if (!value) return '';
+    const [year, month, day] = String(value).split('-');
+    if (!year || !month || !day) return String(value);
+    return `${Number(year)}-${Number(month)}-${Number(day)}`;
+  }, []);
+
+  const normalizeMerchandiserProgressRows = useCallback((data) => {
+    const rows = Array.isArray(data) ? data : data ? [data] : [];
+    return rows.map((row) => ({
+      customer: row?.CustomerName ?? '',
+      supplier: row?.VenderName ?? '',
+      merchand: row?.Marchand ?? '',
+      orders: row?.PONO ?? '',
+      poQuantity: row?.POQty ?? '',
+    }));
+  }, []);
+
   const runPdfExport = useCallback(
     async (mode) => {
+      const base = getApiBase();
+      if (!base) {
+        enqueueSnackbar('API URL missing: set VITE_API_BASE_URL', { variant: 'error' });
+        return;
+      }
+
       try {
         setGeneratingPdf(true);
+        const params = new URLSearchParams();
+        params.set('fromDate', formatApiDate(filters.fromDate));
+        params.set('toDate', formatApiDate(filters.toDate));
+
+        const res = await fetch(`${base}/api/Report/MarchandiserProgressReport?${params.toString()}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(localStorage.getItem('accessToken')
+              ? { Authorization: `Bearer ${localStorage.getItem('accessToken')}` }
+              : {}),
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error(`MarchandiserProgressReport ${res.status}`);
+        }
+
+        const data = await res.json();
+        const rows = normalizeMerchandiserProgressRows(data);
+
         const blob = await buildMerchandiserProgressReportPdfBlob({
           fromDate: filters.fromDate,
           toDate: filters.toDate,
           reportType: filters.reportType,
+          rows,
         });
         openMerchandiserProgressReportPdf(mode === 'pdf' ? 'pdf' : 'view', blob);
       } catch (err) {
@@ -2537,7 +2634,7 @@ function MerchandiserProgressReportForm() {
         setGeneratingPdf(false);
       }
     },
-    [enqueueSnackbar, filters.fromDate, filters.toDate, filters.reportType]
+    [enqueueSnackbar, filters.fromDate, filters.toDate, filters.reportType, getApiBase, formatApiDate, normalizeMerchandiserProgressRows]
   );
 
   const toastSoon = (label) =>

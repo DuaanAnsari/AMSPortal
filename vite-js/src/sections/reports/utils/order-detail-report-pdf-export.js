@@ -199,7 +199,7 @@ function drawPageHeader(doc, logoDataUrl, printDateStr) {
   });
 
   const titleMaxW = Math.max(120, logoX - innerL - 12);
-  const titleBottom = drawBlueBoldUnderline(doc, 'ORDER DETAIL REPORT', innerL, logoY + 10, titleMaxW);
+  const titleBottom = drawBlueBoldUnderline(doc, 'Order Detail Report', innerL, logoY + 10, titleMaxW);
 
   return Math.max(titleBottom, logoY + LOGO_H + 22) + 6;
 }
@@ -292,15 +292,42 @@ function drawTableHeaderRow(doc, y0, x0, widths) {
 
 function bodyLines(doc, text, w, fontSize = 7) {
   doc.setFontSize(fontSize);
-  return doc.splitTextToSize(String(text ?? ''), Math.max(4, w - 6));
+  const sanitized = String(text ?? '').replace(/\r\n|\r|\n/g, '\n');
+  return doc.splitTextToSize(sanitized, Math.max(4, w - 6));
 }
 
 function measureDataRowHeight(doc, row, widths) {
-  const descLines = bodyLines(doc, row.description, widths[2], 7.5);
-  const colorLines = bodyLines(doc, row.color, widths[3], 7.2);
-  const lhD = 8;
-  const lhC = 7.6;
-  const textBlock = Math.max(descLines.length * lhD, colorLines.length * lhC) + DATA_ROW_PAD_V * 2;
+  const lhMain = 8;
+  const lhSmall = 7.6;
+  
+  const pcLines = bodyLines(doc, row.productCode, widths[1], 7.5);
+  const pcH = pcLines.length * lhMain;
+  
+  const dLines = bodyLines(doc, row.description, widths[2], 7.5);
+  const dH = dLines.length * lhMain;
+  
+  const cLines = bodyLines(doc, row.color, widths[3], 7.2);
+  const cH = cLines.length * lhSmall;
+  
+  let maxSampleH = 0;
+  const sampleCols = [
+    { idx: 4, key: 'labDip' },
+    { idx: 5, key: 'mainCare' },
+    { idx: 6, key: 'hangtag' },
+    { idx: 7, key: 'strikeOff' },
+    { idx: 8, key: 'ppSample' },
+    { idx: 9, key: 'topSample' },
+    { idx: 10, key: 'licenserSample' },
+  ];
+  sampleCols.forEach(({ idx, key }) => {
+    const txt = String(row[key] ?? '');
+    if (txt) {
+      const lines = bodyLines(doc, txt, widths[idx], 6.5);
+      maxSampleH = Math.max(maxSampleH, lines.length * lhSmall);
+    }
+  });
+
+  const textBlock = Math.max(pcH, dH, cH, maxSampleH) + DATA_ROW_PAD_V * 2;
   return Math.max(DATA_ROW_MIN_H, textBlock);
 }
 
@@ -322,9 +349,26 @@ function drawDataRow(doc, y, x0, widths, row) {
   const picSize = Math.min(widths[0] - picPad * 2, h - picPad * 2, 56);
   const px = xs[0] + (widths[0] - picSize) / 2;
   const py = y + (h - picSize) / 2;
-  const rgb = row.swatch && row.swatch.length === 3 ? row.swatch : [200, 200, 200];
-  doc.setFillColor(rgb[0], rgb[1], rgb[2]);
-  doc.rect(px, py, picSize, picSize, 'F');
+
+  let imgDrawn = false;
+  if (row.poImage) {
+    try {
+      const imgData = row.poImage.startsWith('data:image') 
+        ? row.poImage 
+        : `data:image/jpeg;base64,${row.poImage}`;
+      doc.addImage(imgData, 'JPEG', px, py, picSize, picSize, undefined, 'FAST');
+      imgDrawn = true;
+    } catch (e) {
+      // fallback if invalid
+    }
+  }
+
+  if (!imgDrawn) {
+    const rgb = row.swatch && row.swatch.length === 3 ? row.swatch : [200, 200, 200];
+    doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+    doc.rect(px, py, picSize, picSize, 'F');
+  }
+
   setBorder(doc, 0.25);
   doc.rect(px, py, picSize, picSize);
 

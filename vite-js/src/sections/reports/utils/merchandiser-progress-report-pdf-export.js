@@ -173,7 +173,7 @@ function drawPageHeader(doc, logoDataUrl, meta) {
 
   /** Title vertically centred on logo band (does not use space under logo for title). */
   const titleYMid = logoY + LOGO_H / 2;
-  const yAfterTitle = drawCenterTitleUnderline(doc, 'MERCHANDISER PROGRESS REPORT', PAGE_W / 2, titleYMid);
+  const yAfterTitle = drawCenterTitleUnderline(doc, 'Merchandiser Progress Report', PAGE_W / 2, titleYMid);
 
   /** Print metadata — below heading / underline, and below logo bottom on the right. */
   const printTop = Math.max(yAfterTitle + 8, logoBottom + 6);
