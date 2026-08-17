@@ -91,6 +91,7 @@ export const OTHER_REPORT_OPTIONS = [
 const REPORT_QUERY_KEY = 'report';
 
 const ALL = 'all';
+const MERCHANDISER_PROGRESS_TITLE = 'Merchandiser Progress Report';
 
 // ----------------------------------------------------------------------
 // Shared auth headers — mirrors the WIP / Shipment / Inspection / Inquiry hubs.
@@ -2215,6 +2216,14 @@ function SupplierMarchandReportForm() {
 function OrderDetailReportForm() {
   const { enqueueSnackbar } = useSnackbar();
 
+  useEffect(() => {
+    const nextTitle = 'Order Detail Report';
+    const raf = window.requestAnimationFrame(() => {
+      document.title = nextTitle;
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, []);
+
   const [filters, setFilters] = useState({
     style: '',
     fromDate: '2026-01-01',
@@ -2486,6 +2495,14 @@ function MerchandiserProgressReportForm() {
     toDate: '2026-12-31',
   });
 
+  useEffect(() => {
+    const nextTitle = MERCHANDISER_PROGRESS_TITLE;
+    const raf = window.requestAnimationFrame(() => {
+      document.title = nextTitle;
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, []);
+
   const [merchants, setMerchants] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -2603,6 +2620,9 @@ function MerchandiserProgressReportForm() {
         const params = new URLSearchParams();
         params.set('fromDate', formatApiDate(filters.fromDate));
         params.set('toDate', formatApiDate(filters.toDate));
+        if (filters.merchandiser !== ALL) {
+          params.set('MarchandID', filters.merchandiser);
+        }
 
         const res = await fetch(`${base}/api/Report/MarchandiserProgressReport?${params.toString()}`, {
           headers: {
@@ -2617,7 +2637,21 @@ function MerchandiserProgressReportForm() {
           throw new Error(`MarchandiserProgressReport ${res.status}`);
         }
 
-        const data = await res.json();
+        let data = await res.json();
+        
+        // Ensure data only contains the selected Merchandiser's rows
+        if (filters.merchandiser !== ALL) {
+          const mId = String(filters.merchandiser).trim();
+          const selectedMerchant = merchants.find(m => milestoneMerchantKey(m) === filters.merchandiser);
+          const selectedName = selectedMerchant ? milestoneMerchantLabel(selectedMerchant).toLowerCase() : '';
+          
+          data = data.filter(row => {
+            const rowId = String(row?.MarchandID ?? row?.marchandID ?? row?.UserID ?? row?.userID ?? row?.UserId ?? row?.Id ?? row?.id ?? row?.MarchandId ?? '');
+            if (rowId && rowId !== '') return rowId === mId;
+            return String(row?.Marchand ?? '').trim().toLowerCase() === selectedName;
+          });
+        }
+
         const rows = normalizeMerchandiserProgressRows(data);
 
         const blob = await buildMerchandiserProgressReportPdfBlob({
@@ -2634,7 +2668,7 @@ function MerchandiserProgressReportForm() {
         setGeneratingPdf(false);
       }
     },
-    [enqueueSnackbar, filters.fromDate, filters.toDate, filters.reportType, getApiBase, formatApiDate, normalizeMerchandiserProgressRows]
+    [enqueueSnackbar, filters, getApiBase, formatApiDate, normalizeMerchandiserProgressRows, merchants]
   );
 
   const toastSoon = (label) =>
@@ -2643,7 +2677,7 @@ function MerchandiserProgressReportForm() {
   return (
     <Card variant="outlined" sx={cardSx}>
       <Typography variant="h6" sx={{ fontWeight: 700, color: 'grey.800', mb: 2 }}>
-        Merchandiser Progress Report
+        {MERCHANDISER_PROGRESS_TITLE}
       </Typography>
       <Box
         sx={{

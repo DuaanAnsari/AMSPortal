@@ -28,6 +28,7 @@ const TABLE_BORDER = [0, 0, 0];
 const HEADER_FILL = [211, 211, 211];
 
 const PDF_VIEW_ZOOM_HASH = '#zoom=100';
+const MERCHANDISER_PROGRESS_TITLE = 'Merchandiser Progress Report';
 
 /** Matches Other hub form values (`MerchandiserProgressReportForm`). */
 const REPORT_TYPE_SUPPLIER_WISE = 'supplier-wise';
@@ -173,7 +174,7 @@ function drawPageHeader(doc, logoDataUrl, meta) {
 
   /** Title vertically centred on logo band (does not use space under logo for title). */
   const titleYMid = logoY + LOGO_H / 2;
-  const yAfterTitle = drawCenterTitleUnderline(doc, 'Merchandiser Progress Report', PAGE_W / 2, titleYMid);
+  const yAfterTitle = drawCenterTitleUnderline(doc, MERCHANDISER_PROGRESS_TITLE, PAGE_W / 2, titleYMid);
 
   /** Print metadata — below heading / underline, and below logo bottom on the right. */
   const printTop = Math.max(yAfterTitle + 8, logoBottom + 6);
@@ -329,7 +330,7 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
 }
 
 function payloadFromInput(data) {
-  if (data && Array.isArray(data.rows) && data.rows.length > 0) {
+  if (data && Array.isArray(data.rows)) {
     const rows = data.rows;
     const totals = data.totals || {
       orders: rows.reduce((s, r) => s + (Number(r.orders) || 0), 0),
@@ -337,7 +338,7 @@ function payloadFromInput(data) {
     };
     return { rows, totals };
   }
-  return { rows: DEMO_ROWS, totals: DEMO_TOTALS };
+  return { rows: [], totals: { orders: 0, poQuantity: 0 } };
 }
 
 /**
@@ -360,6 +361,11 @@ export async function buildMerchandiserProgressReportPdfBlob(data = {}) {
   };
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'p' });
+  doc.setProperties({
+    title: MERCHANDISER_PROGRESS_TITLE,
+    subject: MERCHANDISER_PROGRESS_TITLE,
+    author: 'AMS Portal',
+  });
   const logoDataUrl = await loadLogoDataUrl().catch(() => null);
 
   const tableX = H_MARGIN;

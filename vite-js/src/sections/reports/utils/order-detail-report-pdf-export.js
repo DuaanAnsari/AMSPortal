@@ -30,6 +30,7 @@ const TABLE_BORDER = [0, 0, 0];
 const HEADER_FILL = [211, 211, 211];
 
 const PDF_VIEW_ZOOM_HASH = '#zoom=100';
+const ORDER_DETAIL_TITLE = 'Order Detail Report';
 
 /** Minimum body row height (~4× typical thead) — matches legacy tall grid rows. */
 const DATA_ROW_MIN_H = 132;
@@ -199,7 +200,7 @@ function drawPageHeader(doc, logoDataUrl, printDateStr) {
   });
 
   const titleMaxW = Math.max(120, logoX - innerL - 12);
-  const titleBottom = drawBlueBoldUnderline(doc, 'Order Detail Report', innerL, logoY + 10, titleMaxW);
+  const titleBottom = drawBlueBoldUnderline(doc, ORDER_DETAIL_TITLE, innerL, logoY + 10, titleMaxW);
 
   return Math.max(titleBottom, logoY + LOGO_H + 22) + 6;
 }
@@ -511,6 +512,11 @@ export async function buildOrderDetailReportPdfBlob(data = {}) {
   const printDateStr = formatPrintDateTime();
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'p' });
+  doc.setProperties({
+    title: ORDER_DETAIL_TITLE,
+    subject: ORDER_DETAIL_TITLE,
+    author: 'AMS Portal',
+  });
   const logoDataUrl = await loadLogoDataUrl().catch(() => null);
 
   const tableX = H_MARGIN;

@@ -236,9 +236,59 @@ export default function SupplierEditPage() {
     return Object.keys(nextErrors).length === 0;
   };
 
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
     if (!validateForm()) return;
-    enqueueSnackbar('Update API is not configured yet.', { variant: 'info' });
+
+    const payload = {
+      venderId: Number(id) || 0,
+      supplierStatus: form.supplierStatus || '',
+      venderName: form.name || '',
+      venderCategoryID: Number(form.vendorCategoryId) || 0,
+      venderCode: form.vendorCode || '',
+      venderAddress: form.address || '',
+      town: form.town || '',
+      street: form.street || '',
+      cityID: Number(form.cityId) || 0,
+      contactPerson: form.contactPerson || '',
+      designation: form.designation || '',
+      phoneNumberPrincipal: form.phoneNumberPrincipal || '',
+      phoneNumberOthers: form.phoneNumberOthers || '',
+      cellNumber: form.cellNumber || '',
+      faxNo: form.faxNo || '',
+      email: form.merchandiserEmail || '',
+      email2: form.merchandiserEmail2 || '',
+      email3: form.merchandiserEmail3 || '',
+      ceoEmail: form.ceoEmail || '',
+      shortName: form.shortName || '',
+      productGroupIds: form.productGroupIds.length > 0 ? form.productGroupIds.map(Number) : [0],
+      verticalIntegrationIds: form.verticalIntegrationIds.length > 0 ? form.verticalIntegrationIds.map(Number) : [0],
+      socialCompliance: Number(form.socialCompliance) || 0,
+      supplyChain: Number(form.supplyChain) || 0,
+      businessDevelopment: Number(form.businessDevelopment) || 0,
+      qaGroup: Number(form.qd) || 0,
+      managementApproval: form.managementApproval === 'Yes' ? 1 : form.managementApproval === 'No' ? 0 : Number(form.managementApproval) || 0,
+      aboutSupplier: form.aboutSupplier || '',
+      annualturnover: String(form.annualTurnover || ''),
+      amtSign: form.turnoverUnit || '',
+      supplyChainEvaluation: form.supplyChainEvaluation === 'Yes' ? 1 : form.supplyChainEvaluation === 'No' ? 0 : Number(form.supplyChainEvaluation) || 0,
+      capacity: Number(form.capacity) || 0,
+      capacityUnit: form.capacityUnit || ''
+    };
+
+    try {
+      const url = `${import.meta.env.VITE_API_BASE_URL}/api/MyOrders/Update-Vender`;
+      await axios.put(url, payload);
+      enqueueSnackbar('Supplier updated successfully!', { variant: 'success' });
+      navigate('/dashboard/supplier');
+    } catch (err) {
+      enqueueSnackbar(
+        err?.response?.data?.message ||
+          err?.response?.data?.Message ||
+          err?.message ||
+          'Failed to update supplier.',
+        { variant: 'error' }
+      );
+    }
   };
 
   const renderMultiSelectValue = (selectedValues, options) =>
