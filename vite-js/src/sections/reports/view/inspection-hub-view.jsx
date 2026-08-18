@@ -618,7 +618,7 @@ function resolveDefectReportOrderByParam(selected) {
   return DEFECT_REPORT_ORDER_BY_MAP[key] ?? DEFECT_REPORT_ORDER_BY_MAP.DEFECT;
 }
 
-async function fetchDefectReportRows(fromDateIso, toDateIso, orderBy, headers = {}) {
+async function fetchDefectReportRows(fromDateIso, toDateIso, orderBy, supplierId, headers = {}) {
   const base = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
   if (!base) {
     throw new Error('VITE_API_BASE_URL is not set');
@@ -629,6 +629,9 @@ async function fetchDefectReportRows(fromDateIso, toDateIso, orderBy, headers = 
     toDate: formatDefectReportApiDateFromIso(toDateIso),
     orderBy: resolveDefectReportOrderByParam(orderBy),
   });
+  if (supplierId && supplierId !== ALL) {
+    q.set('supplierId', String(supplierId).trim());
+  }
 
   const url = `${base}/api/Report/DeffectReport?${q.toString()}`;
   const res = await fetch(url, { headers });
@@ -737,10 +740,12 @@ function DefectReportForm() {
    * @param {'view'|'pdf'} mode
    */
   const fetchDefectReportPayload = useCallback(async () => {
+    const supplierId = filters.supplier === ALL ? undefined : filters.supplier;
     const rawRows = await fetchDefectReportRows(
       filters.fromDate,
       filters.toDate,
       filters.orderBy,
+      supplierId,
       inspectionAuthHeaders()
     );
     const rows = filterDefectReportRawRows(rawRows, filters.orderBy, filters.supplier);
@@ -1227,9 +1232,6 @@ async function fetchDiscrepancyComparisonReportRows(params, headers = {}) {
   return unwrapDiscrepancyComparisonList(data);
 }
 
-/**
- * Summary Header — Swagger accepts only year/style/po per side (no supplier/customer).
- */
 async function fetchDiscrepancyComparisonReportHeader(params, headers = {}) {
   const base = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
   if (!base) {
@@ -1240,6 +1242,7 @@ async function fetchDiscrepancyComparisonReportHeader(params, headers = {}) {
     year1: String(params.year1 ?? ''),
     styleNo1: String(params.styleNo1 ?? 'All Styles'),
     poId1: String(params.poId1 ?? '0'),
+    supplierId1: String(params.supplierId1 ?? '0'),
     year2: String(params.year2 ?? ''),
     styleNo2: String(params.styleNo2 ?? 'All Styles'),
     poId2: String(params.poId2 ?? '0'),
@@ -1487,6 +1490,7 @@ function DefectComparisonReportForm() {
           year1: sideAParams.year,
           styleNo1: sideAParams.styleNo,
           poId1: sideAParams.poId,
+          supplierId1: sideAParams.supplierId,
           year2: sideBParams.year,
           styleNo2: sideBParams.styleNo,
           poId2: sideBParams.poId,

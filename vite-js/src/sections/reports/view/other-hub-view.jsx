@@ -1379,6 +1379,12 @@ function DpgReportForm() {
   const normalizeDpgRows = useCallback((data) => {
     const rows = Array.isArray(data) ? data : data ? [data] : [];
     return rows.map((row) => ({
+      merchandiserId: row?.MarchandID ?? row?.marchandID ?? row?.MarchandId ?? row?.UserID ?? row?.userID ?? row?.UserId ?? row?.id ?? row?.ID ?? '',
+      customerId: row?.CustomerID ?? row?.customerID ?? row?.customerId ?? row?.BuyerID ?? row?.buyerID ?? row?.BuyerId ?? '',
+      supplierId: row?.VenderLibraryID ?? row?.venderLibraryID ?? row?.venderLibraryId ?? row?.SupplierID ?? row?.supplierID ?? row?.SupplierId ?? '',
+      merchandiserName: row?.Marchand ?? row?.marchand ?? row?.UserName ?? row?.userName ?? '',
+      customerName: row?.CustomerName ?? row?.customerName ?? row?.BuyerName ?? row?.buyerName ?? '',
+      supplierName: row?.VenderName ?? row?.venderName ?? row?.SupplierName ?? row?.supplierName ?? '',
       factory: row?.CustomerName ?? '',
       poNo: row?.PONO ?? '',
       styling: row?.Currency ?? '',
@@ -1403,6 +1409,68 @@ function DpgReportForm() {
       gpPct: row?.VenderName ?? '',
     }));
   }, []);
+
+  const filterDpgRows = useCallback(
+    (rows) => {
+      const selectedMerchantId = String(filters.merchandiser || '').trim();
+      const selectedCustomerId = String(filters.customer || '').trim();
+
+      const selectedMerchantLabel =
+        selectedMerchantId !== ALL
+          ? String(
+              milestoneMerchantLabel(merchants.find((row) => milestoneMerchantKey(row) === selectedMerchantId)) ||
+                ''
+            )
+              .trim()
+              .toLowerCase()
+          : '';
+
+      const selectedCustomerLabel =
+        selectedCustomerId !== ALL
+          ? String(
+              milestoneCustomerLabel(customers.find((row) => milestoneCustomerKey(row) === selectedCustomerId)) ||
+                ''
+            )
+              .trim()
+              .toLowerCase()
+          : '';
+
+      return rows.filter((row) => {
+        if (selectedMerchantId !== ALL) {
+          const rowMerchantId = String(
+            row?.merchandiserId ?? row?.MarchandID ?? row?.marchandID ?? row?.MarchandId ?? row?.UserID ?? row?.userID ?? row?.UserId ?? row?.id ?? row?.ID ?? ''
+          ).trim();
+          const rowMerchantName = String(
+            row?.merchandiserName ?? row?.Marchand ?? row?.marchand ?? row?.UserName ?? row?.userName ?? ''
+          )
+            .trim()
+            .toLowerCase();
+          const matchesMerchant =
+            (rowMerchantId && rowMerchantId === selectedMerchantId) ||
+            (selectedMerchantLabel && rowMerchantName === selectedMerchantLabel);
+          if (!matchesMerchant) return false;
+        }
+
+        if (selectedCustomerId !== ALL) {
+          const rowCustomerId = String(
+            row?.customerId ?? row?.CustomerID ?? row?.customerID ?? row?.BuyerID ?? row?.buyerID ?? row?.BuyerId ?? ''
+          ).trim();
+          const rowCustomerName = String(
+            row?.customerName ?? row?.CustomerName ?? row?.customerName ?? row?.BuyerName ?? row?.buyerName ?? ''
+          )
+            .trim()
+            .toLowerCase();
+          const matchesCustomer =
+            (rowCustomerId && rowCustomerId === selectedCustomerId) ||
+            (selectedCustomerLabel && rowCustomerName === selectedCustomerLabel);
+          if (!matchesCustomer) return false;
+        }
+
+        return true;
+      });
+    },
+    [filters.customer, filters.merchandiser, merchants, customers]
+  );
 
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
@@ -1447,7 +1515,7 @@ function DpgReportForm() {
         }
 
         const data = await res.json();
-        const rows = normalizeDpgRows(data);
+        const rows = filterDpgRows(normalizeDpgRows(data));
         const blob = await buildDpgReportPdfBlob({
           fromDate: filters.fromDate,
           toDate: filters.toDate,
@@ -1461,7 +1529,16 @@ function DpgReportForm() {
         setGeneratingPdf(false);
       }
     },
-    [enqueueSnackbar, filters.fromDate, filters.toDate, formatApiDate, getApiBase, normalizeDpgRows, toPdfDate]
+    [
+      enqueueSnackbar,
+      filters.fromDate,
+      filters.toDate,
+      formatApiDate,
+      getApiBase,
+      normalizeDpgRows,
+      filterDpgRows,
+      toPdfDate,
+    ]
   );
 
   useEffect(() => {

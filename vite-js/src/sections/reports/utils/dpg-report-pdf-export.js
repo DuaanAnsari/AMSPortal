@@ -30,7 +30,6 @@ const CONT_HEADER_Y = V_MARGIN_TOP + 6;
 
 const TABLE_HEADER_H = 34;
 const DATA_ROW_H = 22;
-const EMPTY_BODY_ROWS = 14;
 
 const TABLE_BORDER = [0, 0, 0];
 const BLACK = [0, 0, 0];
@@ -238,22 +237,6 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
   doc.setTextColor(0, 0, 0);
 }
 
-function emptyRow() {
-  const r = {};
-  COLS.forEach((c) => {
-    r[c.key] = '';
-  });
-  return r;
-}
-
-function firstPercentRow() {
-  const r = emptyRow();
-  r.cPct = '%';
-  r.dutyPct = '%';
-  r.gpPct = '%';
-  return r;
-}
-
 /**
  * @param {{ fromDate?: string; toDate?: string; printedOn?: string; rows?: object[] }} data
  * @returns {Promise<Blob>}
@@ -267,10 +250,7 @@ export async function buildDpgReportPdfBlob(data = {}) {
     new Date('2026-12-31').toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
   const printedOn = data.printedOn || formatPrintedOnLong();
 
-  const bodyRows =
-    Array.isArray(data.rows) && data.rows.length > 0
-      ? data.rows
-      : [firstPercentRow(), ...Array.from({ length: EMPTY_BODY_ROWS }, () => emptyRow())];
+  const bodyRows = Array.isArray(data.rows) ? data.rows : [];
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
   doc.setProperties({
