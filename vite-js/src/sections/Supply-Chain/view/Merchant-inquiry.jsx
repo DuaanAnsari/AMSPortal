@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import Autocomplete from '@mui/material/Autocomplete';
 import Box from '@mui/material/Box';
@@ -74,7 +74,14 @@ function normalizeRows(data) {
     ItemDesc: row?.ItemDesc ?? '',
     Content: row?.Content ?? '',
     Remarks: row?.Remarks ?? '',
+    createdSortValue: row?.Createdatee ?? row?.CreateDate ?? row?.datee ?? row?.createDate ?? row?.createdDate ?? '',
   }));
+}
+
+function getCreatedSortTime(value) {
+  if (!value) return 0;
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? 0 : time;
 }
 
 function extractUniqueOptions(rows, key) {
@@ -120,6 +127,7 @@ function TruncatedGridCell({ value }) {
 
 export default function MerchantInquiryPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { enqueueSnackbar } = useSnackbar();
   const gridDragRef = useRef(null);
   const dragStateRef = useRef({
@@ -177,7 +185,7 @@ export default function MerchantInquiryPage() {
       cancelled = true;
       controller.abort();
     };
-  }, [dispatchOnly, enqueueSnackbar]);
+  }, [dispatchOnly, enqueueSnackbar, location.key]);
 
   const searchOptions = useMemo(
     () =>
@@ -188,7 +196,7 @@ export default function MerchantInquiryPage() {
   );
 
   const filteredRows = useMemo(() => {
-    return rows.filter(
+    return [...rows].sort((a, b) => getCreatedSortTime(b.createdSortValue) - getCreatedSortTime(a.createdSortValue)).filter(
       (row) =>
         matchesPartial(row.SampleNo, searchInput) ||
         matchesPartial(row.Style, searchInput)

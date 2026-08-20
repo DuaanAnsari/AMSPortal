@@ -1592,7 +1592,7 @@ export default function ShipmentEditView() {
                               fullWidth
                               type="number"
                               value={row.cartons ?? ''}
-                              disabled
+                              onChange={(e) => handleGridChange(index, 'cartons', e.target.value)}
                             />
                           </TableCell>
                           <TableCell sx={{ p: 0.5 }}>
@@ -1600,7 +1600,7 @@ export default function ShipmentEditView() {
                               size="small"
                               fullWidth
                               value={row.cartonNo ?? ''}
-                              disabled
+                              InputProps={{ readOnly: true }}
                             />
                           </TableCell>
                           <TableCell sx={{ p: 0.5 }}>
@@ -2026,20 +2026,20 @@ export default function ShipmentEditView() {
                                 />
                               </TableCell>
                               <TableCell sx={{ p: 0.5 }}>
-                                <TextField
-                                  size="small"
-                                  fullWidth
-                                  type="number"
-                                  value={row.cartons ?? ''}
-                                  onChange={(e) => handleDialogGridChange(index, 'cartons', e.target.value)}
-                                />
-                              </TableCell>
+                              <TextField
+                                size="small"
+                                fullWidth
+                                type="number"
+                                value={row.cartons ?? ''}
+                                onChange={(e) => handleDialogGridChange(index, 'cartons', e.target.value)}
+                              />
+                            </TableCell>
                               <TableCell sx={{ p: 0.5 }}>
                                 <TextField
                                   size="small"
                                   fullWidth
                                   value={row.cartonNo || ''}
-                                  onChange={(e) => handleDialogGridChange(index, 'cartonNo', e.target.value)}
+                                  InputProps={{ readOnly: true }}
                                 />
                               </TableCell>
                               <TableCell>{row.qtYwithTolerance ?? '-'}</TableCell>

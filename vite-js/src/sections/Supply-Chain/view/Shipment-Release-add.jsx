@@ -1374,7 +1374,7 @@ export default function ShipmentReleaseAddPage() {
                                 fullWidth
                                 size="small"
                                 value={row.cartonNo || ''}
-                                onChange={(e) => handleGridChange(actualIndex, 'cartonNo', e.target.value)}
+                                InputProps={{ readOnly: true }}
                                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: 0 } }}
                               />
                             </TableCell>
@@ -1808,14 +1808,14 @@ export default function ShipmentReleaseAddPage() {
                           />
                         </TableCell>
                         <TableCell sx={{ p: 0.5 }}>
-                          <TextField
-                            size="small"
-                            fullWidth
-                            type="number"
-                            value={row.cartons ?? ''}
-                            onChange={(e) => handleDialogGridChange(index, 'cartons', e.target.value)}
-                          />
-                        </TableCell>
+                              <TextField
+                                size="small"
+                                fullWidth
+                                type="number"
+                                value={row.cartons ?? ''}
+                                InputProps={{ readOnly: true }}
+                              />
+                            </TableCell>
                         <TableCell sx={{ p: 0.5 }}>
                           <TextField
                             size="small"

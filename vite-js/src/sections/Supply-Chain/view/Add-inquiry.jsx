@@ -19,6 +19,7 @@ import {
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { paths } from 'src/routes/paths';
+import { useSnackbar } from 'src/components/snackbar';
 
 const API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 
@@ -36,6 +37,7 @@ const isUserId28 = () => getUserId() === 28;
 
 const AddInquiry = () => {
   const navigate = useNavigate();
+  const { enqueueSnackbar } = useSnackbar();
   const [searchParams] = useSearchParams();
   const purple = '#3b2a64';
   const editId = searchParams.get('id');
@@ -110,7 +112,102 @@ const AddInquiry = () => {
 
   const handleSave = () => {
     if (!isEditMode) {
-      alert('Form Saved (API later)');
+      const hasEmptyLdbPrice = details.some((row) => String(row?.ldbPrice ?? '').trim() === '');
+      if (hasEmptyLdbPrice) {
+        enqueueSnackbar('LDP.Price is required.', { variant: 'warning' });
+        return;
+      }
+
+      if (loadingInquiry) {
+        return;
+      }
+
+      (async () => {
+        try {
+          setLoadingInquiry(true);
+          setLoadError('');
+
+          const token = localStorage.getItem('accessToken');
+          const payload = {
+            sampleNo,
+            supplierID: Number(supplier) || 0,
+            customerID: Number(customer) || 0,
+            inquiryTypeID: Number(inquiryType) || 0,
+            style,
+            itemDesc,
+            content,
+            status,
+            comment: '',
+            remarks: '',
+            inquiryDate: toIsoDateTime(customerInquiryDate),
+            createDate: toIsoDateTime(creationDate),
+            dueDate: toIsoDateTime(factoryDelDate),
+            dispatchDate: toIsoDateTime(customerDelDate),
+            dispatchDate2: toIsoDateTime(dispatchDate),
+            factoryHOD: toIsoDateTime(factoryHandoverDate),
+            details: details.map((row) => ({
+              fabricID: Number(row?.fabricID) || 0,
+              gsm: row?.gsm ?? '',
+              qty: row?.qty ?? '',
+              color: row?.color ?? '',
+              price: row?.price ?? '',
+              fabricWash: row?.fabricWash ?? '',
+              size: row?.size ?? '',
+              orderQty: row?.orderQty ?? '',
+              ldbPrice: row?.ldbPrice ?? '',
+              deliveryDate: row?.deliveryDate ? toIsoDateTime(row?.deliveryDate) : null,
+            })),
+          };
+
+          const response = await fetch(`${API_BASE_URL}/api/MerchantInquiry/AddInquiry`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) {
+            let message = 'Failed to add inquiry.';
+            try {
+              const errorText = await response.text();
+              if (errorText) {
+                try {
+                  const errorData = JSON.parse(errorText);
+                  message =
+                    errorData?.message ||
+                    errorData?.Message ||
+                    errorData?.error ||
+                    errorData?.Error ||
+                    errorData?.title ||
+                    message;
+                } catch (parseError) {
+                  message = errorText;
+                }
+              }
+            } catch (error) {
+              // ignore parse failures
+            }
+            throw new Error(message);
+          }
+
+          enqueueSnackbar('Inquiry updated successfully.', { variant: 'success' });
+          navigate(paths.dashboard.supplyChain.merchantInquiry);
+        } catch (error) {
+          const message = error?.message || 'Failed to add inquiry.';
+          setLoadError(message);
+          alert(message);
+        } finally {
+          setLoadingInquiry(false);
+        }
+      })();
+      return;
+    }
+
+    const hasEmptyLdbPrice = details.some((row) => String(row?.ldbPrice ?? '').trim() === '');
+    if (hasEmptyLdbPrice) {
+      enqueueSnackbar('LDP.Price is required.', { variant: 'warning' });
       return;
     }
 
@@ -195,7 +292,7 @@ const AddInquiry = () => {
           throw new Error(message);
         }
 
-        alert('Inquiry updated successfully.');
+        enqueueSnackbar('Inquiry updated successfully.', { variant: 'success' });
         navigate(paths.dashboard.supplyChain.merchantInquiry);
       } catch (error) {
         const message = error?.message || 'Failed to update inquiry.';
@@ -340,7 +437,7 @@ const AddInquiry = () => {
 
     const detail = details[index];
     setEditingDetailIndex(index);
-    setFabric(detail.fabricType ?? '');
+    setFabric(detail.fabricID ?? '');
     setFabricWash(detail.fabricWash ?? '');
     setColor(detail.color ?? '');
     setFobPrice(detail.price ?? '');
@@ -893,7 +990,7 @@ const AddInquiry = () => {
                               width: '100%',
                               '& .MuiInputBase-input': {
                                 p: 0,
-                                fontSize: 'inherit',
+                                fontSize: '0.875rem',
                               },
                             }}
                           />
