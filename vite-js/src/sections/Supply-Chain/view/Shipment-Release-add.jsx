@@ -1821,7 +1821,7 @@ export default function ShipmentReleaseAddPage() {
                             size="small"
                             fullWidth
                             value={row.cartonNo || ''}
-                            onChange={(e) => handleDialogGridChange(index, 'cartonNo', e.target.value)}
+                            InputProps={{ readOnly: true }}
                           />
                         </TableCell>
                         <TableCell>{row.qtYwithTolerance ?? '-'}</TableCell>
