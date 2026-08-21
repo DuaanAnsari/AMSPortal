@@ -58,6 +58,7 @@ const TNAHistoryPage = lazy(() => import('src/sections/Supply-Chain/view/TNA-His
 const CancellationsPage = lazy(() => import('src/sections/Supply-Chain/view/Cancellations'));
 const OrderTrackingPage = lazy(() => import('src/sections/Supply-Chain/view/Orders-tracking'));
 const MerchantInquiryPage = lazy(() => import('src/sections/Supply-Chain/view/Merchant-inquiry'));
+const CostingViewPage = lazy(() => import('src/sections/Supply-Chain/view/Costing-view'));
 const OrderDetailPage = lazy(() => import('src/sections/Supply-Chain/view/Order-detail'));
 const SamplingProgramPage = lazy(() => import('src/sections/Supply-Chain/view/Sampling-program'));
 const SampleInspectionReportPage = lazy(
@@ -266,6 +267,7 @@ export const dashboardRoutes = [
           { path: 'sample-inspection-report', element: <SampleInspectionReportPage /> },
           { path: 'add-sampling-program', element: <AddSamplingProgramPage /> },
           { path: 'add-inquiry', element: <AddInquiryPage /> },
+          { path: 'costing', element: <CostingViewPage /> },
           { path: 'add-order-detail', element: <AddOrderDetailPage /> },
           { path: 'size-specs-view', element: <SizeSpecsViewListPage /> },
           { path: 'size-specs/add', element: <SizeSpecsEntryPage /> },

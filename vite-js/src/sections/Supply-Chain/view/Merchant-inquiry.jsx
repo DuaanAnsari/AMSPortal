@@ -70,6 +70,7 @@ function normalizeRows(data) {
     SampleNo: row?.SampleNo ?? '',
     SupplierID: row?.SupplierID ?? '',
     Status: row?.Status ?? '',
+    Costingstatus: row?.Costingstatus ?? row?.costingstatus ?? 0,
     Style: row?.Style ?? '',
     ItemDesc: row?.ItemDesc ?? '',
     Content: row?.Content ?? '',
@@ -217,9 +218,14 @@ export default function MerchantInquiryPage() {
 
   const handleCosting = useCallback(
     (row) => {
-      enqueueSnackbar(`Costing: ${row?.InquiryMstID ?? ''}`, { variant: 'info' });
+      const id = row?.InquiryMstID ?? row?.InquiryMstId ?? row?.id;
+      if (!id) {
+        enqueueSnackbar('Missing InquiryMstID', { variant: 'warning' });
+        return;
+      }
+      navigate(`${paths.dashboard.supplyChain.costing}?id=${encodeURIComponent(String(id))}`);
     },
-    [enqueueSnackbar]
+    [enqueueSnackbar, navigate]
   );
 
   const handleSizeSpecs = useCallback(
@@ -321,7 +327,18 @@ export default function MerchantInquiryPage() {
         renderCell: (params) => (
           <InquiryActionButton
             title="Costing"
-            icon={<CalculateIcon fontSize="small" />}
+            icon={
+              <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
+                <Typography component="span" sx={{ fontSize: '0.72rem', fontWeight: 700, lineHeight: 1 }}>
+                  COSTING
+                </Typography>
+                {Number(params.row?.Costingstatus) === 1 ? (
+                  <Box component="span" sx={{ color: '#2e7d32', fontSize: '0.9rem', lineHeight: 1 }}>
+                    ✓
+                  </Box>
+                ) : null}
+              </Box>
+            }
             onClick={() => handleCosting(params.row)}
           />
         ),

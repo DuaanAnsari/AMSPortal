@@ -132,6 +132,7 @@ export const paths = {
       cancellations: `${ROOTS.DASHBOARD}/supply-chain/cancellations`,
       orderTracking: `${ROOTS.DASHBOARD}/supply-chain/order-tracking`,
       merchantInquiry: `${ROOTS.DASHBOARD}/supply-chain/merchant-inquiry`,
+      costing: `${ROOTS.DASHBOARD}/supply-chain/costing`,
       orderDetail: `${ROOTS.DASHBOARD}/supply-chain/order-detail`,
       samplingProgram: `${ROOTS.DASHBOARD}/supply-chain/sampling-program`,
       sampleInspectionReport: `${ROOTS.DASHBOARD}/supply-chain/sample-inspection-report`,
