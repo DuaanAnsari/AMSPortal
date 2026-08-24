@@ -77,6 +77,8 @@ import {
 } from 'src/sections/reports/utils/cs-wise-sdr-pdf-export';
 import { useUserReportOptions } from 'src/sections/reports/utils/use-user-report-options';
 
+const API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+
 // ----------------------------------------------------------------------
 
 /**
@@ -180,6 +182,59 @@ function InquiryReportForCustomerForm() {
 
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = 'InquiryRpt.aspx';
+    return () => {
+      document.title = previousTitle;
+    };
+  }, []);
+
+  const buildReportParams = useCallback(() => {
+    const params = new URLSearchParams({
+      fromDate: filters.fromDate || '2025-01-01',
+      toDate: filters.toDate || '2026-12-31',
+      customerId: filters.customer === ALL ? '' : String(filters.customer),
+      supplierId: filters.supplier === ALL ? '' : String(filters.supplier),
+      marchandiserId: filters.merchandiser === ALL ? '' : String(filters.merchandiser),
+    });
+    return params;
+  }, [filters.customer, filters.fromDate, filters.merchandiser, filters.supplier, filters.toDate]);
+
+  const fetchInquiryReportRows = useCallback(async () => {
+    if (!API_BASE_URL) throw new Error('API URL missing');
+
+    const url = `${API_BASE_URL}/api/InquiryReports/InquiryAMSNewReport?${buildReportParams().toString()}`;
+    const response = await fetch(url, { headers: inquiryAuthHeaders() });
+    if (!response.ok) throw new Error(await response.text());
+    const data = await response.json();
+    return Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : Array.isArray(data?.data) ? data.data : [];
+  }, [buildReportParams]);
+
+  const mapInquiryRows = useCallback(
+    (rows) =>
+      (Array.isArray(rows) ? rows : []).map((row, index) => ({
+        serial: String(index + 1),
+        requestDate: row?.CreateDate ?? row?.createDate ?? '',
+        customerName: row?.CustomerName ?? row?.customerName ?? '',
+        dueDate: row?.DueDate ?? row?.dueDate ?? '',
+        dispatchDate: row?.DispatchDate ?? row?.dispatchDate ?? '',
+        styleNo: row?.Style ?? row?.style ?? row?.StyleNo ?? row?.styleNo ?? '',
+        item: row?.ItemDesc ?? row?.itemDesc ?? row?.Item ?? row?.item ?? '',
+        content: row?.Content ?? row?.content ?? '',
+        fabric: row?.FabricType ?? row?.fabricType ?? '',
+        colour: row?.Color ?? row?.color ?? '',
+        qty: row?.Qty ?? row?.qty ?? '',
+        size: row?.Size ?? row?.size ?? '',
+        gsm: row?.GSM ?? row?.gsm ?? '',
+        commentStatus: row?.Status ?? row?.status ?? '',
+        progressComments: row?.Comment ?? row?.comment ?? '',
+        remarks: row?.Remarks ?? row?.remarks ?? '',
+        imageUrl: row?.InqImage ?? row?.inqImage ?? row?.imageUrl ?? null,
+      })),
+    []
+  );
+
   /**
    * Build the Inquiry Report PDF (demo data for now) and either preview-tab
    * it or trigger a direct file download. Real backend rows can be passed
@@ -193,7 +248,9 @@ function InquiryReportForCustomerForm() {
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
-        const blob = await buildInquiryReportPdfBlob({});
+        const rows = await fetchInquiryReportRows();
+        const items = mapInquiryRows(rows);
+        const blob = await buildInquiryReportPdfBlob({ items, title: 'InquiryRpt.aspx' });
         if (mode === 'view' && previewWindow) {
           const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
           previewWindow.location.replace(url);
@@ -215,7 +272,7 @@ function InquiryReportForCustomerForm() {
         setGeneratingPdf(false);
       }
     },
-    [generatingPdf, enqueueSnackbar]
+    [generatingPdf, enqueueSnackbar, fetchInquiryReportRows, mapInquiryRows]
   );
 
   const handleViewReport = useCallback(() => runPdfExport('view'), [runPdfExport]);

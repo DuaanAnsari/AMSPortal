@@ -20,7 +20,7 @@ import jsPDF from 'jspdf';
  *   - Footer    : Printed on (left), Powered by … / Developed by … (center),
  *                 Page X of Y (right).
  *
- * Demo data is hardcoded; backend rows can be passed via the same shape later.
+ * Backend rows can be passed via the same shape later.
  */
 
 const LOGO_PATH = `${import.meta.env.BASE_URL}logo/AMSlogo.png`;
@@ -57,12 +57,12 @@ const PDF_VIEW_ZOOM_HASH = '#zoom=110';
 
 /** @type {InquiryCol[]} */
 const COLS = [
-  { key: 'serial', label: 'SERIAL #', weight: 48, align: 'left' },
+  { key: 'serial', label: 'SERIAL #', weight: 48, align: 'center' },
   { key: 'requestDate', label: 'REQUEST DATE', weight: 60, align: 'center' },
-  { key: 'customerName', label: 'CUSTOMER NAME', weight: 88, align: 'left' },
+  { key: 'customerName', label: 'CUSTOMER NAME', weight: 88, align: 'center' },
   { key: 'dueDate', label: 'DUE DATE', weight: 50, align: 'center' },
   { key: 'dispatchDate', label: 'DISPATCH DATE', weight: 60, align: 'center' },
-  { key: 'styleNo', label: 'STYLE #', weight: 55, align: 'left' },
+  { key: 'styleNo', label: 'STYLE #', weight: 55, align: 'center' },
   { key: 'item', label: 'ITEM', weight: 95, align: 'center' },
   { key: 'content', label: 'CONTENT', weight: 70, align: 'center' },
   { key: 'fabric', label: 'FABRIC', weight: 45, align: 'center' },
@@ -489,18 +489,19 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
 // ----------------------------------------------------------------------
 
 /**
- * @param {{ items?: object[]; printedOn?: string }} data
+ * @param {{ items?: object[]; printedOn?: string; title?: string }} data
  * @returns {Promise<Blob>}
  */
 export async function buildInquiryReportPdfBlob(data = {}) {
-  const payload =
-    data && Array.isArray(data.items) && data.items.length > 0 ? data : INQUIRY_REPORT_DEMO;
+  const hasExplicitItems = data && Array.isArray(data.items);
+  const payload = hasExplicitItems ? { ...data, items: data.items } : INQUIRY_REPORT_DEMO;
 
   const meta = {
     printedOn: payload.printedOn || data.printedOn || formatPrintedOnLong(),
   };
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
+  doc.setProperties({ title: data.title || 'InquiryRpt.aspx' });
   const logoDataUrl = await loadLogoDataUrl().catch(() => null);
 
   const innerLeft = H_MARGIN;

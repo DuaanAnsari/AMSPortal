@@ -7,6 +7,7 @@ import {
   Card,
   Container,
   Grid,
+  Snackbar,
   Paper,
   Stack,
   Table,
@@ -17,6 +18,8 @@ import {
   TableRow,
   TextField,
   Typography,
+  Alert,
+  MenuItem,
 } from '@mui/material';
 import { paths } from 'src/routes/paths';
 import axiosInstance from 'src/utils/axios';
@@ -81,6 +84,40 @@ const toNum = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const safeNum = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const safeStr = (value) => {
+  if (value == null) return '';
+  const str = String(value);
+  return str === 'NaN' || str === 'Infinity' || str === '-Infinity' ? '0' : str;
+};
+
+const toIsoDateTimeString = (value) => {
+  if (value == null) return '';
+
+  const raw = String(value).trim();
+  if (!raw) return '';
+
+  const isoDateTimeMatch = raw.match(/^(\d{4}-\d{2}-\d{2})(?:[T\s].*)?$/);
+  if (isoDateTimeMatch) {
+    const parsed = new Date(`${isoDateTimeMatch[1]}T00:00:00.000Z`);
+    return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+  }
+
+  const dmyMatch = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (dmyMatch) {
+    const [, dd, mm, yyyy] = dmyMatch;
+    const parsed = new Date(Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd)));
+    return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+  }
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+};
+
 const formatDateDisplay = (raw) => {
   if (!raw) return '';
   const str = String(raw).trim();
@@ -117,6 +154,11 @@ const TABLE_COLUMNS = [
   { label: 'GP %', width: 55 },
 ];
 
+const COSTING_STATUS_OPTIONS = [
+  { id: 1, label: 'Unconfirmed' },
+  { id: 2, label: 'Confirmed' },
+];
+
 const CostingView = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -127,12 +169,17 @@ const CostingView = () => {
   const [supplierOptions, setSupplierOptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [saveSuccessOpen, setSaveSuccessOpen] = useState(false);
 
   // Top header fields
   const [customerValue, setCustomerValue] = useState('');
+  const [customerId, setCustomerId] = useState('');
   const [supplierValue, setSupplierValue] = useState('');
+  const [supplierId, setSupplierId] = useState('');
   const [descriptionValue, setDescriptionValue] = useState('');
-  const [costingStatusValue, setCostingStatusValue] = useState('');
+  const [costingStatusId, setCostingStatusId] = useState('');
   const [currentFreight, setCurrentFreight] = useState('');
   const [totalCbm40hc, setTotalCbm40hc] = useState('');
   const [gri, setGri] = useState('');
@@ -149,6 +196,107 @@ const CostingView = () => {
 
   const handleCancel = () => {
     navigate(paths.dashboard.supplyChain.merchantInquiry);
+  };
+
+  const buildCostingPayload = () => {
+    const details = calculatedRows.map((row) => {
+      const orderQty = safeNum(row.totalOrderQty);
+      const noofPcsPerCTN = safeNum(row.pcsPerCtn);
+      const noofCarton = safeNum(row.ofCtns);
+      const length = safeNum(row.l);
+      const width = safeNum(row.w);
+      const height = safeNum(row.h);
+      const cbMperCtn = safeNum(row.cbmPerCtn);
+      const totalCBM = safeNum(row.totalCbm);
+      const fobPrice = safeNum(row.fob);
+      const amsCommPercent = safeNum(row.amsCommPct);
+      const amsCommAMT = safeNum(row.amsCommAmt);
+      const dutyPercent = safeNum(row.dutyPct);
+      const dutyAMT = safeNum(row.dutyAmt);
+      const freight = safeNum(row.freight);
+      const trucking = safeNum(row.trucking);
+      const clearing = safeNum(row.clearing);
+      const palletizingCost = safeNum(row.palletizingCost);
+      const totalFreight = safeNum(row.frtPc);
+      const freightPerPC = safeNum(row.frtPc);
+      const totalCostPerPc = safeNum(row.tCostPc);
+      const ldpPrice = safeNum(row.ldp);
+      const gpPerPc = safeNum(row.gpPc);
+      const gpPercent = safeNum(row.gpPct);
+
+      return {
+        costingDtlID: safeNum(row.costingDtlID),
+        costingMstID: 0,
+        deliveryDate: toIsoDateTimeString(row.deliveryDate),
+        sizes: safeStr(row.sizes),
+        orderQty,
+        noofPcsPerCTN,
+        noofCarton,
+        length,
+        width,
+        height,
+        cbMperCtn,
+        totalCBM,
+        fobPrice,
+        amsCommPercent,
+        amsCommAMT,
+        dutyPercent,
+        dutyAMT,
+        freight,
+        trucking,
+        clearing,
+        palletizingCost,
+        totalFreight,
+        freightPerPC,
+        totalCostPerPc,
+        ldpPrice,
+        gpPerPc,
+        gpPercent,
+      };
+    });
+
+    return {
+      costingMstID: 0,
+      inquiryMstID: safeNum(inquiryMstID),
+      userID: 0,
+      creationDate: new Date().toISOString(),
+      currentFreight: safeNum(currentFreight),
+      gri: safeNum(gri),
+      currentFr8GRI: safeNum(gri2),
+      totalCBM40CH: safeNum(totalCbm40hc),
+      inwardTrucking: safeNum(inwardTrucking),
+      costingStatusID: safeNum(costingStatusId),
+      details,
+    };
+  };
+
+  const handleSave = async () => {
+    if (loading || saveLoading) return;
+
+    setSaveLoading(true);
+    setSaveError('');
+
+    try {
+      const payload = buildCostingPayload();
+      const url = `${API_BASE_URL}/api/MerchantInquiry/SaveCostingData`;
+      await axiosInstance.post(url, payload, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      setSaveSuccessOpen(true);
+      setTimeout(() => {
+        navigate(paths.dashboard.supplyChain.merchantInquiry);
+      }, 250);
+    } catch (error) {
+      console.error('[CostingView] SaveCostingData failed', error?.response || error);
+      const message =
+        error?.response?.data?.message ||
+        error?.response?.data?.Message ||
+        error?.message ||
+        'Failed to save costing data';
+      setSaveError(message);
+    } finally {
+      setSaveLoading(false);
+    }
   };
 
   const handleDetailRowChange = (index, field) => (event) => {
@@ -192,9 +340,11 @@ const CostingView = () => {
           : (masterList.length > 0 ? masterList : [master]);
 
         setCustomerValue(master?.CustomerName || '');
+        setCustomerId(master?.CustomerID != null ? String(master.CustomerID) : '');
         setSupplierValue(master?.SupplierName || '');
+        setSupplierId(master?.SupplierID != null ? String(master.SupplierID) : '');
         setDescriptionValue(master?.ItemDesc || master?.Description || master?.Remarks || '');
-        setCostingStatusValue(master?.CostingStatus || '');
+        setCostingStatusId(master?.CostingStatusID != null ? String(master.CostingStatusID) : '');
         setCurrentFreight(master?.CurrentFreight != null && master?.CurrentFreight !== 0 ? String(master.CurrentFreight) : '');
         setTotalCbm40hc(master?.TotalCBM40CH != null && master?.TotalCBM40CH !== 0 ? String(master.TotalCBM40CH) : '');
         setGri(master?.GRI != null && master?.GRI !== 0 ? String(master.GRI) : '');
@@ -260,6 +410,36 @@ const CostingView = () => {
     return () => controller.abort();
   }, [inquiryMstID, costingStatusParam]);
 
+  useEffect(() => {
+    if (!API_BASE_URL) return undefined;
+
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const [customerResponse, supplierResponse] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/MyOrders/GetCustomer`, { signal: controller.signal }),
+          fetch(`${API_BASE_URL}/api/MyOrders/GetSupplier`, { signal: controller.signal }),
+        ]);
+
+        if (controller.signal.aborted) return;
+
+        const customerData = customerResponse.ok ? await customerResponse.json() : [];
+        const supplierData = supplierResponse.ok ? await supplierResponse.json() : [];
+
+        if (!controller.signal.aborted) {
+          setCustomerOptions(Array.isArray(customerData) ? customerData : []);
+          setSupplierOptions(Array.isArray(supplierData) ? supplierData : []);
+        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error('[CostingView] customer/supplier load failed', error);
+      }
+    })();
+
+    return () => controller.abort();
+  }, []);
+
   // Calculate row values
   const calculatedRows = useMemo(() => {
     const cFreight = toNum(currentFreight);
@@ -316,9 +496,30 @@ const CostingView = () => {
   return (
     <Container maxWidth="xl" sx={{ py: 2 }}>
       <Card variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: 1 }}>
+        <Snackbar
+          open={saveSuccessOpen}
+          anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+          autoHideDuration={2500}
+          onClose={() => setSaveSuccessOpen(false)}
+        >
+          <Alert
+            onClose={() => setSaveSuccessOpen(false)}
+            severity="success"
+            variant="filled"
+            sx={{ width: '100%' }}
+          >
+            Costing saved successfully
+          </Alert>
+        </Snackbar>
+
         {loadError ? (
           <Typography variant="body2" color="error.main" sx={{ mb: 2 }}>
             {loadError}
+          </Typography>
+        ) : null}
+        {saveError ? (
+          <Typography variant="body2" color="error.main" sx={{ mb: 2 }}>
+            {saveError}
           </Typography>
         ) : null}
 
@@ -350,17 +551,16 @@ const CostingView = () => {
                     options={customerOptions}
                     value={
                       customerOptions.find(
-                        (option) =>
-                          String(customerKey(option)) === String(customerValue) ||
-                          customerLabel(option) === customerValue
-                      ) || (customerValue ? { customerName: customerValue, customerID: 1 } : null)
+                        (option) => String(customerKey(option)) === String(customerId || customerValue)
+                      ) || (customerValue ? { customerName: customerValue, customerID: customerId || 1 } : null)
                     }
-                    onChange={(_e, value) =>
-                      setCustomerValue(customerLabel(value))
-                    }
+                    onChange={(_e, value) => {
+                      setCustomerValue(customerLabel(value));
+                      setCustomerId(value?.customerID != null ? String(value.customerID) : '');
+                    }}
                     getOptionLabel={(option) => customerLabel(option)}
                     isOptionEqualToValue={(option, value) =>
-                      customerLabel(option) === customerLabel(value)
+                      String(customerKey(option)) === String(customerKey(value))
                     }
                     renderInput={(params) => <TextField {...params} fullWidth size="small" sx={topFieldSx} />}
                   />
@@ -374,10 +574,17 @@ const CostingView = () => {
                   <TextField
                     fullWidth
                     size="small"
-                    value={costingStatusValue}
-                    InputProps={{ readOnly: true }}
+                    select
+                    value={costingStatusId}
+                    onChange={(e) => setCostingStatusId(e.target.value)}
                     sx={topFieldSx}
-                  />
+                  >
+                    {COSTING_STATUS_OPTIONS.map((option) => (
+                      <MenuItem key={option.id} value={option.id}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
                 </Box>
               )}
 
@@ -398,17 +605,16 @@ const CostingView = () => {
                     options={supplierOptions}
                     value={
                       supplierOptions.find(
-                        (option) =>
-                          String(supplierKey(option)) === String(supplierValue) ||
-                          supplierLabel(option) === supplierValue
-                      ) || (supplierValue ? { venderName: supplierValue, venderLibraryID: 1 } : null)
+                        (option) => String(supplierKey(option)) === String(supplierId || supplierValue)
+                      ) || (supplierValue ? { venderName: supplierValue, venderLibraryID: supplierId || 1 } : null)
                     }
-                    onChange={(_e, value) =>
-                      setSupplierValue(supplierLabel(value))
-                    }
+                    onChange={(_e, value) => {
+                      setSupplierValue(supplierLabel(value));
+                      setSupplierId(value?.venderLibraryID != null ? String(value.venderLibraryID) : '');
+                    }}
                     getOptionLabel={(option) => supplierLabel(option)}
                     isOptionEqualToValue={(option, value) =>
-                      supplierLabel(option) === supplierLabel(value)
+                      String(supplierKey(option)) === String(supplierKey(value))
                     }
                     renderInput={(params) => <TextField {...params} fullWidth size="small" sx={topFieldSx} />}
                   />
@@ -818,9 +1024,11 @@ const CostingView = () => {
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 2 }}>
           <Button
             variant="contained"
+            onClick={handleSave}
+            disabled={loading || saveLoading}
             sx={{ minWidth: 150, bgcolor: '#000000', color: '#fff', '&:hover': { bgcolor: '#222' } }}
           >
-            {costingStatusParam ? 'Update' : 'Save'}
+            {saveLoading ? 'Saving...' : costingStatusParam ? 'Update' : 'Save'}
           </Button>
           <Button
             variant="contained"
