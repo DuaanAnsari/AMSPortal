@@ -214,7 +214,7 @@ function InquiryReportForCustomerForm() {
   const mapInquiryRows = useCallback(
     (rows) =>
       (Array.isArray(rows) ? rows : []).map((row, index) => ({
-        serial: String(index + 1),
+        serial: row?.SampleNo  ?? row?.SampleNo ?? '',
         requestDate: row?.CreateDate ?? row?.createDate ?? '',
         customerName: row?.CustomerName ?? row?.customerName ?? '',
         dueDate: row?.DueDate ?? row?.dueDate ?? '',
