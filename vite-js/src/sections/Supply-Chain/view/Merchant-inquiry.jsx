@@ -223,7 +223,10 @@ export default function MerchantInquiryPage() {
         enqueueSnackbar('Missing InquiryMstID', { variant: 'warning' });
         return;
       }
-      navigate(`${paths.dashboard.supplyChain.costing}?id=${encodeURIComponent(String(id))}`);
+      const costingStatus = Number(row?.Costingstatus) === 1 ? 'true' : 'false';
+      navigate(
+        `${paths.dashboard.supplyChain.costing}?id=${encodeURIComponent(String(id))}&costingstatus=${costingStatus}`
+      );
     },
     [enqueueSnackbar, navigate]
   );

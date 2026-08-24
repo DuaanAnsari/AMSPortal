@@ -8,6 +8,7 @@ import {
   Container,
   Grid,
   Paper,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -17,21 +18,62 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
 import { paths } from 'src/routes/paths';
 import axiosInstance from 'src/utils/axios';
 
 const API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 
 const topFieldSx = {
-  '& .MuiInputBase-root': { borderRadius: 0, backgroundColor: '#fff' },
+  '& .MuiInputBase-root': {
+    borderRadius: 0,
+    backgroundColor: '#fff',
+    fontSize: '0.85rem',
+  },
+  '& .MuiOutlinedInput-notchedOutline': {
+    borderColor: '#e0e0e0',
+  },
+};
+
+const labelSx = {
+  fontSize: '0.78rem',
+  fontWeight: 700,
+  color: '#666',
+  mb: 0.5,
+  textTransform: 'uppercase',
+  letterSpacing: 0.5,
 };
 
 const cellSx = {
-  minWidth: 64,
-  p: 0.5,
-  '& .MuiInputBase-root': { borderRadius: 0, backgroundColor: '#fff' },
-  '& .MuiInputBase-input': { p: '4px 5px', fontSize: '0.76rem' },
+  minWidth: 54,
+  p: 0.3,
+  '& .MuiInputBase-root': {
+    borderRadius: 0,
+    backgroundColor: '#fff',
+    fontSize: '0.78rem',
+  },
+  '& .MuiInputBase-input': {
+    p: '4px 4px',
+    fontSize: '0.78rem',
+    textAlign: 'center',
+  },
+  '& .MuiOutlinedInput-notchedOutline': {
+    borderColor: '#d6d6d6',
+  },
+};
+
+const readOnlyCellSx = {
+  ...cellSx,
+  '& .MuiInputBase-root': {
+    borderRadius: 0,
+    backgroundColor: '#fafafa',
+    fontSize: '0.78rem',
+  },
+  '& .MuiInputBase-input': {
+    p: '4px 4px',
+    fontSize: '0.78rem',
+    textAlign: 'center',
+    color: '#333',
+  },
 };
 
 const toNum = (value) => {
@@ -39,214 +81,176 @@ const toNum = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const safeDateValue = (value) => {
-  if (!value) return '';
-  const raw = String(value).trim();
-  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  return raw;
+const formatDateDisplay = (raw) => {
+  if (!raw) return '';
+  const str = String(raw).trim();
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) return str;
+  const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+  return str;
 };
+
+const TABLE_COLUMNS = [
+  { label: 'DELIVERY DATE', width: 95 },
+  { label: 'SIZES', width: 75 },
+  { label: 'TOTAL ORDER QTY', width: 75 },
+  { label: '# OF PCS/CTN', width: 65 },
+  { label: '# OF CTNS', width: 60 },
+  { label: 'L', width: 45 },
+  { label: 'W', width: 45 },
+  { label: 'H', width: 45 },
+  { label: 'CBM PER CTN', width: 65 },
+  { label: 'TOTAL CBM', width: 65 },
+  { label: 'FOB', width: 55 },
+  { label: 'AMS COMM %', width: 60 },
+  { label: 'AMS COMM AMT', width: 65 },
+  { label: 'DUTY %', width: 55 },
+  { label: 'DUTY AMT', width: 60 },
+  { label: 'FREIGHT', width: 65 },
+  { label: 'TRUCKING', width: 65 },
+  { label: 'CLEARING', width: 65 },
+  { label: 'PALLETIZING COST(ctn*12/30)', width: 90 },
+  { label: 'FRT/PC', width: 60 },
+  { label: 'T.COST/PC', width: 65 },
+  { label: 'LDP', width: 55 },
+  { label: 'GP/PC', width: 60 },
+  { label: 'GP %', width: 55 },
+];
 
 const CostingView = () => {
   const navigate = useNavigate();
-  const theme = useTheme();
   const [searchParams] = useSearchParams();
   const inquiryMstID = searchParams.get('id') || searchParams.get('InquiryMstID') || '';
+  const costingStatusParam = searchParams.get('costingstatus') === 'true';
 
   const [customerOptions, setCustomerOptions] = useState([]);
   const [supplierOptions, setSupplierOptions] = useState([]);
-  const [masterData, setMasterData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
+
+  // Top header fields
   const [customerValue, setCustomerValue] = useState('');
   const [supplierValue, setSupplierValue] = useState('');
   const [descriptionValue, setDescriptionValue] = useState('');
   const [costingStatusValue, setCostingStatusValue] = useState('');
-  const [costingMode, setCostingMode] = useState(false);
-  const [row, setRow] = useState({
-    deliveryDate: '',
-    sizes: '',
-    totalOrderQty: '',
-    pcsPerCtn: '',
-    l: '',
-    w: '',
-    h: '',
-    fob: '',
-    amsCommPct: '',
-    dutyPct: '',
-    currentFreight: '',
-    totalCbm40hc: '',
-    inwardTrucking: '',
-    clearingValue: '',
-    ldp: '',
-  });
+  const [currentFreight, setCurrentFreight] = useState('');
+  const [totalCbm40hc, setTotalCbm40hc] = useState('');
+  const [gri, setGri] = useState('');
+  const [gri2, setGri2] = useState('');
+  const [inwardTrucking, setInwardTrucking] = useState('');
 
-  const columns = useMemo(
-    () => [
-      'DELIVERY DATE',
-      'SIZES',
-      'TOTAL ORDER QTY',
-      '# OF PCS/CTN',
-      '# OF CTNS',
-      'L',
-      'W',
-      'H',
-      'CBM PER CTN',
-      'TOTAL CBM',
-      'FOB',
-      'AMS COMM %',
-      'AMS COMM AMT',
-      'DUTY %',
-      'DUTY AMT',
-      'FREIGHT',
-      'TRUCKING',
-      'CLEARING',
-      'PALLETIZING COST(ctn*12/30)',
-      'FRT/PC',
-      'T.COST/PC',
-      'LDP',
-      'GP/PC',
-      'GP %',
-    ],
-    []
-  );
+  // Multi-row detail rows for the table
+  const [detailRows, setDetailRows] = useState([]);
 
-  const customerLabel = (option) => option?.customerName ?? option?.CustomerName ?? option?.name ?? '';
-  const customerKey = (option) => option?.customerID ?? option?.customerId ?? option?.CustomerID ?? '';
-  const supplierLabel = (option) => option?.venderName ?? option?.VenderName ?? option?.vendorName ?? '';
-  const supplierKey = (option) => option?.venderLibraryID ?? option?.venderLibraryId ?? option?.VenderLibraryID ?? '';
+  const customerLabel = (option) => option?.customerName ?? option?.CustomerName ?? option?.name ?? String(option ?? '');
+  const customerKey = (option) => option?.customerID ?? option?.customerId ?? option?.CustomerID ?? String(option ?? '');
+  const supplierLabel = (option) => option?.venderName ?? option?.VenderName ?? option?.vendorName ?? option?.SupplierName ?? String(option ?? '');
+  const supplierKey = (option) => option?.venderLibraryID ?? option?.venderLibraryId ?? option?.VenderLibraryID ?? option?.SupplierID ?? String(option ?? '');
 
   const handleCancel = () => {
     navigate(paths.dashboard.supplyChain.merchantInquiry);
   };
 
-  const handleRowChange = (field) => (event) => {
+  const handleDetailRowChange = (index, field) => (event) => {
     const value = event.target.value;
-    setRow((prev) => ({ ...prev, [field]: value }));
+    setDetailRows((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
   };
 
-  const calculatedRow = useMemo(() => {
-    const totalOrderQty = toNum(row.totalOrderQty);
-    const pcsPerCtn = toNum(row.pcsPerCtn);
-    const l = toNum(row.l);
-    const w = toNum(row.w);
-    const h = toNum(row.h);
-    const fob = toNum(row.fob);
-    const amsCommPct = toNum(row.amsCommPct);
-    const dutyPct = toNum(row.dutyPct);
-    const currentFreight = toNum(row.currentFreight);
-    const totalCbm40hc = toNum(row.totalCbm40hc);
-    const inwardTrucking = toNum(row.inwardTrucking);
-    const clearingValue = toNum(row.clearingValue);
-    const ldp = toNum(row.ldp);
-
-    const ofCtns = pcsPerCtn > 0 ? Math.ceil(totalOrderQty / pcsPerCtn) : 0;
-    const cbmPerCtn = (l * w * h) / 61024;
-    const totalCbm = cbmPerCtn * ofCtns;
-    const amsCommAmt = (fob / 100) * amsCommPct;
-    const dutyAmt = (fob / 100) * dutyPct;
-    const freight =
-      totalOrderQty > 0 && totalCbm40hc > 0 ? ((currentFreight / totalCbm40hc) * totalCbm) / totalOrderQty : 0;
-    const trucking =
-      totalOrderQty > 0 && totalCbm40hc > 0 ? ((inwardTrucking / totalCbm40hc) * totalCbm) / totalOrderQty : 0;
-    const palletizingCost = totalOrderQty > 0 ? ((ofCtns * 12) / 30) / totalOrderQty : 0;
-    const clearing = totalOrderQty > 0 ? clearingValue / totalOrderQty : 0;
-    const frtPc = freight + trucking + clearing + palletizingCost;
-    const tCostPc = frtPc + amsCommAmt + dutyAmt + fob;
-    const gpPc = ldp - tCostPc;
-    const gpPct = ldp > 0 ? (gpPc / ldp) * 100 : 0;
-
-    return {
-      ofCtns,
-      cbmPerCtn,
-      totalCbm,
-      amsCommAmt,
-      dutyAmt,
-      freight,
-      trucking,
-      palletizingCost,
-      clearing,
-      frtPc,
-      tCostPc,
-      gpPc,
-      gpPct,
-    };
-  }, [row]);
-
+  // Fetch CostingData
   useEffect(() => {
     if (!API_BASE_URL || !inquiryMstID) return undefined;
 
     const controller = new AbortController();
-    console.log('=== Costing URL id ===', inquiryMstID);
 
     (async () => {
       setLoading(true);
       setLoadError('');
       try {
-        const loadData = async (costingstatus, inquiryId = inquiryMstID) => {
-          const url = `${API_BASE_URL}/api/MerchantInquiry/CostingData/${encodeURIComponent(
-            inquiryId
-          )}?costingstatus=${String(costingstatus)}`;
-          console.log('=== CostingData request URL ===', url);
-          const response = await axiosInstance.get(url, {
-            signal: controller.signal,
-            headers: { 'Content-Type': 'application/json' },
-          });
-          console.log('=== CostingData API response ===', response?.data);
-          return response?.data;
-        };
+        const url = `${API_BASE_URL}/api/MerchantInquiry/CostingData/${encodeURIComponent(
+          inquiryMstID
+        )}?costingstatus=${String(costingStatusParam)}`;
+        console.log('[CostingView] request URL:', url);
 
-        let data = await loadData(false);
-        const firstMaster = Array.isArray(data?.masterData) ? data.masterData[0] : data?.masterData;
-        const resolvedInquiryMstID =
-          firstMaster?.InquiryMstID ?? firstMaster?.InquiryMstId ?? firstMaster?.inquiryMstID ?? firstMaster?.inquiryMstId ?? inquiryMstID;
-        console.log('=== resolved InquiryMstID ===', resolvedInquiryMstID);
-        const inferredMode =
-          firstMaster && (firstMaster.CostingStatusID != null || firstMaster.CostingStatus != null);
-
-        if (resolvedInquiryMstID && String(resolvedInquiryMstID) !== String(inquiryMstID)) {
-          data = await loadData(false, resolvedInquiryMstID);
-        }
-
-        if (inferredMode) {
-          data = await loadData(true, resolvedInquiryMstID || inquiryMstID);
-        }
+        const response = await axiosInstance.get(url, {
+          signal: controller.signal,
+          headers: { 'Content-Type': 'application/json' },
+        });
 
         if (controller.signal.aborted) return;
 
-        const master = Array.isArray(data?.masterData) ? data.masterData[0] : data?.masterData || {};
-        setMasterData(master);
-        setCostingMode(Boolean(master?.CostingStatusID != null || inferredMode));
+        const data = response?.data;
+        console.log('[CostingView] API response:', data);
+
+        const masterList = Array.isArray(data?.masterData) ? data.masterData : data?.masterData ? [data.masterData] : [];
+        const master = masterList[0] || {};
+        const details = Array.isArray(data?.detailData) && data.detailData.length > 0
+          ? data.detailData
+          : (masterList.length > 0 ? masterList : [master]);
+
         setCustomerValue(master?.CustomerName || '');
         setSupplierValue(master?.SupplierName || '');
-        setDescriptionValue(master?.Description || master?.ItemDesc || master?.Remarks || '');
+        setDescriptionValue(master?.ItemDesc || master?.Description || master?.Remarks || '');
         setCostingStatusValue(master?.CostingStatus || '');
-        setRow((prev) => ({
-          ...prev,
-          currentFreight: master?.CurrentFreight ?? prev.currentFreight,
-          totalCbm40hc: master?.TotalCBM40CH ?? prev.totalCbm40hc,
-          inwardTrucking: master?.InwardTrucking ?? prev.inwardTrucking,
-        }));
+        setCurrentFreight(master?.CurrentFreight != null && master?.CurrentFreight !== 0 ? String(master.CurrentFreight) : '');
+        setTotalCbm40hc(master?.TotalCBM40CH != null && master?.TotalCBM40CH !== 0 ? String(master.TotalCBM40CH) : '');
+        setGri(master?.GRI != null && master?.GRI !== 0 ? String(master.GRI) : '');
+        setGri2(master?.CurrentFr8GRI != null && master?.CurrentFr8GRI !== 0 ? String(master.CurrentFr8GRI) : '');
+        setInwardTrucking(master?.InwardTrucking != null && master?.InwardTrucking !== 0 ? String(master.InwardTrucking) : '');
 
-        if (!master?.CostingStatusID) {
-          setCustomerOptions(
-            Array.isArray(data?.customerOptions) ? data.customerOptions : Array.isArray(data?.customers) ? data.customers : []
-          );
-          setSupplierOptions(
-            Array.isArray(data?.supplierOptions) ? data.supplierOptions : Array.isArray(data?.suppliers) ? data.suppliers : []
-          );
-        } else {
-          setCustomerOptions(
-            Array.isArray(data?.customerOptions) ? data.customerOptions : Array.isArray(data?.customers) ? data.customers : []
-          );
-          setSupplierOptions(
-            Array.isArray(data?.supplierOptions) ? data.supplierOptions : Array.isArray(data?.suppliers) ? data.suppliers : []
-          );
-        }
+        // Map detailData items to table rows
+        const mappedRows = details.map((d, idx) => {
+          const rawDate = d?.DeliveryDatee || d?.DeliveryDate || d?.datee || d?.DueDate || master?.DeliveryDate || '';
+          const deliveryDate = formatDateDisplay(rawDate);
+          const orderQty = d?.OrderQty ?? d?.orderQty ?? master?.OrderQty ?? master?.orderQty ?? d?.Qty ?? d?.qty ?? '';
+          const sizeVal = d?.Size ?? d?.size ?? master?.Size ?? master?.size ?? '';
+          const price = d?.Price ?? d?.price ?? master?.Price ?? master?.price ?? '';
+          const ldbPrice = d?.LDBPrice ?? d?.ldbPrice ?? master?.LDBPrice ?? master?.ldbPrice ?? '';
+
+          return {
+            id: d?.InquiryDtlID ?? d?.CostingDtlID ?? idx,
+            inquiryDtlID: d?.InquiryDtlID ?? 0,
+            deliveryDate,
+            sizes: sizeVal,
+            totalOrderQty: orderQty !== '' && orderQty != null ? String(orderQty) : '',
+            pcsPerCtn: d?.PcsPerCtn ?? d?.pcsPerCtn ?? '',
+            l: d?.L ?? d?.l ?? '',
+            w: d?.W ?? d?.w ?? '',
+            h: d?.H ?? d?.h ?? '',
+            fob: price !== '' && price != null ? String(price) : '',
+            amsCommPct: d?.AmsCommPct ?? d?.amsCommPct ?? '',
+            dutyPct: d?.DutyPct ?? d?.dutyPct ?? '',
+            clearingValue: d?.ClearingValue ?? d?.clearingValue ?? '',
+            ldp: ldbPrice !== '' && ldbPrice != null ? String(ldbPrice) : '',
+          };
+        });
+
+        setDetailRows(mappedRows);
+
+        setCustomerOptions(
+          Array.isArray(data?.customerOptions)
+            ? data.customerOptions
+            : Array.isArray(data?.customers)
+            ? data.customers
+            : master?.CustomerName
+            ? [{ customerName: master.CustomerName, customerID: master.CustomerID || 1 }]
+            : []
+        );
+        setSupplierOptions(
+          Array.isArray(data?.supplierOptions)
+            ? data.supplierOptions
+            : Array.isArray(data?.suppliers)
+            ? data.suppliers
+            : master?.SupplierName
+            ? [{ venderName: master.SupplierName, venderLibraryID: master.SupplierID || 1 }]
+            : []
+        );
       } catch (error) {
         if (controller.signal.aborted) return;
         console.error('[CostingView] CostingData load failed', error);
-        console.error('=== CostingData Error Response ===', error?.response?.data || error);
         setLoadError(error?.message || 'Failed to load costing data');
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -254,7 +258,60 @@ const CostingView = () => {
     })();
 
     return () => controller.abort();
-  }, [API_BASE_URL, inquiryMstID]);
+  }, [inquiryMstID, costingStatusParam]);
+
+  // Calculate row values
+  const calculatedRows = useMemo(() => {
+    const cFreight = toNum(currentFreight);
+    const tCbm40hc = toNum(totalCbm40hc);
+    const inTrucking = toNum(inwardTrucking);
+
+    return detailRows.map((r) => {
+      const totalOrderQty = toNum(r.totalOrderQty);
+      const pcsPerCtn = toNum(r.pcsPerCtn);
+      const l = toNum(r.l);
+      const w = toNum(r.w);
+      const h = toNum(r.h);
+      const fob = toNum(r.fob);
+      const amsCommPct = toNum(r.amsCommPct);
+      const dutyPct = toNum(r.dutyPct);
+      const clearingValue = toNum(r.clearingValue);
+      const ldp = toNum(r.ldp);
+
+      const ofCtns = pcsPerCtn > 0 ? Math.ceil(totalOrderQty / pcsPerCtn) : 0;
+      const cbmPerCtn = (l > 0 && w > 0 && h > 0) ? (l * w * h) / 61024 : 0;
+      const totalCbm = cbmPerCtn * ofCtns;
+      const amsCommAmt = (fob / 100) * amsCommPct;
+      const dutyAmt = (fob / 100) * dutyPct;
+      const freight =
+        totalOrderQty > 0 && tCbm40hc > 0 ? ((cFreight / tCbm40hc) * totalCbm) / totalOrderQty : 0;
+      const trucking =
+        totalOrderQty > 0 && tCbm40hc > 0 ? ((inTrucking / tCbm40hc) * totalCbm) / totalOrderQty : 0;
+      const palletizingCost = totalOrderQty > 0 ? ((ofCtns * 12) / 30) / totalOrderQty : 0;
+      const clearing = totalOrderQty > 0 ? clearingValue / totalOrderQty : 0;
+      const frtPc = freight + trucking + clearing + palletizingCost;
+      const tCostPc = frtPc + amsCommAmt + dutyAmt + fob;
+      const gpPc = ldp > 0 ? ldp - tCostPc : 0;
+      const gpPct = ldp > 0 ? (gpPc / ldp) * 100 : 0;
+
+      return {
+        ...r,
+        ofCtns: ofCtns > 0 ? String(ofCtns) : '',
+        cbmPerCtn: cbmPerCtn > 0 ? cbmPerCtn.toFixed(4) : '',
+        totalCbm: totalCbm > 0 ? totalCbm.toFixed(4) : '',
+        amsCommAmt: amsCommAmt > 0 ? amsCommAmt.toFixed(4) : '',
+        dutyAmt: dutyAmt > 0 ? dutyAmt.toFixed(4) : '',
+        freight: freight > 0 ? freight.toFixed(4) : '',
+        trucking: trucking > 0 ? trucking.toFixed(4) : '',
+        palletizingCost: palletizingCost > 0 ? palletizingCost.toFixed(4) : '',
+        clearing: clearing > 0 ? clearing.toFixed(4) : '',
+        frtPc: frtPc > 0 ? frtPc.toFixed(4) : '',
+        tCostPc: tCostPc > 0 ? tCostPc.toFixed(4) : '',
+        gpPc: gpPc !== 0 ? gpPc.toFixed(4) : '',
+        gpPct: gpPct !== 0 ? gpPct.toFixed(2) : '',
+      };
+    });
+  }, [detailRows, currentFreight, totalCbm40hc, inwardTrucking]);
 
   return (
     <Container maxWidth="xl" sx={{ py: 2 }}>
@@ -265,328 +322,514 @@ const CostingView = () => {
           </Typography>
         ) : null}
 
-        {!costingMode ? (
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <Typography sx={{ fontWeight: 700, color: '#5a5a5a', mb: 1 }}>COSTING</Typography>
-              <Box sx={{ p: 2, border: '1px solid #e5e7eb', borderRight: 0, minHeight: 72, bgcolor: '#fff' }}>
-                <Autocomplete
-                  fullWidth
-                  options={customerOptions}
-                  value={
-                    customerOptions.find(
-                      (option) =>
-                        String(customerKey(option)) === String(customerValue) ||
-                        customerLabel(option) === customerValue
-                    ) || null
-                  }
-                  onChange={(_e, value) =>
-                    setCustomerValue(String(customerKey(value) || customerLabel(value) || ''))
-                  }
-                  getOptionLabel={(option) => customerLabel(option)}
-                  isOptionEqualToValue={(option, value) =>
-                    String(customerKey(option)) === String(customerKey(value)) ||
-                    customerLabel(option) === customerLabel(value)
-                  }
-                  renderInput={(params) => <TextField {...params} fullWidth size="small" label="Customer" sx={topFieldSx} />}
-                />
-                <Box sx={{ height: 12 }} />
-                <Autocomplete
-                  fullWidth
-                  options={supplierOptions}
-                  value={
-                    supplierOptions.find(
-                      (option) =>
-                        String(supplierKey(option)) === String(supplierValue) ||
-                        supplierLabel(option) === supplierValue
-                    ) || null
-                  }
-                  onChange={(_e, value) =>
-                    setSupplierValue(String(supplierKey(value) || supplierLabel(value) || ''))
-                  }
-                  getOptionLabel={(option) => supplierLabel(option)}
-                  isOptionEqualToValue={(option, value) =>
-                    String(supplierKey(option)) === String(supplierKey(value)) ||
-                    supplierLabel(option) === supplierLabel(value)
-                  }
-                  renderInput={(params) => <TextField {...params} fullWidth size="small" label="Supplier" sx={topFieldSx} />}
-                />
-                <Box sx={{ height: 12 }} />
-                <Autocomplete
-                  freeSolo
-                  fullWidth
-                  options={[descriptionValue]}
-                  value={descriptionValue}
-                  onChange={(_e, value) => setDescriptionValue(String(value || ''))}
-                  onInputChange={(_e, value) => setDescriptionValue(String(value || ''))}
-                  renderInput={(params) => <TextField {...params} fullWidth size="small" label="Description" sx={topFieldSx} />}
-                />
-                <Box sx={{ height: 12 }} />
-                <TextField fullWidth size="small" label="Current Freight" value={row.currentFreight} onChange={handleRowChange('currentFreight')} sx={topFieldSx} />
-                <Box sx={{ height: 12 }} />
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={7}>
-                    <TextField fullWidth size="small" label="Total CBM 40HC" value={row.totalCbm40hc} onChange={handleRowChange('totalCbm40hc')} sx={topFieldSx} />
-                  </Grid>
-                  <Grid item xs={12} sm={5}>
-                    <TextField fullWidth size="small" placeholder="" sx={topFieldSx} />
-                  </Grid>
-                </Grid>
-              </Box>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography sx={{ fontWeight: 700, color: '#5a5a5a', mb: 1 }}>STATUS</Typography>
-              <Box sx={{ p: 2, border: '1px solid #e5e7eb', borderLeft: 0, minHeight: 72, bgcolor: '#fff' }}>
-                <Grid container spacing={2} sx={{ mb: 1 }}>
-                  <Grid item xs={12} sm={6}>
-                    <TextField fullWidth size="small" label="GRI" value={row.gri ?? ''} onChange={handleRowChange('gri')} sx={topFieldSx} />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField fullWidth size="small" placeholder="" value={row.griBlank ?? ''} onChange={handleRowChange('griBlank')} sx={topFieldSx} />
-                  </Grid>
-                </Grid>
-                <TextField fullWidth size="small" label="Inward Trucking" value={row.inwardTrucking} onChange={handleRowChange('inwardTrucking')} sx={topFieldSx} />
-              </Box>
-            </Grid>
+        {/* Top Header Section: COSTING & STATUS */}
+        <Grid container spacing={3} sx={{ mb: 3 }}>
+          {/* COSTING Left Column */}
+          <Grid item xs={12} md={6}>
+            <Box sx={{ borderBottom: '2px solid #ddd', pb: 0.5, mb: 2 }}>
+              <Typography sx={{ fontWeight: 800, color: '#444', fontSize: '0.95rem', letterSpacing: 0.5 }}>
+                COSTING
+              </Typography>
+            </Box>
 
+            <Stack spacing={2}>
+              {/* Customer */}
+              <Box>
+                <Typography sx={labelSx}>CUSTOMER :</Typography>
+                {costingStatusParam ? (
+                  <TextField
+                    fullWidth
+                    size="small"
+                    value={customerValue}
+                    InputProps={{ readOnly: true }}
+                    sx={topFieldSx}
+                  />
+                ) : (
+                  <Autocomplete
+                    fullWidth
+                    options={customerOptions}
+                    value={
+                      customerOptions.find(
+                        (option) =>
+                          String(customerKey(option)) === String(customerValue) ||
+                          customerLabel(option) === customerValue
+                      ) || (customerValue ? { customerName: customerValue, customerID: 1 } : null)
+                    }
+                    onChange={(_e, value) =>
+                      setCustomerValue(customerLabel(value))
+                    }
+                    getOptionLabel={(option) => customerLabel(option)}
+                    isOptionEqualToValue={(option, value) =>
+                      customerLabel(option) === customerLabel(value)
+                    }
+                    renderInput={(params) => <TextField {...params} fullWidth size="small" sx={topFieldSx} />}
+                  />
+                )}
+              </Box>
+
+              {/* Costing Status (Only in true mode) */}
+              {costingStatusParam && (
+                <Box>
+                  <Typography sx={labelSx}>COSTING STATUS :</Typography>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    value={costingStatusValue}
+                    InputProps={{ readOnly: true }}
+                    sx={topFieldSx}
+                  />
+                </Box>
+              )}
+
+              {/* Supplier */}
+              <Box>
+                <Typography sx={labelSx}>SUPPLIER :</Typography>
+                {costingStatusParam ? (
+                  <TextField
+                    fullWidth
+                    size="small"
+                    value={supplierValue}
+                    InputProps={{ readOnly: true }}
+                    sx={topFieldSx}
+                  />
+                ) : (
+                  <Autocomplete
+                    fullWidth
+                    options={supplierOptions}
+                    value={
+                      supplierOptions.find(
+                        (option) =>
+                          String(supplierKey(option)) === String(supplierValue) ||
+                          supplierLabel(option) === supplierValue
+                      ) || (supplierValue ? { venderName: supplierValue, venderLibraryID: 1 } : null)
+                    }
+                    onChange={(_e, value) =>
+                      setSupplierValue(supplierLabel(value))
+                    }
+                    getOptionLabel={(option) => supplierLabel(option)}
+                    isOptionEqualToValue={(option, value) =>
+                      supplierLabel(option) === supplierLabel(value)
+                    }
+                    renderInput={(params) => <TextField {...params} fullWidth size="small" sx={topFieldSx} />}
+                  />
+                )}
+              </Box>
+
+              {/* Description */}
+              <Box>
+                <Typography sx={labelSx}>DESCRIPTION :</Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={descriptionValue}
+                  onChange={(e) => setDescriptionValue(e.target.value)}
+                  InputProps={{ readOnly: costingStatusParam }}
+                  sx={topFieldSx}
+                />
+              </Box>
+
+              {/* Current Freight */}
+              <Box>
+                <Typography sx={labelSx}>CURRENT FREIGHT :</Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={currentFreight}
+                  onChange={(e) => setCurrentFreight(e.target.value)}
+                  sx={topFieldSx}
+                />
+              </Box>
+
+              {/* Total CBM 40HC */}
+              <Box>
+                <Typography sx={labelSx}>TOTAL CBM 40HC :</Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={totalCbm40hc}
+                  onChange={(e) => setTotalCbm40hc(e.target.value)}
+                  sx={topFieldSx}
+                />
+              </Box>
+            </Stack>
+          </Grid>
+
+          {/* STATUS Right Column */}
+          <Grid item xs={12} md={6}>
+            <Box sx={{ borderBottom: '2px solid #ddd', pb: 0.5, mb: 2 }}>
+              <Typography sx={{ fontWeight: 800, color: '#444', fontSize: '0.95rem', letterSpacing: 0.5 }}>
+                STATUS
+              </Typography>
+            </Box>
+
+            {/* Spacer to align with Customer, Supplier, Description on the left */}
+            <Box sx={{ display: { xs: 'none', md: 'block' }, height: costingStatusParam ? 275 : 210 }} />
+
+            <Stack spacing={2}>
+              {/* GRI */}
+              <Box>
+                <Typography sx={labelSx}>GRI :</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      value={gri}
+                      onChange={(e) => setGri(e.target.value)}
+                      sx={topFieldSx}
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      value={gri2}
+                      onChange={(e) => setGri2(e.target.value)}
+                      sx={topFieldSx}
+                    />
+                  </Grid>
+                </Grid>
+              </Box>
+
+              {/* Inward Trucking */}
+              <Box>
+                <Typography sx={labelSx}>INWARD TRUCKING :</Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={inwardTrucking}
+                  onChange={(e) => setInwardTrucking(e.target.value)}
+                  sx={topFieldSx}
+                />
+              </Box>
+            </Stack>
+          </Grid>
+        </Grid>
+
+        {/* Bottom Costing Calculation Grid with Orange Header (Only for New Costing: costingstatus=false) */}
+        {!costingStatusParam && (
+          <Grid container spacing={2}>
             <Grid item xs={12}>
-              <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
-                <Table size="small" sx={{ minWidth: 1760, tableLayout: 'fixed' }}>
+              <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto', border: '1px solid #ddd' }}>
+                <Table size="small" sx={{ minWidth: 1780, tableLayout: 'fixed' }}>
                   <TableHead>
-                    <TableRow sx={{ bgcolor: theme.palette.grey[300] }}>
-                      {columns.map((column) => (
+                    <TableRow sx={{ bgcolor: '#e26b47' }}>
+                      {TABLE_COLUMNS.map((col) => (
                         <TableCell
-                          key={column}
+                          key={col.label}
                           sx={{
-                            color: '#333',
-                            fontWeight: 600,
+                            color: '#fff',
+                            fontWeight: 700,
                             fontSize: '0.72rem',
+                            textAlign: 'center',
                             whiteSpace: 'normal',
                             wordBreak: 'break-word',
-                            minWidth:
-                              column === 'DELIVERY DATE'
-                                ? 132
-                                : column === 'TOTAL ORDER QTY'
-                                ? 56
-                                : column === 'PALLETIZING COST(ctn*12/30)'
-                                ? 130
-                                : column === 'SIZES'
-                                ? 88
-                                : 62,
-                            width:
-                              column === 'DELIVERY DATE'
-                                ? 132
-                                : column === 'SIZES'
-                                ? 88
-                                : 'auto',
-                            px: 0.35,
-                            py: 0.55,
-                            borderRight: '1px solid rgba(0,0,0,0.08)',
+                            lineHeight: 1.15,
+                            width: col.width,
+                            minWidth: col.width,
+                            px: 0.4,
+                            py: 0.8,
+                            borderRight: '1px solid rgba(255,255,255,0.3)',
                             verticalAlign: 'middle',
+                            bgcolor: '#e26b47',
                           }}
                         >
-                          {column}
+                          {col.label}
                         </TableCell>
                       ))}
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    <TableRow hover>
-                      <TableCell sx={{ ...cellSx, minWidth: 132, width: 132 }}>
-                        <TextField
-                          fullWidth
-                          size="small"
-                          type="date"
-                          InputLabelProps={{ shrink: true }}
-                          value={row.deliveryDate}
-                          onChange={handleRowChange('deliveryDate')}
-                          sx={{
-                            width: '100%',
-                            '& input': {
-                              minWidth: 0,
-                              width: '100%',
-                              boxSizing: 'border-box',
-                            },
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ ...cellSx, minWidth: 88, width: 88 }}>
-                        <TextField fullWidth size="small" value={row.sizes} onChange={handleRowChange('sizes')} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={row.totalOrderQty} onChange={handleRowChange('totalOrderQty')} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={row.pcsPerCtn} onChange={handleRowChange('pcsPerCtn')} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={calculatedRow.ofCtns.toString()} InputProps={{ readOnly: true }} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={row.l} onChange={handleRowChange('l')} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={row.w} onChange={handleRowChange('w')} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={row.h} onChange={handleRowChange('h')} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={calculatedRow.cbmPerCtn.toFixed(4)} InputProps={{ readOnly: true }} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={calculatedRow.totalCbm.toFixed(4)} InputProps={{ readOnly: true }} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={row.fob} onChange={handleRowChange('fob')} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={row.amsCommPct} onChange={handleRowChange('amsCommPct')} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={calculatedRow.amsCommAmt.toFixed(4)} InputProps={{ readOnly: true }} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={row.dutyPct} onChange={handleRowChange('dutyPct')} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={calculatedRow.dutyAmt.toFixed(4)} InputProps={{ readOnly: true }} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={row.currentFreight} onChange={handleRowChange('currentFreight')} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={row.inwardTrucking} onChange={handleRowChange('inwardTrucking')} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={row.clearingValue} onChange={handleRowChange('clearingValue')} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={calculatedRow.palletizingCost.toFixed(4)} InputProps={{ readOnly: true }} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={calculatedRow.frtPc.toFixed(4)} InputProps={{ readOnly: true }} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={calculatedRow.tCostPc.toFixed(4)} InputProps={{ readOnly: true }} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={row.ldp} onChange={handleRowChange('ldp')} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={calculatedRow.gpPc.toFixed(4)} InputProps={{ readOnly: true }} />
-                      </TableCell>
-                      <TableCell sx={cellSx}>
-                        <TextField fullWidth size="small" value={calculatedRow.gpPct.toFixed(2)} InputProps={{ readOnly: true }} />
-                      </TableCell>
-                    </TableRow>
+                    {calculatedRows.map((r, index) => (
+                      <TableRow key={r.id || index} hover>
+                        {/* DELIVERY DATE */}
+                        <TableCell sx={readOnlyCellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.deliveryDate}
+                            InputProps={{ readOnly: true }}
+                            sx={readOnlyCellSx}
+                          />
+                        </TableCell>
+
+                        {/* SIZES */}
+                        <TableCell sx={cellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.sizes}
+                            onChange={handleDetailRowChange(index, 'sizes')}
+                            sx={cellSx}
+                          />
+                        </TableCell>
+
+                        {/* TOTAL ORDER QTY */}
+                        <TableCell sx={cellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.totalOrderQty}
+                            onChange={handleDetailRowChange(index, 'totalOrderQty')}
+                            sx={cellSx}
+                          />
+                        </TableCell>
+
+                        {/* # OF PCS/CTN */}
+                        <TableCell sx={cellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.pcsPerCtn}
+                            onChange={handleDetailRowChange(index, 'pcsPerCtn')}
+                            sx={cellSx}
+                          />
+                        </TableCell>
+
+                        {/* # OF CTNS */}
+                        <TableCell sx={readOnlyCellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.ofCtns}
+                            InputProps={{ readOnly: true }}
+                            sx={readOnlyCellSx}
+                          />
+                        </TableCell>
+
+                        {/* L */}
+                        <TableCell sx={cellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.l}
+                            onChange={handleDetailRowChange(index, 'l')}
+                            sx={cellSx}
+                          />
+                        </TableCell>
+
+                        {/* W */}
+                        <TableCell sx={cellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.w}
+                            onChange={handleDetailRowChange(index, 'w')}
+                            sx={cellSx}
+                          />
+                        </TableCell>
+
+                        {/* H */}
+                        <TableCell sx={cellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.h}
+                            onChange={handleDetailRowChange(index, 'h')}
+                            sx={cellSx}
+                          />
+                        </TableCell>
+
+                        {/* CBM PER CTN */}
+                        <TableCell sx={readOnlyCellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.cbmPerCtn}
+                            InputProps={{ readOnly: true }}
+                            sx={readOnlyCellSx}
+                          />
+                        </TableCell>
+
+                        {/* TOTAL CBM */}
+                        <TableCell sx={readOnlyCellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.totalCbm}
+                            InputProps={{ readOnly: true }}
+                            sx={readOnlyCellSx}
+                          />
+                        </TableCell>
+
+                        {/* FOB */}
+                        <TableCell sx={cellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.fob}
+                            onChange={handleDetailRowChange(index, 'fob')}
+                            sx={cellSx}
+                          />
+                        </TableCell>
+
+                        {/* AMS COMM % */}
+                        <TableCell sx={cellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.amsCommPct}
+                            onChange={handleDetailRowChange(index, 'amsCommPct')}
+                            sx={cellSx}
+                          />
+                        </TableCell>
+
+                        {/* AMS COMM AMT */}
+                        <TableCell sx={readOnlyCellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.amsCommAmt}
+                            InputProps={{ readOnly: true }}
+                            sx={readOnlyCellSx}
+                          />
+                        </TableCell>
+
+                        {/* DUTY % */}
+                        <TableCell sx={cellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.dutyPct}
+                            onChange={handleDetailRowChange(index, 'dutyPct')}
+                            sx={cellSx}
+                          />
+                        </TableCell>
+
+                        {/* DUTY AMT */}
+                        <TableCell sx={readOnlyCellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.dutyAmt}
+                            InputProps={{ readOnly: true }}
+                            sx={readOnlyCellSx}
+                          />
+                        </TableCell>
+
+                        {/* FREIGHT */}
+                        <TableCell sx={readOnlyCellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.freight}
+                            InputProps={{ readOnly: true }}
+                            sx={readOnlyCellSx}
+                          />
+                        </TableCell>
+
+                        {/* TRUCKING */}
+                        <TableCell sx={readOnlyCellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.trucking}
+                            InputProps={{ readOnly: true }}
+                            sx={readOnlyCellSx}
+                          />
+                        </TableCell>
+
+                        {/* CLEARING */}
+                        <TableCell sx={cellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.clearingValue}
+                            onChange={handleDetailRowChange(index, 'clearingValue')}
+                            sx={cellSx}
+                          />
+                        </TableCell>
+
+                        {/* PALLETIZING COST(ctn*12/30) */}
+                        <TableCell sx={readOnlyCellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.palletizingCost}
+                            InputProps={{ readOnly: true }}
+                            sx={readOnlyCellSx}
+                          />
+                        </TableCell>
+
+                        {/* FRT/PC */}
+                        <TableCell sx={readOnlyCellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.frtPc}
+                            InputProps={{ readOnly: true }}
+                            sx={readOnlyCellSx}
+                          />
+                        </TableCell>
+
+                        {/* T.COST/PC */}
+                        <TableCell sx={readOnlyCellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.tCostPc}
+                            InputProps={{ readOnly: true }}
+                            sx={readOnlyCellSx}
+                          />
+                        </TableCell>
+
+                        {/* LDP */}
+                        <TableCell sx={cellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.ldp}
+                            onChange={handleDetailRowChange(index, 'ldp')}
+                            sx={cellSx}
+                          />
+                        </TableCell>
+
+                        {/* GP/PC */}
+                        <TableCell sx={readOnlyCellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.gpPc}
+                            InputProps={{ readOnly: true }}
+                            sx={readOnlyCellSx}
+                          />
+                        </TableCell>
+
+                        {/* GP % */}
+                        <TableCell sx={readOnlyCellSx}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            value={r.gpPct}
+                            InputProps={{ readOnly: true }}
+                            sx={readOnlyCellSx}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </TableContainer>
             </Grid>
-
-            <Grid item xs={12}>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-                <Button variant="contained" sx={{ minWidth: 160, bgcolor: '#000000', '&:hover': { bgcolor: '#111111' } }}>
-                  Save
-                </Button>
-                <Button
-                  variant="contained"
-                  sx={{ minWidth: 160, bgcolor: '#000000', '&:hover': { bgcolor: '#111111' } }}
-                  onClick={handleCancel}
-                >
-                  Cancel
-                </Button>
-              </Box>
-            </Grid>
-          </Grid>
-        ) : (
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <Typography sx={{ fontWeight: 700, color: '#5a5a5a', mb: 1 }}>COSTING</Typography>
-              <Box sx={{ p: 2, border: '1px solid #e5e7eb', borderRight: 0, minHeight: 72, bgcolor: '#fff' }}>
-                <Autocomplete
-                  fullWidth
-                  options={customerOptions}
-                  value={
-                    customerOptions.find(
-                      (option) =>
-                        String(customerKey(option)) === String(customerValue) ||
-                        customerLabel(option) === customerValue
-                    ) || null
-                  }
-                  onChange={(_e, value) =>
-                    setCustomerValue(String(customerKey(value) || customerLabel(value) || ''))
-                  }
-                  getOptionLabel={(option) => customerLabel(option)}
-                  isOptionEqualToValue={(option, value) =>
-                    String(customerKey(option)) === String(customerKey(value)) ||
-                    customerLabel(option) === customerLabel(value)
-                  }
-                  renderInput={(params) => <TextField {...params} fullWidth size="small" label="Customer" sx={topFieldSx} />}
-                />
-                <Box sx={{ height: 12 }} />
-                <TextField fullWidth size="small" label="COSTING STATUS" value={costingStatusValue} />
-                <Box sx={{ height: 12 }} />
-                <Autocomplete
-                  fullWidth
-                  options={supplierOptions}
-                  value={
-                    supplierOptions.find(
-                      (option) =>
-                        String(supplierKey(option)) === String(supplierValue) ||
-                        supplierLabel(option) === supplierValue
-                    ) || null
-                  }
-                  onChange={(_e, value) =>
-                    setSupplierValue(String(supplierKey(value) || supplierLabel(value) || ''))
-                  }
-                  getOptionLabel={(option) => supplierLabel(option)}
-                  isOptionEqualToValue={(option, value) =>
-                    String(supplierKey(option)) === String(supplierKey(value)) ||
-                    supplierLabel(option) === supplierLabel(value)
-                  }
-                  renderInput={(params) => <TextField {...params} fullWidth size="small" label="Supplier" sx={topFieldSx} />}
-                />
-                <Box sx={{ height: 12 }} />
-                <Autocomplete
-                  freeSolo
-                  fullWidth
-                  options={[descriptionValue]}
-                  value={descriptionValue}
-                  onChange={(_e, value) => setDescriptionValue(String(value || ''))}
-                  onInputChange={(_e, value) => setDescriptionValue(String(value || ''))}
-                  renderInput={(params) => <TextField {...params} fullWidth size="small" label="Description" sx={topFieldSx} />}
-                />
-              </Box>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography sx={{ fontWeight: 700, color: '#5a5a5a', mb: 1 }}>STATUS</Typography>
-              <Box sx={{ p: 2, border: '1px solid #e5e7eb', borderLeft: 0, minHeight: 72, bgcolor: '#fff' }}>
-                <TextField fullWidth size="small" label="Current Freight" value={row.currentFreight} onChange={handleRowChange('currentFreight')} sx={topFieldSx} />
-                <Box sx={{ height: 12 }} />
-                <TextField fullWidth size="small" label="GRI" value={row.gri ?? ''} onChange={handleRowChange('gri')} sx={topFieldSx} />
-                <Box sx={{ height: 12 }} />
-                <TextField fullWidth size="small" placeholder="" value={row.griBlank ?? ''} onChange={handleRowChange('griBlank')} sx={topFieldSx} />
-                <Box sx={{ height: 12 }} />
-                <TextField fullWidth size="small" label="Total CBM 40HC" value={row.totalCbm40hc} onChange={handleRowChange('totalCbm40hc')} sx={topFieldSx} />
-                <Box sx={{ height: 12 }} />
-                <TextField fullWidth size="small" label="Inward Trucking" value={row.inwardTrucking} onChange={handleRowChange('inwardTrucking')} sx={topFieldSx} />
-              </Box>
-            </Grid>
-
-            <Grid item xs={12}>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-                <Button variant="contained" sx={{ minWidth: 160, bgcolor: '#000000', '&:hover': { bgcolor: '#111111' } }}>
-                  Update
-                </Button>
-                <Button variant="contained" sx={{ minWidth: 160, bgcolor: '#000000', '&:hover': { bgcolor: '#111111' } }} onClick={handleCancel}>
-                  Cancel
-                </Button>
-              </Box>
-            </Grid>
           </Grid>
         )}
+
+        {/* Action Buttons */}
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 2 }}>
+          <Button
+            variant="contained"
+            sx={{ minWidth: 150, bgcolor: '#000000', color: '#fff', '&:hover': { bgcolor: '#222' } }}
+          >
+            {costingStatusParam ? 'Update' : 'Save'}
+          </Button>
+          <Button
+            variant="contained"
+            sx={{ minWidth: 150, bgcolor: '#000000', color: '#fff', '&:hover': { bgcolor: '#222' } }}
+            onClick={handleCancel}
+          >
+            Cancel
+          </Button>
+        </Box>
       </Card>
     </Container>
   );
