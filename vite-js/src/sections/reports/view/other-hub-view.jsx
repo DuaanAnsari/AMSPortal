@@ -93,6 +93,31 @@ const REPORT_QUERY_KEY = 'report';
 const ALL = 'all';
 const MERCHANDISER_PROGRESS_TITLE = 'Merchandiser Progress Report';
 
+// Hardcoded whitelist — only these merchandisers appear in the dropdown.
+// Names are matched case-insensitively against the API label.
+const ALLOWED_MERCHANDISER_NAMES = new Set([
+  'hassan ali tirmizi',
+  'mehwish riaz',
+  'muhammad shahzaib',
+  'saad ahmed khan',
+]);
+
+/**
+ * Filter the raw API merchant list down to only the allowed names.
+ * @param {object[]} rows
+ * @returns {object[]}
+ */
+function filterAllowedMerchants(rows) {
+  return rows.filter((row) => {
+    const label = String(
+      row?.userName ?? row?.UserName ?? row?.name ?? ''
+    )
+      .trim()
+      .toLowerCase();
+    return ALLOWED_MERCHANDISER_NAMES.has(label);
+  });
+}
+
 // ----------------------------------------------------------------------
 // Shared auth headers — mirrors the WIP / Shipment / Inspection / Inquiry hubs.
 // ----------------------------------------------------------------------
@@ -988,35 +1013,154 @@ function QuickOrdersOverviewForm() {
     [toPdfDate]
   );
 
-  const runPdfExport = useCallback(
-    async (mode) => {
-      const base = getApiBase();
-      if (!base) {
-        enqueueSnackbar('API URL missing: set VITE_API_BASE_URL', { variant: 'error' });
-        return;
-      }
+  const filterQuickOrdersRows = useCallback(
+    (rows) => {
+      const selectedMerchantId = String(filters.merchandiser || '').trim();
+      const selectedCustomerId = String(filters.customer || '').trim();
+      const selectedSupplierId = String(filters.supplier || '').trim();
+      const selectedPoNo = String(filters.poNo || '').trim();
 
-      try {
-        setGeneratingPdf(true);
-        const params = new URLSearchParams();
-        params.set('fromDate', formatApiDate(filters.fromDate));
-        params.set('toDate', formatApiDate(filters.toDate));
+      const selectedMerchantObj = merchants.find(
+        (row) => milestoneMerchantKey(row) === selectedMerchantId
+      );
+      const selectedMerchantLabel =
+        selectedMerchantId !== ALL && selectedMerchantObj
+          ? String(milestoneMerchantLabel(selectedMerchantObj) || '').trim().toLowerCase()
+          : '';
 
-        const res = await fetch(`${base}/api/Report/AMSQuickOrdersOverview?${params.toString()}`, {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(localStorage.getItem('accessToken')
-              ? { Authorization: `Bearer ${localStorage.getItem('accessToken')}` }
-              : {}),
-          },
-        });
+      const selectedCustomerObj = customers.find(
+        (row) => milestoneCustomerKey(row) === selectedCustomerId
+      );
+      const selectedCustomerLabel =
+        selectedCustomerId !== ALL && selectedCustomerObj
+          ? String(milestoneCustomerLabel(selectedCustomerObj) || '').trim().toLowerCase()
+          : '';
 
-        if (!res.ok) {
-          throw new Error(`AMSQuickOrdersOverview ${res.status}`);
+      const selectedSupplierObj = suppliers.find(
+        (row) => milestoneSupplierKey(row) === selectedSupplierId
+      );
+      const selectedSupplierLabel =
+        selectedSupplierId !== ALL && selectedSupplierObj
+          ? String(milestoneSupplierLabel(selectedSupplierObj) || '').trim().toLowerCase()
+          : '';
+
+      return rows.filter((row) => {
+        if (selectedMerchantId !== ALL) {
+          const rowMerchantId = String(row?.MarchandID ?? row?.marchandID ?? '').trim();
+          const rowMerchantName = String(row?.Marchand ?? row?.marchand ?? '').trim().toLowerCase();
+          if (rowMerchantId || rowMerchantName) {
+            const matchesMerchant =
+              (rowMerchantId && rowMerchantId === selectedMerchantId) ||
+              (selectedMerchantLabel &&
+                (rowMerchantName === selectedMerchantLabel ||
+                  rowMerchantName.includes(selectedMerchantLabel) ||
+                  selectedMerchantLabel.includes(rowMerchantName)));
+            if (!matchesMerchant) return false;
+          }
         }
 
-        const data = await res.json();
-        const rows = normalizeQuickOrdersRows(data);
+        if (selectedCustomerId !== ALL) {
+          const rowCustomerId = String(row?.CustomerID ?? row?.customerId ?? '').trim();
+          const rowCustomerName = String(row?.CustomerName ?? row?.customerName ?? '').trim().toLowerCase();
+          if (rowCustomerId || rowCustomerName) {
+            const matchesCustomer =
+              (rowCustomerId && rowCustomerId === selectedCustomerId) ||
+              (selectedCustomerLabel &&
+                (rowCustomerName === selectedCustomerLabel ||
+                  rowCustomerName.includes(selectedCustomerLabel) ||
+                  selectedCustomerLabel.includes(rowCustomerName)));
+            if (!matchesCustomer) return false;
+          }
+        }
+
+        if (selectedSupplierId !== ALL) {
+          const rowSupplierId = String(row?.VenderLibraryID ?? row?.venderLibraryID ?? '').trim();
+          const rowSupplierName = String(row?.VenderName ?? row?.venderName ?? '').trim().toLowerCase();
+          if (rowSupplierId || rowSupplierName) {
+            const matchesSupplier =
+              (rowSupplierId && rowSupplierId === selectedSupplierId) ||
+              (selectedSupplierLabel &&
+                (rowSupplierName === selectedSupplierLabel ||
+                  rowSupplierName.includes(selectedSupplierLabel) ||
+                  selectedSupplierLabel.includes(rowSupplierName)));
+            if (!matchesSupplier) return false;
+          }
+        }
+
+        if (selectedPoNo !== ALL && selectedPoNo) {
+          const rowPoNo = String(row?.PONO ?? row?.poNo ?? '').trim();
+          if (rowPoNo && rowPoNo.toLowerCase() !== selectedPoNo.toLowerCase()) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+    },
+    [
+      filters.merchandiser,
+      filters.customer,
+      filters.supplier,
+      filters.poNo,
+      merchants,
+      customers,
+      suppliers,
+    ]
+  );
+
+  const fetchQuickOrdersData = useCallback(async () => {
+    const base = getApiBase();
+    if (!base) {
+      throw new Error('API URL missing: set VITE_API_BASE_URL');
+    }
+
+    const params = new URLSearchParams();
+    params.set('fromDate', formatApiDate(filters.fromDate));
+    params.set('toDate', formatApiDate(filters.toDate));
+
+    if (filters.merchandiser !== ALL && filters.merchandiser) {
+      params.set('marchandiserId', filters.merchandiser);
+    }
+    if (filters.customer !== ALL && filters.customer) {
+      params.set('customerId', filters.customer);
+    }
+    if (filters.supplier !== ALL && filters.supplier) {
+      params.set('supplierId', filters.supplier);
+    }
+    if (filters.poNo !== ALL && filters.poNo) {
+      params.set('poId', filters.poNo);
+    }
+
+    const res = await fetch(`${base}/api/Report/AMSQuickOrdersOverview?${params.toString()}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(localStorage.getItem('accessToken')
+          ? { Authorization: `Bearer ${localStorage.getItem('accessToken')}` }
+          : {}),
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`AMSQuickOrdersOverview ${res.status}`);
+    }
+
+    const data = await res.json();
+    const rows = normalizeQuickOrdersRows(data);
+    return filterQuickOrdersRows(rows);
+  }, [
+    filters,
+    formatApiDate,
+    getApiBase,
+    normalizeQuickOrdersRows,
+    filterQuickOrdersRows,
+  ]);
+
+  const runPdfExport = useCallback(
+    async (mode) => {
+      try {
+        setGeneratingPdf(true);
+        const rows = await fetchQuickOrdersData();
+
         const blob = await buildQuickOrdersOverviewPdfBlob({
           fromDate: toPdfDate(filters.fromDate),
           toDate: toPdfDate(filters.toDate),
@@ -1035,14 +1179,110 @@ function QuickOrdersOverviewForm() {
     [
       buildGroupedQuickOrdersData,
       enqueueSnackbar,
+      fetchQuickOrdersData,
       filters.fromDate,
       filters.toDate,
-      formatApiDate,
-      getApiBase,
-      normalizeQuickOrdersRows,
       toPdfDate,
     ]
   );
+
+  const runExcelExport = useCallback(async () => {
+    try {
+      setGeneratingPdf(true);
+      const rows = await fetchQuickOrdersData();
+
+      const headers = [
+        'Customer',
+        'Supplier',
+        'PO #',
+        'Style #',
+        'Description',
+        'Ship Date',
+        'Ship Mode',
+        'Order Qty',
+        'Fit / PP Sample',
+        'Cutting',
+        'Stitching',
+        'Packing',
+        'Shipped Qty',
+        'Balance Qty',
+        'Remarks',
+      ];
+
+      const dataRows = rows.map((r) => {
+        const orderQty = Number(r.OrderQtyUnits || 0);
+        const shippedQty = Number(r.ShippedQty || 0);
+        const balanceQty = orderQty - shippedQty;
+        const sampleApproval = [r.FitSample, r.PPSample]
+          .filter((v) => v !== '' && v != null)
+          .join(' / ');
+
+        return [
+          r.CustomerName,
+          r.VenderName,
+          r.PONO,
+          r.Style,
+          r.ItemDescriptionShippingInvoice,
+          r.ShipmentDate ? toPdfDate(r.ShipmentDate) : '',
+          r.ShipMode,
+          orderQty,
+          sampleApproval,
+          r.Cutting,
+          r.Stitching,
+          r.Packing,
+          shippedQty,
+          balanceQty,
+          r.Remarks,
+        ];
+      });
+
+      const totalOrderQty = rows.reduce((s, r) => s + (Number(r.OrderQtyUnits) || 0), 0);
+      const totalShippedQty = rows.reduce((s, r) => s + (Number(r.ShippedQty) || 0), 0);
+      const totalBalanceQty = totalOrderQty - totalShippedQty;
+
+      const totalRow = [
+        'Total',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        totalOrderQty,
+        '',
+        '',
+        '',
+        '',
+        totalShippedQty,
+        totalBalanceQty,
+        '',
+      ];
+
+      const XLSX = await import('xlsx');
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows, totalRow]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Quick Orders Overview');
+      const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([out], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Quick-Orders-Overview_${filters.fromDate}_to_${filters.toDate}.xlsx`;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (err) {
+      console.error('[QuickOrdersOverview] excel', err);
+      enqueueSnackbar(err?.message || 'Could not export Excel', { variant: 'error' });
+    } finally {
+      setGeneratingPdf(false);
+    }
+  }, [enqueueSnackbar, fetchQuickOrdersData, filters.fromDate, filters.toDate, toPdfDate]);
 
   useEffect(() => {
     const base = getMilestoneSummaryDropdownApiBase();
@@ -1060,7 +1300,7 @@ function QuickOrdersOverviewForm() {
       try {
         const res = await fetchMilestoneSummaryDropdowns(otherAuthHeaders());
         if (cancelled) return;
-        setMerchants(res.merchants);
+        setMerchants(filterAllowedMerchants(res.merchants));
         setCustomers(res.customers);
         setSuppliers(res.suppliers);
       } catch (err) {
@@ -1302,7 +1542,7 @@ function QuickOrdersOverviewForm() {
               onClick={() => runPdfExport('view')}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              View Report
+              {generatingPdf ? 'Building…' : 'View Report'}
             </Button>
             <Button
               variant="contained"
@@ -1312,18 +1552,14 @@ function QuickOrdersOverviewForm() {
               onClick={() => runPdfExport('pdf')}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
-              Download PDF
+              {generatingPdf ? 'Building…' : 'Download PDF'}
             </Button>
             <Button
               variant="contained"
               color="primary"
               size="medium"
-              onClick={() =>
-                enqueueSnackbar(
-                  'Download Excel: connect API when backend is ready.',
-                  { variant: 'info' }
-                )
-              }
+              disabled={generatingPdf}
+              onClick={runExcelExport}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
               Download Excel
@@ -2681,7 +2917,7 @@ function MerchandiserProgressReportForm() {
       try {
         const res = await fetchMilestoneSummaryDropdowns(otherAuthHeaders());
         if (cancelled) return;
-        setMerchants(res.merchants);
+        setMerchants(filterAllowedMerchants(res.merchants));
         setCustomers(res.customers);
         setSuppliers(res.suppliers);
       } catch (err) {
@@ -2738,80 +2974,343 @@ function MerchandiserProgressReportForm() {
   const normalizeMerchandiserProgressRows = useCallback((data) => {
     const rows = Array.isArray(data) ? data : data ? [data] : [];
     return rows.map((row) => ({
-      customer: row?.CustomerName ?? '',
-      supplier: row?.VenderName ?? '',
-      merchand: row?.Marchand ?? '',
-      orders: row?.PONO ?? '',
-      poQuantity: row?.POQty ?? '',
+      customer:
+        row?.CustomerName ??
+        row?.customerName ??
+        row?.BuyerName ??
+        row?.buyerName ??
+        row?.Customer ??
+        row?.customer ??
+        '',
+      supplier:
+        row?.VenderName ??
+        row?.venderName ??
+        row?.SupplierName ??
+        row?.supplierName ??
+        row?.VendorName ??
+        row?.vendorName ??
+        row?.Supplier ??
+        row?.supplier ??
+        '',
+      merchand:
+        row?.Marchand ??
+        row?.marchand ??
+        row?.UserName ??
+        row?.userName ??
+        row?.Merchandiser ??
+        row?.merchandiser ??
+        '',
+      orders: row?.PONO ?? row?.pono ?? row?.orders ?? row?.Orders ?? row?.PoNo ?? '',
+      poQuantity:
+        row?.POQty ??
+        row?.poQty ??
+        row?.poQuantity ??
+        row?.POQuantity ??
+        row?.BookedQuantity ??
+        row?.BookedQTY ??
+        row?.ReleaseQty ??
+        0,
+
+      customerId:
+        row?.CustomerID ??
+        row?.customerID ??
+        row?.customerId ??
+        row?.BuyerID ??
+        row?.buyerID ??
+        row?.BuyerId ??
+        '',
+      supplierId:
+        row?.VenderLibraryID ??
+        row?.venderLibraryID ??
+        row?.venderLibraryId ??
+        row?.SupplierID ??
+        row?.supplierID ??
+        row?.SupplierId ??
+        row?.VendorLibraryID ??
+        row?.vendorLibraryID ??
+        '',
+      merchandiserId:
+        row?.MarchandID ??
+        row?.marchandID ??
+        row?.MarchandId ??
+        row?.UserID ??
+        row?.userID ??
+        row?.UserId ??
+        row?.Id ??
+        row?.id ??
+        '',
     }));
   }, []);
 
+  const filterMerchandiserProgressRows = useCallback(
+    (rows) => {
+      const selectedMerchantId = String(filters.merchandiser || '').trim();
+      const selectedCustomerId = String(filters.customer || '').trim();
+      const selectedSupplierId = String(filters.supplier || '').trim();
+
+      const selectedMerchantObj = merchants.find(
+        (row) => milestoneMerchantKey(row) === selectedMerchantId
+      );
+      const selectedMerchantLabel =
+        selectedMerchantId !== ALL && selectedMerchantObj
+          ? String(milestoneMerchantLabel(selectedMerchantObj) || '').trim().toLowerCase()
+          : '';
+
+      const selectedCustomerObj = customers.find(
+        (row) => milestoneCustomerKey(row) === selectedCustomerId
+      );
+      const selectedCustomerLabel =
+        selectedCustomerId !== ALL && selectedCustomerObj
+          ? String(milestoneCustomerLabel(selectedCustomerObj) || '').trim().toLowerCase()
+          : '';
+
+      const selectedSupplierObj = suppliers.find(
+        (row) => milestoneSupplierKey(row) === selectedSupplierId
+      );
+      const selectedSupplierLabel =
+        selectedSupplierId !== ALL && selectedSupplierObj
+          ? String(milestoneSupplierLabel(selectedSupplierObj) || '').trim().toLowerCase()
+          : '';
+
+      return rows.filter((row) => {
+        // 1. Merchandiser Filter
+        if (selectedMerchantId !== ALL) {
+          const rowMerchantId = String(
+            row?.merchandiserId ??
+              row?.MarchandID ??
+              row?.marchandID ??
+              row?.UserID ??
+              row?.userID ??
+              row?.UserId ??
+              row?.Id ??
+              row?.id ??
+              row?.MarchandId ??
+              ''
+          ).trim();
+          const rowMerchantName = String(
+            row?.merchand ??
+              row?.Marchand ??
+              row?.marchand ??
+              row?.UserName ??
+              row?.userName ??
+              row?.Merchandiser ??
+              row?.merchandiser ??
+              ''
+          )
+            .trim()
+            .toLowerCase();
+
+          const matchesMerchant =
+            (rowMerchantId && rowMerchantId === selectedMerchantId) ||
+            (selectedMerchantLabel &&
+              (rowMerchantName === selectedMerchantLabel ||
+                rowMerchantName.includes(selectedMerchantLabel) ||
+                selectedMerchantLabel.includes(rowMerchantName)));
+
+          if (!matchesMerchant) return false;
+        }
+
+        // 2. Customer Filter (when reportType is Customer Wise)
+        if (filters.reportType === MERCH_PROGRESS_TYPE_CUSTOMER && selectedCustomerId !== ALL) {
+          const rowCustomerId = String(
+            row?.customerId ??
+              row?.CustomerID ??
+              row?.customerID ??
+              row?.BuyerID ??
+              row?.buyerID ??
+              row?.BuyerId ??
+              ''
+          ).trim();
+          const rowCustomerName = String(
+            row?.customer ??
+              row?.CustomerName ??
+              row?.customerName ??
+              row?.BuyerName ??
+              row?.buyerName ??
+              row?.Customer ??
+              ''
+          )
+            .trim()
+            .toLowerCase();
+
+          const matchesCustomer =
+            (rowCustomerId && rowCustomerId === selectedCustomerId) ||
+            (selectedCustomerLabel &&
+              (rowCustomerName === selectedCustomerLabel ||
+                rowCustomerName.includes(selectedCustomerLabel) ||
+                selectedCustomerLabel.includes(rowCustomerName)));
+
+          if (!matchesCustomer) return false;
+        }
+
+        // 3. Supplier Filter (when reportType is Supplier Wise)
+        if (filters.reportType === MERCH_PROGRESS_TYPE_SUPPLIER && selectedSupplierId !== ALL) {
+          const rowSupplierId = String(
+            row?.supplierId ??
+              row?.SupplierID ??
+              row?.supplierID ??
+              row?.SupplierId ??
+              row?.VenderLibraryID ??
+              row?.venderLibraryID ??
+              row?.venderLibraryId ??
+              row?.VendorLibraryID ??
+              row?.vendorLibraryID ??
+              ''
+          ).trim();
+          const rowSupplierName = String(
+            row?.supplier ??
+              row?.VenderName ??
+              row?.venderName ??
+              row?.SupplierName ??
+              row?.supplierName ??
+              row?.VendorName ??
+              row?.vendorName ??
+              row?.Supplier ??
+              ''
+          )
+            .trim()
+            .toLowerCase();
+
+          const matchesSupplier =
+            (rowSupplierId && rowSupplierId === selectedSupplierId) ||
+            (selectedSupplierLabel &&
+              (rowSupplierName === selectedSupplierLabel ||
+                rowSupplierName.includes(selectedSupplierLabel) ||
+                selectedSupplierLabel.includes(rowSupplierName)));
+
+          if (!matchesSupplier) return false;
+        }
+
+        return true;
+      });
+    },
+    [
+      filters.merchandiser,
+      filters.customer,
+      filters.supplier,
+      filters.reportType,
+      merchants,
+      customers,
+      suppliers,
+    ]
+  );
+
+  const fetchMerchandiserProgressData = useCallback(async () => {
+    const base = getApiBase();
+    if (!base) {
+      throw new Error('API URL missing: set VITE_API_BASE_URL');
+    }
+
+    const params = new URLSearchParams();
+    params.set('fromDate', formatApiDate(filters.fromDate));
+    params.set('toDate', formatApiDate(filters.toDate));
+    if (filters.merchandiser !== ALL) {
+      params.set('MarchandID', filters.merchandiser);
+    }
+    if (filters.reportType === MERCH_PROGRESS_TYPE_CUSTOMER && filters.customer !== ALL) {
+      params.set('CustomerID', filters.customer);
+    }
+    if (filters.reportType === MERCH_PROGRESS_TYPE_SUPPLIER && filters.supplier !== ALL) {
+      params.set('VenderLibraryID', filters.supplier);
+    }
+
+    const res = await fetch(`${base}/api/Report/MarchandiserProgressReport?${params.toString()}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(localStorage.getItem('accessToken')
+          ? { Authorization: `Bearer ${localStorage.getItem('accessToken')}` }
+          : {}),
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`MarchandiserProgressReport ${res.status}`);
+    }
+
+    const rawData = await res.json();
+    const normalized = normalizeMerchandiserProgressRows(rawData);
+    return filterMerchandiserProgressRows(normalized);
+  }, [
+    filters,
+    formatApiDate,
+    getApiBase,
+    normalizeMerchandiserProgressRows,
+    filterMerchandiserProgressRows,
+  ]);
+
   const runPdfExport = useCallback(
     async (mode) => {
-      const base = getApiBase();
-      if (!base) {
-        enqueueSnackbar('API URL missing: set VITE_API_BASE_URL', { variant: 'error' });
-        return;
-      }
-
       try {
         setGeneratingPdf(true);
-        const params = new URLSearchParams();
-        params.set('fromDate', formatApiDate(filters.fromDate));
-        params.set('toDate', formatApiDate(filters.toDate));
-        if (filters.merchandiser !== ALL) {
-          params.set('MarchandID', filters.merchandiser);
-        }
-
-        const res = await fetch(`${base}/api/Report/MarchandiserProgressReport?${params.toString()}`, {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(localStorage.getItem('accessToken')
-              ? { Authorization: `Bearer ${localStorage.getItem('accessToken')}` }
-              : {}),
-          },
-        });
-
-        if (!res.ok) {
-          throw new Error(`MarchandiserProgressReport ${res.status}`);
-        }
-
-        let data = await res.json();
-        
-        // Ensure data only contains the selected Merchandiser's rows
-        if (filters.merchandiser !== ALL) {
-          const mId = String(filters.merchandiser).trim();
-          const selectedMerchant = merchants.find(m => milestoneMerchantKey(m) === filters.merchandiser);
-          const selectedName = selectedMerchant ? milestoneMerchantLabel(selectedMerchant).toLowerCase() : '';
-          
-          data = data.filter(row => {
-            const rowId = String(row?.MarchandID ?? row?.marchandID ?? row?.UserID ?? row?.userID ?? row?.UserId ?? row?.Id ?? row?.id ?? row?.MarchandId ?? '');
-            if (rowId && rowId !== '') return rowId === mId;
-            return String(row?.Marchand ?? '').trim().toLowerCase() === selectedName;
-          });
-        }
-
-        const rows = normalizeMerchandiserProgressRows(data);
+        const filteredRows = await fetchMerchandiserProgressData();
 
         const blob = await buildMerchandiserProgressReportPdfBlob({
           fromDate: filters.fromDate,
           toDate: filters.toDate,
           reportType: filters.reportType,
-          rows,
+          rows: filteredRows,
         });
         openMerchandiserProgressReportPdf(mode === 'pdf' ? 'pdf' : 'view', blob);
       } catch (err) {
         console.error('[MerchandiserProgress] pdf', err);
-        enqueueSnackbar('Could not generate Merchandiser Progress Report PDF', { variant: 'error' });
+        enqueueSnackbar(
+          err?.message || 'Could not generate Merchandiser Progress Report PDF',
+          { variant: 'error' }
+        );
       } finally {
         setGeneratingPdf(false);
       }
     },
-    [enqueueSnackbar, filters, getApiBase, formatApiDate, normalizeMerchandiserProgressRows, merchants]
+    [enqueueSnackbar, fetchMerchandiserProgressData, filters.fromDate, filters.toDate, filters.reportType]
   );
 
-  const toastSoon = (label) =>
-    enqueueSnackbar(`${label}: connect API when backend is ready.`, { variant: 'info' });
+  const runExcelExport = useCallback(async () => {
+    try {
+      setGeneratingPdf(true);
+      const filteredRows = await fetchMerchandiserProgressData();
+
+      const isSupplierWise = filters.reportType === MERCH_PROGRESS_TYPE_SUPPLIER;
+      const headers = isSupplierWise
+        ? ['Supplier', 'Customer', 'Merchand', "Order's", 'PO Quantity']
+        : ['Customer', 'Supplier', 'Merchand', "Order's", 'PO Quantity'];
+
+      const dataRows = filteredRows.map((r) => [
+        isSupplierWise ? r.supplier : r.customer,
+        isSupplierWise ? r.customer : r.supplier,
+        r.merchand,
+        r.orders,
+        Number(r.poQuantity) || 0,
+      ]);
+
+      const totalOrders = filteredRows.reduce((s, r) => s + (Number(r.orders) || 0), 0);
+      const totalPoQty = filteredRows.reduce((s, r) => s + (Number(r.poQuantity) || 0), 0);
+      const totalRow = ['Total', '', '', totalOrders, totalPoQty];
+
+      const XLSX = await import('xlsx');
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows, totalRow]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Merchandiser Progress');
+      const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([out], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Merchandiser-Progress-Report_${filters.reportType}_${filters.fromDate}_to_${filters.toDate}.xlsx`;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (err) {
+      console.error('[MerchandiserProgress] excel', err);
+      enqueueSnackbar(err?.message || 'Could not export Excel', { variant: 'error' });
+    } finally {
+      setGeneratingPdf(false);
+    }
+  }, [enqueueSnackbar, fetchMerchandiserProgressData, filters.fromDate, filters.toDate, filters.reportType]);
 
   return (
     <Card variant="outlined" sx={cardSx}>
@@ -2987,7 +3486,8 @@ function MerchandiserProgressReportForm() {
               variant="contained"
               color="primary"
               size="medium"
-              onClick={() => toastSoon('Download Excel')}
+              disabled={generatingPdf}
+              onClick={runExcelExport}
               sx={{ minWidth: 140, textTransform: 'none', fontWeight: 600 }}
             >
               Download Excel
