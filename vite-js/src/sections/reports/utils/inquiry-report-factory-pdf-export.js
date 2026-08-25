@@ -492,16 +492,14 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  * @returns {Promise<Blob>}
  */
 export async function buildInquiryReportFactoryPdfBlob(data = {}) {
-  const payload =
-    data && Array.isArray(data.items) && data.items.length > 0
-      ? data
-      : INQUIRY_REPORT_FACTORY_DEMO;
+  const items = Array.isArray(data?.items) ? data.items : [];
 
   const meta = {
-    printedOn: payload.printedOn || data.printedOn || formatPrintedOnLong(),
+    printedOn: data.printedOn || formatPrintedOnLong(),
   };
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
+  doc.setProperties({ title: 'InquiryAMSforFactory' });
   const logoDataUrl = await loadLogoDataUrl().catch(() => null);
 
   const innerLeft = H_MARGIN;
@@ -521,7 +519,7 @@ export async function buildInquiryReportFactoryPdfBlob(data = {}) {
   startPage();
 
   const cardH = DATA_ROW_H + ROW_TO_COMMENT_GAP + COMMENT_BOX_H + ITEM_GAP;
-  payload.items.forEach((item) => {
+  items.forEach((item) => {
     if (y + cardH > pageBodyBottom) {
       doc.addPage([PAGE_W, PAGE_H], 'l');
       startPage();

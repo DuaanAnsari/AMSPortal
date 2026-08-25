@@ -445,19 +445,19 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  * @returns {Promise<Blob>}
  */
 export async function buildSupplierSdrPdfBlob(data = {}) {
-  const payload =
-    data && Array.isArray(data.items) && data.items.length > 0 ? data : SUPPLIER_SDR_DEMO;
+  const items = Array.isArray(data?.items) ? data.items : [];
 
   const meta = {
-    title: payload.title || data.title || SUPPLIER_SDR_DEMO.title,
-    fromDate: payload.fromDate || data.fromDate || SUPPLIER_SDR_DEMO.fromDate,
-    toDate: payload.toDate || data.toDate || SUPPLIER_SDR_DEMO.toDate,
-    printedOn: payload.printedOn || data.printedOn || formatPrintedOnLong(),
+    title: data.title || SUPPLIER_SDR_DEMO.title,
+    fromDate: data.fromDate || SUPPLIER_SDR_DEMO.fromDate,
+    toDate: data.toDate || SUPPLIER_SDR_DEMO.toDate,
+    printedOn: data.printedOn || formatPrintedOnLong(),
   };
 
   // Logo fetched for parity with the other Inquiry hub PDFs even though the
   // legacy mock-up does not render it in the title strip.
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
+  doc.setProperties({ title: 'SampleDevelopmentReport' });
   await loadLogoDataUrl().catch(() => null);
 
   const tableX = H_MARGIN;
@@ -477,7 +477,7 @@ export async function buildSupplierSdrPdfBlob(data = {}) {
 
   let y = startPage();
 
-  payload.items.forEach((item) => {
+  items.forEach((item) => {
     if (y + DATA_ROW_H > pageBodyBottom) {
       doc.addPage([PAGE_W, PAGE_H], 'l');
       y = startPage();

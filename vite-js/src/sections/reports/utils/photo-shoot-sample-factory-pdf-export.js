@@ -535,16 +535,14 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  * @returns {Promise<Blob>}
  */
 export async function buildPhotoShootSampleFactoryPdfBlob(data = {}) {
-  const payload =
-    data && Array.isArray(data.items) && data.items.length > 0
-      ? data
-      : PHOTO_SHOOT_SAMPLE_FACTORY_DEMO;
+  const items = Array.isArray(data?.items) ? data.items : [];
 
   const meta = {
-    printedOn: payload.printedOn || data.printedOn || formatPrintedOnLong(),
+    printedOn: data.printedOn || formatPrintedOnLong(),
   };
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
+  doc.setProperties({ title: 'PhotoShotSample' });
   const logoDataUrl = await loadLogoDataUrl().catch(() => null);
 
   const tableX = H_MARGIN;
@@ -566,7 +564,7 @@ export async function buildPhotoShootSampleFactoryPdfBlob(data = {}) {
 
   const itemBlockH = DATA_ROW_H + FOOTER_STRIP_H + ITEM_GAP;
 
-  payload.items.forEach((item) => {
+  items.forEach((item) => {
     if (y + itemBlockH > pageBodyBottom) {
       doc.addPage([PAGE_W, PAGE_H], 'l');
       y = startPage();

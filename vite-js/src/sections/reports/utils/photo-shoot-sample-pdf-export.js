@@ -273,7 +273,7 @@ function drawHeaderBand(doc, logoDataUrl, customerName, tableX, tableW) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(0, 0, 0);
-  const titleText = `${(customerName || '').toUpperCase()} SAMPLE`.trim();
+  const titleText = 'Photo Shoot Sample for Customer';
   doc.text(titleText, tableX + tableW / 2, titleY + TITLE_BAR_H / 2, {
     align: 'center',
     baseline: 'middle',
@@ -461,15 +461,15 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  * @returns {Promise<Blob>}
  */
 export async function buildPhotoShootSamplePdfBlob(data = {}) {
-  const payload =
-    data && Array.isArray(data.items) && data.items.length > 0 ? data : PHOTO_SHOOT_SAMPLE_DEMO;
+  const items = Array.isArray(data?.items) ? data.items : [];
 
   const meta = {
-    customerName: payload.customerName || data.customerName || PHOTO_SHOOT_SAMPLE_DEMO.customerName,
-    printedOn: payload.printedOn || data.printedOn || formatPrintedOnLong(),
+    customerName: data.customerName || 'Photo Shoot Sample for Customer',
+    printedOn: data.printedOn || formatPrintedOnLong(),
   };
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
+  doc.setProperties({ title: 'PhotoShotSample' });
   const logoDataUrl = await loadLogoDataUrl().catch(() => null);
 
   const tableX = H_MARGIN;
@@ -491,7 +491,7 @@ export async function buildPhotoShootSamplePdfBlob(data = {}) {
 
   const itemBlockH = DATA_ROW_H + FOOTER_STRIP_H + ITEM_GAP;
 
-  payload.items.forEach((item) => {
+  items.forEach((item) => {
     if (y + itemBlockH > pageBodyBottom) {
       doc.addPage([PAGE_W, PAGE_H], 'l');
       y = startPage();

@@ -214,7 +214,7 @@ function InquiryReportForCustomerForm() {
   const mapInquiryRows = useCallback(
     (rows) =>
       (Array.isArray(rows) ? rows : []).map((row, index) => ({
-        serial: row?.SampleNo  ?? row?.SampleNo ?? '',
+        serial: row?.SampleNo ?? row?.SampleNo ?? '',
         requestDate: row?.CreateDate ?? row?.createDate ?? '',
         customerName: row?.CustomerName ?? row?.customerName ?? '',
         dueDate: row?.DueDate ?? row?.dueDate ?? '',
@@ -526,7 +526,7 @@ function PhotoShootSampleForCustomerForm() {
     merchandiser: ALL,
     customer: ALL,
     supplier: ALL,
-    fromDate: '2026-01-01',
+    fromDate: '2025-01-01',
     toDate: '2026-12-31',
   });
 
@@ -550,10 +550,69 @@ function PhotoShootSampleForCustomerForm() {
 
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  const buildReportParams = useCallback(() => {
+    const params = new URLSearchParams({
+      fromDate: filters.fromDate || '2025-01-01',
+      toDate: filters.toDate || '2026-12-31',
+      customerId: filters.customer === ALL ? '' : String(filters.customer),
+      supplierId: filters.supplier === ALL ? '' : String(filters.supplier),
+      marchandiserId: filters.merchandiser === ALL ? '' : String(filters.merchandiser),
+      reportName: 'PhotoShootSampleReport',
+    });
+    return params;
+  }, [filters.customer, filters.fromDate, filters.merchandiser, filters.supplier, filters.toDate]);
+
+  const fetchPhotoShootSampleRows = useCallback(async () => {
+    if (!API_BASE_URL) throw new Error('API URL missing');
+
+    const url = `${API_BASE_URL}/api/InquiryReports/PhotoShootSampleReport?${buildReportParams().toString()}`;
+    try {
+      const response = await fetch(url, { headers: inquiryAuthHeaders() });
+      if (!response.ok) {
+        return [];
+      }
+      const text = await response.text();
+      if (!text || !text.trim()) return [];
+      const data = JSON.parse(text);
+      return Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : Array.isArray(data?.data) ? data.data : [];
+    } catch (err) {
+      console.warn('[PhotoShootSample] fetch warning', err);
+      return [];
+    }
+  }, [buildReportParams]);
+
+  const mapPhotoShootSampleRows = useCallback(
+    (rows) =>
+      (Array.isArray(rows) ? rows : []).map((row, index) => {
+        let pictures = [];
+        if (row?.InqImage) {
+          pictures = [row.InqImage];
+        } else if (row?.inqImage) {
+          pictures = [row.inqImage];
+        }
+
+        return {
+          serial: String(index + 1),
+          styleNo: row?.Style ?? row?.style ?? '',
+          description: row?.ItemDesc ?? row?.itemDesc ?? '',
+          size: row?.Size ?? row?.size ?? '',
+          pictures,
+          colors: row?.Color ?? row?.color ?? '',
+          fabric: row?.FabricType ?? row?.fabricType ?? '',
+          gsm: row?.GSM != null ? String(row.GSM) : row?.gsm != null ? String(row.gsm) : '',
+          fWash: row?.FabricWash ?? row?.fabricWash ?? '',
+          qty: row?.Qty != null ? String(row.Qty) : row?.qty != null ? String(row.qty) : '',
+          status: row?.Status ?? row?.status ?? '',
+          remarks: row?.Remarks ?? row?.remarks ?? '',
+          comments: row?.Comment ?? row?.comment ?? '',
+        };
+      }),
+    []
+  );
+
   /**
-   * Build the Photo Shoot Sample PDF (demo data for now) and either preview
-   * it in a new tab or trigger a direct file download. Real backend rows
-   * can be passed later via the same shape.
+   * Build the Photo Shoot Sample PDF and either preview
+   * it in a new tab or trigger a direct file download.
    *
    * @param {'view'|'pdf'} mode
    */
@@ -563,8 +622,20 @@ function PhotoShootSampleForCustomerForm() {
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
-        const blob = await buildPhotoShootSamplePdfBlob({});
+        const rows = await fetchPhotoShootSampleRows();
+        const items = mapPhotoShootSampleRows(rows);
+        const selectedCustomerObj = customers.find((c) => milestoneCustomerKey(c) === filters.customer);
+        const customerName = selectedCustomerObj ? milestoneCustomerLabel(selectedCustomerObj) : '';
+        const blob = await buildPhotoShootSamplePdfBlob({
+          items,
+          customerName: customerName ? `${customerName} SAMPLE` : 'Photo Shoot Sample for Customer',
+        });
         if (mode === 'view' && previewWindow) {
+          try {
+            previewWindow.document.title = 'PhotoShotSample';
+          } catch {
+            /* ignore cross-origin if any */
+          }
           const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
           previewWindow.location.replace(url);
           setTimeout(() => URL.revokeObjectURL(url), 120_000);
@@ -585,7 +656,7 @@ function PhotoShootSampleForCustomerForm() {
         setGeneratingPdf(false);
       }
     },
-    [generatingPdf, enqueueSnackbar]
+    [generatingPdf, enqueueSnackbar, fetchPhotoShootSampleRows, mapPhotoShootSampleRows, customers, filters.customer]
   );
 
   const handleViewReport = useCallback(() => runPdfExport('view'), [runPdfExport]);
@@ -860,10 +931,71 @@ function PhotoShootSampleForFactoryForm() {
 
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  const buildReportParams = useCallback(() => {
+    const params = new URLSearchParams({
+      fromDate: filters.fromDate || '2025-01-01',
+      toDate: filters.toDate || '2026-12-31',
+      customerId: filters.customer === ALL ? '' : String(filters.customer),
+      supplierId: filters.supplier === ALL ? '' : String(filters.supplier),
+      marchandiserId: filters.merchandiser === ALL ? '' : String(filters.merchandiser),
+      reportName: 'PhotoShotSampleforFactory',
+    });
+    return params;
+  }, [filters.customer, filters.fromDate, filters.merchandiser, filters.supplier, filters.toDate]);
+
+  const fetchPhotoShootSampleFactoryRows = useCallback(async () => {
+    if (!API_BASE_URL) throw new Error('API URL missing');
+
+    const url = `${API_BASE_URL}/api/InquiryReports/PhotoShootSampleReport?${buildReportParams().toString()}`;
+    try {
+      const response = await fetch(url, { headers: inquiryAuthHeaders() });
+      if (!response.ok) {
+        return [];
+      }
+      const text = await response.text();
+      if (!text || !text.trim()) return [];
+      const data = JSON.parse(text);
+      return Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : Array.isArray(data?.data) ? data.data : [];
+    } catch (err) {
+      console.warn('[PhotoShootSampleFactory] fetch warning', err);
+      return [];
+    }
+  }, [buildReportParams]);
+
+  const mapPhotoShootSampleFactoryRows = useCallback(
+    (rows) =>
+      (Array.isArray(rows) ? rows : []).map((row, index) => {
+        let pictures = [];
+        if (row?.InqImage) {
+          pictures = [row.InqImage];
+        } else if (row?.inqImage) {
+          pictures = [row.inqImage];
+        }
+
+        return {
+          serial: String(index + 1),
+          styleNo: row?.Style ?? row?.style ?? '',
+          description: row?.ItemDesc ?? row?.itemDesc ?? '',
+          size: row?.Size ?? row?.size ?? '',
+          pictures,
+          colors: row?.Color ?? row?.color ?? '',
+          fabric: row?.FabricType ?? row?.fabricType ?? '',
+          gsm: row?.GSM != null ? String(row.GSM) : row?.gsm != null ? String(row.gsm) : '',
+          price: row?.Price != null ? String(row.Price) : row?.price != null ? String(row.price) : '',
+          fWash: row?.FabricWash ?? row?.fabricWash ?? '',
+          factory: row?.VenderName ?? row?.venderName ?? row?.VendorName ?? row?.vendorName ?? '',
+          qty: row?.Qty != null ? String(row.Qty) : row?.qty != null ? String(row.qty) : '',
+          status: row?.Status ?? row?.status ?? '',
+          remarks: row?.Remarks ?? row?.remarks ?? '',
+          comments: row?.Comment ?? row?.comment ?? '',
+        };
+      }),
+    []
+  );
+
   /**
-   * Build the Factory Photo Shoot Sample PDF (demo data for now) and either
-   * preview it in a new tab or trigger a direct file download. Real backend
-   * rows can be passed later via the same shape.
+   * Build the Factory Photo Shoot Sample PDF and either preview
+   * it in a new tab or trigger a direct file download.
    *
    * @param {'view'|'pdf'} mode
    */
@@ -873,8 +1005,17 @@ function PhotoShootSampleForFactoryForm() {
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
-        const blob = await buildPhotoShootSampleFactoryPdfBlob({});
+        const rows = await fetchPhotoShootSampleFactoryRows();
+        const items = mapPhotoShootSampleFactoryRows(rows);
+        const blob = await buildPhotoShootSampleFactoryPdfBlob({
+          items,
+        });
         if (mode === 'view' && previewWindow) {
+          try {
+            previewWindow.document.title = 'PhotoShotSample';
+          } catch {
+            /* ignore cross-origin if any */
+          }
           const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
           previewWindow.location.replace(url);
           setTimeout(() => URL.revokeObjectURL(url), 120_000);
@@ -895,12 +1036,11 @@ function PhotoShootSampleForFactoryForm() {
         setGeneratingPdf(false);
       }
     },
-    [generatingPdf, enqueueSnackbar]
+    [generatingPdf, enqueueSnackbar, fetchPhotoShootSampleFactoryRows, mapPhotoShootSampleFactoryRows]
   );
 
   const handleViewReport = useCallback(() => runPdfExport('view'), [runPdfExport]);
   const handleDownloadPdf = useCallback(() => runPdfExport('pdf'), [runPdfExport]);
-
   useEffect(() => {
     const base = getMilestoneSummaryDropdownApiBase();
     if (!base) {
@@ -1169,10 +1309,81 @@ function InquiryReportForFactoryForm() {
 
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  const buildReportParams = useCallback(() => {
+    const params = new URLSearchParams({
+      fromDate: filters.fromDate || '2025-01-01',
+      toDate: filters.toDate || '2026-12-31',
+      marchandiserId: filters.merchandiser === ALL ? '' : String(filters.merchandiser),
+    });
+    return params;
+  }, [filters.fromDate, filters.merchandiser, filters.toDate]);
+
+  const fetchInquiryReportFactoryRows = useCallback(async () => {
+    if (!API_BASE_URL) throw new Error('API URL missing');
+
+    const url = `${API_BASE_URL}/api/InquiryReports/InquiryAMSforFactoryNewReport?${buildReportParams().toString()}`;
+    try {
+      const response = await fetch(url, { headers: inquiryAuthHeaders() });
+      if (!response.ok) {
+        return [];
+      }
+      const text = await response.text();
+      if (!text || !text.trim()) return [];
+      const data = JSON.parse(text);
+      return Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : Array.isArray(data?.data) ? data.data : [];
+    } catch (err) {
+      console.warn('[InquiryReportFactory] fetch warning', err);
+      return [];
+    }
+  }, [buildReportParams]);
+
+  const formatDateDDMMYYYY = (val) => {
+    if (!val) return '';
+    const str = String(val).trim();
+    if (!str) return '';
+    // Handle ISO date format like YYYY-MM-DD or YYYY-MM-DDT...
+    const isoMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (isoMatch) {
+      const [, yyyy, mm, dd] = isoMatch;
+      return `${dd.padStart(2, '0')}-${mm.padStart(2, '0')}-${yyyy}`;
+    }
+    // Handle MM/DD/YYYY format if any
+    const usMatch = str.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})/);
+    if (usMatch) {
+      const [, mm, dd, yyyy] = usMatch;
+      return `${dd.padStart(2, '0')}-${mm.padStart(2, '0')}-${yyyy}`;
+    }
+    return str.split('T')[0];
+  };
+
+  const mapInquiryReportFactoryRows = useCallback(
+    (rows) =>
+      (Array.isArray(rows) ? rows : []).map((row, index) => ({
+        serial: row?.SampleNo ?? row?.sampleNo ?? '',
+        requestDate: formatDateDDMMYYYY(row?.CreateDate ?? row?.createDate ?? row?.RequestDate ?? row?.requestDate),
+        dueDate: formatDateDDMMYYYY(row?.DueDate ?? row?.dueDate),
+        dispatchDate: formatDateDDMMYYYY(row?.DispatchDate ?? row?.dispatchDate),
+        styleNo: row?.Style ?? row?.style ?? '',
+        item: row?.ItemDesc ?? row?.itemDesc ?? '',
+        content: row?.Content ?? row?.content ?? '',
+        fabric: row?.FabricType ?? row?.fabricType ?? '',
+        colour: row?.Color ?? row?.color ?? '',
+        price: row?.Price != null ? String(row.Price) : row?.price != null ? String(row.price) : '',
+        qty: row?.Qty != null ? String(row.Qty) : row?.qty != null ? String(row.qty) : '',
+        size: row?.Size ?? row?.size ?? '',
+        gsm: row?.GSM != null ? String(row.GSM) : row?.gsm != null ? String(row.gsm) : '',
+        factoryName: row?.VenderName ?? row?.venderName ?? row?.VendorName ?? row?.vendorName ?? '',
+        commentStatus: row?.Status ?? row?.status ?? '',
+        progressComments: row?.Comment ?? row?.comment ?? '',
+        remarks: row?.Remarks ?? row?.remarks ?? '',
+        imageUrl: row?.InqImage || row?.inqImage || null,
+      })),
+    []
+  );
+
   /**
-   * Build the Inquiry Report For Factory PDF (demo data for now) and either
-   * preview it in a new tab or trigger a direct file download. Real backend
-   * rows can be passed later via the same shape.
+   * Build the Inquiry Report For Factory PDF and either preview
+   * it in a new tab or trigger a direct file download.
    *
    * @param {'view'|'pdf'} mode
    */
@@ -1182,8 +1393,17 @@ function InquiryReportForFactoryForm() {
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
-        const blob = await buildInquiryReportFactoryPdfBlob({});
+        const rows = await fetchInquiryReportFactoryRows();
+        const items = mapInquiryReportFactoryRows(rows);
+        const blob = await buildInquiryReportFactoryPdfBlob({
+          items,
+        });
         if (mode === 'view' && previewWindow) {
+          try {
+            previewWindow.document.title = 'InquiryAMSforFactory';
+          } catch {
+            /* ignore cross-origin if any */
+          }
           const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
           previewWindow.location.replace(url);
           setTimeout(() => URL.revokeObjectURL(url), 120_000);
@@ -1204,7 +1424,7 @@ function InquiryReportForFactoryForm() {
         setGeneratingPdf(false);
       }
     },
-    [generatingPdf, enqueueSnackbar]
+    [generatingPdf, enqueueSnackbar, fetchInquiryReportFactoryRows, mapInquiryReportFactoryRows]
   );
 
   const handleViewReport = useCallback(() => runPdfExport('view'), [runPdfExport]);
@@ -1431,25 +1651,119 @@ function SampleDevelopmentReportForm() {
 
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  const buildReportParams = useCallback(() => {
+    let selectType = 'INTERNAL';
+    if (filters.variant === 'internal') selectType = 'INTERNAL';
+    else if (filters.variant === 'all-customer') selectType = 'AllCustomer';
+    else if (filters.variant === 'all-supplier') selectType = 'AllSupplier';
+    else if (filters.variant === 'select-customer') selectType = 'Customer';
+    else if (filters.variant === 'select-supplier') selectType = 'Supplier';
+
+    let customerName = '';
+    if (filters.customer !== ALL) {
+      const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+      customerName = (row ? milestoneCustomerLabel(row) : '').toString().trim();
+    }
+
+    let supplierName = '';
+    if (filters.supplier !== ALL) {
+      const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
+      supplierName = (row ? milestoneSupplierLabel(row) : '').toString().trim();
+    }
+
+    const params = new URLSearchParams({
+      selectType,
+      fromDate: filters.fromDate || '2025-01-01',
+      toDate: filters.toDate || '2026-12-31',
+      customerId: filters.customer === ALL ? '' : String(filters.customer),
+      customerName,
+      supplierId: filters.supplier === ALL ? '' : String(filters.supplier),
+      supplierName,
+    });
+    return params;
+  }, [customers, filters.customer, filters.fromDate, filters.supplier, filters.toDate, filters.variant, suppliers]);
+
+  const fetchSampleDevRows = useCallback(async () => {
+    if (!API_BASE_URL) throw new Error('API URL missing');
+
+    const url = `${API_BASE_URL}/api/InquiryReports/InternalSampleDevelopmentReport?${buildReportParams().toString()}`;
+    try {
+      const response = await fetch(url, { headers: inquiryAuthHeaders() });
+      if (!response.ok) return [];
+      const text = await response.text();
+      if (!text || !text.trim()) return [];
+      const data = JSON.parse(text);
+      return Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : Array.isArray(data?.data) ? data.data : [];
+    } catch (err) {
+      console.warn('[SampleDevelopmentReport] fetch warning', err);
+      return [];
+    }
+  }, [buildReportParams]);
+
+  const mapSampleDevRows = useCallback((rows, variant) => {
+    return (Array.isArray(rows) ? rows : []).map((row, index) => {
+      let pictures = [];
+      if (Array.isArray(row?.pictures)) {
+        pictures = row.pictures;
+      } else if (Array.isArray(row?.Pictures)) {
+        pictures = row.Pictures;
+      } else {
+        const img1 = row?.InqImage || row?.inqImage || row?.InqImage1 || row?.inqImage1 || row?.Image1 || row?.image1;
+        const img2 = row?.InqImage2 || row?.inqImage2 || row?.Image2 || row?.image2;
+        if (img1) pictures.push(img1);
+        if (img2) pictures.push(img2);
+      }
+
+      const serial = String(row?.serial ?? row?.Serial ?? row?.SampleNo ?? row?.sampleNo ?? (index + 1));
+      const customer = row?.CustomerName ?? row?.customerName ?? row?.Customer ?? row?.customer ?? '';
+      const inquiryDate = row?.InquiryDate ?? row?.inquiryDate ?? row?.CreateDate ?? row?.createDate ?? '';
+      const factoryName = row?.VenderName ?? row?.venderName ?? row?.VendorName ?? row?.vendorName ?? row?.FactoryName ?? row?.factoryName ?? '';
+      const hodDate = row?.HodDate ?? row?.hodDate ?? row?.HODDate ?? row?.hoddate ?? '';
+      const styleNo = row?.Style ?? row?.style ?? row?.StyleNo ?? row?.styleNo ?? '';
+      const description = row?.ItemDesc ?? row?.itemDesc ?? row?.Description ?? row?.description ?? '';
+      const fabric = row?.FabricType ?? row?.fabricType ?? row?.Fabric ?? row?.fabric ?? '';
+      const content = row?.Content ?? row?.content ?? '';
+      const gsm = row?.GSM != null ? String(row.GSM) : row?.gsm != null ? String(row.gsm) : '';
+      const size = row?.Size ?? row?.size ?? '';
+      const colors = row?.Color ?? row?.color ?? row?.Colors ?? row?.colors ?? '';
+      const qty = row?.Qty != null ? String(row.Qty) : row?.qty != null ? String(row.qty) : '';
+      const price = row?.Price != null ? String(row.Price) : row?.price != null ? String(row.price) : '';
+      const fobPrice = row?.FOBPrice != null ? String(row.FOBPrice) : row?.fobPrice != null ? String(row.fobPrice) : (row?.FobPrice != null ? String(row.FobPrice) : '');
+      const factoryDelDate = row?.FactoryDelDate ?? row?.factoryDelDate ?? row?.FtyDelDate ?? row?.ftyDelDate ?? '';
+      const customerDelDate = row?.CustomerDelDate ?? row?.customerDelDate ?? row?.CustDelDate ?? row?.custDelDate ?? '';
+      const dispatchDate = row?.DispatchDate ?? row?.dispatchDate ?? '';
+      const deliveryDate = row?.DeliveryDate ?? row?.deliveryDate ?? row?.Deliverydate ?? '';
+      const status = row?.Status ?? row?.status ?? '';
+
+      return {
+        serial,
+        pictures,
+        customer,
+        inquiryDate,
+        factoryName,
+        hodDate,
+        styleNo,
+        description,
+        fabric,
+        content,
+        gsm,
+        size,
+        colors,
+        qty,
+        price,
+        fobPrice,
+        factoryDelDate,
+        customerDelDate,
+        dispatchDate,
+        deliveryDate,
+        status,
+      };
+    });
+  }, []);
+
   /**
    * Build the right Sample Development Report PDF for the currently-selected
-   * variant (demo data for now) and either preview it in a new tab or
-   * trigger a direct file download. Variants that do not yet have a PDF
-   * exporter fall through to the "coming soon" toast.
-   *
-   * - `internal`        → INTERNAL SAMPLE DEVELOPMENT REPORT (dd/MM/yyyy).
-   * - `all-customer`    → CUSTOMER DEVELOPMENT REPORT (yyyy-MM-dd).
-   * - `all-supplier`    → SUPPLIER DEVELOPMENT REPORT (dd/MM/yyyy).
-   * - `select-customer` → "<CUSTOMER> SAMPLE DEVELOPMENT REPORT" — uses the
-   *                       Customer Development Report layout but the title
-   *                       is prefixed with the selected customer name.
-   * - `select-supplier` → "<SUPPLIER> SAMPLE DEVELOPMENT REPORT" — uses the
-   *                       Supplier Development Report layout but the title
-   *                       is prefixed with the selected supplier name.
-   *
-   * When the user picks "Select Customer" / "Select Supplier" without
-   * choosing an actual customer / supplier, a warning toast asks them to
-   * pick one and the PDF build is aborted.
+   * variant and either preview it in a new tab or trigger a direct file download.
    *
    * @param {'view'|'pdf'} mode
    */
@@ -1457,104 +1771,116 @@ function SampleDevelopmentReportForm() {
     async (mode) => {
       if (generatingPdf) return;
 
-      let exporter = null;
-      if (filters.variant === 'internal') {
-        const fromLabel = filters.fromDate
-          ? new Date(filters.fromDate).toLocaleDateString('en-GB')
-          : null;
-        const toLabel = filters.toDate
-          ? new Date(filters.toDate).toLocaleDateString('en-GB')
-          : null;
-        exporter = {
-          label: 'Internal Sample Development Report',
-          build: () =>
-            buildInternalSdrPdfBlob({
-              ...(fromLabel ? { fromDate: fromLabel } : {}),
-              ...(toLabel ? { toDate: toLabel } : {}),
-            }),
-          open: openInternalSdrPdf,
-        };
-      } else if (filters.variant === 'all-customer') {
-        exporter = {
-          label: 'Customer Development Report',
-          build: () =>
-            buildCustomerSdrPdfBlob({
-              ...(filters.fromDate ? { fromDate: filters.fromDate } : {}),
-              ...(filters.toDate ? { toDate: filters.toDate } : {}),
-            }),
-          open: openCustomerSdrPdf,
-        };
-      } else if (filters.variant === 'all-supplier') {
-        const fromLabel = filters.fromDate
-          ? new Date(filters.fromDate).toLocaleDateString('en-GB')
-          : null;
-        const toLabel = filters.toDate
-          ? new Date(filters.toDate).toLocaleDateString('en-GB')
-          : null;
-        exporter = {
-          label: 'Supplier Development Report',
-          build: () =>
-            buildSupplierSdrPdfBlob({
-              ...(fromLabel ? { fromDate: fromLabel } : {}),
-              ...(toLabel ? { toDate: toLabel } : {}),
-            }),
-          open: openSupplierSdrPdf,
-        };
-      } else if (filters.variant === 'select-customer') {
-        if (filters.customer === ALL) {
-          enqueueSnackbar('Please Select Customer', { variant: 'warning' });
-          return;
-        }
-        const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
-        const name = (row ? milestoneCustomerLabel(row) : '').toString().trim();
-        const title = `${(name || 'CUSTOMER').toUpperCase()} SAMPLE DEVELOPMENT REPORT`;
-        exporter = {
-          label: title,
-          build: () =>
-            buildCustomerSdrPdfBlob({
-              title,
-              ...(filters.fromDate ? { fromDate: filters.fromDate } : {}),
-              ...(filters.toDate ? { toDate: filters.toDate } : {}),
-              // Empty rows for now — backend rows wire in via the same shape
-              // once the per-customer endpoint is confirmed.
-              items: [{ serial: '1', pictures: [], customer: name }],
-            }),
-          open: openCustomerSdrPdf,
-        };
-      } else if (filters.variant === 'select-supplier') {
-        if (filters.supplier === ALL) {
-          enqueueSnackbar('Please Select Supplier', { variant: 'warning' });
-          return;
-        }
-        const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
-        const name = (row ? milestoneSupplierLabel(row) : '').toString().trim();
-        const fromLabel = filters.fromDate
-          ? new Date(filters.fromDate).toLocaleDateString('en-GB')
-          : null;
-        const toLabel = filters.toDate
-          ? new Date(filters.toDate).toLocaleDateString('en-GB')
-          : null;
-        const title = `${(name || 'SUPPLIER').toUpperCase()} SAMPLE DEVELOPMENT REPORT`;
-        exporter = {
-          label: title,
-          build: () =>
-            buildSupplierSdrPdfBlob({
-              title,
-              ...(fromLabel ? { fromDate: fromLabel } : {}),
-              ...(toLabel ? { toDate: toLabel } : {}),
-              items: [{ serial: '1', pictures: [], factoryName: name }],
-            }),
-          open: openSupplierSdrPdf,
-        };
+      if (filters.variant === 'select-customer' && filters.customer === ALL) {
+        enqueueSnackbar('Please Select Customer', { variant: 'warning' });
+        return;
       }
 
-      if (!exporter) return; // handled by toast callers below
+      if (filters.variant === 'select-supplier' && filters.supplier === ALL) {
+        enqueueSnackbar('Please Select Supplier', { variant: 'warning' });
+        return;
+      }
 
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
+
       try {
+        const rows = await fetchSampleDevRows();
+        const items = mapSampleDevRows(rows, filters.variant);
+
+        let exporter = null;
+        if (filters.variant === 'internal') {
+          const fromLabel = filters.fromDate
+            ? new Date(filters.fromDate).toLocaleDateString('en-GB')
+            : null;
+          const toLabel = filters.toDate
+            ? new Date(filters.toDate).toLocaleDateString('en-GB')
+            : null;
+          exporter = {
+            label: 'Internal Sample Development Report',
+            build: () =>
+              buildInternalSdrPdfBlob({
+                items,
+                ...(fromLabel ? { fromDate: fromLabel } : {}),
+                ...(toLabel ? { toDate: toLabel } : {}),
+              }),
+            open: openInternalSdrPdf,
+          };
+        } else if (filters.variant === 'all-customer') {
+          exporter = {
+            label: 'Customer Development Report',
+            build: () =>
+              buildCustomerSdrPdfBlob({
+                items,
+                ...(filters.fromDate ? { fromDate: filters.fromDate } : {}),
+                ...(filters.toDate ? { toDate: filters.toDate } : {}),
+              }),
+            open: openCustomerSdrPdf,
+          };
+        } else if (filters.variant === 'all-supplier') {
+          const fromLabel = filters.fromDate
+            ? new Date(filters.fromDate).toLocaleDateString('en-GB')
+            : null;
+          const toLabel = filters.toDate
+            ? new Date(filters.toDate).toLocaleDateString('en-GB')
+            : null;
+          exporter = {
+            label: 'Supplier Development Report',
+            build: () =>
+              buildSupplierSdrPdfBlob({
+                items,
+                ...(fromLabel ? { fromDate: fromLabel } : {}),
+                ...(toLabel ? { toDate: toLabel } : {}),
+              }),
+            open: openSupplierSdrPdf,
+          };
+        } else if (filters.variant === 'select-customer') {
+          const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+          const name = (row ? milestoneCustomerLabel(row) : '').toString().trim();
+          const title = `${(name || 'CUSTOMER').toUpperCase()} SAMPLE DEVELOPMENT REPORT`;
+          exporter = {
+            label: title,
+            build: () =>
+              buildCustomerSdrPdfBlob({
+                title,
+                items,
+                ...(filters.fromDate ? { fromDate: filters.fromDate } : {}),
+                ...(filters.toDate ? { toDate: filters.toDate } : {}),
+              }),
+            open: openCustomerSdrPdf,
+          };
+        } else if (filters.variant === 'select-supplier') {
+          const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
+          const name = (row ? milestoneSupplierLabel(row) : '').toString().trim();
+          const fromLabel = filters.fromDate
+            ? new Date(filters.fromDate).toLocaleDateString('en-GB')
+            : null;
+          const toLabel = filters.toDate
+            ? new Date(filters.toDate).toLocaleDateString('en-GB')
+            : null;
+          const title = `${(name || 'SUPPLIER').toUpperCase()} SAMPLE DEVELOPMENT REPORT`;
+          exporter = {
+            label: title,
+            build: () =>
+              buildSupplierSdrPdfBlob({
+                title,
+                items,
+                ...(fromLabel ? { fromDate: fromLabel } : {}),
+                ...(toLabel ? { toDate: toLabel } : {}),
+              }),
+            open: openSupplierSdrPdf,
+          };
+        }
+
+        if (!exporter) return;
+
         const blob = await exporter.build();
         if (mode === 'view' && previewWindow) {
+          try {
+            previewWindow.document.title = 'SampleDevelopmentReport';
+          } catch {
+            /* ignore cross-origin */
+          }
           const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
           previewWindow.location.replace(url);
           setTimeout(() => URL.revokeObjectURL(url), 120_000);
@@ -1570,19 +1896,21 @@ function SampleDevelopmentReportForm() {
             /* ignore */
           }
         }
-        enqueueSnackbar(`Could not build ${exporter.label} PDF`, { variant: 'error' });
+        enqueueSnackbar('Could not build Sample Development Report PDF', { variant: 'error' });
       } finally {
         setGeneratingPdf(false);
       }
     },
     [
       generatingPdf,
-      enqueueSnackbar,
       filters.variant,
-      filters.fromDate,
-      filters.toDate,
       filters.customer,
       filters.supplier,
+      filters.fromDate,
+      filters.toDate,
+      enqueueSnackbar,
+      fetchSampleDevRows,
+      mapSampleDevRows,
       customers,
       suppliers,
     ]
