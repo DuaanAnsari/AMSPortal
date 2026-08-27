@@ -1714,7 +1714,7 @@ function SampleDevelopmentReportForm() {
         if (img2) pictures.push(img2);
       }
 
-      const serial = String(row?.serial ?? row?.Serial ?? row?.SampleNo ?? row?.sampleNo ?? (index + 1));
+      const serial = String(index + 1);
       const customer = row?.CustomerName ?? row?.customerName ?? row?.Customer ?? row?.customer ?? '';
       const inquiryDate = row?.InquiryDate ?? row?.inquiryDate ?? row?.CreateDate ?? row?.createDate ?? '';
       const factoryName = row?.VenderName ?? row?.venderName ?? row?.VendorName ?? row?.vendorName ?? row?.FactoryName ?? row?.factoryName ?? '';
