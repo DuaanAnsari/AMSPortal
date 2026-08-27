@@ -87,14 +87,60 @@ const AddInquiry = () => {
     img2: [],
   });
 
+  const readFileAsDataUrl = useCallback((file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  }), []);
+
+  const toImageSrc = useCallback((value, fallbackMime = 'image/jpeg') => {
+    if (!value) return '';
+    const raw = String(value).trim();
+    if (!raw) return '';
+    if (/^data:image\//i.test(raw)) return raw;
+    if (/^https?:\/\//i.test(raw) || raw.startsWith('blob:')) return raw;
+
+    const clean = raw.replace(/\s+/g, '');
+    if (!clean) return '';
+
+    const inferMime = (base64) => {
+      if (base64.startsWith('/9j/')) return 'image/jpeg';
+      if (base64.startsWith('iVBOR')) return 'image/png';
+      if (base64.startsWith('R0lGOD')) return 'image/gif';
+      if (base64.startsWith('UklGR')) return 'image/webp';
+      return fallbackMime;
+    };
+
+    if (/^[A-Za-z0-9+/=]+$/.test(clean) || clean.startsWith('/9j/') || clean.startsWith('iVBOR') || clean.startsWith('R0lGOD') || clean.startsWith('UklGR')) {
+      return `data:${inferMime(clean)};base64,${clean}`;
+    }
+
+    return '';
+  }, []);
+
+  const imagePayloadFromSlot = useCallback((slot) => {
+    const item = slot?.[0];
+    if (!item) return { base64: null, fileName: null };
+    const rawBase64 = String(item.base64 || '').trim();
+    const base64 = rawBase64 ? rawBase64.split(',')[1] || rawBase64 : null;
+    return {
+      base64,
+      fileName: item.name || null,
+    };
+  }, []);
+
   // 🔹 Handle multiple uploads
-  const handleUpload = (key, e) => {
+  const handleUpload = async (key, e) => {
     const files = Array.from(e.target.files);
     if (files.length > 0) {
-      const newFiles = files.map((file) => ({
-        name: file.name,
-        url: URL.createObjectURL(file),
-      }));
+      const newFiles = await Promise.all(
+        files.map(async (file) => ({
+          name: file.name,
+          url: URL.createObjectURL(file),
+          base64: await readFileAsDataUrl(file),
+        }))
+      );
       setImages((prev) => ({
         ...prev,
         [key]: [...prev[key], ...newFiles],
@@ -110,14 +156,42 @@ const AddInquiry = () => {
     }));
   };
 
-  const handleSave = () => {
-    if (!isEditMode) {
-      const hasEmptyLdbPrice = details.some((row) => String(row?.ldbPrice ?? '').trim() === '');
-      if (hasEmptyLdbPrice) {
-        enqueueSnackbar('LDP.Price is required.', { variant: 'warning' });
-        return;
-      }
+  useEffect(() => {
+    if (isEditMode || !API_BASE_URL || sampleNo) return undefined;
 
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const response = await fetch(`${API_BASE_URL}/api/MerchantInquiry/GenerateSampleNo`, {
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+
+        if (!response.ok) return;
+        const data = await response.json().catch(() => null);
+        const nextSampleNo = data?.sampleNo ?? data?.SampleNo ?? '';
+        if (nextSampleNo) setSampleNo(nextSampleNo);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error('[AddInquiry] GenerateSampleNo failed', error);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [API_BASE_URL, isEditMode, sampleNo]);
+
+  const handleSave = () => {
+    const toNullableLdbPrice = (value) => {
+      const raw = String(value ?? '').trim();
+      return raw === '' ? null : value;
+    };
+
+    if (!isEditMode) {
       if (loadingInquiry) {
         return;
       }
@@ -145,6 +219,8 @@ const AddInquiry = () => {
             dispatchDate: toIsoDateTime(customerDelDate),
             dispatchDate2: toIsoDateTime(dispatchDate),
             factoryHOD: toIsoDateTime(factoryHandoverDate),
+            frontImageBase64: images.front?.[0]?.base64 ? String(images.front[0].base64).split(',')[1] || '' : '',
+            frontImageFileName: images.front?.[0]?.name || '',
             details: details.map((row) => ({
               fabricID: Number(row?.fabricID) || 0,
               gsm: row?.gsm ?? '',
@@ -154,7 +230,7 @@ const AddInquiry = () => {
               fabricWash: row?.fabricWash ?? '',
               size: row?.size ?? '',
               orderQty: row?.orderQty ?? '',
-              ldbPrice: row?.ldbPrice ?? '',
+              ldbPrice: toNullableLdbPrice(row?.ldbPrice),
               deliveryDate: row?.deliveryDate ? toIsoDateTime(row?.deliveryDate) : null,
             })),
           };
@@ -205,12 +281,6 @@ const AddInquiry = () => {
       return;
     }
 
-    const hasEmptyLdbPrice = details.some((row) => String(row?.ldbPrice ?? '').trim() === '');
-    if (hasEmptyLdbPrice) {
-      enqueueSnackbar('LDP.Price is required.', { variant: 'warning' });
-      return;
-    }
-
     if (loadingInquiry) {
       return;
     }
@@ -221,6 +291,10 @@ const AddInquiry = () => {
         setLoadError('');
 
         const token = localStorage.getItem('accessToken');
+        const frontImage = imagePayloadFromSlot(images.front);
+        const backImage = imagePayloadFromSlot(images.back);
+        const image1 = imagePayloadFromSlot(images.img1);
+        const image2 = imagePayloadFromSlot(images.img2);
         const payload = {
           inquiryMstID: Number(editId),
           sampleNo,
@@ -239,6 +313,14 @@ const AddInquiry = () => {
           dispatchDate: toIsoDateTime(customerDelDate),
           dispatchDate2: toIsoDateTime(dispatchDate),
           factoryHOD: toIsoDateTime(factoryHandoverDate),
+          frontImageBase64: frontImage.base64,
+          frontImageFileName: frontImage.fileName,
+          backImageBase64: backImage.base64,
+          backImageFileName: backImage.fileName,
+          image1Base64: image1.base64,
+          image1FileName: image1.fileName,
+          image2Base64: image2.base64,
+          image2FileName: image2.fileName,
           details: details.map((row) => ({
             fabricID: Number(row?.fabricID) || 0,
             gsm: row?.gsm ?? '',
@@ -248,7 +330,7 @@ const AddInquiry = () => {
             fabricWash: row?.fabricWash ?? '',
             size: row?.size ?? '',
             orderQty: row?.orderQty ?? '',
-            ldbPrice: row?.ldbPrice ?? '',
+            ldbPrice: toNullableLdbPrice(row?.ldbPrice),
             deliveryDate: row?.deliveryDate ? toIsoDateTime(row?.deliveryDate) : null,
           })),
         };
@@ -593,6 +675,19 @@ const AddInquiry = () => {
         setOrderQtys(data.OrderQtys ?? '');
         setSize(data.Size ?? '');
 
+        const frontImagePayload = data.FrontImageBase64 ?? data.frontImageBase64 ?? '';
+        const frontImageName = data.FileName ?? data.frontImageFileName ?? '';
+        const backImagePayload = data.BackImageBase64 ?? data.backImageBase64 ?? '';
+        const backImageName = data.FileNameBack ?? data.backImageFileName ?? '';
+        const image1Payload = data.Image1Base64 ?? data.image1Base64 ?? '';
+        const image1Name = data.FileName1 ?? data.image1FileName ?? '';
+        const image2Payload = data.Image2Base64 ?? data.image2Base64 ?? '';
+        const image2Name = data.FileName2 ?? data.image2FileName ?? '';
+        const frontImageSrc = toImageSrc(frontImagePayload);
+        const backImageSrc = toImageSrc(backImagePayload);
+        const image1Src = toImageSrc(image1Payload);
+        const image2Src = toImageSrc(image2Payload);
+
         setDetails(
           Array.isArray(data.Details)
             ? data.Details.map((row, index) => ({
@@ -615,10 +710,10 @@ const AddInquiry = () => {
         );
 
         setImages({
-          front: data.FileName ? [{ name: data.FileName, url: data.FileName }] : [],
-          back: data.FileNameBack ? [{ name: data.FileNameBack, url: data.FileNameBack }] : [],
-          img1: data.FileName1 ? [{ name: data.FileName1, url: data.FileName1 }] : [],
-          img2: data.FileName2 ? [{ name: data.FileName2, url: data.FileName2 }] : [],
+          front: frontImageSrc ? [{ name: frontImageName || 'front-image', url: frontImageSrc, base64: frontImageSrc }] : [],
+          back: backImageSrc ? [{ name: backImageName || 'back-image', url: backImageSrc, base64: backImageSrc }] : [],
+          img1: image1Src ? [{ name: image1Name || 'image-1', url: image1Src, base64: image1Src }] : [],
+          img2: image2Src ? [{ name: image2Name || 'image-2', url: image2Src, base64: image2Src }] : [],
         });
       } catch (error) {
         if (controller.signal.aborted) return;

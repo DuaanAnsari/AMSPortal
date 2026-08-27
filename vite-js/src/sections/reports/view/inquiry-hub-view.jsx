@@ -1728,7 +1728,7 @@ function SampleDevelopmentReportForm() {
       const colors = row?.Color ?? row?.color ?? row?.Colors ?? row?.colors ?? '';
       const qty = row?.Qty != null ? String(row.Qty) : row?.qty != null ? String(row.qty) : '';
       const price = row?.Price != null ? String(row.Price) : row?.price != null ? String(row.price) : '';
-      const fobPrice = row?.FOBPrice != null ? String(row.FOBPrice) : row?.fobPrice != null ? String(row.fobPrice) : (row?.FobPrice != null ? String(row.FobPrice) : '');
+      const fobPrice = row?.Price != null ? String(row.Price) : row?.price != null ? String(row.price) : '';
       const factoryDelDate = row?.FactoryDelDate ?? row?.factoryDelDate ?? row?.FtyDelDate ?? row?.ftyDelDate ?? '';
       const customerDelDate = row?.CustomerDelDate ?? row?.customerDelDate ?? row?.CustDelDate ?? row?.custDelDate ?? '';
       const dispatchDate = row?.DispatchDate ?? row?.dispatchDate ?? '';
@@ -2215,6 +2215,109 @@ function MerchantInquirySheetForm() {
 
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  const formatReadableDate = useCallback((value) => {
+    if (!value) return '';
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleDateString('en-GB');
+  }, []);
+
+  const buildReportParams = useCallback(() => {
+    let selectType = 'INTERNAL';
+    if (filters.variant === 'internal') selectType = 'INTERNAL';
+    else if (filters.variant === 'all-customer') selectType = 'AllCustomer';
+    else if (filters.variant === 'all-supplier') selectType = 'AllSupplier';
+    else if (filters.variant === 'select-customer') selectType = 'Customer';
+    else if (filters.variant === 'select-supplier') selectType = 'Supplier';
+
+    let customerName = '';
+    if (filters.customer !== ALL) {
+      const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+      customerName = (row ? milestoneCustomerLabel(row) : '').toString().trim();
+    }
+
+    let supplierName = '';
+    if (filters.supplier !== ALL) {
+      const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
+      supplierName = (row ? milestoneSupplierLabel(row) : '').toString().trim();
+    }
+
+    return new URLSearchParams({
+      selectType,
+      fromDate: filters.fromDate || '2025-01-01',
+      toDate: filters.toDate || '2026-12-31',
+      customerId: filters.customer === ALL ? '' : String(filters.customer),
+      customerName,
+      supplierId: filters.supplier === ALL ? '' : String(filters.supplier),
+      supplierName,
+    });
+  }, [customers, filters.customer, filters.fromDate, filters.supplier, filters.toDate, filters.variant, suppliers]);
+
+  const fetchSampleDevRows = useCallback(async () => {
+    if (!API_BASE_URL) throw new Error('API URL missing');
+
+    const url = `${API_BASE_URL}/api/InquiryReports/InternalSampleDevelopmentReport?${buildReportParams().toString()}`;
+    try {
+      const response = await fetch(url, { headers: inquiryAuthHeaders() });
+      if (!response.ok) return [];
+      const text = await response.text();
+      if (!text || !text.trim()) return [];
+      const data = JSON.parse(text);
+      return Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : Array.isArray(data?.data) ? data.data : [];
+    } catch (err) {
+      console.warn('[MerchantInquiry] fetch warning', err);
+      return [];
+    }
+  }, [buildReportParams]);
+
+  const mapSampleDevRows = useCallback((rows) => (
+    (Array.isArray(rows) ? rows : []).map((row, index) => {
+      let pictures = [];
+      if (Array.isArray(row?.pictures)) {
+        pictures = row.pictures;
+      } else if (Array.isArray(row?.Pictures)) {
+        pictures = row.Pictures;
+      } else {
+        const imageCandidates = [
+          row?.InqImage,
+          row?.Image,
+          row?.BackImage,
+          row?.Image1,
+          row?.inqImage,
+          row?.image,
+          row?.backImage,
+          row?.image1,
+        ];
+        imageCandidates.forEach((img) => {
+          if (img) pictures.push(img);
+        });
+      }
+
+      return {
+        serial: String(index + 1),
+        pictures,
+        customer: row?.CustomerName ?? row?.customerName ?? row?.Customer ?? row?.customer ?? '',
+        inquiryDate: formatReadableDate(row?.InquiryDate ?? row?.inquiryDate ?? row?.CreateDate ?? row?.createDate ?? ''),
+        factoryName: row?.VenderName ?? row?.venderName ?? row?.VendorName ?? row?.vendorName ?? row?.FactoryName ?? row?.factoryName ?? '',
+        hodDate: formatReadableDate(row?.FactoryHOD ?? row?.factoryHOD ?? row?.HodDate ?? row?.hodDate ?? row?.HODDate ?? row?.hoddate ?? ''),
+        styleNo: row?.Style ?? row?.style ?? row?.StyleNo ?? row?.styleNo ?? '',
+        description: row?.ItemDesc ?? row?.itemDesc ?? row?.Description ?? row?.description ?? '',
+        fabric: row?.FabricType ?? row?.fabricType ?? row?.Fabric ?? row?.fabric ?? '',
+        content: row?.Content ?? row?.content ?? '',
+        gsm: row?.GSM != null ? String(row.GSM) : row?.gsm != null ? String(row.gsm) : '',
+        size: row?.Size ?? row?.size ?? '',
+        colors: row?.Color ?? row?.color ?? row?.Colors ?? row?.colors ?? '',
+        qty: row?.Qty != null ? String(row.Qty) : row?.qty != null ? String(row.qty) : '',
+        price: row?.Price != null ? String(row.Price) : row?.price != null ? String(row.price) : '',
+        fobPrice: row?.Price != null ? String(row.Price) : row?.price != null ? String(row.price) : '',
+        factoryDelDate: formatReadableDate(row?.DueDate ?? row?.dueDate ?? row?.FactoryDelDate ?? row?.factoryDelDate ?? row?.FtyDelDate ?? row?.ftyDelDate ?? ''),
+        customerDelDate: formatReadableDate(row?.DeliveryDate ?? row?.deliveryDate ?? row?.CustomerDelDate ?? row?.customerDelDate ?? row?.CustDelDate ?? row?.custDelDate ?? ''),
+        dispatchDate: formatReadableDate(row?.DispatchDate ?? row?.dispatchDate ?? ''),
+        status: row?.Status ?? row?.status ?? '',
+      };
+    })
+  ), [formatReadableDate]);
+
   /**
    * Build the right Merchant Inquiry PDF for the currently-selected variant
    * (demo data for now) and either preview it in a new tab or trigger a
@@ -2236,135 +2339,54 @@ function MerchantInquirySheetForm() {
   const runPdfExport = useCallback(
     async (mode) => {
       if (generatingPdf) return;
-
-      let exporter = null;
-      if (filters.variant === 'internal') {
-        const fromLabel = filters.fromDate
-          ? new Date(filters.fromDate).toLocaleDateString('en-GB')
-          : null;
-        const toLabel = filters.toDate
-          ? new Date(filters.toDate).toLocaleDateString('en-GB')
-          : null;
-        exporter = {
-          label: 'Internal Sample Development Report',
-          build: () =>
-            buildInternalSdrPdfBlob({
-              ...(fromLabel ? { fromDate: fromLabel } : {}),
-              ...(toLabel ? { toDate: toLabel } : {}),
-            }),
-          open: openInternalSdrPdf,
-        };
-      } else if (filters.variant === 'all-customer') {
-        exporter = {
-          label: 'Customer Development Report',
-          build: () =>
-            buildCustomerSdrPdfBlob({
-              ...(filters.fromDate ? { fromDate: filters.fromDate } : {}),
-              ...(filters.toDate ? { toDate: filters.toDate } : {}),
-            }),
-          open: openCustomerSdrPdf,
-        };
-      } else if (filters.variant === 'all-supplier') {
-        const fromLabel = filters.fromDate
-          ? new Date(filters.fromDate).toLocaleDateString('en-GB')
-          : null;
-        const toLabel = filters.toDate
-          ? new Date(filters.toDate).toLocaleDateString('en-GB')
-          : null;
-        exporter = {
-          label: 'Supplier Development Report',
-          build: () =>
-            buildSupplierSdrPdfBlob({
-              ...(fromLabel ? { fromDate: fromLabel } : {}),
-              ...(toLabel ? { toDate: toLabel } : {}),
-            }),
-          open: openSupplierSdrPdf,
-        };
-      } else if (filters.variant === 'select-customer') {
-        if (filters.customer === ALL) {
+      setGeneratingPdf(true);
+      try {
+        if (filters.variant === 'select-customer' && filters.customer === ALL) {
           enqueueSnackbar('Please Select Customer', { variant: 'warning' });
           return;
         }
-        const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
-        const name = (row ? milestoneCustomerLabel(row) : '').toString().trim();
-        const title = `${(name || 'CUSTOMER').toUpperCase()} SAMPLE DEVELOPMENT REPORT`;
-        exporter = {
-          label: title,
-          build: () =>
-            buildCustomerSdrPdfBlob({
-              title,
-              ...(filters.fromDate ? { fromDate: filters.fromDate } : {}),
-              ...(filters.toDate ? { toDate: filters.toDate } : {}),
-              items: [{ serial: '1', pictures: [], customer: name }],
-            }),
-          open: openCustomerSdrPdf,
-        };
-      } else if (filters.variant === 'select-supplier') {
-        if (filters.supplier === ALL) {
+        if (filters.variant === 'select-supplier' && filters.supplier === ALL) {
           enqueueSnackbar('Please Select Supplier', { variant: 'warning' });
           return;
         }
-        const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
-        const name = (row ? milestoneSupplierLabel(row) : '').toString().trim();
-        const fromLabel = filters.fromDate
-          ? new Date(filters.fromDate).toLocaleDateString('en-GB')
-          : null;
-        const toLabel = filters.toDate
-          ? new Date(filters.toDate).toLocaleDateString('en-GB')
-          : null;
-        const title = `${(name || 'SUPPLIER').toUpperCase()} SAMPLE DEVELOPMENT REPORT`;
-        exporter = {
-          label: title,
-          build: () =>
-            buildSupplierSdrPdfBlob({
-              title,
-              ...(fromLabel ? { fromDate: fromLabel } : {}),
-              ...(toLabel ? { toDate: toLabel } : {}),
-              items: [{ serial: '1', pictures: [], factoryName: name }],
-            }),
-          open: openSupplierSdrPdf,
-        };
-      }
 
-      if (!exporter) return;
-
-      const previewWindow = mode === 'view' ? window.open('about:blank') : null;
-      setGeneratingPdf(true);
-      try {
-        const blob = await exporter.build();
-        if (mode === 'view' && previewWindow) {
-          const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
-          previewWindow.location.replace(url);
-          setTimeout(() => URL.revokeObjectURL(url), 120_000);
-          return;
-        }
-        exporter.open(mode, blob);
+        const rows = await fetchSampleDevRows();
+        const items = mapSampleDevRows(rows);
+        const blob = await buildInternalSdrPdfBlob({
+          title: 'Internal Sample Development Report',
+          fromDate: formatReadableDate(filters.fromDate),
+          toDate: formatReadableDate(filters.toDate),
+          items,
+        });
+        openInternalSdrPdf(mode, blob);
       } catch (err) {
-        console.error(`[MerchantInquiry:${filters.variant}] PDF build failed`, err);
-        if (previewWindow) {
-          try {
-            previewWindow.close();
-          } catch {
-            /* ignore */
-          }
-        }
-        enqueueSnackbar(`Could not build ${exporter.label} PDF`, { variant: 'error' });
+        console.error('[MerchantInquiry] PDF build failed', err);
+        enqueueSnackbar('Could not build Merchant Inquiry PDF', { variant: 'error' });
       } finally {
         setGeneratingPdf(false);
       }
     },
     [
       generatingPdf,
+      filters.customer,
+      filters.supplier,
       enqueueSnackbar,
       filters.variant,
       filters.fromDate,
       filters.toDate,
-      filters.customer,
-      filters.supplier,
-      customers,
-      suppliers,
+      fetchSampleDevRows,
+      mapSampleDevRows,
+      formatReadableDate,
     ]
   );
+
+  const handleViewReport = useCallback(() => {
+    runPdfExport('view');
+  }, [runPdfExport]);
+
+  const handleDownloadPdf = useCallback(() => {
+    runPdfExport('pdf');
+  }, [runPdfExport]);
 
   const hasPdfExporter =
     filters.variant === 'internal' ||
@@ -2372,22 +2394,6 @@ function MerchantInquirySheetForm() {
     filters.variant === 'all-supplier' ||
     filters.variant === 'select-customer' ||
     filters.variant === 'select-supplier';
-
-  const handleViewReport = useCallback(() => {
-    if (hasPdfExporter) {
-      runPdfExport('view');
-      return;
-    }
-    toast('View Report: connect API when backend is ready.');
-  }, [hasPdfExporter, runPdfExport, toast]);
-
-  const handleDownloadPdf = useCallback(() => {
-    if (hasPdfExporter) {
-      runPdfExport('pdf');
-      return;
-    }
-    toast('Download PDF: connect API when backend is ready.');
-  }, [hasPdfExporter, runPdfExport, toast]);
 
   /**
    * Customer / Supplier lists for the conditional second-column dropdown.
