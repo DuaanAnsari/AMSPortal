@@ -652,7 +652,23 @@ export default function TNAChartPage() {
   }, [modifiedRows]);
 
   const [columnDefs, setColumnDefs] = useState([]);
+  const [selectedTnaHeading, setSelectedTnaHeading] = useState('');
   const restoredFromCacheRef = useRef(false);
+
+  const tnaHeadingOptions = useMemo(
+    () => (columnDefs || []).slice(5).map((group) => group.headerName).filter(Boolean),
+    [columnDefs]
+  );
+
+  useEffect(() => {
+    if (tnaHeadingOptions.length === 0) {
+      if (selectedTnaHeading) setSelectedTnaHeading('');
+      return;
+    }
+    if (!selectedTnaHeading || !tnaHeadingOptions.includes(selectedTnaHeading)) {
+      setSelectedTnaHeading(tnaHeadingOptions[0]);
+    }
+  }, [selectedTnaHeading, tnaHeadingOptions]);
 
   useEffect(() => {
     submissionFieldKeysRef.current = collectSubmissionFieldKeys(columnDefs);
@@ -1848,6 +1864,20 @@ export default function TNAChartPage() {
     }
   };
 
+  const handleTnaHeadingChange = useCallback((_, newValue) => {
+    setSelectedTnaHeading(newValue || '');
+
+    if (!newValue || !gridRef.current?.api) return;
+
+    const targetGroup = (columnDefs || []).slice(5).find((group) => group.headerName === newValue);
+    const firstVisibleField = targetGroup?.children?.find((col) => col?.field)?.field;
+    if (!firstVisibleField) return;
+
+    setTimeout(() => {
+      gridRef.current?.api?.ensureColumnVisible(firstVisibleField, 'start');
+    }, 0);
+  }, [columnDefs]);
+
   // Handle save changes
   const handleSaveChanges = async () => {
     if (modifiedRows.size === 0) return;
@@ -2637,6 +2667,30 @@ export default function TNAChartPage() {
       {/* Grid card */}
       <Card sx={{ p: 2 }}>
         <Box
+          sx={{
+            mb: 1.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            flexWrap: 'wrap',
+          }}
+        >
+          <Autocomplete
+            size="small"
+            sx={{ minWidth: 260, maxWidth: 420, flex: '1 1 260px', ml: 'auto' }}
+            options={tnaHeadingOptions}
+            value={selectedTnaHeading || null}
+            onChange={handleTnaHeadingChange}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Select heading"
+                placeholder="Search heading..."
+              />
+            )}
+          />
+        </Box>
+        <Box
           style={containerStyle}
           sx={{
             position: 'relative',
@@ -2677,6 +2731,23 @@ export default function TNAChartPage() {
             {
               backgroundColor: theme.palette.background.paper,
               color: theme.palette.text.primary,
+            },
+            '& .ag-body-viewport::-webkit-scrollbar': {
+              width: '22px',
+            },
+            '& .ag-body-viewport::-webkit-scrollbar-track': {
+              backgroundColor: 'transparent',
+            },
+            '& .ag-body-viewport::-webkit-scrollbar-thumb': {
+              backgroundColor: 'rgba(0, 0, 0, 0.35)',
+              borderRadius: '999px',
+              border: `2px solid ${theme.palette.background.paper}`,
+              minHeight: '80px',
+              minWidth: '18px',
+            },
+            '& .ag-body-viewport': {
+              scrollbarWidth: 'thin',
+              scrollbarColor: `rgba(0, 0, 0, 0.35) ${theme.palette.background.paper}`,
             },
             '& .ag-row, & .ag-cell': {
               backgroundColor: 'inherit',
