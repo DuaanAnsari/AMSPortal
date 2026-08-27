@@ -289,7 +289,6 @@ const normalizeTnaDateCellValue = (newValue, fallback = '') => {
 
 const TNA_DATE_COL_PROPS = {
   cellEditor: 'agDateCellEditor',
-  singleClickEdit: true,
   valueGetter: (params) => {
     const field = params.colDef?.field;
     if (!field || !params.data) return null;
@@ -426,6 +425,7 @@ export default function TNAChartPage() {
   const dragScrollRef = useRef({ active: false, wasDragged: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
   const fullColDefsRef = useRef([]); // stores unfiltered column defs for dynamic visibility
   const processKeyToNameRef = useRef(new Map()); // safeKey(proc) -> original process name
+  const enterNavRef = useRef(null);
 
   const onGridReady = useCallback((params) => {
     const gridDiv = params.api.getGridBody?.()?.eGridBody
@@ -1832,6 +1832,20 @@ export default function TNAChartPage() {
     const fieldKey = params.colDef?.field;
     if (!fieldKey || !isTnaDateFieldKey(fieldKey)) return;
     syncCellChangeToState(params);
+
+    const nav = enterNavRef.current;
+    if (!nav) return;
+    if (nav.rowIndex !== params.node?.rowIndex || nav.colId !== fieldKey) return;
+
+    enterNavRef.current = null;
+    const nextRowIndex = params.node.rowIndex + 1;
+    const rowCount = params.api.getDisplayedRowCount?.() ?? 0;
+    if (nextRowIndex < rowCount) {
+      setTimeout(() => {
+        params.api.ensureIndexVisible(nextRowIndex, 'middle');
+        params.api.setFocusedCell(nextRowIndex, nav.colId);
+      }, 0);
+    }
   };
 
   // Handle save changes
@@ -2799,6 +2813,13 @@ export default function TNAChartPage() {
               onCellValueChanged={onCellValueChanged}
               onCellEditingStopped={onCellEditingStopped}
               onFillOperation={onFillOperation}
+              onCellDoubleClicked={(params) => {
+                if (!params.colDef?.editable || !params.api) return;
+                params.api.startEditingCell({
+                  rowIndex: params.node.rowIndex,
+                  colKey: params.column,
+                });
+              }}
               onColumnHeaderClicked={(e) => {
                 if (e.column?.getColId()?.endsWith('_idealdate')) {
                   e.api.ensureColumnVisible(e.column.getColId(), 'start');
@@ -2806,11 +2827,21 @@ export default function TNAChartPage() {
               }}
               onCellClicked={(params) => {
                 if (dragScrollRef.current.wasDragged) return;
+                params.api.setFocusedCell(params.node.rowIndex, params.column);
                 const field = params.colDef?.field || '';
                 if (!field.endsWith('_idealdate')) return;
                 setTimeout(() => {
                   params.api.ensureColumnVisible(params.column, 'start');
                 }, 0);
+              }}
+              onCellKeyDown={(params) => {
+                if (params.event?.key !== 'Enter') return;
+                const fieldKey = params.colDef?.field;
+                if (!fieldKey) return;
+                enterNavRef.current = {
+                  rowIndex: params.node.rowIndex,
+                  colId: params.column,
+                };
               }}
             />
           </div>
