@@ -8,6 +8,7 @@ import {
   Typography,
   TextField,
   MenuItem,
+  Menu,
   CircularProgress,
   Checkbox,
   ListItemText,
@@ -29,6 +30,7 @@ import {
   LinearProgress,
 } from '@mui/material';
 import { History, Group, SettingsSuggest } from '@mui/icons-material';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useTheme } from '@mui/material/styles';
 
 import { AgGridReact } from 'ag-grid-react';
@@ -384,6 +386,35 @@ const SelectCheckbox = React.memo(({ isChecked, onToggle }) => {
 // Process group header — checkbox to select all rows for this process
 const ProcessGroupHeader = (params) => {
   const { displayName, onSelectAll } = params;
+  const [anchorEl, setAnchorEl] = React.useState(null);
+  const [menuOptions, setMenuOptions] = React.useState([]);
+  const menuOpen = Boolean(anchorEl);
+
+  const getHeadingOptions = () => (
+    (params.api?.getColumnDefs?.() || [])
+      .slice(5)
+      .map((group) => group.headerName)
+      .filter(Boolean)
+  );
+
+  const handleOpenMenu = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setMenuOptions(getHeadingOptions());
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleCloseMenu = (event) => {
+    event?.stopPropagation?.();
+    setAnchorEl(null);
+  };
+
+  const handleHeadingSelect = (heading) => (event) => {
+    event.stopPropagation();
+    params.context?.onTnaHeadingChange?.(null, heading);
+    setAnchorEl(null);
+  };
+
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', height: '100%', overflow: 'visible' }}>
       <input
@@ -393,16 +424,68 @@ const ProcessGroupHeader = (params) => {
         onClick={(e) => e.stopPropagation()}
         onChange={(e) => { if (onSelectAll) onSelectAll(displayName, e.target.checked); }}
       />
-      <span style={{
-        fontWeight: 600,
-        fontSize: '12px',
-        whiteSpace: 'nowrap',
-        position: 'sticky',
-        left: 6,
-        zIndex: 1,
-      }}>
-        {displayName}
-      </span>
+      <Box
+        component="button"
+        type="button"
+        onClick={handleOpenMenu}
+        sx={{
+          position: 'sticky',
+          left: 6,
+          zIndex: 1,
+          height: 24,
+          minWidth: 0,
+          maxWidth: 'calc(100% - 22px)',
+          px: 0.5,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 0.25,
+          border: 0,
+          borderRadius: 0.75,
+          bgcolor: menuOpen ? 'rgba(0, 0, 0, 0.06)' : 'transparent',
+          color: 'inherit',
+          cursor: 'pointer',
+          font: 'inherit',
+          fontWeight: 600,
+          fontSize: 12,
+          lineHeight: 1,
+          whiteSpace: 'nowrap',
+          '&:hover': {
+            bgcolor: 'rgba(0, 0, 0, 0.06)',
+          },
+        }}
+      >
+        <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {displayName}
+        </Box>
+        <KeyboardArrowDownIcon sx={{ flexShrink: 0, fontSize: 16, color: 'text.secondary' }} />
+      </Box>
+      <Menu
+        anchorEl={anchorEl}
+        open={menuOpen}
+        onClose={handleCloseMenu}
+        onClick={(e) => e.stopPropagation()}
+        PaperProps={{
+          sx: {
+            mt: 0.5,
+            minWidth: 220,
+            maxHeight: 320,
+          },
+        }}
+      >
+        {menuOptions.map((heading) => (
+          <MenuItem
+            key={heading}
+            selected={heading === displayName}
+            onClick={handleHeadingSelect(heading)}
+            dense
+          >
+            <ListItemText
+              primary={heading}
+              primaryTypographyProps={{ fontSize: 12, fontWeight: heading === displayName ? 600 : 400 }}
+            />
+          </MenuItem>
+        ))}
+      </Menu>
     </Box>
   );
 };
@@ -658,6 +741,14 @@ export default function TNAChartPage() {
   const tnaHeadingOptions = useMemo(
     () => (columnDefs || []).slice(5).map((group) => group.headerName).filter(Boolean),
     [columnDefs]
+  );
+  const selectedPortfolioName = useMemo(
+    () => (
+      selectedPortfolioId
+        ? allPoOptions.find((opt) => opt.portfolioID === selectedPortfolioId)?.portfolioName || 'Other'
+        : ''
+    ),
+    [allPoOptions, selectedPortfolioId]
   );
 
   useEffect(() => {
@@ -2480,7 +2571,22 @@ export default function TNAChartPage() {
               </TextField>
             </Box>
 
-            <Box sx={{ flex: '1 1 30%', minWidth: 200 }}>
+            <Box sx={{ flex: '1 1 30%', minWidth: 200, position: 'relative' }}>
+              {selectedPortfolioName && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    position: 'absolute',
+                    left: 14,
+                    top: -17,
+                    color: 'text.secondary',
+                    lineHeight: 1.2,
+                    pointerEvents: 'none',
+                  }}
+                >
+                  {selectedPortfolioName} selected
+                </Typography>
+              )}
               <Autocomplete
                 multiple
                 id="po-number-autocomplete"
@@ -2499,11 +2605,6 @@ export default function TNAChartPage() {
                     label={`PO No ${selectedPoNumbers.length > 0 ? `(${selectedPoNumbers.length})` : ''}`}
                     placeholder={selectedPoNumbers.length === 0 ? 'Search or select PO...' : ''}
                     size="small"
-                    helperText={
-                      selectedPortfolioId
-                        ? `${allPoOptions.find(opt => opt.portfolioID === selectedPortfolioId)?.portfolioName || 'Other'} selected`
-                        : ''
-                    }
                   />
                 )}
                 renderOption={(props, option, { selected }) => (
@@ -2667,30 +2768,6 @@ export default function TNAChartPage() {
       {/* Grid card */}
       <Card sx={{ p: 2 }}>
         <Box
-          sx={{
-            mb: 1.5,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1.5,
-            flexWrap: 'wrap',
-          }}
-        >
-          <Autocomplete
-            size="small"
-            sx={{ minWidth: 260, maxWidth: 420, flex: '1 1 260px', ml: 'auto' }}
-            options={tnaHeadingOptions}
-            value={selectedTnaHeading || null}
-            onChange={handleTnaHeadingChange}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Select heading"
-                placeholder="Search heading..."
-              />
-            )}
-          />
-        </Box>
-        <Box
           style={containerStyle}
           sx={{
             position: 'relative',
@@ -2805,6 +2882,7 @@ export default function TNAChartPage() {
               onGridReady={onGridReady}
               rowData={tableData}
               columnDefs={columnDefs}
+              context={{ onTnaHeadingChange: handleTnaHeadingChange }}
               suppressFieldDotNotation
               getRowId={(params) => `${params.data.poid}_${params.data.color || ''}`}
               headerHeight={32}
