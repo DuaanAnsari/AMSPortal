@@ -221,6 +221,12 @@ const AddInquiry = () => {
             factoryHOD: toIsoDateTime(factoryHandoverDate),
             frontImageBase64: images.front?.[0]?.base64 ? String(images.front[0].base64).split(',')[1] || '' : '',
             frontImageFileName: images.front?.[0]?.name || '',
+            backImageBase64: images.back?.[0]?.base64 ? String(images.back[0].base64).split(',')[1] || '' : '',
+            backImageFileName: images.back?.[0]?.name || '',
+            image1Base64: images.img1?.[0]?.base64 ? String(images.img1[0].base64).split(',')[1] || '' : '',
+            image1FileName: images.img1?.[0]?.name || '',
+            image2Base64: images.img2?.[0]?.base64 ? String(images.img2[0].base64).split(',')[1] || '' : '',
+            image2FileName: images.img2?.[0]?.name || '',
             details: details.map((row) => ({
               fabricID: Number(row?.fabricID) || 0,
               gsm: row?.gsm ?? '',
