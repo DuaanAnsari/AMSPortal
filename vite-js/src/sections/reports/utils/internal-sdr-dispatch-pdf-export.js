@@ -66,10 +66,10 @@ const COLS = [
   { key: 'customerBlock', label: 'CUSTOMER /\nINQUIRY DATE', weight: 72, align: 'left', render: 'stack2' },
   { key: 'factoryBlock', label: 'FTY NAME /\nHOD DATE', weight: 68, align: 'left', render: 'stack2' },
   { key: 'styleBlock', label: 'STYLE WITH\nDESCRIPTION', weight: 74, align: 'left', render: 'stack2' },
-  { key: 'fabricBlock', label: 'FABRIC /\nCONTENT / GSM', weight: 82, align: 'left', render: 'stack3' },
+  { key: 'fabricBlock', label: 'FABRIC /\nCONTENT / GSM', weight: 92, align: 'left', render: 'stack3' },
   { key: 'category', label: 'CATEGORY', weight: 50, align: 'left' },
   { key: 'size', label: 'SIZE', weight: 26, align: 'center' },
-  { key: 'colors', label: 'COLORS', weight: 56, align: 'center' },
+  { key: 'colors', label: 'COLORS', weight: 52, align: 'center' },
   { key: 'qty', label: 'QTY', weight: 28, align: 'center' },
   { key: 'fobPrice', label: 'FOB\nPRICE', weight: 34, align: 'center' },
   { key: 'factoryDelDate', label: 'FACTORY\nDEL. DATE', weight: 56, align: 'center' },
@@ -83,7 +83,7 @@ const COLS = [
 // ----------------------------------------------------------------------
 
 const INTERNAL_SDR_DISPATCH_DEMO = {
-  title: 'INTERNAL SAMPLE DEVELOPMENT REPORT',
+  title: 'Sample Development Report for Dispatch Inquiry',
   fromDate: '01/01/2026',
   toDate: '12/31/2026',
   printedOn: null,
@@ -453,13 +453,15 @@ function drawStack3(doc, x, y, w, h, line1, line2, line3) {
   const all = [];
   [line1, line2, line3].forEach((chunk) => {
     if (chunk == null || chunk === '') return;
+    if (all.length > 0) all.push('');
     all.push(...wrapText(doc, String(chunk), w, 7.2, false));
   });
   drawTextLines(doc, x, y, w, h, all, {
     align: 'left',
     fontSize: 7.2,
     vAlign: 'top',
-    pad: 4,
+    pad: 5,
+    lineH: 10,
   });
 }
 
@@ -562,13 +564,14 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  * @returns {Promise<Blob>}
  */
 export async function buildInternalSdrDispatchPdfBlob(data = {}) {
-  const payload =
-    data && Array.isArray(data.items) && data.items.length > 0
-      ? data
-      : INTERNAL_SDR_DISPATCH_DEMO;
+  const payload = {
+    ...INTERNAL_SDR_DISPATCH_DEMO,
+    ...data,
+    items: Array.isArray(data.items) ? data.items : [],
+  };
 
   const meta = {
-    title: payload.title || data.title || INTERNAL_SDR_DISPATCH_DEMO.title,
+    title: payload.title || data.title || 'Sample Development Report for Dispatch Inquiry',
     fromDate: payload.fromDate || data.fromDate || INTERNAL_SDR_DISPATCH_DEMO.fromDate,
     toDate: payload.toDate || data.toDate || INTERNAL_SDR_DISPATCH_DEMO.toDate,
     printedOn: payload.printedOn || data.printedOn || formatPrintedOnLong(),
@@ -576,6 +579,7 @@ export async function buildInternalSdrDispatchPdfBlob(data = {}) {
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
   await loadLogoDataUrl().catch(() => null);
+  doc.setProperties({ title: meta.title });
 
   const tableX = H_MARGIN;
   const tableW = PAGE_W - 2 * H_MARGIN;

@@ -473,11 +473,14 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  * @returns {Promise<Blob>}
  */
 export async function buildCsWiseSdrPdfBlob(data = {}) {
-  const payload =
-    data && Array.isArray(data.items) && data.items.length > 0 ? data : CS_WISE_SDR_DEMO;
+  const payload = {
+    ...CS_WISE_SDR_DEMO,
+    ...data,
+    items: Array.isArray(data.items) ? data.items : [],
+  };
 
   const meta = {
-    title: payload.title ?? data.title ?? CS_WISE_SDR_DEMO.title,
+    title: payload.title ?? data.title ?? 'Sample Development CS Wise Report',
     fromDate: payload.fromDate || data.fromDate || CS_WISE_SDR_DEMO.fromDate,
     toDate: payload.toDate || data.toDate || CS_WISE_SDR_DEMO.toDate,
     printedOn: payload.printedOn || data.printedOn || formatPrintedOnLong(),
@@ -485,6 +488,7 @@ export async function buildCsWiseSdrPdfBlob(data = {}) {
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
   await loadLogoDataUrl().catch(() => null);
+  doc.setProperties({ title: meta.title });
 
   const tableX = H_MARGIN;
   const tableW = PAGE_W - 2 * H_MARGIN;

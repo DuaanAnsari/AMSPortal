@@ -1635,6 +1635,7 @@ function SampleDevelopmentReportForm() {
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
+  const [activeSide, setActiveSide] = useState('customer');
 
   const handleSelect = (name) => (e) => {
     setFilters((prev) => ({ ...prev, [name]: e.target.value }));
@@ -2215,14 +2216,16 @@ function MerchantInquirySheetForm() {
 
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
-  const formatReadableDate = useCallback((value) => {
+  const formatDispatchReadableDate = useCallback((value) => {
     if (!value) return '';
     const date = value instanceof Date ? value : new Date(value);
     if (Number.isNaN(date.getTime())) return String(value);
     return date.toLocaleDateString('en-GB');
   }, []);
 
-  const buildReportParams = useCallback(() => {
+  const formatReadableDate = useCallback((value) => formatDispatchReadableDate(value), [formatDispatchReadableDate]);
+
+  const buildDispatchReportParams = useCallback(() => {
     let selectType = 'INTERNAL';
     if (filters.variant === 'internal') selectType = 'INTERNAL';
     else if (filters.variant === 'all-customer') selectType = 'AllCustomer';
@@ -2230,28 +2233,88 @@ function MerchantInquirySheetForm() {
     else if (filters.variant === 'select-customer') selectType = 'Customer';
     else if (filters.variant === 'select-supplier') selectType = 'Supplier';
 
-    let customerName = '';
-    if (filters.customer !== ALL) {
-      const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
-      customerName = (row ? milestoneCustomerLabel(row) : '').toString().trim();
-    }
+    const selectedCustomerObj = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+    const selectedSupplierObj = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
 
-    let supplierName = '';
-    if (filters.supplier !== ALL) {
-      const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
-      supplierName = (row ? milestoneSupplierLabel(row) : '').toString().trim();
-    }
+    const customerName = selectedCustomerObj ? milestoneCustomerLabel(selectedCustomerObj) : '';
+    const supplierName = selectedSupplierObj ? milestoneSupplierLabel(selectedSupplierObj) : '';
 
     return new URLSearchParams({
       selectType,
-      fromDate: filters.fromDate || '2025-01-01',
-      toDate: filters.toDate || '2026-12-31',
+      fromDate: filters.fromDate || '',
+      toDate: filters.toDate || '',
       customerId: filters.customer === ALL ? '' : String(filters.customer),
       customerName,
       supplierId: filters.supplier === ALL ? '' : String(filters.supplier),
       supplierName,
     });
   }, [customers, filters.customer, filters.fromDate, filters.supplier, filters.toDate, filters.variant, suppliers]);
+
+  const buildReportParams = useCallback(() => buildDispatchReportParams(), [buildDispatchReportParams]);
+
+  const fetchDispatchReportRows = useCallback(async () => {
+    if (!API_BASE_URL) throw new Error('API URL missing');
+
+    const url = `${API_BASE_URL}/api/InquiryReports/InternalSampleDevelopForDispatchReport?${buildDispatchReportParams().toString()}`;
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (!response.ok) return [];
+      const text = await response.text();
+      if (!text || !text.trim()) return [];
+      const data = JSON.parse(text);
+      return Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : Array.isArray(data?.data) ? data.data : [];
+    } catch (err) {
+      console.warn('[SDROnlyDispatch] fetch warning', err);
+      return [];
+    }
+  }, [buildDispatchReportParams]);
+
+  const mapDispatchRows = useCallback((rows) => (
+    (Array.isArray(rows) ? rows : []).map((row, index) => {
+      const pictures = [];
+      const imageCandidates = [
+        row?.InqImage,
+        row?.Image,
+        row?.BackImage,
+        row?.Image1,
+        row?.Image2,
+        row?.inqImage,
+        row?.image,
+      ];
+      imageCandidates.forEach((img) => {
+        if (img) pictures.push(img);
+      });
+
+      return {
+        serial: String(index + 1),
+        pictures,
+        customer: row?.CustomerName ?? row?.customerName ?? row?.Customer ?? row?.customer ?? '',
+        inquiryDate: formatDispatchReadableDate(row?.InquiryDate ?? row?.inquiryDate ?? row?.CreateDate ?? row?.createDate ?? ''),
+        factoryName: row?.VenderName ?? row?.venderName ?? row?.VendorName ?? row?.vendorName ?? row?.FactoryName ?? row?.factoryName ?? '',
+        hodDate: formatDispatchReadableDate(row?.FactoryHOD ?? row?.factoryHOD ?? row?.HodDate ?? row?.hodDate ?? row?.HODDate ?? row?.hoddate ?? ''),
+        styleNo: row?.Style ?? row?.style ?? row?.StyleNo ?? row?.styleNo ?? '',
+        description: row?.ItemDesc ?? row?.itemDesc ?? row?.Description ?? row?.description ?? '',
+        fabric: row?.FabricType ?? row?.fabricType ?? row?.Fabric ?? row?.fabric ?? '',
+        content: row?.Content ?? row?.content ?? '',
+        gsm: row?.GSM != null ? String(row.GSM) : row?.gsm != null ? String(row.gsm) : '',
+        category: row?.Comment ?? row?.comment ?? '',
+        size: row?.Size ?? row?.size ?? '',
+        colors: row?.Color ?? row?.color ?? row?.Colors ?? row?.colors ?? '',
+        qty: row?.Qty != null ? String(row.Qty) : row?.qty != null ? String(row.qty) : '',
+        fobPrice: row?.Price != null ? String(row.Price) : row?.price != null ? String(row.price) : '',
+        factoryDelDate: formatDispatchReadableDate(row?.DueDate ?? row?.dueDate ?? row?.FactoryDelDate ?? row?.factoryDelDate ?? ''),
+        customerDelDate: formatDispatchReadableDate(row?.DeliveryDate ?? row?.deliveryDate ?? row?.CustomerDelDate ?? row?.customerDelDate ?? ''),
+        dispatchDate: formatDispatchReadableDate(row?.DispatchDate ?? row?.dispatchDate ?? ''),
+        status: row?.Status ?? row?.status ?? '',
+      };
+    })
+  ), [formatDispatchReadableDate]);
 
   const fetchSampleDevRows = useCallback(async () => {
     if (!API_BASE_URL) throw new Error('API URL missing');
@@ -2663,6 +2726,102 @@ function SampleDevelopmentReportOnlyDispatchForm() {
 
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  const formatDispatchReadableDate = useCallback((value) => {
+    if (!value) return '';
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleDateString('en-GB');
+  }, []);
+
+  const buildDispatchReportParams = useCallback(() => {
+    let selectType = 'INTERNAL';
+    if (filters.variant === 'internal') selectType = 'INTERNAL';
+    else if (filters.variant === 'all-customer') selectType = 'AllCustomer';
+    else if (filters.variant === 'all-supplier') selectType = 'AllSupplier';
+    else if (filters.variant === 'select-customer') selectType = 'Customer';
+    else if (filters.variant === 'select-supplier') selectType = 'Supplier';
+
+    const selectedCustomerObj = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+    const selectedSupplierObj = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
+
+    const customerName = selectedCustomerObj ? milestoneCustomerLabel(selectedCustomerObj) : '';
+    const supplierName = selectedSupplierObj ? milestoneSupplierLabel(selectedSupplierObj) : '';
+
+    return new URLSearchParams({
+      selectType,
+      fromDate: filters.fromDate || '',
+      toDate: filters.toDate || '',
+      customerId: filters.customer === ALL ? '' : String(filters.customer),
+      customerName,
+      supplierId: filters.supplier === ALL ? '' : String(filters.supplier),
+      supplierName,
+    });
+  }, [customers, filters.customer, filters.fromDate, filters.supplier, filters.toDate, filters.variant, suppliers]);
+
+  const fetchDispatchReportRows = useCallback(async () => {
+    if (!API_BASE_URL) return [];
+
+    const url = `${API_BASE_URL}/api/InquiryReports/InternalSampleDevelopForDispatchReport?${buildDispatchReportParams().toString()}`;
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (!response.ok) return [];
+      const text = await response.text();
+      if (!text || !text.trim()) return [];
+      const data = JSON.parse(text);
+      return Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : Array.isArray(data?.data) ? data.data : [];
+    } catch (err) {
+      console.warn('[SDROnlyDispatch] fetch warning', err);
+      return [];
+    }
+  }, [buildDispatchReportParams]);
+
+  const mapDispatchRows = useCallback((rows) => (
+    (Array.isArray(rows) ? rows : []).map((row, index) => {
+      const pictures = [];
+      const imageCandidates = [
+        row?.InqImage,
+        row?.Image,
+        row?.BackImage,
+        row?.Image1,
+        row?.Image2,
+        row?.inqImage,
+        row?.image,
+      ];
+      imageCandidates.forEach((img) => {
+        if (img) pictures.push(img);
+      });
+
+      return {
+        serial: String(index + 1),
+        pictures,
+        customer: row?.CustomerName ?? row?.customerName ?? row?.Customer ?? row?.customer ?? '',
+        inquiryDate: formatDispatchReadableDate(row?.InquiryDate ?? row?.inquiryDate ?? row?.CreateDate ?? row?.createDate ?? ''),
+        factoryName: row?.VenderName ?? row?.venderName ?? row?.VendorName ?? row?.vendorName ?? row?.FactoryName ?? row?.factoryName ?? '',
+        hodDate: formatDispatchReadableDate(row?.FactoryHOD ?? row?.factoryHOD ?? row?.HodDate ?? row?.hodDate ?? row?.HODDate ?? row?.hoddate ?? ''),
+        styleNo: row?.Style ?? row?.style ?? row?.StyleNo ?? row?.styleNo ?? '',
+        description: row?.ItemDesc ?? row?.itemDesc ?? row?.Description ?? row?.description ?? '',
+        fabric: row?.FabricType ?? row?.fabricType ?? row?.Fabric ?? row?.fabric ?? '',
+        content: row?.Content ?? row?.content ?? '',
+        gsm: row?.GSM != null ? String(row.GSM) : row?.gsm != null ? String(row.gsm) : '',
+        category: row?.Comment ?? row?.comment ?? '',
+        size: row?.Size ?? row?.size ?? '',
+        colors: row?.Color ?? row?.color ?? row?.Colors ?? row?.colors ?? '',
+        qty: row?.Qty != null ? String(row.Qty) : row?.qty != null ? String(row.qty) : '',
+        fobPrice: row?.Price != null ? String(row.Price) : row?.price != null ? String(row.price) : '',
+        factoryDelDate: formatDispatchReadableDate(row?.DueDate ?? row?.dueDate ?? row?.FactoryDelDate ?? row?.factoryDelDate ?? ''),
+        customerDelDate: formatDispatchReadableDate(row?.DeliveryDate ?? row?.deliveryDate ?? row?.CustomerDelDate ?? row?.customerDelDate ?? ''),
+        dispatchDate: formatDispatchReadableDate(row?.DispatchDate ?? row?.dispatchDate ?? ''),
+        status: row?.Status ?? row?.status ?? '',
+      };
+    })
+  ), [formatDispatchReadableDate]);
+
   /**
    * Build the right Sample Development Report (Dispatch) PDF for the
    * currently-selected variant. Dedicated Dispatch-flavored exporters are
@@ -2682,120 +2841,33 @@ function SampleDevelopmentReportOnlyDispatchForm() {
     async (mode) => {
       if (generatingPdf) return;
 
-      let exporter = null;
-      if (filters.variant === 'internal') {
-        const fromLabel = filters.fromDate
-          ? new Date(filters.fromDate).toLocaleDateString('en-GB')
-          : null;
-        const toLabel = filters.toDate
-          ? new Date(filters.toDate).toLocaleDateString('en-GB')
-          : null;
-        exporter = {
-          label: 'Internal Sample Development Report (Dispatch)',
-          build: () =>
-            buildInternalSdrDispatchPdfBlob({
-              ...(fromLabel ? { fromDate: fromLabel } : {}),
-              ...(toLabel ? { toDate: toLabel } : {}),
-            }),
-          open: openInternalSdrDispatchPdf,
-        };
-      } else if (filters.variant === 'all-customer') {
-        const fromLabel = filters.fromDate
-          ? new Date(filters.fromDate).toLocaleDateString('en-GB')
-          : null;
-        const toLabel = filters.toDate
-          ? new Date(filters.toDate).toLocaleDateString('en-GB')
-          : null;
-        exporter = {
-          label: 'Customer Development Report (Dispatch)',
-          build: () =>
-            buildCustomerSdrDispatchPdfBlob({
-              ...(fromLabel ? { fromDate: fromLabel } : {}),
-              ...(toLabel ? { toDate: toLabel } : {}),
-            }),
-          open: openCustomerSdrDispatchPdf,
-        };
-      } else if (filters.variant === 'all-supplier') {
-        const fromLabel = filters.fromDate
-          ? new Date(filters.fromDate).toLocaleDateString('en-GB')
-          : null;
-        const toLabel = filters.toDate
-          ? new Date(filters.toDate).toLocaleDateString('en-GB')
-          : null;
-        exporter = {
-          label: 'Supplier Development Report (Dispatch)',
-          build: () =>
-            buildSupplierSdrDispatchPdfBlob({
-              ...(fromLabel ? { fromDate: fromLabel } : {}),
-              ...(toLabel ? { toDate: toLabel } : {}),
-            }),
-          open: openSupplierSdrDispatchPdf,
-        };
-      } else if (filters.variant === 'select-customer') {
-        if (filters.customer === ALL) {
-          enqueueSnackbar('Please Select Customer', { variant: 'warning' });
-          return;
-        }
-        const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
-        const name = (row ? milestoneCustomerLabel(row) : '').toString().trim();
-        const fromLabel = filters.fromDate
-          ? new Date(filters.fromDate).toLocaleDateString('en-GB')
-          : null;
-        const toLabel = filters.toDate
-          ? new Date(filters.toDate).toLocaleDateString('en-GB')
-          : null;
-        const title = `${(name || 'CUSTOMER').toUpperCase()} SAMPLE DEVELOPMENT REPORT`;
-        exporter = {
-          label: title,
-          build: () =>
-            buildCustomerSdrDispatchPdfBlob({
-              title,
-              ...(fromLabel ? { fromDate: fromLabel } : {}),
-              ...(toLabel ? { toDate: toLabel } : {}),
-              items: [{ serial: '1', pictures: [], customer: name }],
-            }),
-          open: openCustomerSdrDispatchPdf,
-        };
-      } else if (filters.variant === 'select-supplier') {
-        if (filters.supplier === ALL) {
-          enqueueSnackbar('Please Select Supplier', { variant: 'warning' });
-          return;
-        }
-        const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
-        const name = (row ? milestoneSupplierLabel(row) : '').toString().trim();
-        const fromLabel = filters.fromDate
-          ? new Date(filters.fromDate).toLocaleDateString('en-GB')
-          : null;
-        const toLabel = filters.toDate
-          ? new Date(filters.toDate).toLocaleDateString('en-GB')
-          : null;
-        const title = `${(name || 'SUPPLIER').toUpperCase()} SAMPLE DEVELOPMENT REPORT`;
-        exporter = {
-          label: title,
-          build: () =>
-            buildSupplierSdrDispatchPdfBlob({
-              title,
-              ...(fromLabel ? { fromDate: fromLabel } : {}),
-              ...(toLabel ? { toDate: toLabel } : {}),
-              items: [{ serial: '1', pictures: [], factoryName: name }],
-            }),
-          open: openSupplierSdrDispatchPdf,
-        };
+      if (filters.variant === 'select-customer' && filters.customer === ALL) {
+        enqueueSnackbar('Please Select Customer', { variant: 'warning' });
+        return;
       }
-
-      if (!exporter) return;
+      if (filters.variant === 'select-supplier' && filters.supplier === ALL) {
+        enqueueSnackbar('Please Select Supplier', { variant: 'warning' });
+        return;
+      }
 
       const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
-        const blob = await exporter.build();
+        const rows = await fetchDispatchReportRows();
+        const items = mapDispatchRows(rows);
+        const blob = await buildInternalSdrDispatchPdfBlob({
+          title: 'Sample Development Report for Dispatch Inquiry',
+          fromDate: filters.fromDate ? formatDispatchReadableDate(filters.fromDate) : '',
+          toDate: filters.toDate ? formatDispatchReadableDate(filters.toDate) : '',
+          items,
+        });
         if (mode === 'view' && previewWindow) {
           const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
           previewWindow.location.replace(url);
           setTimeout(() => URL.revokeObjectURL(url), 120_000);
           return;
         }
-        exporter.open(mode, blob);
+        openInternalSdrDispatchPdf(mode, blob);
       } catch (err) {
         console.error(`[SDROnlyDispatch:${filters.variant}] PDF build failed`, err);
         if (previewWindow) {
@@ -2805,7 +2877,7 @@ function SampleDevelopmentReportOnlyDispatchForm() {
             /* ignore */
           }
         }
-        enqueueSnackbar(`Could not build ${exporter.label} PDF`, { variant: 'error' });
+        enqueueSnackbar('Could not build Sample Development Report for Dispatch Inquiry PDF', { variant: 'error' });
       } finally {
         setGeneratingPdf(false);
       }
@@ -2818,8 +2890,9 @@ function SampleDevelopmentReportOnlyDispatchForm() {
       filters.toDate,
       filters.customer,
       filters.supplier,
-      customers,
-      suppliers,
+      fetchDispatchReportRows,
+      mapDispatchRows,
+      formatDispatchReadableDate,
     ]
   );
 
@@ -3111,6 +3184,7 @@ function SampleDevelopmentReportCsWiseForm() {
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
+  const [activeSide, setActiveSide] = useState('customer');
 
   const handleLeft = (name) => (e) => {
     setLeftFilters((prev) => ({ ...prev, [name]: e.target.value }));
@@ -3133,13 +3207,84 @@ function SampleDevelopmentReportCsWiseForm() {
     return `${m}/${d}/${y}`;
   }, []);
 
+  const formatDispatchReadableDate = useCallback((value) => {
+    if (!value) return '';
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleDateString('en-GB');
+  }, []);
+
+  const buildCsWiseReportParams = useCallback((filters) => {
+    const customerId = filters.customer === ALL ? '' : String(filters.customer);
+    const supplierId = filters.supplier === ALL ? '' : String(filters.supplier);
+    return new URLSearchParams({
+      fromDate: filters.fromDate || '',
+      toDate: filters.toDate || '',
+      customerId,
+      supplierId,
+    });
+  }, []);
+
+  const fetchCsWiseReportRows = useCallback(
+    async (filters) => {
+      if (!API_BASE_URL) throw new Error('API URL missing');
+
+      const url = `${API_BASE_URL}/api/InquiryReports/SampleDevelopmentCSWiseReport?${buildCsWiseReportParams(filters).toString()}`;
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!response.ok) return [];
+      const text = await response.text();
+      if (!text || !text.trim()) return [];
+      const data = JSON.parse(text);
+      return Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : Array.isArray(data?.data) ? data.data : [];
+    },
+    [buildCsWiseReportParams]
+  );
+
+  const mapCsWiseRows = useCallback(
+    (rows) => (
+      (Array.isArray(rows) ? rows : []).map((row, index) => ({
+        serial: String(index + 1),
+        pictures: Array.isArray(row?.pictures) ? row.pictures : Array.isArray(row?.Pictures) ? row.Pictures : [],
+        customer: row?.CustomerName ?? row?.customerName ?? row?.Customer ?? row?.customer ?? '',
+        inquiryDate: formatDispatchReadableDate(row?.InquiryDate ?? row?.inquiryDate ?? row?.CreateDate ?? row?.createDate ?? ''),
+        factoryName: row?.VenderName ?? row?.venderName ?? row?.VendorName ?? row?.vendorName ?? row?.FactoryName ?? row?.factoryName ?? '',
+        hodDate: formatDispatchReadableDate(row?.FactoryHOD ?? row?.factoryHOD ?? row?.HodDate ?? row?.hodDate ?? row?.HODDate ?? row?.hoddate ?? ''),
+        styleNo: row?.Style ?? row?.style ?? row?.StyleNo ?? row?.styleNo ?? '',
+        description: row?.ItemDesc ?? row?.itemDesc ?? row?.Description ?? row?.description ?? '',
+        fabric: row?.FabricType ?? row?.fabricType ?? row?.Fabric ?? row?.fabric ?? '',
+        content: row?.Content ?? row?.content ?? '',
+        gsm: row?.GSM != null ? String(row.GSM) : row?.gsm != null ? String(row.gsm) : '',
+        category: row?.Comment ?? row?.comment ?? row?.Category ?? row?.category ?? '',
+        size: row?.Size ?? row?.size ?? '',
+        colors: row?.Color ?? row?.color ?? row?.Colors ?? row?.colors ?? '',
+        qty: row?.Qty != null ? String(row.Qty) : row?.qty != null ? String(row.qty) : '',
+        fobPrice: row?.Price != null ? String(row.Price) : row?.price != null ? String(row.price) : '',
+        factoryDelDate: formatDispatchReadableDate(row?.DueDate ?? row?.dueDate ?? row?.FactoryDelDate ?? row?.factoryDelDate ?? ''),
+        customerDelDate: formatDispatchReadableDate(row?.DeliveryDate ?? row?.deliveryDate ?? row?.CustomerDelDate ?? row?.customerDelDate ?? ''),
+        status: row?.Status ?? row?.status ?? '',
+      }))
+    ),
+    [formatDispatchReadableDate]
+  );
+
   const runPdfExport = useCallback(
     async (mode, side) => {
       const f = side === 'customer' ? leftFilters : rightFilters;
       try {
+        const rows = await fetchCsWiseReportRows(f);
+        const items = mapCsWiseRows(rows);
         const blob = await buildCsWiseSdrPdfBlob({
+          title: 'Sample Development CS Wise Report',
           fromDate: toPdfDate(f.fromDate),
           toDate: toPdfDate(f.toDate),
+          items,
         });
         openCsWiseSdrPdf(mode, blob);
       } catch (err) {
@@ -3147,7 +3292,7 @@ function SampleDevelopmentReportCsWiseForm() {
         enqueueSnackbar('Could not generate PDF', { variant: 'error' });
       }
     },
-    [leftFilters, rightFilters, toPdfDate, enqueueSnackbar]
+    [leftFilters, rightFilters, toPdfDate, enqueueSnackbar, fetchCsWiseReportRows, mapCsWiseRows]
   );
 
   useEffect(() => {
@@ -3313,81 +3458,119 @@ function SampleDevelopmentReportCsWiseForm() {
 
   return (
     <Card variant="outlined" sx={cardSx}>
-      <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary', mb: 3 }}>
-        Sample Development Report
-      </Typography>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+          mb: 2,
+        }}
+      >
+        <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary' }}>
+          Sample Development Report
+        </Typography>
 
-      <Grid container spacing={{ xs: 3, md: 6 }}>
-        {/* Left half — Customer-first filter */}
-        <Grid item xs={12} md={6}>
+        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+          <Box
+            sx={{
+              display: 'inline-flex',
+              gap: 1,
+              p: 0.5,
+              borderRadius: 2,
+              border: 1,
+              borderColor: 'divider',
+              bgcolor: 'background.paper',
+            }}
+          >
+            <Button
+              variant={activeSide === 'customer' ? 'contained' : 'text'}
+              onClick={() => setActiveSide('customer')}
+              sx={{ minWidth: 96, textTransform: 'none', fontWeight: 600 }}
+            >
+              Customer
+            </Button>
+            <Button
+              variant={activeSide === 'supplier' ? 'contained' : 'text'}
+              onClick={() => setActiveSide('supplier')}
+              sx={{ minWidth: 96, textTransform: 'none', fontWeight: 600 }}
+            >
+              Supplier
+            </Button>
+          </Box>
+        </Box>
+      </Box>
+
+      <Card variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+        {activeSide === 'customer' ? (
           <Grid container spacing={2.5}>
-            <Grid item xs={12}>
+            <Grid item xs={12} md={4}>
               <Typography variant="subtitle2" sx={sectionLabelSx}>
                 Customer :
               </Typography>
               {renderCustomerSelect(leftFilters.customer, handleLeft('customer'))}
             </Grid>
 
-            <Grid item xs={12}>
+            <Grid item xs={12} md={4}>
               <Typography variant="subtitle2" sx={sectionLabelSx}>
                 Supplier :
               </Typography>
               {renderSupplierSelect(leftFilters.supplier, handleLeft('supplier'))}
             </Grid>
 
-            <Grid item xs={12}>
+            <Grid item xs={12} md={4}>
               <Typography variant="subtitle2" sx={sectionLabelSx}>
                 From :
               </Typography>
               {renderDateInput(leftFilters.fromDate, handleLeft('fromDate'))}
             </Grid>
 
-            <Grid item xs={12}>
+            <Grid item xs={12} md={4}>
               <Typography variant="subtitle2" sx={sectionLabelSx}>
                 To :
               </Typography>
               {renderDateInput(leftFilters.toDate, handleLeft('toDate'))}
             </Grid>
 
-            <Grid item xs={12}>{renderActionButtons('customer')}</Grid>
+            <Grid item xs={12} md={12}>
+              {renderActionButtons('customer')}
+            </Grid>
           </Grid>
-        </Grid>
-
-        {/* Right half — Supplier-first filter */}
-        <Grid item xs={12} md={6}>
+        ) : (
           <Grid container spacing={2.5}>
-            <Grid item xs={12}>
+            <Grid item xs={12} md={4}>
               <Typography variant="subtitle2" sx={sectionLabelSx}>
                 Supplier :
               </Typography>
               {renderSupplierSelect(rightFilters.supplier, handleRight('supplier'))}
             </Grid>
 
-            <Grid item xs={12}>
+            <Grid item xs={12} md={4}>
               <Typography variant="subtitle2" sx={sectionLabelSx}>
                 Customer :
               </Typography>
               {renderCustomerSelect(rightFilters.customer, handleRight('customer'))}
             </Grid>
 
-            <Grid item xs={12}>
+            <Grid item xs={12} md={4}>
               <Typography variant="subtitle2" sx={sectionLabelSx}>
                 From :
               </Typography>
               {renderDateInput(rightFilters.fromDate, handleRight('fromDate'))}
             </Grid>
 
-            <Grid item xs={12}>
+            <Grid item xs={12} md={4}>
               <Typography variant="subtitle2" sx={sectionLabelSx}>
                 To :
               </Typography>
               {renderDateInput(rightFilters.toDate, handleRight('toDate'))}
             </Grid>
 
-            <Grid item xs={12}>{renderActionButtons('supplier')}</Grid>
+            <Grid item xs={12} md={12}>
+              {renderActionButtons('supplier')}
+            </Grid>
           </Grid>
-        </Grid>
-      </Grid>
+        )}
+      </Card>
     </Card>
   );
 }

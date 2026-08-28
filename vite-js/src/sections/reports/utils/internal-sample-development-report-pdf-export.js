@@ -373,13 +373,15 @@ function drawStack3(doc, x, y, w, h, line1, line2, line3) {
   const all = [];
   [line1, line2, line3].forEach((chunk) => {
     if (chunk == null || chunk === '') return;
-    all.push(...wrapText(doc, String(chunk), w, 7.4, false));
+    if (all.length > 0) all.push('');
+    all.push(...wrapText(doc, String(chunk), w, 6.8, false));
   });
   drawTextLines(doc, x, y, w, h, all, {
     align: 'left',
-    fontSize: 7.4,
+    fontSize: 6.8,
     vAlign: 'top',
     pad: 4,
+    lineH: 8.4,
   });
 }
 
