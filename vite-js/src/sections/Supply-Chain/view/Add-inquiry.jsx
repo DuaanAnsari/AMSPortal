@@ -35,6 +35,14 @@ const getUserId = () => {
 /** UserId = 28 → hide Delivery Date + Order Qty (Page_Load L33–43) */
 const isUserId28 = () => getUserId() === 28;
 
+const getTodayInputDate = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const AddInquiry = () => {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
@@ -55,7 +63,7 @@ const AddInquiry = () => {
   const [inquiryType, setInquiryType] = useState('');
   const [customerInquiryDate, setCustomerInquiryDate] = useState('');
   const [sampleNo, setSampleNo] = useState('');
-  const [creationDate, setCreationDate] = useState('');
+  const [creationDate, setCreationDate] = useState(getTodayInputDate());
   const [factoryDelDate, setFactoryDelDate] = useState('');
   const [factoryHandoverDate, setFactoryHandoverDate] = useState('');
   const [customerDelDate, setCustomerDelDate] = useState('');
