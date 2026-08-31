@@ -8,6 +8,8 @@ import {
   Typography,
   TextField,
   MenuItem,
+  Menu,
+  ListItemText,
   CircularProgress,
   Checkbox,
   Autocomplete,
@@ -16,7 +18,7 @@ import {
   Alert,
   IconButton,
 } from '@mui/material';
-import { History, ArrowBack } from '@mui/icons-material';
+import { History, ArrowBack, KeyboardArrowDown } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 
 import { AgGridReact } from 'ag-grid-react';
@@ -93,6 +95,35 @@ const SelectCheckbox = React.memo(({ isChecked, onToggle }) => {
 // Process group header — checkbox to select all rows for this process
 const ProcessGroupHeader = (params) => {
   const { displayName, onSelectAll } = params;
+  const [anchorEl, setAnchorEl] = React.useState(null);
+  const [menuOptions, setMenuOptions] = React.useState([]);
+  const menuOpen = Boolean(anchorEl);
+
+  const getHeadingOptions = () => (
+    (params.api?.getColumnDefs?.() || [])
+      .slice(4)
+      .map((group) => group.headerName)
+      .filter(Boolean)
+  );
+
+  const handleOpenMenu = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setMenuOptions(getHeadingOptions());
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleCloseMenu = (event) => {
+    event?.stopPropagation?.();
+    setAnchorEl(null);
+  };
+
+  const handleHeadingSelect = (heading) => (event) => {
+    event.stopPropagation();
+    params.context?.onTnaHeadingChange?.(null, heading);
+    setAnchorEl(null);
+  };
+
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', height: '100%', overflow: 'visible' }}>
       <input
@@ -102,16 +133,68 @@ const ProcessGroupHeader = (params) => {
         onClick={(e) => e.stopPropagation()}
         onChange={(e) => { if (onSelectAll) onSelectAll(displayName, e.target.checked); }}
       />
-      <span style={{
-        fontWeight: 600,
-        fontSize: '12px',
-        whiteSpace: 'nowrap',
-        position: 'sticky',
-        left: 6,
-        zIndex: 1,
-      }}>
-        {displayName}
-      </span>
+      <Box
+        component="button"
+        type="button"
+        onClick={handleOpenMenu}
+        sx={{
+          position: 'sticky',
+          left: 6,
+          zIndex: 1,
+          height: 24,
+          minWidth: 0,
+          maxWidth: 'calc(100% - 22px)',
+          px: 0.5,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 0.25,
+          border: 0,
+          borderRadius: 0.75,
+          bgcolor: menuOpen ? 'rgba(0, 0, 0, 0.06)' : 'transparent',
+          color: 'inherit',
+          cursor: 'pointer',
+          font: 'inherit',
+          fontWeight: 600,
+          fontSize: 12,
+          lineHeight: 1,
+          whiteSpace: 'nowrap',
+          '&:hover': {
+            bgcolor: 'rgba(0, 0, 0, 0.06)',
+          },
+        }}
+      >
+        <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {displayName}
+        </Box>
+        <KeyboardArrowDown sx={{ flexShrink: 0, fontSize: 16, color: 'text.secondary' }} />
+      </Box>
+      <Menu
+        anchorEl={anchorEl}
+        open={menuOpen}
+        onClose={handleCloseMenu}
+        onClick={(e) => e.stopPropagation()}
+        PaperProps={{
+          sx: {
+            mt: 0.5,
+            minWidth: 220,
+            maxHeight: 320,
+          },
+        }}
+      >
+        {menuOptions.map((heading) => (
+          <MenuItem
+            key={heading}
+            selected={heading === displayName}
+            onClick={handleHeadingSelect(heading)}
+            dense
+          >
+            <ListItemText
+              primary={heading}
+              primaryTypographyProps={{ fontSize: 12, fontWeight: heading === displayName ? 600 : 400 }}
+            />
+          </MenuItem>
+        ))}
+      </Menu>
     </Box>
   );
 };
@@ -395,13 +478,13 @@ export default function TNAViewPage() {
       const poData = allTnaData;
 
       const newColDefs = [
-        { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
-        { headerName: 'Customer', field: 'customer', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
+        { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 120, suppressHeaderMenuButton: true },
+        { headerName: 'Customer', field: 'customer', pinned: 'left', maxWidth: 120, suppressHeaderMenuButton: true },
         {
-          headerName: 'PCS', field: 'pcPerCarton', pinned: 'left', maxWidth: 100, editable: true, suppressHeaderMenuButton: true,
+          headerName: 'PCS', field: 'pcPerCarton', pinned: 'left', maxWidth: 120, editable: true, suppressHeaderMenuButton: true,
           valueFormatter: (params) => { const v = params.value; if (v === null || v === undefined || v === '') return ''; return String(v); },
         },
-        { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true, cellStyle: { borderRight: '2px solid #999' } },
+        { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 120, suppressHeaderMenuButton: true, cellStyle: { borderRight: '2px solid #999' } },
         ...processList.map((proc) => {
           const noProcessRenderer = (params) => {
             if (!params.data?.[`_processExists_${proc}`]) {
@@ -544,13 +627,13 @@ export default function TNAViewPage() {
     );
 
     const newColDefs = [
-      { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
-      { headerName: 'Customer', field: 'customer', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true },
+      { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 120, suppressHeaderMenuButton: true },
+      { headerName: 'Customer', field: 'customer', pinned: 'left', maxWidth: 120, suppressHeaderMenuButton: true },
       {
-        headerName: 'PCS', field: 'pcPerCarton', pinned: 'left', maxWidth: 100, editable: true, suppressHeaderMenuButton: true,
+        headerName: 'PCS', field: 'pcPerCarton', pinned: 'left', maxWidth: 120, editable: true, suppressHeaderMenuButton: true,
         valueFormatter: (params) => { const v = params.value; if (v === null || v === undefined || v === '') return ''; return String(v); },
       },
-      { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 100, suppressHeaderMenuButton: true, cellStyle: { borderRight: '2px solid #999' } },
+      { headerName: 'Color', field: 'color', pinned: 'left', maxWidth: 120, suppressHeaderMenuButton: true, cellStyle: { borderRight: '2px solid #999' } },
       ...processList.map((proc) => {
         const noProcessRenderer = (params) => {
           if (!params.data?.[`_processExists_${proc}`]) return <span style={{ color: '#999', fontStyle: 'italic', fontSize: '12px' }}>This process not exist in this PO</span>;
@@ -882,8 +965,8 @@ export default function TNAViewPage() {
       {/* Filters */}
       <Card sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-            <Box sx={{ flex: '1 1 30%', minWidth: 200 }}>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <Box sx={{ flex: '1 1 0', minWidth: 260 }}>
               <TextField
                 select fullWidth size="small" label="Customer"
                 value={selectedCustomer} onChange={handleCustomerChange}
@@ -898,19 +981,25 @@ export default function TNAViewPage() {
               </TextField>
             </Box>
 
-            <Box sx={{ flex: '1 1 30%', minWidth: 200 }}>
+            <Box sx={{ flex: '1 1 0', minWidth: 260 }}>
               <Autocomplete
                 multiple id="po-number-autocomplete"
                 options={allPoOptions.map(opt => opt.poNo)}
                 groupBy={(option) => { const poOption = allPoOptions.find(opt => opt.poNo === option); return poOption?.portfolioName || 'Unknown Portfolio'; }}
                 disableCloseOnSelect value={selectedPoNumbers} onChange={handlePoChange}
                 getOptionLabel={(option) => option}
+                sx={{ width: '100%' }}
                 renderInput={(params) => (
                   <TextField {...params}
                     label={`PO No ${selectedPoNumbers.length > 0 ? `(${selectedPoNumbers.length})` : ''}`}
                     placeholder={selectedPoNumbers.length === 0 ? 'Search or select PO...' : ''}
                     size="small"
+                    sx={{
+                      width: '100%',
+                      '& .MuiInputBase-root': { minHeight: 40 },
+                    }}
                     helperText={selectedPortfolioId ? `${allPoOptions.find(opt => opt.portfolioID === selectedPortfolioId)?.portfolioName || 'Other'} selected` : ''}
+                    FormHelperTextProps={{ sx: { minHeight: 20, mt: 0.5 } }}
                   />
                 )}
                 renderOption={(props, option, { selected }) => (
@@ -925,18 +1014,23 @@ export default function TNAViewPage() {
               />
             </Box>
 
-            <Box sx={{ flex: '1 1 22%', minWidth: 200 }}>
+            <Box sx={{ flex: '1 1 0', minWidth: 260 }}>
               <Autocomplete
                 multiple id="color-autocomplete"
                 options={['__SELECT_ALL__', ...allColors]}
                 disableCloseOnSelect value={selectedColors}
                 onChange={(event, newValue) => { const filteredValue = newValue.filter((v) => v !== '__SELECT_ALL__'); handleColorChange(event, filteredValue); }}
                 getOptionLabel={(option) => { if (option === '__SELECT_ALL__') return 'Select All'; return option; }}
+                sx={{ width: '100%' }}
                 renderInput={(params) => (
                   <TextField {...params}
                     label={`Color ${selectedColors.length > 0 ? `(${selectedColors.length})` : ''}`}
                     placeholder={selectedColors.length === 0 ? 'Search or select colors...' : ''}
                     size="small"
+                    sx={{
+                      width: '100%',
+                      '& .MuiInputBase-root': { minHeight: 40 },
+                    }}
                   />
                 )}
                 renderOption={(props, option, { selected }) => {
