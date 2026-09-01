@@ -99,12 +99,31 @@ const ProcessGroupHeader = (params) => {
   const [menuOptions, setMenuOptions] = React.useState([]);
   const menuOpen = Boolean(anchorEl);
 
-  const getHeadingOptions = () => (
-    (params.api?.getColumnDefs?.() || [])
-      .slice(4)
-      .map((group) => group.headerName)
-      .filter(Boolean)
-  );
+  const getHeadingOptions = () => {
+    const isSinglePoSelected = params.context?.selectedPoCount === 1;
+
+    if (isSinglePoSelected) {
+      return [
+        'All Processes',
+        ...(params.api?.getColumnDefs?.() || [])
+          .slice(4)
+          .map((group) => group.headerName)
+          .filter(Boolean),
+      ];
+    }
+
+    const list = params.context?.allProcessList || [];
+    if (list.length > 0) {
+      return ['All Processes', ...list];
+    }
+    return [
+      'All Processes',
+      ...(params.api?.getColumnDefs?.() || [])
+        .slice(4)
+        .map((group) => group.headerName)
+        .filter(Boolean),
+    ];
+  };
 
   const handleOpenMenu = (event) => {
     event.preventDefault();
@@ -181,19 +200,24 @@ const ProcessGroupHeader = (params) => {
           },
         }}
       >
-        {menuOptions.map((heading) => (
-          <MenuItem
-            key={heading}
-            selected={heading === displayName}
-            onClick={handleHeadingSelect(heading)}
-            dense
-          >
-            <ListItemText
-              primary={heading}
-              primaryTypographyProps={{ fontSize: 12, fontWeight: heading === displayName ? 600 : 400 }}
-            />
-          </MenuItem>
-        ))}
+        {menuOptions.map((heading) => {
+          const isSelected = heading === 'All Processes'
+            ? !params.context?.selectedProcessFilter
+            : heading === (params.context?.selectedProcessFilter || displayName);
+          return (
+            <MenuItem
+              key={heading}
+              selected={isSelected}
+              onClick={handleHeadingSelect(heading)}
+              dense
+            >
+              <ListItemText
+                primary={heading}
+                primaryTypographyProps={{ fontSize: 12, fontWeight: isSelected ? 600 : 400 }}
+              />
+            </MenuItem>
+          );
+        })}
       </Menu>
     </Box>
   );
@@ -277,9 +301,18 @@ export default function TNAViewPage() {
   const [modifiedRows, setModifiedRows] = useState(new Map());
   const [processList, setProcessList] = useState([]);
   const [columnDefs, setColumnDefs] = useState([]);
+  const [selectedProcessFilter, setSelectedProcessFilter] = useState(null);
 
   const [saving, setSaving] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  const handleTnaHeadingChange = useCallback((event, heading) => {
+    if (!heading || heading === 'All Processes') {
+      setSelectedProcessFilter(null);
+    } else {
+      setSelectedProcessFilter((prev) => (prev === heading ? null : heading));
+    }
+  }, []);
 
   const modifiedProcessCount = useMemo(() => {
     let count = 0;
@@ -309,7 +342,7 @@ export default function TNAViewPage() {
     });
   }, []);
 
-  const buildColumnDefs = useCallback((procs, currentFullData, activePoNumbers, activeColors) => {
+  const buildColumnDefs = useCallback((procs, currentFullData, activePoNumbers, activeColors, processFilter) => {
     if (!procs || procs.length === 0) return [];
 
     const selectedPoStrings = (activePoNumbers || []).map((po) => String(po).trim());
@@ -343,7 +376,7 @@ export default function TNAViewPage() {
       candidateRows = candidateRows.filter((row) => activeColors.includes(row.color));
     }
 
-    const visibleProcs = procs.filter((proc) => {
+    let visibleProcs = procs.filter((proc) => {
       if (isSelectedPoMode) {
         if (candidateRows.length === 0) return false;
         return candidateRows.some((row) => hasProcessData(row, proc));
@@ -351,6 +384,10 @@ export default function TNAViewPage() {
       if (candidateRows.length === 0) return true;
       return candidateRows.some((row) => hasProcessData(row, proc));
     });
+
+    if (processFilter) {
+      visibleProcs = visibleProcs.filter((proc) => proc === processFilter);
+    }
 
     return [
       { headerName: 'PO No', field: 'poNo', pinned: 'left', maxWidth: 120, suppressHeaderMenuButton: true },
@@ -523,9 +560,9 @@ export default function TNAViewPage() {
     }
     setTableData(filteredData);
     if (processList.length > 0) {
-      setColumnDefs(buildColumnDefs(processList, fullData, selectedPoNumbers, selectedColors));
+      setColumnDefs(buildColumnDefs(processList, fullData, selectedPoNumbers, selectedColors, selectedProcessFilter));
     }
-  }, [fullData, selectedColors, selectedPoNumbers, processList, buildColumnDefs]);
+  }, [fullData, selectedColors, selectedPoNumbers, processList, selectedProcessFilter, buildColumnDefs]);
 
   const handleSearch = async (customerId) => {
     const idToUse = customerId || selectedCustomer;
@@ -639,7 +676,7 @@ export default function TNAViewPage() {
       });
 
       setFullData(finalData);
-      setColumnDefs(buildColumnDefs(processList, finalData, selectedPoNumbers, selectedColors));
+      setColumnDefs(buildColumnDefs(processList, finalData, selectedPoNumbers, selectedColors, selectedProcessFilter));
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Error fetching Not Applicable TNA data:', error);
@@ -654,6 +691,7 @@ export default function TNAViewPage() {
     setSelectedCustomer(value);
     setSelectedPoNumbers([]);
     setSelectedColors([]);
+    setSelectedProcessFilter(null);
     setSelectedPortfolioId(null);
     setAvailablePortfolios([]);
     setPortfolioGroupsRef([]);
@@ -721,8 +759,9 @@ export default function TNAViewPage() {
       return row;
     });
 
+    setSelectedProcessFilter(null);
     setFullData(finalData);
-    setColumnDefs(buildColumnDefs(processList, finalData, [], []));
+    setColumnDefs(buildColumnDefs(processList, finalData, [], [], null));
     setSelectedPoNumbers([]);
     setSelectedColors([]);
     setModifiedRows(new Map());
@@ -1106,6 +1145,12 @@ export default function TNAViewPage() {
               onGridReady={onGridReady}
               rowData={tableData}
               columnDefs={columnDefs}
+              context={{
+                onTnaHeadingChange: handleTnaHeadingChange,
+                allProcessList: processList,
+                selectedProcessFilter,
+                selectedPoCount: selectedPoNumbers.length,
+              }}
               getRowId={(params) => `${params.data.poid}_${params.data.color || ''}`}
               headerHeight={32}
               groupHeaderHeight={32}
