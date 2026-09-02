@@ -16,6 +16,7 @@ import Tab from '@mui/material/Tab';
 import IconButton from '@mui/material/IconButton';
 import TextField from '@mui/material/TextField';
 import Stack from '@mui/material/Stack';
+import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
 import { alpha } from '@mui/material/styles';
@@ -38,7 +39,8 @@ import Scrollbar from 'src/components/scrollbar';
 import Label from 'src/components/label';
 import Iconify from 'src/components/iconify';
 
-import UserTableRow from 'src/sections/Supply-Chain/user-table-row';
+import { useRouter } from 'src/routes/hooks';
+import Checkbox from '@mui/material/Checkbox';
 import UserTableToolbar from 'src/sections/Supply-Chain/user-table-toolbar';
 import UserTableFiltersResult from 'src/sections/Supply-Chain/user-table-filters-result';
 
@@ -49,12 +51,11 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const STATUS_OPTIONS = [{ value: 'all', label: 'All' }];
 
 const TABLE_HEAD = [
-  { id: 'name', label: 'Name' },
-  { id: 'phoneNumber', label: 'Phone Number', width: 180 },
-  { id: 'company', label: 'Company', width: 220 },
-  { id: 'role', label: 'Role', width: 180 },
-  { id: 'status', label: 'Status', width: 100 },
-  { id: '', width: 88 },
+  { id: 'customerName', label: 'Customer', align: 'left' },
+  { id: 'address', label: 'Address', align: 'left' },
+  { id: 'city', label: 'City', align: 'left' },
+  { id: 'country', label: 'Country', align: 'left' },
+  { id: '', width: 88, align: 'center' },
 ];
 
 const defaultFilters = {
@@ -69,6 +70,7 @@ export default function OverviewEcommerceView() {
   const { enqueueSnackbar } = useSnackbar();
   const table = useTable({ defaultRowsPerPage: 10 });
   const settings = useSettingsContext();
+  const router = useRouter();
 
   const [tableData, setTableData] = useState([]);
   const [filters, setFilters] = useState(defaultFilters);
@@ -88,7 +90,7 @@ export default function OverviewEcommerceView() {
         throw new Error('Missing access token; login required.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/MyOrders/GetCustomer`, {
+      const response = await fetch(`${API_BASE_URL}/api/Customer/CustomerGrid?customerName=`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -104,19 +106,10 @@ export default function OverviewEcommerceView() {
       const arr = Array.isArray(data) ? data : data ? [data] : [];
       const mapped = arr.map((item, index) => ({
         id: item?.customerID ?? item?.customerId ?? item?.id ?? `${index}`,
-        name: item?.customerName ?? item?.customer ?? item?.name ?? '',
-        email: item?.email ?? '',
-        phoneNumber: item?.phoneNumber ?? item?.phone ?? item?.mobile ?? item?.contactNo ?? '',
-        company:
-          item?.company ??
-          item?.companyName ??
-          item?.customerCompany ??
-          item?.customerName ??
-          item?.customer ??
-          '',
-        role: item?.role ?? item?.userRole ?? 'Customer',
-        status: (item?.status ?? item?.customerStatus ?? 'active') || 'active',
-        avatarUrl: item?.avatarUrl ?? '',
+        customerName: item?.customerName ?? '',
+        address: item?.address ?? '',
+        city: item?.city ?? '',
+        country: item?.country ?? '',
       }));
 
       setTableData(mapped);
@@ -171,16 +164,6 @@ export default function OverviewEcommerceView() {
         <CustomBreadcrumbs
           heading="Customers List"
           links={[{ name: 'Dashboard' }, { name: 'Customers' }]}
-          action={
-            <Button
-              component={RouterLink}
-              href="/dashboard/customers/new"
-              variant="contained"
-              startIcon={<Iconify icon="mingcute:add-line" />}
-            >
-              Add Customer
-            </Button>
-          }
           sx={{ mb: { xs: 3, md: 5 } }}
         />
 
@@ -221,7 +204,21 @@ export default function OverviewEcommerceView() {
             ))}
           </Tabs>
 
-          <UserTableToolbar filters={filters} onFilters={handleFilters} />
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Box sx={{ flexGrow: 1 }}>
+              <UserTableToolbar filters={filters} onFilters={handleFilters} />
+            </Box>
+            <Box sx={{ pr: 2.5 }}>
+              <Button
+                component={RouterLink}
+                href="/dashboard/customers/new"
+                variant="contained"
+                startIcon={<Iconify icon="mingcute:add-line" />}
+              >
+                Add Customer
+              </Button>
+            </Box>
+          </Stack>
 
           {canReset && (
             <UserTableFiltersResult
@@ -255,7 +252,16 @@ export default function OverviewEcommerceView() {
             />
 
             <Scrollbar>
-              <Table size={table.dense ? 'small' : 'medium'} sx={{ minWidth: 960 }}>
+              <Table 
+                size={table.dense ? 'small' : 'medium'} 
+                sx={{ 
+                  minWidth: 960,
+                  '& .MuiTableCell-root': {
+                    border: '1px solid',
+                    borderColor: 'divider',
+                  }
+                }}
+              >
                 <TableHeadCustom
                   order={table.order}
                   orderBy={table.orderBy}
@@ -286,13 +292,12 @@ export default function OverviewEcommerceView() {
                         table.page * table.rowsPerPage + table.rowsPerPage
                       )
                       .map((row) => (
-                        <UserTableRow
+                        <CustomerTableRow
                           key={row.id}
                           row={row}
                           selected={table.selected.includes(row.id)}
                           onSelectRow={() => table.onSelectRow(row.id)}
-                          onEditRow={() => {}}
-                          onDeleteRow={() => {}}
+                          onEditRow={() => router.push(`/dashboard/customers/new?id=${row.id}`)}
                         />
                       ))
                   )}
@@ -340,7 +345,7 @@ function applyFilter({ inputData, comparator, filters }) {
   if (name) {
     const searchTerm = name.toLowerCase();
     inputData = inputData.filter((row) =>
-      String(row.name ?? '')
+      String(row.customerName ?? '')
         .toLowerCase()
         .includes(searchTerm)
     );
@@ -351,4 +356,25 @@ function applyFilter({ inputData, comparator, filters }) {
   }
 
   return inputData;
+}
+
+function CustomerTableRow({ row, selected, onSelectRow, onEditRow }) {
+  const { customerName, address, city, country } = row;
+
+  return (
+    <TableRow hover selected={selected}>
+      <TableCell padding="checkbox">
+        <Checkbox checked={selected} onClick={onSelectRow} />
+      </TableCell>
+      <TableCell align="left">{customerName}</TableCell>
+      <TableCell align="left">{address}</TableCell>
+      <TableCell align="left">{city}</TableCell>
+      <TableCell align="left">{country}</TableCell>
+      <TableCell align="center" sx={{ px: 1, whiteSpace: 'nowrap' }}>
+        <Button size="small" variant="text" onClick={onEditRow}>
+          Edit
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
 }
