@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import isEqual from 'lodash/isEqual';
+import { RouterLink } from 'src/routes/components';
 
 import Card from '@mui/material/Card';
 import Table from '@mui/material/Table';
@@ -170,6 +171,16 @@ export default function OverviewEcommerceView() {
         <CustomBreadcrumbs
           heading="Customers List"
           links={[{ name: 'Dashboard' }, { name: 'Customers' }]}
+          action={
+            <Button
+              component={RouterLink}
+              href="/dashboard/customers/new"
+              variant="contained"
+              startIcon={<Iconify icon="mingcute:add-line" />}
+            >
+              Add Customer
+            </Button>
+          }
           sx={{ mb: { xs: 3, md: 5 } }}
         />
 

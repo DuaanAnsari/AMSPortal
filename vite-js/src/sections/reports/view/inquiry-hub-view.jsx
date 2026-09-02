@@ -2402,28 +2402,107 @@ function MerchantInquirySheetForm() {
   const runPdfExport = useCallback(
     async (mode) => {
       if (generatingPdf) return;
+
+      if (filters.variant === 'select-customer' && filters.customer === ALL) {
+        enqueueSnackbar('Please Select Customer', { variant: 'warning' });
+        return;
+      }
+      if (filters.variant === 'select-supplier' && filters.supplier === ALL) {
+        enqueueSnackbar('Please Select Supplier', { variant: 'warning' });
+        return;
+      }
+
+      const previewWindow = mode === 'view' ? window.open('about:blank') : null;
       setGeneratingPdf(true);
       try {
-        if (filters.variant === 'select-customer' && filters.customer === ALL) {
-          enqueueSnackbar('Please Select Customer', { variant: 'warning' });
-          return;
-        }
-        if (filters.variant === 'select-supplier' && filters.supplier === ALL) {
-          enqueueSnackbar('Please Select Supplier', { variant: 'warning' });
-          return;
-        }
-
         const rows = await fetchSampleDevRows();
         const items = mapSampleDevRows(rows);
-        const blob = await buildInternalSdrPdfBlob({
-          title: 'Internal Sample Development Report',
-          fromDate: formatReadableDate(filters.fromDate),
-          toDate: formatReadableDate(filters.toDate),
-          items,
-        });
-        openInternalSdrPdf(mode, blob);
+
+        let exporter = null;
+        if (filters.variant === 'internal') {
+          exporter = {
+            build: () =>
+              buildInternalSdrPdfBlob({
+                items,
+                fromDate: formatReadableDate(filters.fromDate),
+                toDate: formatReadableDate(filters.toDate),
+              }),
+            open: openInternalSdrPdf,
+          };
+        } else if (filters.variant === 'all-customer') {
+          exporter = {
+            build: () =>
+              buildCustomerSdrPdfBlob({
+                items,
+                fromDate: filters.fromDate,
+                toDate: filters.toDate,
+              }),
+            open: openCustomerSdrPdf,
+          };
+        } else if (filters.variant === 'all-supplier') {
+          exporter = {
+            build: () =>
+              buildSupplierSdrPdfBlob({
+                items,
+                fromDate: formatReadableDate(filters.fromDate),
+                toDate: formatReadableDate(filters.toDate),
+              }),
+            open: openSupplierSdrPdf,
+          };
+        } else if (filters.variant === 'select-customer') {
+          const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+          const name = (row ? milestoneCustomerLabel(row) : '').toString().trim();
+          const title = `${(name || 'CUSTOMER').toUpperCase()} SAMPLE DEVELOPMENT REPORT`;
+          exporter = {
+            build: () =>
+              buildCustomerSdrPdfBlob({
+                title,
+                items,
+                fromDate: filters.fromDate,
+                toDate: filters.toDate,
+              }),
+            open: openCustomerSdrPdf,
+          };
+        } else if (filters.variant === 'select-supplier') {
+          const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
+          const name = (row ? milestoneSupplierLabel(row) : '').toString().trim();
+          const title = `${(name || 'SUPPLIER').toUpperCase()} SAMPLE DEVELOPMENT REPORT`;
+          exporter = {
+            build: () =>
+              buildSupplierSdrPdfBlob({
+                title,
+                items,
+                fromDate: formatReadableDate(filters.fromDate),
+                toDate: formatReadableDate(filters.toDate),
+              }),
+            open: openSupplierSdrPdf,
+          };
+        }
+
+        if (!exporter) return;
+
+        const blob = await exporter.build();
+        if (mode === 'view' && previewWindow) {
+          try {
+            previewWindow.document.title = 'MerchantInquiry';
+          } catch {
+            /* ignore cross-origin */
+          }
+          const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+          previewWindow.location.replace(url);
+          setTimeout(() => URL.revokeObjectURL(url), 120_000);
+          return;
+        }
+        exporter.open(mode, blob);
       } catch (err) {
-        console.error('[MerchantInquiry] PDF build failed', err);
+        console.error(`[MerchantInquiry:${filters.variant}] PDF build failed`, err);
+        if (previewWindow) {
+          try {
+            previewWindow.close();
+          } catch {
+            /* ignore */
+          }
+        }
         enqueueSnackbar('Could not build Merchant Inquiry PDF', { variant: 'error' });
       } finally {
         setGeneratingPdf(false);
@@ -2431,15 +2510,17 @@ function MerchantInquirySheetForm() {
     },
     [
       generatingPdf,
+      filters.variant,
       filters.customer,
       filters.supplier,
-      enqueueSnackbar,
-      filters.variant,
       filters.fromDate,
       filters.toDate,
+      enqueueSnackbar,
       fetchSampleDevRows,
       mapSampleDevRows,
       formatReadableDate,
+      customers,
+      suppliers,
     ]
   );
 
@@ -2855,19 +2936,84 @@ function SampleDevelopmentReportOnlyDispatchForm() {
       try {
         const rows = await fetchDispatchReportRows();
         const items = mapDispatchRows(rows);
-        const blob = await buildInternalSdrDispatchPdfBlob({
-          title: 'Sample Development Report for Dispatch Inquiry',
-          fromDate: filters.fromDate ? formatDispatchReadableDate(filters.fromDate) : '',
-          toDate: filters.toDate ? formatDispatchReadableDate(filters.toDate) : '',
-          items,
-        });
+
+        let exporter = null;
+        if (filters.variant === 'internal') {
+          exporter = {
+            build: () =>
+              buildInternalSdrDispatchPdfBlob({
+                title: 'Sample Development Report for Dispatch Inquiry',
+                fromDate: filters.fromDate ? formatDispatchReadableDate(filters.fromDate) : '',
+                toDate: filters.toDate ? formatDispatchReadableDate(filters.toDate) : '',
+                items,
+              }),
+            open: openInternalSdrDispatchPdf,
+          };
+        } else if (filters.variant === 'all-customer') {
+          exporter = {
+            build: () =>
+              buildCustomerSdrDispatchPdfBlob({
+                fromDate: filters.fromDate ? formatDispatchReadableDate(filters.fromDate) : '',
+                toDate: filters.toDate ? formatDispatchReadableDate(filters.toDate) : '',
+                items,
+              }),
+            open: openCustomerSdrDispatchPdf,
+          };
+        } else if (filters.variant === 'all-supplier') {
+          exporter = {
+            build: () =>
+              buildSupplierSdrDispatchPdfBlob({
+                fromDate: filters.fromDate ? formatDispatchReadableDate(filters.fromDate) : '',
+                toDate: filters.toDate ? formatDispatchReadableDate(filters.toDate) : '',
+                items,
+              }),
+            open: openSupplierSdrDispatchPdf,
+          };
+        } else if (filters.variant === 'select-customer') {
+          const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
+          const name = (row ? milestoneCustomerLabel(row) : '').toString().trim();
+          const title = `${(name || 'CUSTOMER').toUpperCase()} SAMPLE DEVELOPMENT REPORT`;
+          exporter = {
+            build: () =>
+              buildCustomerSdrDispatchPdfBlob({
+                title,
+                fromDate: filters.fromDate ? formatDispatchReadableDate(filters.fromDate) : '',
+                toDate: filters.toDate ? formatDispatchReadableDate(filters.toDate) : '',
+                items,
+              }),
+            open: openCustomerSdrDispatchPdf,
+          };
+        } else if (filters.variant === 'select-supplier') {
+          const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
+          const name = (row ? milestoneSupplierLabel(row) : '').toString().trim();
+          const title = `${(name || 'SUPPLIER').toUpperCase()} SAMPLE DEVELOPMENT REPORT`;
+          exporter = {
+            build: () =>
+              buildSupplierSdrDispatchPdfBlob({
+                title,
+                fromDate: filters.fromDate ? formatDispatchReadableDate(filters.fromDate) : '',
+                toDate: filters.toDate ? formatDispatchReadableDate(filters.toDate) : '',
+                items,
+              }),
+            open: openSupplierSdrDispatchPdf,
+          };
+        }
+
+        if (!exporter) return;
+
+        const blob = await exporter.build();
         if (mode === 'view' && previewWindow) {
+          try {
+            previewWindow.document.title = 'SDRDispatchInquiry';
+          } catch {
+            /* ignore cross-origin */
+          }
           const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
           previewWindow.location.replace(url);
           setTimeout(() => URL.revokeObjectURL(url), 120_000);
           return;
         }
-        openInternalSdrDispatchPdf(mode, blob);
+        exporter.open(mode, blob);
       } catch (err) {
         console.error(`[SDROnlyDispatch:${filters.variant}] PDF build failed`, err);
         if (previewWindow) {
@@ -2893,6 +3039,8 @@ function SampleDevelopmentReportOnlyDispatchForm() {
       fetchDispatchReportRows,
       mapDispatchRows,
       formatDispatchReadableDate,
+      customers,
+      suppliers,
     ]
   );
 

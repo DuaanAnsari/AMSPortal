@@ -23,6 +23,7 @@ const SupplierEditPage = lazy(() => import('src/pages/dashboard/supplier-edit'))
 const OverviewBankingPage = lazy(() => import('src/pages/dashboard/banking'));
 const OverviewBookingPage = lazy(() => import('src/pages/dashboard/booking'));
 const OverviewFilePage = lazy(() => import('src/pages/dashboard/file'));
+const CustomerCreatePage = lazy(() => import('src/pages/dashboard/customer-new'));
 // PRODUCT
 const ProductDetailsPage = lazy(() => import('src/pages/dashboard/product/details'));
 const ProductListPage = lazy(() => import('src/pages/dashboard/product/list'));
@@ -242,6 +243,7 @@ export const dashboardRoutes = [
       { path: 'qd-process-entry', element: <QDInspectionProcessEntryPage /> },
       { path: 'qa-inspection-view', element: <QAInspectionViewPage /> },
       { path: 'customers', element: <OverviewEcommercePage /> },
+      { path: 'customers/new', element: <CustomerCreatePage /> },
       { path: 'supplier', element: <OverviewAnalyticsPage /> },
       { path: 'supplier/add', element: <SupplierAddPage /> },
       { path: 'supplier/:id/edit', element: <SupplierEditPage /> },
