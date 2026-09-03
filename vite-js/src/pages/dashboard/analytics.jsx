@@ -22,6 +22,11 @@ import Checkbox from '@mui/material/Checkbox';
 import MenuItem from '@mui/material/MenuItem';
 import TextField from '@mui/material/TextField';
 import InputAdornment from '@mui/material/InputAdornment';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Typography from '@mui/material/Typography';
 import { alpha } from '@mui/material/styles';
 
 import axios from 'src/utils/axios';
@@ -40,7 +45,7 @@ import {
 import Scrollbar from 'src/components/scrollbar';
 import Label from 'src/components/label';
 import Iconify from 'src/components/iconify';
-import CustomPopover, { usePopover } from 'src/components/custom-popover';
+import { useSnackbar } from 'src/components/snackbar';
 
 import UserTableFiltersResult from 'src/sections/Supply-Chain/user-table-filters-result';
 
@@ -71,11 +76,16 @@ export default function OverviewAnalyticsPage() {
   const table = useTable({ defaultRowsPerPage: 10 });
   const settings = useSettingsContext();
   const navigate = useNavigate();
+  const { enqueueSnackbar } = useSnackbar();
 
   const [tableData, setTableData] = useState([]);
   const [filters, setFilters] = useState(defaultFilters);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState('');
+
+  // Modal state for Update Capacity / Update Turnover
+  const [actionModal, setActionModal] = useState({ open: false, type: '' });
+  const [actionValue, setActionValue] = useState('');
 
   const fetchSuppliers = useCallback(async () => {
     setLoading(true);
@@ -140,6 +150,56 @@ export default function OverviewAnalyticsPage() {
     setFilters(defaultFilters);
   }, []);
 
+  // Handle dropdown action selection
+  const handleActionSelect = useCallback(
+    (actionType) => {
+      if (!table.selected.length) {
+        return; // No suppliers selected
+      }
+      setActionValue('');
+      setActionModal({ open: true, type: actionType });
+    },
+    [table.selected]
+  );
+
+  const handleModalClose = useCallback(() => {
+    setActionModal({ open: false, type: '' });
+    setActionValue('');
+  }, []);
+
+  const handleModalUpdate = useCallback(async () => {
+    const selectedRows = tableData.filter((row) => table.selected.includes(row.id));
+    const venderIDs = selectedRows.map((row) => Number(row.supplierId));
+    const typeStr = actionModal.type === 'Update Capacity' ? 'Capacity' : 'Turnover';
+
+    try {
+        // Build query string with repeated venderIDs and other parameters
+        const params = new URLSearchParams();
+        venderIDs.forEach((id) => params.append('venderIDs', id));
+        params.append('type', typeStr);
+        params.append('value', Number(actionValue));
+        await axios.post(`/api/Vendor/update-grading?${params.toString()}`, null);
+
+
+      enqueueSnackbar(`${actionModal.type} updated successfully!`, { variant: 'success' });
+      handleModalClose();
+      table.onSelectAllRows(false, []); // clear selection
+      fetchSuppliers(); // refresh grid
+    } catch (error) {
+      console.error('Update grading error:', error);
+      const errorMessage = error?.response?.data?.Message || error?.message || 'Failed to update grading.';
+      enqueueSnackbar(errorMessage, { variant: 'error' });
+    }
+  }, [
+    tableData,
+    table,
+    actionModal.type,
+    actionValue,
+    handleModalClose,
+    fetchSuppliers,
+    enqueueSnackbar,
+  ]);
+
   return (
     <>
       <Helmet>
@@ -193,6 +253,8 @@ export default function OverviewAnalyticsPage() {
             filters={filters}
             onFilters={handleFilters}
             onAddSupplier={() => navigate('/dashboard/supplier/add')}
+            onActionSelect={handleActionSelect}
+            hasSelection={table.selected.length > 0}
           />
 
           {canReset && (
@@ -286,13 +348,50 @@ export default function OverviewAnalyticsPage() {
             onChangeDense={table.onChangeDense}
           />
         </Card>
+
+        {/* Update Capacity / Turnover Modal */}
+        <Dialog
+          open={actionModal.open}
+          onClose={handleModalClose}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle>{actionModal.type}</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" sx={{ mb: 2, mt: 1 }}>
+              {table.selected.length} supplier(s) selected
+            </Typography>
+            <TextField
+              autoFocus
+              fullWidth
+              type="number"
+              label={actionModal.type === 'Update Capacity' ? 'Capacity' : 'Turnover'}
+              value={actionValue}
+              onChange={(e) => setActionValue(e.target.value)}
+              placeholder="Enter value"
+              InputProps={{ inputProps: { min: 0 } }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleModalClose} color="inherit">
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleModalUpdate}
+              disabled={!actionValue}
+            >
+              Update
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Container>
     </>
   );
 }
 
-function SupplierTableToolbar({ filters, onFilters, onAddSupplier }) {
-  const popover = usePopover();
+function SupplierTableToolbar({ filters, onFilters, onAddSupplier, onActionSelect, hasSelection }) {
+  const [selectAction, setSelectAction] = useState('');
 
   const handleFilterName = useCallback(
     (event) => {
@@ -301,81 +400,70 @@ function SupplierTableToolbar({ filters, onFilters, onAddSupplier }) {
     [onFilters]
   );
 
+  const handleActionChange = useCallback(
+    (event) => {
+      const val = event.target.value;
+      setSelectAction(val);
+      if (val) {
+        onActionSelect(val);
+        // Reset dropdown back to placeholder after triggering action
+        setTimeout(() => setSelectAction(''), 0);
+      }
+    },
+    [onActionSelect]
+  );
+
   return (
-    <>
-      <Stack
-        spacing={2}
-        alignItems={{ xs: 'stretch', md: 'center' }}
-        direction={{ xs: 'column', md: 'row' }}
-        sx={{
-          p: 2.5,
-          pr: { xs: 2.5, md: 2.5 },
+    <Stack
+      spacing={2}
+      alignItems="center"
+      direction={{ xs: 'column', md: 'row' }}
+      sx={{ p: 2.5 }}
+    >
+      <TextField
+        fullWidth
+        value={filters.name}
+        onChange={handleFilterName}
+        placeholder="Search..."
+        size="small"
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <Iconify icon="eva:search-fill" sx={{ color: 'text.disabled' }} />
+            </InputAdornment>
+          ),
+        }}
+      />
+
+      <TextField
+        select
+        value={selectAction}
+        onChange={handleActionChange}
+        sx={{ minWidth: 180, flexShrink: 0 }}
+        size="small"
+        SelectProps={{
+          displayEmpty: true,
+          renderValue: (selected) => {
+            if (!selected) {
+              return <span style={{ color: '#9e9e9e' }}>Select Action</span>;
+            }
+            return selected;
+          },
         }}
       >
-        <Stack direction="row" alignItems="center" spacing={2} flexGrow={1} sx={{ width: 1 }}>
-          <TextField
-            fullWidth
-            value={filters.name}
-            onChange={handleFilterName}
-            placeholder="Search..."
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Iconify icon="eva:search-fill" sx={{ color: 'text.disabled' }} />
-                </InputAdornment>
-              ),
-            }}
-          />
+        <MenuItem value="Update Capacity">Update Capacity</MenuItem>
+        <MenuItem value="Update Turnover">Update Turnover</MenuItem>
+      </TextField>
 
-          <IconButton onClick={popover.onOpen}>
-            <Iconify icon="eva:more-vertical-fill" />
-          </IconButton>
-        </Stack>
-
-        <Button
-          variant="contained"
-          startIcon={<Iconify icon="mingcute:add-line" />}
-          onClick={onAddSupplier}
-          sx={{ whiteSpace: 'nowrap' }}
-        >
-          Add Supplier
-        </Button>
-      </Stack>
-
-      <CustomPopover
-        open={popover.open}
-        onClose={popover.onClose}
-        arrow="right-top"
-        sx={{ width: 140 }}
+      <Button
+        variant="contained"
+        startIcon={<Iconify icon="mingcute:add-line" />}
+        onClick={onAddSupplier}
+        sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
       >
-        <MenuItem
-          onClick={() => {
-            popover.onClose();
-          }}
-        >
-          <Iconify icon="solar:printer-minimalistic-bold" />
-          Print
-        </MenuItem>
-
-        <MenuItem
-          onClick={() => {
-            popover.onClose();
-          }}
-        >
-          <Iconify icon="solar:import-bold" />
-          Import
-        </MenuItem>
-
-        <MenuItem
-          onClick={() => {
-            popover.onClose();
-          }}
-        >
-          <Iconify icon="solar:export-bold" />
-          Export
-        </MenuItem>
-      </CustomPopover>
-    </>
+        Add Supplier
+      </Button>
+    </Stack>
   );
 }
 
