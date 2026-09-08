@@ -89,24 +89,57 @@ function drawSideStrip(doc, x, y, w, h, data) {
   doc.text(data.customerName, x + w - 2.2, y + h - 4.5, { angle: 90 });
 }
 
+// ============================================================
+// UPDATED drawQrArea FUNCTION - FIXED ALIGNMENT
+// ============================================================
 function drawQrArea(doc, x, y, w, h, data, qrDataUrl) {
-  const qrSize = Math.min(36, Math.max(30, Math.min(w, h) * 0.44));
-  const qrX = x + (w - qrSize) / 2;
-  const qrY = y + (h - qrSize) / 2;
-  doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+  const QR_BOX_WIDTH = 32.5;
+  const QR_BOX_HEIGHT = 32.5;
+  const qrX = x + (w - QR_BOX_WIDTH) / 2;
+  const qrY = y + (h - QR_BOX_HEIGHT) / 2;
+  const qrSize = QR_BOX_WIDTH;
+  
+  // Add QR Code
+  doc.addImage(qrDataUrl, 'PNG', qrX, qrY, QR_BOX_WIDTH, QR_BOX_HEIGHT);
 
+  // ============================================================
+  // SIZE - Top of QR (Center aligned)
+  // ============================================================
   doc.setFont('helvetica', 'bold');
-  fitFontSize(doc, data.size, w - 8, 10.5);
-  doc.text(data.size, x + w / 2, qrY - 6, { align: 'center' });
-  fitFontSize(doc, data.style, w - 8, 10.5);
-  doc.text(data.style, x + w / 2, qrY + qrSize + 6, { align: 'center' });
+  const sizeText = String(data.size || '').trim();
+  const sizeFontSize = fitFontSize(doc, sizeText, w - 8, 10.5, 5);
+  doc.setFontSize(sizeFontSize);
+  doc.text(sizeText, x + w / 2, qrY - 4, { align: 'center' });
 
+  // ============================================================
+  // STYLE - Bottom of QR (Center aligned)
+  // ============================================================
+  const styleText = String(data.style || '').trim();
+  const styleFontSize = fitFontSize(doc, styleText, w - 8, 10.5, 5);
+  doc.setFontSize(styleFontSize);
+  doc.text(styleText, x + w / 2, qrY + qrSize + 5, { align: 'center' });
+
+  // ============================================================
+  // PO NO - Left side (Vertical, Center aligned)
+  // ============================================================
   doc.setFont('helvetica', 'bold');
-  fitFontSize(doc, data.poNo, h - 8, 8.5);
-  doc.setFontSize(8.5);
-  const colorCode = String(data.colorCode || '').split(' (')[0].trim();
-  doc.text(data.poNo, x + 27, y + h / 1.5, { angle: 90, align: 'center' });
-  doc.text(colorCode, x + w - 10, y + h / 1.8, { angle: 90, align: 'center' });
+  const poText = String(data.poNo || '').trim();
+  const poMaxHeight = h - 10;
+  let poFontSize = fitFontSize(doc, poText, poMaxHeight, 9, 5);
+  doc.setFontSize(poFontSize);
+  doc.text(poText, x + 28, y + h / 1.5, { angle: 90, align: 'center' });
+
+  // ============================================================
+  // COLOR CODE - Right side (Vertical, Center aligned)
+  // ============================================================
+  const colorCode = String(data.colorCode || '')
+    .split(' (')[0]
+    .split(/\s+Pack\b/i)[0]
+    .trim();
+  const colorMaxHeight = h - 10;
+  let colorFontSize = fitFontSize(doc, colorCode, colorMaxHeight, 9, 5);
+  doc.setFontSize(colorFontSize);
+  doc.text(colorCode, x + w - 6, y + h / 1.8, { angle: 90, align: 'center' });
 }
 
 function drawInfoCells(doc, x, y, w, h, data) {
@@ -126,10 +159,25 @@ function drawInfoCells(doc, x, y, w, h, data) {
       doc.setFontSize(4.5);
       doc.setFont('helvetica', 'normal');
       doc.text('COLOR CODE', x + 1.8, cy + 3.6);
-      doc.setFontSize(11.5);
       doc.setFont('helvetica', 'bold');
       const colorCode = String(data.colorCode || '').split(' (')[0].trim();
-      doc.text(colorCode, x + 1.8, cy + 11);
+      const colorTextX = x + 1.8;
+      const colorTextY = cy + 11;
+      const colorTextWidth = w - 3.6;
+      const colorTextHeight = Math.max(2, h1 - 11);
+      let colorFontSize = 9.5;
+      let colorLines = [];
+
+      do {
+        doc.setFontSize(colorFontSize);
+        colorLines = doc.splitTextToSize(colorCode, colorTextWidth);
+        const lineHeight = colorFontSize * 0.35;
+        if (colorLines.length * lineHeight <= colorTextHeight || colorFontSize <= 1) break;
+        colorFontSize -= 0.5;
+      } while (colorFontSize > 1);
+
+      doc.setFontSize(colorFontSize);
+      doc.text(colorLines, colorTextX, colorTextY, { lineHeightFactor: 1 });
     } else if (i === 1) {
       doc.setFontSize(4.5);
       doc.setFont('helvetica', 'normal');
@@ -281,6 +329,7 @@ export default function CartonMarkingQRCode() {
   const [poOptions, setPoOptions] = useState([]);
   const [displayOptions, setDisplayOptions] = useState([]); // For lazy loading
   const [selected, setSelected] = useState([]);
+  const [pdfUrl, setPdfUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
@@ -494,14 +543,12 @@ export default function CartonMarkingQRCode() {
           poAssortType: row.POAssortType,
         };
 
-        const qrContent = JSON.stringify({
-          PODetailID: carton.poDetailID,
-          POAssortType: carton.poAssortType,
-        });
+        const qrContent = `${carton.poDetailID},${carton.solid}`;
 
         const qrDataUrl = await QRCode.toDataURL(qrContent, {
           width: 200,
           margin: 1,
+          version: 4,
           errorCorrectionLevel: 'M',
         });
 
@@ -512,6 +559,8 @@ export default function CartonMarkingQRCode() {
       // Open PDF in new tab with title "CartonMarkingQRCode"
       const pdfBlob = doc.output('blob');
       const blobUrl = URL.createObjectURL(pdfBlob);
+      setPdfUrl(blobUrl);
+
       const newTab = window.open(blobUrl, '_blank');
 
       // Set the document title in the new tab
@@ -537,6 +586,20 @@ export default function CartonMarkingQRCode() {
       enqueueSnackbar('Failed to generate PDF', { variant: 'error' });
     }
   }, [selected, enqueueSnackbar]);
+
+  const handleDownload = useCallback(() => {
+    if (!pdfUrl) {
+      enqueueSnackbar('Please print the PDF first', { variant: 'warning' });
+      return;
+    }
+
+    const link = document.createElement('a');
+    link.href = pdfUrl;
+    link.download = 'CartonMarkingQRCode.pdf';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }, [pdfUrl, enqueueSnackbar]);
 
   const handleCancel = useCallback(() => {
     setSelected([]);
@@ -659,6 +722,15 @@ export default function CartonMarkingQRCode() {
             disabled={selected.length === 0 || loading}
           >
             Print
+          </Button>
+
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleDownload}
+            disabled={selected.length === 0 || loading}
+          >
+            Download
           </Button>
 
           <Button
