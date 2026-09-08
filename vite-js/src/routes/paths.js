@@ -101,6 +101,7 @@ export const paths = {
   dashboard: {
     root: ROOTS.DASHBOARD,
     containerLoading: `${ROOTS.DASHBOARD}/container-loading`,
+    containerLoadingCartonMarking: `${ROOTS.DASHBOARD}/container-loading/carton-marking-qr`,
     masterOrderForQDSheet: `${ROOTS.DASHBOARD}/MasterOrderForQDSheet`,
     qdInspection: `${ROOTS.DASHBOARD}/qd-inspection`,
     qdPoPreview: `${ROOTS.DASHBOARD}/qd-po-preview`,
@@ -136,9 +137,9 @@ export const paths = {
       orderDetail: `${ROOTS.DASHBOARD}/supply-chain/order-detail`,
       samplingProgram: `${ROOTS.DASHBOARD}/supply-chain/sampling-program`,
       sampleInspectionReport: `${ROOTS.DASHBOARD}/supply-chain/sample-inspection-report`,
-      /** Legacy `SelfSizeSpecsView.aspx` — list + PO filter + PDF (API later). */
+      /** Legacy \`SelfSizeSpecsView.aspx\` — list + PO filter + PDF (API later). */
       sizeSpecsView: `${ROOTS.DASHBOARD}/supply-chain/size-specs-view`,
-      /** Legacy `SelfSizeSpecsEntry.aspx` (new). */
+      /** Legacy \`SelfSizeSpecsEntry.aspx\` (new). */
       sizeSpecsAdd: `${ROOTS.DASHBOARD}/supply-chain/size-specs/add`,
       sizeSpecsEdit: `${ROOTS.DASHBOARD}/supply-chain/size-specs/edit`,
       sizeSpecsEditWithQuery: (lPODetailID, lPOID, measurementTypeId) => {
@@ -178,7 +179,6 @@ export const paths = {
       sizeRangeDatabase: `${ROOTS.DASHBOARD}/power-tool/size-range-database`,
       addSizeRange: `${ROOTS.DASHBOARD}/power-tool/add-size-range`,
       addSize: `${ROOTS.DASHBOARD}/power-tool/add-size`,
-      sizeRangeDatabase: `${ROOTS.DASHBOARD}/power-tool/size-range-database`,
       advancePayment: `${ROOTS.DASHBOARD}/power-tool/advance-payment`,
       addAdvance: `${ROOTS.DASHBOARD}/power-tool/add-advance`,
       icrForm: `${ROOTS.DASHBOARD}/power-tool/icr-form`,

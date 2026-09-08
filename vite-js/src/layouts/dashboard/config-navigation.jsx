@@ -55,6 +55,8 @@ const ROUTE_BY_NAME = createNameMap([
   ['File', paths.dashboard.general.file],
   ['New Container Loading', paths.dashboard.containerLoading],
   // Removed 'Container Loading' from here so it acts as a pure dropdown folder (no path)
+  ['Carton Marking QR Code', paths.dashboard.containerLoadingCartonMarking],
+  ['carton-marking-qr', paths.dashboard.containerLoadingCartonMarking],
   ['Inspection', paths.dashboard.masterOrderForQDSheet],
   ['Inspection Report', paths.dashboard.qaInspectionView],
   ['Sample Inspection Report', paths.dashboard.supplyChain.sampleInspectionReport],
@@ -195,6 +197,7 @@ const ICON_BY_NAME = createNameMap([
   ['Profile Setting', ICONS.user],
   ['New Container Loading', ICONS.order],
   ['Container Loading', ICONS.order],
+  ['Carton Marking QR Code', ICONS.order],
   ['Courier Packages', ICONS.folder],
   ['Evaluation Form', ICONS.file],
   ['Reports', ICONS.analytics],
@@ -324,7 +327,9 @@ export function useNavData() {
                'sample-inspection-report', 
                'sample inspection report',
                'size-specs-view',
-               'size specs'
+               'size specs',
+               'carton-marking-qr',
+               'carton marking qr code'
             ];
 
             // 1. Remove the target pages from anywhere else in the menu completely (children)
@@ -343,7 +348,9 @@ export function useNavData() {
                   lKey === 'sample inspection report' ||
                   lKey === 'size-specs-view' ||
                   lKey === 'size specs' ||
-                  lKey === 'container-loading'
+                  lKey === 'container-loading' ||
+                  lKey === 'carton-marking-qr' ||
+                  lKey === 'carton marking qr code'
                ) {
                   delete data[key];
                }
@@ -364,6 +371,9 @@ export function useNavData() {
 
             if (!clDropdownItems.includes('container-loading')) {
                 clDropdownItems.push('container-loading');
+            }
+            if (!clDropdownItems.includes('carton-marking-qr')) {
+                clDropdownItems.push('carton-marking-qr');
             }
 
             // 3. Reconstruct the data object to place 'Inspection' directly BELOW 'Power Tool'

@@ -147,6 +147,9 @@ const ContainerHandlingViewPage = lazy(
 const ContainerLoadingViewPage = lazy(
   () => import('src/sections/power-tool/view/Container-loading-view')
 );
+const CartonMarkingQRCodePage = lazy(
+  () => import('src/sections/container-loading/CartonMarkingQRCode')
+);
 const ContainerHandlingReportPage = lazy(
   () => import('src/sections/power-tool/view/Container-handling-report')
 );
@@ -237,6 +240,7 @@ export const dashboardRoutes = [
     children: [
       { element: <IndexPage />, index: true },
       { path: 'container-loading', element: <ContainerLoadingViewPage /> },
+      { path: 'container-loading/carton-marking-qr', element: <CartonMarkingQRCodePage /> },
       { path: 'MasterOrderForQDSheet', element: <MasterOrderForQDSheetPage /> },
       { path: 'qd-inspection', element: <QualityDepartmentInspectionPage /> },
       { path: 'qd-po-preview', element: <QDPurchaseOrderPreviewPage /> },
