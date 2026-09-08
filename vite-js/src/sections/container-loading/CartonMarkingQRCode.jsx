@@ -105,8 +105,8 @@ function drawQrArea(doc, x, y, w, h, data, qrDataUrl) {
   fitFontSize(doc, data.poNo, h - 8, 8.5);
   doc.setFontSize(8.5);
   const colorCode = String(data.colorCode || '').split(' (')[0].trim();
-  doc.text(data.poNo, x + 24, y + h / 2, { angle: 90, align: 'center' });
-  doc.text(colorCode, x + w - 12, y + h / 2, { angle: 90, align: 'center' });
+  doc.text(data.poNo, x + 27, y + h / 1.5, { angle: 90, align: 'center' });
+  doc.text(colorCode, x + w - 10, y + h / 1.8, { angle: 90, align: 'center' });
 }
 
 function drawInfoCells(doc, x, y, w, h, data) {
