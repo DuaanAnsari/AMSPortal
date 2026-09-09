@@ -310,7 +310,7 @@ function drawPictureSlots(doc, x0, y, w, h, pictures) {
     const url = Array.isArray(pictures) ? pictures[i] : null;
     if (url) {
       try {
-        doc.addImage(url, 'PNG', ix, iy, iw, ih, undefined, 'FAST');
+        doc.addImage(url, undefined, ix, iy, iw, ih, undefined, 'FAST');
       } catch {
         drawPlaceholderImage(doc, ix, iy, iw, ih);
       }
@@ -326,6 +326,8 @@ function drawPictureSlots(doc, x0, y, w, h, pictures) {
 // ----------------------------------------------------------------------
 
 function drawStack2(doc, x, y, w, h, topText, bottomText) {
+  const gap = 2;
+  const zoneH = (h - gap) / 2;
   // Top line pinned near the top, bottom line pinned near the bottom — gives
   // the legacy look where Customer sits at the top of the cell and Inquiry
   // Date drops to the bottom.
@@ -337,7 +339,7 @@ function drawStack2(doc, x, y, w, h, topText, bottomText) {
     pad: 4,
   });
   const bottomLines = wrapText(doc, bottomText, w, 7.4, false);
-  drawTextLines(doc, x, y, w, h, bottomLines, {
+  drawTextLines(doc, x, y + zoneH + gap, w, zoneH, bottomLines, {
     align: 'left',
     fontSize: 7.4,
     vAlign: 'bottom',

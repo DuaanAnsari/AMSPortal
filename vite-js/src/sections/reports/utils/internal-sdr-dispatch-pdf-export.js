@@ -565,15 +565,14 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  */
 export async function buildInternalSdrDispatchPdfBlob(data = {}) {
   const payload = {
-    ...INTERNAL_SDR_DISPATCH_DEMO,
     ...data,
     items: Array.isArray(data.items) ? data.items : [],
   };
 
   const meta = {
     title: payload.title || data.title || 'Sample Development Report for Dispatch Inquiry',
-    fromDate: payload.fromDate || data.fromDate || INTERNAL_SDR_DISPATCH_DEMO.fromDate,
-    toDate: payload.toDate || data.toDate || INTERNAL_SDR_DISPATCH_DEMO.toDate,
+    fromDate: payload.fromDate || data.fromDate || '',
+    toDate: payload.toDate || data.toDate || '',
     printedOn: payload.printedOn || data.printedOn || formatPrintedOnLong(),
   };
 

@@ -115,6 +115,41 @@ function inquiryAuthHeaders() {
   };
 }
 
+async function toPdfImageSource(source) {
+  if (!source || typeof source !== 'string' || source.startsWith('data:image/')) return source;
+
+  if (/^[A-Za-z0-9+/=\r\n]+$/.test(source) && source.length > 100) {
+    return `data:image/png;base64,${source.replace(/\s/g, '')}`;
+  }
+
+  try {
+    const imageUrl = new URL(source, API_BASE_URL || window.location.origin).href;
+    const response = await fetch(imageUrl, { headers: inquiryAuthHeaders() });
+    if (!response.ok) return source;
+
+    const blob = await response.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result || source);
+      reader.onerror = () => resolve(source);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return source;
+  }
+}
+
+async function hydrateReportImages(items) {
+  return Promise.all(
+    (Array.isArray(items) ? items : []).map(async (item) => ({
+      ...item,
+      pictures: await Promise.all(
+        (Array.isArray(item?.pictures) ? item.pictures : []).map(toPdfImageSource)
+      ),
+    }))
+  );
+}
+
 // ----------------------------------------------------------------------
 // Shared form styling (mirrors the Shipment / MGT / Inspection hub look).
 // ----------------------------------------------------------------------
@@ -1787,7 +1822,7 @@ function SampleDevelopmentReportForm() {
 
       try {
         const rows = await fetchSampleDevRows();
-        const items = mapSampleDevRows(rows, filters.variant);
+        const items = await hydrateReportImages(mapSampleDevRows(rows, filters.variant));
 
         let exporter = null;
         if (filters.variant === 'internal') {
@@ -2903,6 +2938,83 @@ function SampleDevelopmentReportOnlyDispatchForm() {
     })
   ), [formatDispatchReadableDate]);
 
+  const filterDispatchReportRows = useCallback((rows) => {
+    const list = Array.isArray(rows) ? rows : [];
+    const normalize = (value) => String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const pickRowField = (row, ...keys) => {
+      if (!row || typeof row !== 'object') return '';
+      for (const key of keys) {
+        if (key in row && row[key] != null && row[key] !== '') return row[key];
+      }
+      const lower = {};
+      Object.keys(row).forEach((key) => {
+        lower[key.toLowerCase()] = row[key];
+      });
+      for (const key of keys) {
+        const value = lower[String(key).toLowerCase()];
+        if (value != null && value !== '') return value;
+      }
+      return '';
+    };
+
+    const selectedCustomer =
+      filters.customer !== ALL
+        ? customers.find((row) => milestoneCustomerKey(row) === filters.customer)
+        : null;
+    const selectedSupplier =
+      filters.supplier !== ALL
+        ? suppliers.find((row) => milestoneSupplierKey(row) === filters.supplier)
+        : null;
+    const customerLabel = selectedCustomer ? milestoneCustomerLabel(selectedCustomer) : '';
+    const supplierLabel = selectedSupplier ? milestoneSupplierLabel(selectedSupplier) : '';
+
+    if (!customerLabel && !supplierLabel) return list;
+
+    return list.filter((row) => {
+      if (customerLabel) {
+        const customerId = pickRowField(row, 'CustomerID', 'CustomerId', 'customerID', 'customerId');
+        const customerName = pickRowField(row, 'CustomerName', 'customerName', 'Customer', 'customer', 'BuyerName');
+        const customerMatches = customerId
+          ? String(customerId).trim() === String(filters.customer).trim()
+          : normalize(customerName) === normalize(customerLabel);
+        if (!customerMatches) return false;
+      }
+
+      if (supplierLabel) {
+        const supplierId = pickRowField(
+          row,
+          'VenderLibraryID',
+          'VenderLibraryId',
+          'venderLibraryID',
+          'venderLibraryId',
+          'SupplierID',
+          'SupplierId',
+          'supplierID',
+          'supplierId'
+        );
+        const supplierName = pickRowField(
+          row,
+          'VenderName',
+          'venderName',
+          'SupplierName',
+          'supplierName',
+          'VendorName',
+          'vendorName',
+          'FactoryName',
+          'factoryName',
+          'Supplier',
+          'Vendor'
+        );
+        const supplierMatches = supplierId
+          ? String(supplierId).trim() === String(filters.supplier).trim()
+          : normalize(supplierName) === normalize(supplierLabel);
+        if (!supplierMatches) return false;
+      }
+
+      return true;
+    });
+  }, [customers, filters.customer, filters.supplier, suppliers]);
+
   /**
    * Build the right Sample Development Report (Dispatch) PDF for the
    * currently-selected variant. Dedicated Dispatch-flavored exporters are
@@ -2935,7 +3047,7 @@ function SampleDevelopmentReportOnlyDispatchForm() {
       setGeneratingPdf(true);
       try {
         const rows = await fetchDispatchReportRows();
-        const items = mapDispatchRows(rows);
+        const items = mapDispatchRows(filterDispatchReportRows(rows));
 
         let exporter = null;
         if (filters.variant === 'internal') {
@@ -2953,6 +3065,7 @@ function SampleDevelopmentReportOnlyDispatchForm() {
           exporter = {
             build: () =>
               buildCustomerSdrDispatchPdfBlob({
+                title: 'Sample Development Report for Dispatch Inquiry',
                 fromDate: filters.fromDate ? formatDispatchReadableDate(filters.fromDate) : '',
                 toDate: filters.toDate ? formatDispatchReadableDate(filters.toDate) : '',
                 items,
@@ -2963,6 +3076,7 @@ function SampleDevelopmentReportOnlyDispatchForm() {
           exporter = {
             build: () =>
               buildSupplierSdrDispatchPdfBlob({
+                title: 'Sample Development Report for Dispatch Inquiry',
                 fromDate: filters.fromDate ? formatDispatchReadableDate(filters.fromDate) : '',
                 toDate: filters.toDate ? formatDispatchReadableDate(filters.toDate) : '',
                 items,
@@ -2970,9 +3084,7 @@ function SampleDevelopmentReportOnlyDispatchForm() {
             open: openSupplierSdrDispatchPdf,
           };
         } else if (filters.variant === 'select-customer') {
-          const row = customers.find((r) => milestoneCustomerKey(r) === filters.customer);
-          const name = (row ? milestoneCustomerLabel(row) : '').toString().trim();
-          const title = `${(name || 'CUSTOMER').toUpperCase()} SAMPLE DEVELOPMENT REPORT`;
+          const title = 'Sample Development Report for Dispatch Inquiry';
           exporter = {
             build: () =>
               buildCustomerSdrDispatchPdfBlob({
@@ -2984,9 +3096,7 @@ function SampleDevelopmentReportOnlyDispatchForm() {
             open: openCustomerSdrDispatchPdf,
           };
         } else if (filters.variant === 'select-supplier') {
-          const row = suppliers.find((r) => milestoneSupplierKey(r) === filters.supplier);
-          const name = (row ? milestoneSupplierLabel(row) : '').toString().trim();
-          const title = `${(name || 'SUPPLIER').toUpperCase()} SAMPLE DEVELOPMENT REPORT`;
+          const title = 'Sample Development Report for Dispatch Inquiry';
           exporter = {
             build: () =>
               buildSupplierSdrDispatchPdfBlob({
@@ -3004,7 +3114,7 @@ function SampleDevelopmentReportOnlyDispatchForm() {
         const blob = await exporter.build();
         if (mode === 'view' && previewWindow) {
           try {
-            previewWindow.document.title = 'SDRDispatchInquiry';
+            previewWindow.document.title = 'Sample Development Report for Dispatch Inquiry';
           } catch {
             /* ignore cross-origin */
           }
@@ -3037,6 +3147,7 @@ function SampleDevelopmentReportOnlyDispatchForm() {
       filters.customer,
       filters.supplier,
       fetchDispatchReportRows,
+      filterDispatchReportRows,
       mapDispatchRows,
       formatDispatchReadableDate,
       customers,

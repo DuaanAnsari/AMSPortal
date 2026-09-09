@@ -504,19 +504,20 @@ function drawFooter(doc, pageIdx, totalPages, printedOn) {
  * @returns {Promise<Blob>}
  */
 export async function buildCustomerSdrDispatchPdfBlob(data = {}) {
-  const payload =
-    data && Array.isArray(data.items) && data.items.length > 0
-      ? data
-      : CUSTOMER_SDR_DISPATCH_DEMO;
+  const payload = {
+    ...data,
+    items: Array.isArray(data.items) ? data.items : [],
+  };
 
   const meta = {
-    title: payload.title || data.title || CUSTOMER_SDR_DISPATCH_DEMO.title,
-    fromDate: payload.fromDate || data.fromDate || CUSTOMER_SDR_DISPATCH_DEMO.fromDate,
-    toDate: payload.toDate || data.toDate || CUSTOMER_SDR_DISPATCH_DEMO.toDate,
+    title: payload.title || data.title || 'Sample Development Report for Dispatch Inquiry',
+    fromDate: payload.fromDate || data.fromDate || '',
+    toDate: payload.toDate || data.toDate || '',
     printedOn: payload.printedOn || data.printedOn || formatPrintedOnLong(),
   };
 
   const doc = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H], orientation: 'l' });
+  doc.setProperties({ title: meta.title, subject: meta.title });
   await loadLogoDataUrl().catch(() => null);
 
   const tableX = H_MARGIN;

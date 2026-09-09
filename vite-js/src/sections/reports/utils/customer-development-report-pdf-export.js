@@ -303,7 +303,7 @@ function drawPictureSlots(doc, x0, y, w, h, pictures) {
     const url = Array.isArray(pictures) ? pictures[i] : null;
     if (url) {
       try {
-        doc.addImage(url, 'PNG', ix, iy, iw, ih, undefined, 'FAST');
+        doc.addImage(url, undefined, ix, iy, iw, ih, undefined, 'FAST');
       } catch {
         drawPlaceholderImage(doc, ix, iy, iw, ih);
       }
