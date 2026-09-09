@@ -43,7 +43,7 @@ const IMAGE_PLACEHOLDER_BORDER = [200, 200, 200];
 const IMAGE_PLACEHOLDER_TEXT = [195, 195, 195];
 const NAVY = [0, 51, 102];
 
-const PICTURE_SLOTS = 1;
+const PICTURE_SLOTS = 2;
 
 const PDF_VIEW_ZOOM_HASH = '#zoom=110';
 
@@ -295,6 +295,23 @@ function drawPlaceholderImage(doc, x, y, w, h) {
   doc.setTextColor(0, 0, 0);
 }
 
+function getPdfImageSource(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+
+  const source = value.trim();
+  if (source.startsWith('data:image/jpeg') || source.startsWith('data:image/jpg')) {
+    return { source, format: 'JPEG' };
+  }
+  if (source.startsWith('data:image/png')) return { source, format: 'PNG' };
+
+  const base64 = source.replace(/\s/g, '');
+  if (base64.startsWith('/9j/')) {
+    return { source: `data:image/jpeg;base64,${base64}`, format: 'JPEG' };
+  }
+
+  return { source, format: 'PNG' };
+}
+
 function drawPictureSlots(doc, x0, y, w, h, pictures) {
   const slotW = w / PICTURE_SLOTS;
   for (let i = 0; i < PICTURE_SLOTS; i += 1) {
@@ -305,10 +322,10 @@ function drawPictureSlots(doc, x0, y, w, h, pictures) {
     const iw = slotW - padding * 2;
     const ih = h - padding * 2;
 
-    const url = Array.isArray(pictures) ? pictures[i] : null;
-    if (url) {
+    const image = getPdfImageSource(Array.isArray(pictures) ? pictures[i] : null);
+    if (image) {
       try {
-        doc.addImage(url, 'PNG', ix, iy, iw, ih, undefined, 'FAST');
+        doc.addImage(image.source, image.format, ix, iy, iw, ih, undefined, 'FAST');
       } catch {
         drawPlaceholderImage(doc, ix, iy, iw, ih);
       }

@@ -5,15 +5,13 @@ import QRCode from 'qrcode';
 
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Checkbox,
   CircularProgress,
   Container,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
+  TextField,
   Typography,
 } from '@mui/material';
 
@@ -470,9 +468,8 @@ export default function CartonMarkingQRCode() {
   // ============================================================
   // HANDLERS
   // ============================================================
-  const handleChange = useCallback((event) => {
-    const value = event.target.value;
-    setSelected(typeof value === 'string' ? value.split(',') : value);
+  const handleChange = useCallback((_event, options) => {
+    setSelected(options.map((option) => option.value));
   }, []);
 
   const handlePrint = useCallback(async () => {
@@ -617,12 +614,12 @@ export default function CartonMarkingQRCode() {
   // ============================================================
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredOptions = useCallback((term) => {
-    if (!term) return displayOptions;
-    return displayOptions.filter(po =>
-      po.label.toLowerCase().includes(term.toLowerCase())
-    );
-  }, [displayOptions]);
+  const normalizedSearchTerm = searchTerm.replace(/\s+/g, '').toLowerCase();
+  const filteredOptions = normalizedSearchTerm
+    ? poOptions.filter((po) =>
+      po.label.replace(/\s+/g, '').toLowerCase().includes(normalizedSearchTerm)
+    )
+    : displayOptions;
 
   // ============================================================
   // UI
@@ -657,62 +654,57 @@ export default function CartonMarkingQRCode() {
           </Alert>
         )}
 
-        <FormControl size="small" sx={{ width: 320, mb: 3 }}>
-          <InputLabel id="po-multi-select-label">PO #</InputLabel>
-          <Select
-            labelId="po-multi-select-label"
+        <Autocomplete
             id="po-multi-select"
             multiple
-            value={selected}
+            options={filteredOptions}
+            value={poOptions.filter((po) => selected.includes(po.value))}
             onChange={handleChange}
-            renderValue={renderValue}
-            label="PO #"
-            disabled={loading || isInitialLoad}
-            MenuProps={{
-              PaperProps: {
-                sx: {
-                  maxHeight: 400,
-                  overflow: 'auto',
-                },
-              },
-              // Keep menu mounted to avoid re-renders
-              keepMounted: true,
-              disableScrollLock: true,
+            inputValue={searchTerm}
+            onInputChange={(_event, value, reason) => {
+              if (reason === 'input' || reason === 'clear') {
+                setSearchTerm(value);
+              }
             }}
-          >
-            {displayOptions.length === 0 && !loading && !isInitialLoad && (
-              <MenuItem disabled>No POs found</MenuItem>
-            )}
-
-            {displayOptions.map((po, index) => {
+            getOptionLabel={(option) => option.label}
+            isOptionEqualToValue={(option, value) => option.value === value.value}
+            filterOptions={(options) => options}
+            disableCloseOnSelect
+            disabled={loading || isInitialLoad}
+            loading={loading}
+            noOptionsText="No POs found"
+            renderTags={(value) => renderValue(value.map((option) => option.value))}
+            ListboxProps={{
+              sx: {
+                maxHeight: 400,
+                overflow: 'auto',
+              },
+            }}
+            renderOption={(props, po, { selected: isSelected }) => {
               // Attach ref to last item for infinite scroll
-              const isLastItem = index === displayOptions.length - 1;
+              const isLastItem =
+                !normalizedSearchTerm && po.value === filteredOptions[filteredOptions.length - 1]?.value;
               const itemRef = isLastItem ? lastItemRef : null;
 
               return (
-                <MenuItem
-                  key={po.value}
-                  value={po.value}
-                  sx={{ minHeight: 48 }}
+                <Box
+                  component="li"
+                  {...props}
                   ref={itemRef}
+                  sx={{ minHeight: 48 }}
                 >
                   <Checkbox
-                    checked={selected.includes(po.value)}
+                    checked={isSelected}
                     sx={{ p: 0.5, mr: 1 }}
                   />
                   {po.label}
-                </MenuItem>
+                </Box>
               );
-            })}
-
-            {/* Loading indicator at bottom */}
-            {loading && hasMore && (
-              <MenuItem disabled sx={{ justifyContent: 'center' }}>
-                <CircularProgress size={20} />
-              </MenuItem>
-            )}
-          </Select>
-        </FormControl>
+            }}
+            renderInput={(params) => <TextField {...params} label="PO #" />}
+            size="small"
+            sx={{ width: 320, mb: 3 }}
+          />
 
         <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
           <Button

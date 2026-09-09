@@ -3510,7 +3510,7 @@ function SampleDevelopmentReportCsWiseForm() {
     (rows) => (
       (Array.isArray(rows) ? rows : []).map((row, index) => ({
         serial: String(index + 1),
-        pictures: Array.isArray(row?.pictures) ? row.pictures : Array.isArray(row?.Pictures) ? row.Pictures : [],
+        pictures: [row?.InqImage ?? row?.inqImage ?? null, row?.BackImage ?? row?.backImage ?? null],
         customer: row?.CustomerName ?? row?.customerName ?? row?.Customer ?? row?.customer ?? '',
         inquiryDate: formatDispatchReadableDate(row?.InquiryDate ?? row?.inquiryDate ?? row?.CreateDate ?? row?.createDate ?? ''),
         factoryName: row?.VenderName ?? row?.venderName ?? row?.VendorName ?? row?.vendorName ?? row?.FactoryName ?? row?.factoryName ?? '',
