@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
+import { useNavigate } from 'react-router-dom';
 
 import {
   Alert,
@@ -72,7 +73,7 @@ function drawSideStrip(doc, x, y, w, h, data) {
   doc.setFontSize(4.5);
   doc.setFont('helvetica', 'normal');
   doc.text('VENDOR CODE', x + 2.2, midY - 4.5, { angle: 90 });
-  
+
   doc.setFontSize(7);
   doc.setFont('helvetica', 'bold');
   doc.text(data.vendorCode, x + w - 2.2, midY - 4.5, { angle: 90 });
@@ -81,7 +82,7 @@ function drawSideStrip(doc, x, y, w, h, data) {
   doc.setFontSize(4.5);
   doc.setFont('helvetica', 'normal');
   doc.text('CUSTOMER NAME', x + 2.2, y + h - 4.5, { angle: 90 });
-  
+
   doc.setFontSize(7);
   doc.setFont('helvetica', 'bold');
   doc.text(data.customerName, x + w - 2.2, y + h - 4.5, { angle: 90 });
@@ -96,7 +97,11 @@ function drawQrArea(doc, x, y, w, h, data, qrDataUrl) {
   const qrX = x + (w - QR_BOX_WIDTH) / 2;
   const qrY = y + (h - QR_BOX_HEIGHT) / 2;
   const qrSize = QR_BOX_WIDTH;
-  
+  const sideAreaCenterY = y + h / 2;
+  const leftSideAreaCenterX = x + (qrX - x) / 2;
+  const rightQrEdge = qrX + QR_BOX_WIDTH;
+  const rightSideAreaCenterX = rightQrEdge + (x + w - rightQrEdge) / 2;
+
   // Add QR Code
   doc.addImage(qrDataUrl, 'PNG', qrX, qrY, QR_BOX_WIDTH, QR_BOX_HEIGHT);
 
@@ -125,7 +130,11 @@ function drawQrArea(doc, x, y, w, h, data, qrDataUrl) {
   const poMaxHeight = h - 10;
   let poFontSize = fitFontSize(doc, poText, poMaxHeight, 9, 5);
   doc.setFontSize(poFontSize);
-  doc.text(poText, x + 28, y + h / 1.5, { angle: 90, align: 'center' });
+  doc.text(poText, leftSideAreaCenterX, sideAreaCenterY, {
+    angle: 90,
+    align: 'center',
+    baseline: 'middle',
+  });
 
   // ============================================================
   // COLOR CODE - Right side (Vertical, Center aligned)
@@ -137,7 +146,11 @@ function drawQrArea(doc, x, y, w, h, data, qrDataUrl) {
   const colorMaxHeight = h - 10;
   let colorFontSize = fitFontSize(doc, colorCode, colorMaxHeight, 9, 5);
   doc.setFontSize(colorFontSize);
-  doc.text(colorCode, x + w - 6, y + h / 1.8, { angle: 90, align: 'center' });
+  doc.text(colorCode, rightSideAreaCenterX, sideAreaCenterY, {
+    angle: 90,
+    align: 'center',
+    baseline: 'middle',
+  });
 }
 
 function drawInfoCells(doc, x, y, w, h, data) {
@@ -203,7 +216,7 @@ function drawInfoCells(doc, x, y, w, h, data) {
       doc.text(`GW : ${data.gw} KG`, x + 1.8, cy + 7);
       doc.text(`NW : ${data.nw} KG`, x + 1.8, cy + 14);
     }
-    
+
     cy += rh;
   });
 }
@@ -248,7 +261,7 @@ function drawCartonPanel(doc, ox, oy, pw, ph, data, qrDataUrl) {
     doc.setFontSize(4.5);
     doc.setFont('helvetica', 'normal');
     doc.text(label, x + 1.5, y + 3.2);
-    
+
     doc.setFont('helvetica', 'bold');
     const lines = value.split('\n');
     const longestLine = lines.reduce(
@@ -323,6 +336,7 @@ function drawCartonPanel(doc, ox, oy, pw, ph, data, qrDataUrl) {
 export default function CartonMarkingQRCode() {
   const settings = useSettingsContext();
   const { enqueueSnackbar } = useSnackbar();
+  const navigate = useNavigate();
 
   const [poOptions, setPoOptions] = useState([]);
   const [displayOptions, setDisplayOptions] = useState([]); // For lazy loading
@@ -359,7 +373,7 @@ export default function CartonMarkingQRCode() {
 
       try {
         const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
-        const { data } = await axios.post(`${base}/api/Container/Getpono`, {});
+        const { data } = await axios.get(`${base}/api/Container/Getpono`, {});
 
         // Extract PO list
         let list = [];
@@ -486,16 +500,16 @@ export default function CartonMarkingQRCode() {
       const responseRows = Array.isArray(data)
         ? data
         : Array.isArray(data?.data)
-        ? data.data
-        : Array.isArray(data?.Data)
-        ? data.Data
-        : Array.isArray(data?.result)
-        ? data.result
-        : Array.isArray(data?.Result)
-        ? data.Result
-        : data && typeof data === 'object'
-        ? [data]
-        : [];
+          ? data.data
+          : Array.isArray(data?.Data)
+            ? data.Data
+            : Array.isArray(data?.result)
+              ? data.result
+              : Array.isArray(data?.Result)
+                ? data.Result
+                : data && typeof data === 'object'
+                  ? [data]
+                  : [];
 
       if (!responseRows.length) {
         throw new Error('No carton data found for the selected PO');
@@ -520,6 +534,7 @@ export default function CartonMarkingQRCode() {
       // The ERP report keeps an 8.5 x 3.5 inch carton box inside its 9 x 4 inch page.
       const panelW = Math.min(pageW - margin * 2, 215.9);
       const panelH = Math.min(pageH - margin * 2, 88.9);
+      const previewCartons = [];
 
       for (let index = 0; index < responseRows.length; index += 1) {
         const row = responseRows[index];
@@ -539,6 +554,7 @@ export default function CartonMarkingQRCode() {
           poDetailID: row.PODetailID,
           poAssortType: row.POAssortType,
         };
+        previewCartons.push(carton);
 
         const qrContent = `${carton.poDetailID},${carton.solid}`;
 
@@ -553,36 +569,14 @@ export default function CartonMarkingQRCode() {
         drawCartonPanel(doc, margin, margin, panelW, panelH, carton, qrDataUrl);
       }
 
-      // Open PDF in new tab with title "CartonMarkingQRCode"
-      const pdfBlob = doc.output('blob');
-      const blobUrl = URL.createObjectURL(pdfBlob);
-      setPdfUrl(blobUrl);
-
-      const newTab = window.open(blobUrl, '_blank');
-
-      // Set the document title in the new tab
-      if (newTab) {
-        newTab.addEventListener('load', () => {
-          try {
-            newTab.document.title = 'CartonMarkingQRCode';
-          } catch (_) {
-            // cross-origin: title can't be set, no-op
-          }
-        });
-        // Also try immediately for some browsers
-        setTimeout(() => {
-          try {
-            newTab.document.title = 'CartonMarkingQRCode';
-          } catch (_) {
-            // no-op
-          }
-        }, 500);
-      }
+      navigate('/dashboard/container-loading/carton-marking-qr-pdf', {
+        state: { cartons: previewCartons },
+      });
     } catch (err) {
       console.error('PDF generation error:', err);
       enqueueSnackbar('Failed to generate PDF', { variant: 'error' });
     }
-  }, [selected, enqueueSnackbar]);
+  }, [selected, enqueueSnackbar, navigate]);
 
   const handleDownload = useCallback(() => {
     if (!pdfUrl) {
@@ -655,56 +649,56 @@ export default function CartonMarkingQRCode() {
         )}
 
         <Autocomplete
-            id="po-multi-select"
-            multiple
-            options={filteredOptions}
-            value={poOptions.filter((po) => selected.includes(po.value))}
-            onChange={handleChange}
-            inputValue={searchTerm}
-            onInputChange={(_event, value, reason) => {
-              if (reason === 'input' || reason === 'clear') {
-                setSearchTerm(value);
-              }
-            }}
-            getOptionLabel={(option) => option.label}
-            isOptionEqualToValue={(option, value) => option.value === value.value}
-            filterOptions={(options) => options}
-            disableCloseOnSelect
-            disabled={loading || isInitialLoad}
-            loading={loading}
-            noOptionsText="No POs found"
-            renderTags={(value) => renderValue(value.map((option) => option.value))}
-            ListboxProps={{
-              sx: {
-                maxHeight: 400,
-                overflow: 'auto',
-              },
-            }}
-            renderOption={(props, po, { selected: isSelected }) => {
-              // Attach ref to last item for infinite scroll
-              const isLastItem =
-                !normalizedSearchTerm && po.value === filteredOptions[filteredOptions.length - 1]?.value;
-              const itemRef = isLastItem ? lastItemRef : null;
+          id="po-multi-select"
+          multiple
+          options={filteredOptions}
+          value={poOptions.filter((po) => selected.includes(po.value))}
+          onChange={handleChange}
+          inputValue={searchTerm}
+          onInputChange={(_event, value, reason) => {
+            if (reason === 'input' || reason === 'clear') {
+              setSearchTerm(value);
+            }
+          }}
+          getOptionLabel={(option) => option.label}
+          isOptionEqualToValue={(option, value) => option.value === value.value}
+          filterOptions={(options) => options}
+          disableCloseOnSelect
+          disabled={loading || isInitialLoad}
+          loading={loading}
+          noOptionsText="No POs found"
+          renderTags={(value) => renderValue(value.map((option) => option.value))}
+          ListboxProps={{
+            sx: {
+              maxHeight: 400,
+              overflow: 'auto',
+            },
+          }}
+          renderOption={(props, po, { selected: isSelected }) => {
+            // Attach ref to last item for infinite scroll
+            const isLastItem =
+              !normalizedSearchTerm && po.value === filteredOptions[filteredOptions.length - 1]?.value;
+            const itemRef = isLastItem ? lastItemRef : null;
 
-              return (
-                <Box
-                  component="li"
-                  {...props}
-                  ref={itemRef}
-                  sx={{ minHeight: 48 }}
-                >
-                  <Checkbox
-                    checked={isSelected}
-                    sx={{ p: 0.5, mr: 1 }}
-                  />
-                  {po.label}
-                </Box>
-              );
-            }}
-            renderInput={(params) => <TextField {...params} label="PO #" />}
-            size="small"
-            sx={{ width: 320, mb: 3 }}
-          />
+            return (
+              <Box
+                component="li"
+                {...props}
+                ref={itemRef}
+                sx={{ minHeight: 48 }}
+              >
+                <Checkbox
+                  checked={isSelected}
+                  sx={{ p: 0.5, mr: 1 }}
+                />
+                {po.label}
+              </Box>
+            );
+          }}
+          renderInput={(params) => <TextField {...params} label="PO #" />}
+          size="small"
+          sx={{ width: 320, mb: 3 }}
+        />
 
         <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
           <Button
