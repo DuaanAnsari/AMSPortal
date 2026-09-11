@@ -16,8 +16,10 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Dialog,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import CloseIcon from '@mui/icons-material/Close';
 import { paths } from 'src/routes/paths';
 import { useSnackbar } from 'src/components/snackbar';
 
@@ -95,6 +97,9 @@ const AddInquiry = () => {
     img2: [],
   });
 
+  // 🔹 Fullsize Image Preview Modal State
+  const [previewImage, setPreviewImage] = useState(null);
+
   const readFileAsDataUrl = useCallback((file) => new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ''));
@@ -138,22 +143,32 @@ const AddInquiry = () => {
     };
   }, []);
 
-  // 🔹 Handle multiple uploads
-  const handleUpload = async (key, e) => {
-    const files = Array.from(e.target.files);
+  // 🔹 Handle image upload (replace previous image & ensure instant preview)
+  const handleUpload = (key, e) => {
+    const files = Array.from(e.target.files || []);
     if (files.length > 0) {
-      const newFiles = await Promise.all(
-        files.map(async (file) => ({
-          name: file.name,
-          url: URL.createObjectURL(file),
-          base64: await readFileAsDataUrl(file),
-        }))
-      );
+      const file = files[files.length - 1];
+      const objectUrl = URL.createObjectURL(file);
+
+      // Instant preview with blob URL
       setImages((prev) => ({
         ...prev,
-        [key]: [...prev[key], ...newFiles],
+        [key]: [{ name: file.name, url: objectUrl, base64: '' }],
       }));
+
+      // Asynchronously load base64 for API save
+      readFileAsDataUrl(file)
+        .then((base64) => {
+          setImages((prev) => ({
+            ...prev,
+            [key]: [{ name: file.name, url: objectUrl, base64 }],
+          }));
+        })
+        .catch((err) => {
+          console.error('FileReader error:', err);
+        });
     }
+    e.target.value = '';
   };
 
   // 🔹 Remove single image
@@ -757,7 +772,6 @@ const AddInquiry = () => {
         Upload Images
         <input
           type="file"
-          multiple
           hidden
           accept="image/*"
           onChange={(e) => handleUpload(key, e)}
@@ -766,39 +780,41 @@ const AddInquiry = () => {
 
       {/* Thumbnails */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-        {images[key].map((img, index) => (
-          <Box
-            key={index}
-            sx={{
-              position: 'relative',
-              width: 90,
-              height: 90,
-              borderRadius: 2,
-              overflow: 'hidden',
-              border: '2px solid #ddd',
-            }}
-          >
-            <img
-              src={img.url}
-              alt={img.name}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-            <IconButton
-              size="small"
+        {images[key].map((img, index) => {
+          const imgSrc = img.url || toImageSrc(img.base64);
+          return (
+            <Box
+              key={index}
+              onClick={() => imgSrc && setPreviewImage(imgSrc)}
               sx={{
-                position: 'absolute',
-                top: 2,
-                right: 2,
-                background: 'rgba(0,0,0,0.6)',
-                color: 'white',
-                '&:hover': { background: 'rgba(0,0,0,0.8)' },
+                position: 'relative',
+                width: 100,
+                height: 100,
+                borderRadius: 1.5,
+                overflow: 'hidden',
+                border: '1px solid #ccc',
+                backgroundColor: '#f5f5f5',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': {
+                  transform: 'scale(1.03)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                },
               }}
-              onClick={() => handleRemove(key, index)}
             >
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Box>
-        ))}
+              {imgSrc ? (
+                <img
+                  src={imgSrc}
+                  alt={img.name || 'preview'}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                />
+              ) : null}
+            </Box>
+          );
+        })}
       </Box>
     </Grid>
   );
@@ -1153,6 +1169,49 @@ const AddInquiry = () => {
           </Grid>
         </Grid>
       </Paper>
+
+      {/* 🔹 Fullsize Image Preview Modal */}
+      <Dialog
+        open={Boolean(previewImage)}
+        onClose={() => setPreviewImage(null)}
+        maxWidth="md"
+        PaperProps={{
+          sx: {
+            backgroundColor: '#000',
+            overflow: 'hidden',
+            borderRadius: 2,
+          },
+        }}
+      >
+        <Box sx={{ position: 'relative', p: 2, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <IconButton
+            onClick={() => setPreviewImage(null)}
+            sx={{
+              position: 'absolute',
+              top: 10,
+              right: 10,
+              color: '#fff',
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              '&:hover': { backgroundColor: 'rgba(255,255,255,0.4)' },
+              zIndex: 10,
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+          {previewImage && (
+            <img
+              src={previewImage}
+              alt="Full Preview"
+              style={{
+                maxWidth: '100%',
+                maxHeight: '80vh',
+                objectFit: 'contain',
+                borderRadius: '4px',
+              }}
+            />
+          )}
+        </Box>
+      </Dialog>
     </Container>
   );
 };

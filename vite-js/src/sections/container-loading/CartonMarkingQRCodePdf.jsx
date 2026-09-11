@@ -111,7 +111,7 @@ function InfoCells({ carton }) {
         <strong style={{ fontSize: sizeFontSize, lineHeight: 1.15 }}>{carton.size}</strong>
       </Box>
       <Box className="carton-pdf-cell-solid">
-        <small>Ratio</small>
+        <small>{carton.solid || 'Solid'}</small>
         <strong>{carton.solid}</strong>
       </Box>
       <Box className="carton-pdf-cell-qty">

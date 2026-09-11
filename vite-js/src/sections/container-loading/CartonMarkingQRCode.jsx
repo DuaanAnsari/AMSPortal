@@ -197,9 +197,10 @@ function drawInfoCells(doc, x, y, w, h, data) {
       doc.setFont('helvetica', 'bold');
       doc.text(data.size, x + 1.8, cy + 10);
     } else if (i === 2) {
+      const heading = String(data.solid || '').trim() || 'SOLID';
       doc.setFontSize(4.5);
       doc.setFont('helvetica', 'normal');
-      doc.text('SOLID', x + 1.8, cy + 3.6);
+      doc.text(heading.toUpperCase(), x + 1.8, cy + 3.6);
       doc.setFontSize(8);
       doc.setFont('helvetica', 'bold');
       doc.text(data.solid, x + 1.8, cy + 9);
