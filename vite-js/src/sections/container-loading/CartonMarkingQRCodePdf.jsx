@@ -69,12 +69,12 @@ function QrArea({ carton, qrDataUrl }) {
       </Box>
       <Box
         className="carton-pdf-size"
-        sx={{ fontSize: isLongSize ? '18px !important' : '24px !important' }}
+        sx={{ fontSize: isLongSize ? '11px !important' : '13px !important' }}
       >
         {carton.size}
       </Box>
       {qrDataUrl && <Box component="img" src={qrDataUrl} alt="Carton QR code" className="carton-pdf-qr" />}
-      <Box className="carton-pdf-style">{carton.style}</Box>
+      <Box className="carton-pdf-style" sx={{ fontSize: '13px !important' }}>{carton.style}</Box>
     </Box>
   );
 }
@@ -111,7 +111,7 @@ function InfoCells({ carton }) {
         <strong style={{ fontSize: sizeFontSize, lineHeight: 1.15 }}>{carton.size}</strong>
       </Box>
       <Box className="carton-pdf-cell-solid">
-        <small>Solid</small>
+        <small>Ratio</small>
         <strong>{carton.solid}</strong>
       </Box>
       <Box className="carton-pdf-cell-qty">
@@ -485,7 +485,7 @@ export default function CartonMarkingQRCodePdf() {
         .carton-pdf-panel-mirrored .carton-pdf-header { grid-template-columns: 22% 27% 41% 10%; }
         .carton-pdf-header-cell { border-right: 1px solid #000000; padding: 6px 7px; overflow: hidden; display: flex; flex-direction: column; gap: 3px; box-sizing: border-box; }
         .carton-pdf-header-cell:last-child { border-right: 0; }
-        .carton-pdf-header-label, .carton-pdf-info-cells small { font-size: 8.5px; font-weight: 400; line-height: 1.1; overflow-wrap: anywhere; word-break: break-word; }
+        .carton-pdf-header-label, .carton-pdf-info-cells small { font-size: 7px; font-weight: 400; line-height: 1.1; overflow-wrap: normal; word-break: normal; white-space: nowrap; }
         .carton-pdf-header-value { font-size: 15px; line-height: 1.05; white-space: pre-line; overflow-wrap: anywhere; }
         .carton-pdf-body { height: 365px; display: grid; grid-template-columns: 10% 68% 22%; box-sizing: border-box; }
         .carton-pdf-panel-mirrored .carton-pdf-body { grid-template-columns: 22% 68% 10%; }
@@ -499,13 +499,13 @@ export default function CartonMarkingQRCodePdf() {
         .carton-pdf-side-value { right: 4px; bottom: 4px; font-size: 13px; font-weight: 700; color: #000000; }
         .carton-pdf-qr-area { position: relative; overflow: hidden; border-bottom: 0 !important; box-sizing: border-box; }
         .carton-pdf-qr { position: absolute; width: ${QR_SIZE}px; height: ${QR_SIZE}px; left: 50%; top: 50%; transform: translate(-50%, -50%); }
-        .carton-pdf-size, .carton-pdf-style { position: absolute; left: 0; width: 100%; text-align: center; font-size: 24px; font-weight: 700; }
-        .carton-pdf-size { top: calc(50% - ${QR_SIZE / 2 + 32}px); }
-        .carton-pdf-style { top: calc(50% + ${QR_SIZE / 2 + 10}px); }
-        .carton-pdf-side-zone { position: absolute; top: 0; bottom: 0; width: calc((100% - ${QR_SIZE}px) / 2); display: flex; align-items: center; justify-content: center; }
-        .carton-pdf-side-zone-left { left: 0; }
-        .carton-pdf-side-zone-right { right: 0; }
-        .carton-pdf-rotated-text { transform: rotate(-90deg); white-space: nowrap; font-size: 18px; font-weight: 700; }
+        .carton-pdf-size, .carton-pdf-style { position: absolute; left: 0; width: 100%; text-align: center; font-size: 13px; font-weight: 700; }
+        .carton-pdf-size { top: calc(50% - ${QR_SIZE / 2 + 22}px); }
+        .carton-pdf-style { top: calc(50% + ${QR_SIZE / 2 + 6}px); }
+        .carton-pdf-side-zone { position: absolute; top: 0; bottom: 0; width: 30px; display: flex; align-items: center; justify-content: center; }
+        .carton-pdf-side-zone-left { left: calc((100% - ${QR_SIZE}px) / 2 - 30px); }
+        .carton-pdf-side-zone-right { right: calc((100% - ${QR_SIZE}px) / 2 - 30px); }
+        .carton-pdf-rotated-text { transform: rotate(-90deg); white-space: nowrap; font-size: 13px; font-weight: 700; }
         .carton-pdf-info-cells { display: grid; grid-template-rows: 29% 20% 19% 20% 12%; height: 100%; border-bottom: 2px solid #000000; box-sizing: border-box; }
         .carton-pdf-info-cells > div { border-bottom: 1px solid #000000; padding: 4px 6px; display: flex; flex-direction: column; justify-content: flex-start; gap: 2px; overflow: hidden; box-sizing: border-box; }
         .carton-pdf-info-cells > div:last-child { border-bottom: 0; padding: 2px 6px; justify-content: center; gap: 2px !important; }
