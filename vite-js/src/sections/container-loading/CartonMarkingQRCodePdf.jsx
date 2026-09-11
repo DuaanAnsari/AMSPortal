@@ -69,9 +69,18 @@ function QrArea({ carton, qrDataUrl }) {
       </Box>
       <Box
         className="carton-pdf-size"
-        sx={{ fontSize: isLongSize ? '11px !important' : '13px !important' }}
+        sx={{
+          fontSize: isLongSize ? '11px !important' : '13px !important',
+          top: carton.ration ? `calc(50% - ${QR_SIZE / 2 + 34}px) !important` : `calc(50% - ${QR_SIZE / 2 + 22}px) !important`,
+          lineHeight: 1.15,
+        }}
       >
-        {carton.size}
+        <Box component="div">{carton.size}</Box>
+        {carton.ration && (
+          <Box component="div" sx={{ fontSize: '11px !important', fontWeight: 600 }}>
+            {carton.ration}
+          </Box>
+        )}
       </Box>
       {qrDataUrl && <Box component="img" src={qrDataUrl} alt="Carton QR code" className="carton-pdf-qr" />}
       <Box className="carton-pdf-style" sx={{ fontSize: '13px !important' }}>{carton.style}</Box>
@@ -112,7 +121,7 @@ function InfoCells({ carton }) {
       </Box>
       <Box className="carton-pdf-cell-solid">
         <small>{carton.solid || 'Solid'}</small>
-        <strong>{carton.solid}</strong>
+        <strong>{carton.ration || carton.solid}</strong>
       </Box>
       <Box className="carton-pdf-cell-qty">
         <small>QUANTITY</small>

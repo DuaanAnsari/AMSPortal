@@ -35,7 +35,8 @@ const SAMPLE_CARTON = {
   style: 'GW2200',
   colorCode: 'Raisin',
   size: 'S',
-  solid: 'Solid',
+  solid: 'Ratio',
+  ration: '1,2,2,1',
   quantity: '72',
   gw: '0.00',
   nw: '0.00',
@@ -110,9 +111,16 @@ function drawQrArea(doc, x, y, w, h, data, qrDataUrl) {
   // ============================================================
   doc.setFont('helvetica', 'bold');
   const sizeText = String(data.size || '').trim();
+  const rationText = String(data.ration || '').trim();
   const sizeFontSize = fitFontSize(doc, sizeText, w - 8, 10.5, 5);
   doc.setFontSize(sizeFontSize);
-  doc.text(sizeText, x + w / 2, qrY - 4, { align: 'center' });
+  if (rationText) {
+    doc.text(sizeText, x + w / 2, qrY - 6, { align: 'center' });
+    doc.setFontSize(fitFontSize(doc, rationText, w - 8, 8.5, 4.5));
+    doc.text(rationText, x + w / 2, qrY - 2, { align: 'center' });
+  } else {
+    doc.text(sizeText, x + w / 2, qrY - 4, { align: 'center' });
+  }
 
   // ============================================================
   // STYLE - Bottom of QR (Center aligned)
@@ -198,12 +206,13 @@ function drawInfoCells(doc, x, y, w, h, data) {
       doc.text(data.size, x + 1.8, cy + 10);
     } else if (i === 2) {
       const heading = String(data.solid || '').trim() || 'SOLID';
+      const displayValue = String(data.ration || data.solid || '').trim();
       doc.setFontSize(4.5);
       doc.setFont('helvetica', 'normal');
       doc.text(heading.toUpperCase(), x + 1.8, cy + 3.6);
       doc.setFontSize(8);
       doc.setFont('helvetica', 'bold');
-      doc.text(data.solid, x + 1.8, cy + 9);
+      doc.text(displayValue, x + 1.8, cy + 9);
     } else if (i === 3) {
       doc.setFontSize(4.5);
       doc.setFont('helvetica', 'normal');
@@ -547,6 +556,7 @@ export default function CartonMarkingQRCode() {
           colorCode: String(row.ColorName ?? '').trim(),
           quantity: String(row.CartonQty ?? '').trim(),
           solid: String(row.Assortment ?? row.POAssortType ?? '').trim(),
+          ration: String(row.Ration ?? row.ration ?? '').trim(),
           customerName: String(row.CustomerName ?? '').trim(),
           itemDescription: String(row.Item ?? '').trim(),
           gw: String(row.GrossW ?? '').trim(),
