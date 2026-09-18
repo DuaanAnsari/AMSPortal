@@ -1243,9 +1243,12 @@ async function fetchDiscrepancyComparisonReportHeader(params, headers = {}) {
     styleNo1: String(params.styleNo1 ?? 'All Styles'),
     poId1: String(params.poId1 ?? '0'),
     supplierId1: String(params.supplierId1 ?? '0'),
+    customerId1: String(params.customerId1 ?? '0'),
     year2: String(params.year2 ?? ''),
     styleNo2: String(params.styleNo2 ?? 'All Styles'),
     poId2: String(params.poId2 ?? '0'),
+    supplierId2: String(params.supplierId2 ?? '0'),
+    customerId2: String(params.customerId2 ?? '0'),
   });
 
   const url = `${base}/api/Report/DiscrepancyComparisonReportHeader?${q.toString()}`;
@@ -1491,9 +1494,12 @@ function DefectComparisonReportForm() {
           styleNo1: sideAParams.styleNo,
           poId1: sideAParams.poId,
           supplierId1: sideAParams.supplierId,
+          customerId1: sideAParams.customerId,
           year2: sideBParams.year,
           styleNo2: sideBParams.styleNo,
           poId2: sideBParams.poId,
+          supplierId2: sideBParams.supplierId,
+          customerId2: sideBParams.customerId,
         },
         headers
       ),
