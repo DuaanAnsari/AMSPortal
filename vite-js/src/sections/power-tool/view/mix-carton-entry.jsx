@@ -18,16 +18,25 @@ import { DataGrid } from '@mui/x-data-grid';
 import { useNavigate } from 'react-router-dom';
 import axios from 'src/utils/axios';
 import { paths } from 'src/routes/paths';
+import { useSnackbar } from 'src/components/snackbar';
 
 export default function MixCartonEntryPage() {
     const [poList, setPoList] = useState([]);
     const [selectedPO, setSelectedPO] = useState(null);
     const [poLoading, setPoLoading] = useState(false);
     const [gridLoading, setGridLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
     const [dense, setDense] = useState(false);
     const [rows, setRows] = useState([]);
+
+    const [grossWeight, setGrossWeight] = useState('');
+    const [netWeight, setNetWeight] = useState('');
+    const [grossAndNetWeight, setGrossAndNetWeight] = useState('KG');
+    const [mixCtn, setMixCtn] = useState('');
+
     const navigate = useNavigate();
     const theme = useTheme();
+    const { enqueueSnackbar } = useSnackbar();
 
     // 🔹 Fetch PO List on Mount
     useEffect(() => {
@@ -99,6 +108,60 @@ export default function MixCartonEntryPage() {
             setGridLoading(false);
         }
     }, [selectedPO]);
+
+    // 🔹 Save Handler
+    const handleSave = async () => {
+        if (!selectedPO?.value) {
+            enqueueSnackbar('Please select a PO # first', { variant: 'warning' });
+            return;
+        }
+        if (rows.length === 0) {
+            enqueueSnackbar('At least one detail row is required', { variant: 'warning' });
+            return;
+        }
+
+        setSaving(true);
+        try {
+            const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+            const details = rows.map((row) => ({
+                assortment: row.assortment || 'Solid',
+                styleNo: row.styleNo || '',
+                colorway: row.color || row.colorway || '',
+                sizeName: row.size || row.sizeName || '',
+                poQty: Number(row.poQty) || 0,
+                mixQty: Number(row.mixQty) || 0,
+            }));
+
+            const payload = {
+                poMixID: 0,
+                poid: Number(selectedPO.value) || 0,
+                userID: Number(localStorage.getItem('userId') || localStorage.getItem('userID') || 0),
+                pono: selectedPO.label || '',
+                mixCtn: Number(mixCtn) || 0,
+                grossWeight: Number(grossWeight) || 0,
+                netWeight: Number(netWeight) || 0,
+                grossAndNetWeight: grossAndNetWeight || 'KG',
+                assortment: rows[0]?.assortment || 'Solid',
+                details,
+            };
+
+            await axios.post(`${baseUrl}/api/Container/SaveMixCartonQR`, payload);
+
+            enqueueSnackbar('Mix Carton QR saved successfully!', { variant: 'success' });
+            navigate(paths?.dashboard?.powerTool?.qrView || '/dashboard/power-tool/qr-view');
+        } catch (err) {
+            console.error('Error saving Mix Carton QR:', err);
+            const errorMsg =
+                (typeof err?.response?.data === 'string' && err.response.data) ||
+                err?.response?.data?.message ||
+                err?.response?.data?.Message ||
+                err?.message ||
+                'Failed to save Mix Carton QR';
+            enqueueSnackbar(errorMsg, { variant: 'error' });
+        } finally {
+            setSaving(false);
+        }
+    };
 
     // 🔹 Columns
     const columns = [
@@ -238,6 +301,8 @@ export default function MixCartonEntryPage() {
                                 size="small"
                                 placeholder="Gross Weight"
                                 variant="outlined"
+                                value={grossWeight}
+                                onChange={(e) => setGrossWeight(e.target.value)}
                                 sx={{ backgroundColor: 'white' }}
                             />
                         </Grid>
@@ -250,6 +315,8 @@ export default function MixCartonEntryPage() {
                                 size="small"
                                 placeholder="Net Weight"
                                 variant="outlined"
+                                value={netWeight}
+                                onChange={(e) => setNetWeight(e.target.value)}
                                 sx={{ backgroundColor: 'white' }}
                             />
                         </Grid>
@@ -261,7 +328,8 @@ export default function MixCartonEntryPage() {
                                 select
                                 fullWidth
                                 size="small"
-                                defaultValue="KG"
+                                value={grossAndNetWeight}
+                                onChange={(e) => setGrossAndNetWeight(e.target.value)}
                                 variant="outlined"
                                 sx={{ backgroundColor: 'white' }}
                             >
@@ -276,7 +344,10 @@ export default function MixCartonEntryPage() {
                             <TextField
                                 fullWidth
                                 size="small"
+                                placeholder="Total Carton"
                                 variant="outlined"
+                                value={mixCtn}
+                                onChange={(e) => setMixCtn(e.target.value)}
                                 sx={{ backgroundColor: 'white' }}
                             />
                         </Grid>
@@ -358,6 +429,8 @@ export default function MixCartonEntryPage() {
                             <Button
                                 variant="contained"
                                 fullWidth
+                                onClick={handleSave}
+                                disabled={saving}
                                 sx={{
                                     backgroundColor: 'black',
                                     color: 'white',
@@ -367,7 +440,7 @@ export default function MixCartonEntryPage() {
                                     height: 42,
                                 }}
                             >
-                                Save
+                                {saving ? 'Saving...' : 'Save'}
                             </Button>
                         </Grid>
                         <Grid item xs={6} sm={2}>
