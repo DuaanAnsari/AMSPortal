@@ -89,6 +89,8 @@ const ROUTE_BY_NAME = createNameMap([
   ['Advance Payment', paths.dashboard.powerTool.advancePayment],
   ['ICR Form', paths.dashboard.powerTool.icrForm],
   ['Po Mix Qty', paths.dashboard.powerTool.qrView],
+  ['QR View', paths.dashboard.powerTool.qrView],
+  ['qr-view', paths.dashboard.powerTool.qrView],
   ['View Users', paths.dashboard.powerTool.viewUsers],
   ['Cost Sheet View', paths.dashboard.powerTool.costSheetView],
   ['Courier Packaging', paths.dashboard.powerTool.courierPackagingView],

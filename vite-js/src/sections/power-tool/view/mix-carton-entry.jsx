@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Box,
     Card,
@@ -11,23 +11,94 @@ import {
     FormControlLabel,
     Switch,
     MenuItem,
+    Autocomplete,
     useTheme,
 } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import { useNavigate } from 'react-router-dom';
+import axios from 'src/utils/axios';
+import { paths } from 'src/routes/paths';
 
 export default function MixCartonEntryPage() {
-    const [poNo, setPoNo] = useState('00000183');
+    const [poList, setPoList] = useState([]);
+    const [selectedPO, setSelectedPO] = useState(null);
+    const [poLoading, setPoLoading] = useState(false);
+    const [gridLoading, setGridLoading] = useState(false);
     const [dense, setDense] = useState(false);
+    const [rows, setRows] = useState([]);
     const navigate = useNavigate();
     const theme = useTheme();
 
-    // 🔹 Table Data (Mock data based on requirement)
-    const rows = [
-        { id: 1, customer: 'Duke Clothing Co (UK)', poNo: '00000183', shipmentDate: '12/30/2020', assortment: 'Solid', styleNo: '610906', color: 'Black Pack A', size: '2XL', poQty: 64, mixQty: '' },
-        { id: 2, customer: 'Duke Clothing Co (UK)', poNo: '00000183', shipmentDate: '12/30/2020', assortment: 'Solid', styleNo: '610906', color: 'Black Pack A', size: '3XL', poQty: 64, mixQty: '' },
-        { id: 3, customer: 'Duke Clothing Co (UK)', poNo: '00000183', shipmentDate: '12/30/2020', assortment: 'Solid', styleNo: '610906', color: 'Black Pack A', size: '4XL', poQty: 48, mixQty: '' },
-    ];
+    // 🔹 Fetch PO List on Mount
+    useEffect(() => {
+        const fetchPOs = async () => {
+            setPoLoading(true);
+            try {
+                const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+                const res = await axios.get(`${baseUrl}/api/Container/Getpono`);
+                const raw = Array.isArray(res.data)
+                    ? res.data
+                    : res.data?.data || res.data?.Data || res.data?.result || res.data?.Result || [];
+
+                const options = (Array.isArray(raw) ? raw : [])
+                    .map((item) => ({
+                        label: String(item.PONO ?? item.pono ?? item.poNo ?? item.label ?? ''),
+                        value: item.POID ?? item.poid ?? item.poId ?? item.id ?? item.value,
+                        raw: item,
+                    }))
+                    .filter((opt) => Boolean(opt.label));
+
+                setPoList(options);
+            } catch (err) {
+                console.error('Error fetching POs:', err);
+                setPoList([]);
+            } finally {
+                setPoLoading(false);
+            }
+        };
+
+        fetchPOs();
+    }, []);
+
+    // 🔹 Show Data Handler
+    const handleShowData = useCallback(async () => {
+        if (!selectedPO?.value) return;
+        setGridLoading(true);
+        try {
+            const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+            const poId = selectedPO.value;
+            const res = await axios.get(`${baseUrl}/api/Container/GetMixCartonQREntryData`, {
+                params: {
+                    poIds: poId,
+                },
+            });
+
+            const raw = Array.isArray(res.data)
+                ? res.data
+                : res.data?.data || res.data?.Data || res.data?.result || res.data?.Result || [];
+
+            const mapped = (Array.isArray(raw) ? raw : []).map((item, index) => ({
+                id: item.poDetailID || item.podetailid || item.poMixID || item.id || index + 1,
+                customer: item.customerName ?? item.CustomerName ?? item.customer ?? item.Customer ?? '',
+                poNo: item.pono ?? item.PONO ?? item.poNo ?? selectedPO.label ?? '',
+                shipmentDate: item.shipmentDate ?? item.ShipmentDate ?? item.tolerance ?? item.Tolerance ?? '',
+                assortment: item.assortment ?? item.Assortment ?? item.assortmentName ?? item.AssortmentName ?? 'Solid',
+                styleNo: item.styleNo ?? item.StyleNo ?? item.style ?? item.Style ?? '',
+                color: item.colorway ?? item.Colorway ?? item.color ?? item.Color ?? '',
+                size: item.sizeName ?? item.SizeName ?? item.size ?? item.Size ?? '',
+                poQty: item.poQty ?? item.POQty ?? item.quantity ?? item.Quantity ?? '',
+                mixQty: item.mixQty ?? item.MixQty ?? '',
+                raw: item,
+            }));
+
+            setRows(mapped);
+        } catch (err) {
+            console.error('Error fetching mix carton QR entry data:', err);
+            setRows([]);
+        } finally {
+            setGridLoading(false);
+        }
+    }, [selectedPO]);
 
     // 🔹 Columns
     const columns = [
@@ -48,18 +119,24 @@ export default function MixCartonEntryPage() {
                     variant="outlined"
                     size="small"
                     fullWidth
+                    value={params.row.mixQty ?? ''}
+                    onChange={(e) => {
+                        const val = e.target.value;
+                        setRows((prev) =>
+                            prev.map((r) => (r.id === params.row.id ? { ...r, mixQty: val } : r))
+                        );
+                    }}
                     sx={{
                         backgroundColor: 'white',
-                        '& .MuiOutlinedInput-root': { borderRadius: 0 }
+                        '& .MuiOutlinedInput-root': { borderRadius: 0 },
                     }}
                 />
-            )
+            ),
         },
     ];
 
     return (
         <Box sx={{ width: '100%', mt: 4 }}>
-
             {/* 🔹 Header Section */}
             <Box sx={{ mb: 3 }}>
                 <Typography
@@ -102,40 +179,47 @@ export default function MixCartonEntryPage() {
             {/* 🔹 Filters & Actions Card */}
             <Card sx={{ borderRadius: 2, mb: 3, boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}>
                 <CardContent sx={{ p: 3 }}>
-
                     {/* Row 1: PO # and Show Data */}
                     <Grid container spacing={2} alignItems="flex-end" sx={{ mb: 3 }}>
                         <Grid item xs={12} sm={4}>
                             <Typography variant="body2" sx={{ color: 'gray', mb: 0.5, fontWeight: 500 }}>
                                 PO #
                             </Typography>
-                            <TextField
-                                select
+                            <Autocomplete
                                 fullWidth
                                 size="small"
-                                variant="outlined"
-                                value={poNo}
-                                onChange={(e) => setPoNo(e.target.value)}
-                                sx={{
-                                    backgroundColor: 'white',
-                                    '& .MuiOutlinedInput-root': { borderRadius: 1 }
-                                }}
-                            >
-                                <MenuItem value="00000183">00000183</MenuItem>
-                                <MenuItem value="00000184">00000184</MenuItem>
-                            </TextField>
+                                options={poList}
+                                loading={poLoading}
+                                value={selectedPO}
+                                onChange={(event, newValue) => setSelectedPO(newValue)}
+                                getOptionLabel={(option) => (typeof option === 'string' ? option : option.label || '')}
+                                isOptionEqualToValue={(option, val) => option.value === val?.value}
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params}
+                                        placeholder="Search / Select PO #"
+                                        variant="outlined"
+                                        sx={{
+                                            backgroundColor: 'white',
+                                            '& .MuiOutlinedInput-root': { borderRadius: 1 },
+                                        }}
+                                    />
+                                )}
+                            />
                         </Grid>
                         <Grid item xs={12} sm={2}>
                             <Button
                                 variant="contained"
                                 fullWidth
+                                onClick={handleShowData}
+                                disabled={!selectedPO || gridLoading}
                                 sx={{
-                                    bgcolor: '#4a3b75',
+                                    backgroundColor: 'black',
                                     color: 'white',
                                     textTransform: 'none',
                                     fontWeight: 600,
-                                    '&:hover': { bgcolor: '#382c5a' },
-                                    height: 40
+                                    '&:hover': { backgroundColor: '#212B36' },
+                                    height: 40,
                                 }}
                             >
                                 Show Data
@@ -197,7 +281,6 @@ export default function MixCartonEntryPage() {
                             />
                         </Grid>
                     </Grid>
-
                 </CardContent>
             </Card>
 
@@ -208,6 +291,7 @@ export default function MixCartonEntryPage() {
                         <DataGrid
                             rows={rows}
                             columns={columns}
+                            loading={gridLoading}
                             initialState={{
                                 pagination: { paginationModel: { pageSize: 5, page: 0 } },
                             }}
@@ -215,7 +299,7 @@ export default function MixCartonEntryPage() {
                             disableRowSelectionOnClick
                             pagination
                             hideFooterSelectedRowCount
-                            getRowHeight={() => (dense ? 35 : 80)} // Taller rows to accommodate multi-line text if needed
+                            getRowHeight={() => (dense ? 35 : 80)}
                             sx={{
                                 border: 'none',
                                 '& .MuiDataGrid-columnHeaders': {
@@ -267,8 +351,45 @@ export default function MixCartonEntryPage() {
                             />
                         </Box>
                     </Paper>
+
+                    {/* 🔹 Action Buttons (Save & Cancel) */}
+                    <Grid container spacing={2} justifyContent="flex-end" sx={{ mt: 3, mb: 1 }}>
+                        <Grid item xs={6} sm={2}>
+                            <Button
+                                variant="contained"
+                                fullWidth
+                                sx={{
+                                    backgroundColor: 'black',
+                                    color: 'white',
+                                    textTransform: 'none',
+                                    fontWeight: 600,
+                                    '&:hover': { backgroundColor: '#212B36' },
+                                    height: 42,
+                                }}
+                            >
+                                Save
+                            </Button>
+                        </Grid>
+                        <Grid item xs={6} sm={2}>
+                            <Button
+                                variant="contained"
+                                fullWidth
+                                onClick={() => navigate(paths?.dashboard?.powerTool?.qrView || '/dashboard/power-tool/qr-view')}
+                                sx={{
+                                    backgroundColor: 'black',
+                                    color: 'white',
+                                    textTransform: 'none',
+                                    fontWeight: 600,
+                                    '&:hover': { backgroundColor: '#212B36' },
+                                    height: 42,
+                                }}
+                            >
+                                Cancel
+                            </Button>
+                        </Grid>
+                    </Grid>
                 </CardContent>
             </Card>
-        </Box >
+        </Box>
     );
 }
