@@ -129,7 +129,7 @@ function tableHeadRowSx(theme) {
   };
 }
 
-const DISCREPANCY_ROWS = 10;
+const DISCREPANCY_ROWS = 12;
 
 function uniqueCaseInsensitive(values) {
   const out = [];

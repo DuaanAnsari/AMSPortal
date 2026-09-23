@@ -606,12 +606,30 @@ export default function QAInspectionPDF({ data: inputData }) {
   const matrixColumns = buildInspectionDtlMatrixColumns(sizeRow, sizeQtyBreakdown);
   const activeCols = matrixColumns.length > 0 ? matrixColumns.map((c) => c.slot) : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
-  const discs = data.discrepancies ?? [];
-  // Force exactly 12 rows for Discrepancies as per user request
-  const filledDiscs = Array.from({ length: 12 }, (_, i) => discs[i] || {});
-  const totalCrit = discs.reduce((s, d) => s + (Number(d.critical) || 0), 0);
-  const totalMaj = discs.reduce((s, d) => s + (Number(d.major) || 0), 0);
-  const totalMin = discs.reduce((s, d) => s + (Number(d.minor) || 0), 0);
+  const discsRaw = Array.isArray(data.discrepancies)
+    ? data.discrepancies
+    : Array.isArray(data.Discrepancies)
+    ? data.Discrepancies
+    : [];
+
+  const discs = discsRaw.filter((d) => {
+    if (!d || typeof d !== 'object') return false;
+    const text = String(d.discrepanices ?? d.Discrepanices ?? d.discrepancy ?? d.Discrepancy ?? '').trim();
+    const remarks = String(d.remarks ?? d.Remarks ?? '').trim();
+    const crit = d.critical ?? d.Critical;
+    const maj = d.major ?? d.Major;
+    const min = d.minor ?? d.Minor;
+
+    const hasCrit = crit !== undefined && crit !== null && String(crit).trim() !== '' && Number(crit) > 0;
+    const hasMaj = maj !== undefined && maj !== null && String(maj).trim() !== '' && Number(maj) > 0;
+    const hasMin = min !== undefined && min !== null && String(min).trim() !== '' && Number(min) > 0;
+
+    return text !== '' || remarks !== '' || hasCrit || hasMaj || hasMin;
+  });
+
+  const totalCrit = discs.reduce((s, d) => s + (Number(d.critical ?? d.Critical) || 0), 0);
+  const totalMaj = discs.reduce((s, d) => s + (Number(d.major ?? d.Major) || 0), 0);
+  const totalMin = discs.reduce((s, d) => s + (Number(d.minor ?? d.Minor) || 0), 0);
 
   const accLeft = [
     { label: 'CARE LABEL', checked: isCheckedByKeys(mst, ['careLabel', 'CareLabel'], ['careLblCom', 'CareLblCom']), c: getAnyVal(mst, ['careLblCom', 'CareLblCom']) },
@@ -878,16 +896,19 @@ export default function QAInspectionPDF({ data: inputData }) {
             <View style={[styles.tdBold, { width: 40, alignItems: 'center' }]}><Text>MINOR</Text></View>
           </View>
 
-          {filledDiscs.map((d, i) => {
+          {discs.map((d, i) => {
             const discText = d.discrepanices ?? d.Discrepanices ?? d.discrepancy ?? '';
+            const critVal = d.critical ?? d.Critical;
+            const majVal = d.major ?? d.Major;
+            const minVal = d.minor ?? d.Minor;
             return (
               <View key={i} style={styles.tr}>
                 <View style={[styles.td, { width: 35, alignItems: 'center' }]}><Text>{i + 1}</Text></View>
                 <View style={[styles.td, { flex: 1 }]}><Text>{discText}</Text></View>
                 <View style={[styles.td, { width: 100 }]}><Text>{d.remarks ?? d.Remarks ?? ''}</Text></View>
-                <View style={[styles.td, { width: 50, alignItems: 'center' }]}><Text>{d.critical ? fmt(d.critical) : ''}</Text></View>
-                <View style={[styles.td, { width: 40, alignItems: 'center' }]}><Text>{d.major ? fmt(d.major) : ''}</Text></View>
-                <View style={[styles.td, { width: 40, alignItems: 'center' }]}><Text>{d.minor ? fmt(d.minor) : ''}</Text></View>
+                <View style={[styles.td, { width: 50, alignItems: 'center' }]}><Text>{critVal ? fmt(critVal) : ''}</Text></View>
+                <View style={[styles.td, { width: 40, alignItems: 'center' }]}><Text>{majVal ? fmt(majVal) : ''}</Text></View>
+                <View style={[styles.td, { width: 40, alignItems: 'center' }]}><Text>{minVal ? fmt(minVal) : ''}</Text></View>
               </View>
             );
           })}
