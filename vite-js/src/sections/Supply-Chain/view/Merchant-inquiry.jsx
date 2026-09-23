@@ -504,7 +504,6 @@ export default function MerchantInquiryPage() {
             pageSizeOptions={[10, 25, 50]}
             initialState={{
               pagination: { paginationModel: { pageSize: 10, page: 0 } },
-              sorting: { sortModel: [{ field: 'Createdatee', sort: 'desc' }] },
             }}
             slotProps={{
               loadingOverlay: { variant: 'circular-progress', noRowsVariant: 'skeleton' },
