@@ -36,6 +36,7 @@ import UploadIcon from '@mui/icons-material/CloudUpload';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Tooltip from '@mui/material/Tooltip';
+import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
 import Stepper from '@mui/material/Stepper';
@@ -277,6 +278,7 @@ const COMPLIMENTARY_IMAGE_SLOTS = [
   'HangTag Images',
   'Major Defect Images',
   'Minor Defect Images',
+  'Critical Defect Images',
   'Inner Label Image',
 ];
 
@@ -1830,6 +1832,20 @@ export default function QualityDepartmentInspectionView() {
       next[index] = { ...next[index], [key]: value };
       return next;
     });
+
+  const handleAddDiscRow = () => {
+    setDiscRows((prev) => [
+      ...prev,
+      {
+        id: prev.length,
+        discrepancy: '',
+        remarks: '',
+        critical: '',
+        major: '',
+        minor: '',
+      },
+    ]);
+  };
 
   const updateDtlCell = (rowIdx, slot1To12, value) => {
     setDtlRows((prev) => {
@@ -3459,6 +3475,18 @@ export default function QualityDepartmentInspectionView() {
                         </TableBody>
                       </Table>
                     </TableContainer>
+
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-start', mt: 1 }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<AddIcon />}
+                        onClick={handleAddDiscRow}
+                        sx={{ fontWeight: 600 }}
+                      >
+                        Add Row
+                      </Button>
+                    </Box>
 
                     <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 3 }}>
                       <Box
