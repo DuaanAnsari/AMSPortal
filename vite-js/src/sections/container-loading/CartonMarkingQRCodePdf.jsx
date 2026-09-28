@@ -3,7 +3,6 @@ import { Helmet } from 'react-helmet-async';
 import { useLocation, useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import QRCode from 'qrcode';
 import PropTypes from 'prop-types';
 
 import { Box, Typography, AppBar, Toolbar, IconButton } from '@mui/material';
@@ -184,24 +183,20 @@ export default function CartonMarkingQRCodePdf() {
     () => (Array.isArray(state?.cartons) ? state.cartons : []),
     [state]
   );
-  const [qrImages, setQrImages] = useState([]);
   const [zoomLevel, setZoomLevel] = useState(1.0);
   const [currentPage, setCurrentPage] = useState(1);
   const previewRef = useRef(null);
   const scrollContainerRef = useRef(null);
 
-  useEffect(() => {
-    let isCurrent = true;
-    Promise.all(cartons.map((carton) => QRCode.toDataURL(`${carton.poDetailID},${carton.solid}`, {
-      width: 200,
-      margin: 1,
-      version: 4,
-      errorCorrectionLevel: 'M',
-    }).catch(() => ''))).then((images) => {
-      if (isCurrent) setQrImages(images);
-    });
-    return () => { isCurrent = false; };
-  }, [cartons]);
+  const qrImages = useMemo(
+    () =>
+      cartons.map((carton) => {
+        const raw = carton.qrImgPOD ?? carton.QRImgPOD ?? carton.QrImgPOD ?? '';
+        if (!raw) return '';
+        return String(raw).startsWith('data:') ? String(raw) : `data:image/png;base64,${raw}`;
+      }),
+    [cartons]
+  );
 
   useEffect(() => {
     const root = scrollContainerRef.current;

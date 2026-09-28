@@ -103,8 +103,14 @@ function drawQrArea(doc, x, y, w, h, data, qrDataUrl) {
   const rightQrEdge = qrX + QR_BOX_WIDTH;
   const rightSideAreaCenterX = rightQrEdge + (x + w - rightQrEdge) / 2;
 
-  // Add QR Code
-  doc.addImage(qrDataUrl, 'PNG', qrX, qrY, QR_BOX_WIDTH, QR_BOX_HEIGHT);
+  // Add QR Code if present
+  if (qrDataUrl) {
+    try {
+      doc.addImage(qrDataUrl, 'PNG', qrX, qrY, QR_BOX_WIDTH, QR_BOX_HEIGHT);
+    } catch (e) {
+      console.error('Failed to add QR image to doc', e);
+    }
+  }
 
   // ============================================================
   // SIZE - Top of QR (Center aligned)
@@ -548,6 +554,10 @@ export default function CartonMarkingQRCode() {
 
       for (let index = 0; index < responseRows.length; index += 1) {
         const row = responseRows[index];
+        const rawQrImg = row.QRImgPOD ?? row.qrImgPOD ?? row.QrImgPOD ?? '';
+        const qrImgPOD = rawQrImg
+          ? (String(rawQrImg).startsWith('data:') ? String(rawQrImg) : `data:image/png;base64,${rawQrImg}`)
+          : '';
         const carton = {
           ...SAMPLE_CARTON,
           poNo: String(row.PONO ?? '').trim(),
@@ -564,20 +574,18 @@ export default function CartonMarkingQRCode() {
           vendorCode: String(row.VenderCode ?? '').trim(),
           poDetailID: row.PODetailID,
           poAssortType: row.POAssortType,
+          qrImgPOD,
         };
         previewCartons.push(carton);
 
-        const qrContent = `${carton.poDetailID},${carton.solid}`;
-
-        const qrDataUrl = await QRCode.toDataURL(qrContent, {
-          width: 200,
-          margin: 1,
-          version: 4,
-          errorCorrectionLevel: 'M',
-        });
+        const qrDataUrl = qrImgPOD || '';
 
         if (index > 0) doc.addPage();
-        drawCartonPanel(doc, margin, margin, panelW, panelH, carton, qrDataUrl);
+        if (qrDataUrl) {
+          drawCartonPanel(doc, margin, margin, panelW, panelH, carton, qrDataUrl);
+        } else {
+          drawCartonPanel(doc, margin, margin, panelW, panelH, carton, '');
+        }
       }
 
       navigate('/dashboard/container-loading/carton-marking-qr-pdf', {
