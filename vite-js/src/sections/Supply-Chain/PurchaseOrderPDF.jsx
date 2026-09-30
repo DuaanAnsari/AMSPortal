@@ -103,7 +103,12 @@ function handlePoImageError(event) {
   event.currentTarget.src = PO_IMAGE_PLACEHOLDER;
 }
 
-// --- Helper Components ---
+// ============================================================================
+// DESIGN TOGGLE SWITCH
+// ============================================================================
+export const USE_NEW_PO_DESIGN = true;
+
+// --- Legacy / Original Helper Components ---
 const POCell = ({ children, header = false, sx = {} }) => {
   return (
     <TableCell
@@ -140,8 +145,10 @@ const BorderedPOCell = ({ children, header = false, sx = {} }) => (
   </POCell>
 );
 
-// --- Main Component ---
-const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
+// ============================================================================
+// ORIGINAL / LEGACY DESIGN (PRESERVED EXACTLY AS IS FOR SAFE FALLBACK)
+// ============================================================================
+const LegacyPurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
   const componentRef = useRef();
   const scrollContainerRef = useRef(null);
   const [zoomLevel, setZoomLevel] = useState(1.0);
@@ -495,78 +502,78 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
   };
 
   const data = {
-  ref: poData.amsRefNo || '',
-  receivedDate: (poData.creationDate && !poData.creationDate.startsWith('1900-01-01'))
-    ? new Date(poData.creationDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-    : '',
-  attn: poData.supplierName || '',
-  addressLeft: poData.venderAddress || '',
-  trackingCode: poData.venderCode || '',
-  brand: poData.brand || '',
-  division: poData.ecpDivistion || '',
-  rn: poData.rnNo || '',
-  shipTo: poData.consigneeAddress1 || '',
-  itemDescription: poData.itemDescriptionShippingInvoice || '',
-  exFactory: (poData.shipmentDate && !poData.shipmentDate.startsWith('1900-01-01')) ? new Date(poData.shipmentDate).toLocaleDateString('en-US') : '',
-  finalInspection: (poData.finalInspDate && !poData.finalInspDate.startsWith('1900-01-01')) ? new Date(poData.finalInspDate).toLocaleDateString('en-US') : '',
-  leadtime: poData.leadtime ? `${poData.leadtime} Days` : '',
-  fabric: {
-    description: 'Body',
-    fabric: poData.fabric || '',
-    content: poData.quality || '',
-    weight: poData.gms ? `${poData.gms} gsm` : ''
-  },
-  packingInstructions: poData.packingList || '',
-  cartonMarking: poData.cartonMarking || '',
-  pcsPerCarton: poData.pcPerCarton || '',
-  ration: poData.ration || '',
-  ratio: poData.ratio || poData.ration || '',
-  assortment: poData.assortment || '',
-  orderRows: buildOrderRowsFromReport(reportRows),
-  get totalQtyNum() {
-    return this.orderRows.reduce((sum, row) => sum + (row.totalQtyNum || 0), 0);
-  },
-  get totalAmountNum() {
-    return this.orderRows.reduce((sum, row) => sum + (row.amountNum || 0), 0);
-  },
-  importantNotes: poData.importantNote ? [poData.importantNote] : [
-    "Fabric should be heat set and lock properly to avoid shrinkage problem.",
-    "Before cutting fabric should be kept on table for atleast 24 hours.",
-    "All garments should be 100% checked for sizes before carton packing"
-  ],
-  productImage: resolvePoImageSrc(poData.poImage),
-  shipMode: poData.deliveryTypeDisplayName || '',
-  destination: poData.destination || '',
-  shipmentTerms: poData.shipmentModeName || '',
-  paymentTerms: poData.paymentModeName || '',
-  amsTeam: poData.userName || 'MUHAMMAD SHAHZAIB',
-  cpoNumber: poData.pono || '',
-  styleNumber: poData.style || '',
-  productCategory: poData.productCategoriesName || '',
-  specialInstructions: poData.pO_Special_Instructions || '',
-  source: poData.styleSource || 'Local',
-  embellishment: poData.embAndEmbellishment || 'Not Required',
-  trimsAccessories: poData.trimsAccessories || '',
-  specialOperation: poData.pO_Special_Operation || '',
-  samplingReq: poData.samplingReq || 'N/A',
-  otherFabric: poData.otherFabric || '',
-  construction: poData.construction || '',
-  gsmOF: poData.ribGSM || poData.ribGsm || poData.RibGSM || '',
-  beneficiaryBank: poData.bankNameBank || '',
-  accountNo: poData.accountNoBank || '',
-  routingNo: poData.ibanBank || '',
-  washingInstructions: poData.washingCareLabelInstructions || 'Machine Wash Cold With Like Colors, Gentle Cycle, Non Chlorine Bleach when needed, Line Dry, Cool Iron.',
-  poTotalDetails:
-    poData.poTotalDetails ||
-    poData.poTotalDetail ||
-    poData.poTotalDetailText ||
-    poData.poTotalDetailsText ||
-    '',
-  fmtQty,
-  fmtMoney,
-  fmtInt,
-  fmtDz,
-  fmtSmart,
+    ref: poData.amsRefNo || '',
+    receivedDate: (poData.creationDate && !poData.creationDate.startsWith('1900-01-01'))
+      ? new Date(poData.creationDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+      : '',
+    attn: poData.supplierName || '',
+    addressLeft: poData.venderAddress || '',
+    trackingCode: poData.venderCode || '',
+    brand: poData.brand || '',
+    division: poData.ecpDivistion || '',
+    rn: poData.rnNo || '',
+    shipTo: poData.consigneeAddress1 || '',
+    itemDescription: poData.itemDescriptionShippingInvoice || '',
+    exFactory: (poData.shipmentDate && !poData.shipmentDate.startsWith('1900-01-01')) ? new Date(poData.shipmentDate).toLocaleDateString('en-US') : '',
+    finalInspection: (poData.finalInspDate && !poData.finalInspDate.startsWith('1900-01-01')) ? new Date(poData.finalInspDate).toLocaleDateString('en-US') : '',
+    leadtime: poData.leadtime ? `${poData.leadtime} Days` : '',
+    fabric: {
+      description: 'Body',
+      fabric: poData.fabric || '',
+      content: poData.quality || '',
+      weight: poData.gms ? `${poData.gms} gsm` : ''
+    },
+    packingInstructions: poData.packingList || '',
+    cartonMarking: poData.cartonMarking || '',
+    pcsPerCarton: poData.pcPerCarton || '',
+    ration: poData.ration || '',
+    ratio: poData.ratio || poData.ration || '',
+    assortment: poData.assortment || '',
+    orderRows: buildOrderRowsFromReport(reportRows),
+    get totalQtyNum() {
+      return this.orderRows.reduce((sum, row) => sum + (row.totalQtyNum || 0), 0);
+    },
+    get totalAmountNum() {
+      return this.orderRows.reduce((sum, row) => sum + (row.amountNum || 0), 0);
+    },
+    importantNotes: poData.importantNote ? [poData.importantNote] : [
+      "Fabric should be heat set and lock properly to avoid shrinkage problem.",
+      "Before cutting fabric should be kept on table for atleast 24 hours.",
+      "All garments should be 100% checked for sizes before carton packing"
+    ],
+    productImage: resolvePoImageSrc(poData.poImage),
+    shipMode: poData.deliveryTypeDisplayName || '',
+    destination: poData.destination || '',
+    shipmentTerms: poData.shipmentModeName || '',
+    paymentTerms: poData.paymentModeName || '',
+    amsTeam: poData.userName || 'MUHAMMAD SHAHZAIB',
+    cpoNumber: poData.pono || '',
+    styleNumber: poData.style || '',
+    productCategory: poData.productCategoriesName || '',
+    specialInstructions: poData.pO_Special_Instructions || '',
+    source: poData.styleSource || 'Local',
+    embellishment: poData.embAndEmbellishment || 'Not Required',
+    trimsAccessories: poData.trimsAccessories || '',
+    specialOperation: poData.pO_Special_Operation || '',
+    samplingReq: poData.samplingReq || 'N/A',
+    otherFabric: poData.otherFabric || '',
+    construction: poData.construction || '',
+    gsmOF: poData.ribGSM || poData.ribGsm || poData.RibGSM || '',
+    beneficiaryBank: poData.bankNameBank || '',
+    accountNo: poData.accountNoBank || '',
+    routingNo: poData.ibanBank || '',
+    washingInstructions: poData.washingCareLabelInstructions || 'Machine Wash Cold With Like Colors, Gentle Cycle, Non Chlorine Bleach when needed, Line Dry, Cool Iron.',
+    poTotalDetails:
+      poData.poTotalDetails ||
+      poData.poTotalDetail ||
+      poData.poTotalDetailText ||
+      poData.poTotalDetailsText ||
+      '',
+    fmtQty,
+    fmtMoney,
+    fmtInt,
+    fmtDz,
+    fmtSmart,
   };
 
   const isSolid = String(data.assortment || '').toLowerCase() === 'solid' || String(data.ratio || '').toLowerCase() === 'solid';
@@ -982,9 +989,9 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.fabric.content}</TableCell>
                     <TableCell sx={{ borderRight: '1px solid #000', borderBottom: '1px solid #000', fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>{data.fabric.weight}</TableCell>
                     <TableCell sx={{ borderRight: '1px solid #000', fontSize: '9.5px', p: '4px 8px', verticalAlign: 'middle', lineHeight: 1.2 }}>{data.packingInstructions}</TableCell>
-                                            <TableCell sx={{ fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>
-                                              {isSolid ? 'Solid' : (data.ratio ? (String(data.ratio).toLowerCase().startsWith('ratio') ? data.ratio : `Ratio: ${data.ratio}`) : '')}
-                                            </TableCell>
+                    <TableCell sx={{ fontSize: '10px', p: '4px', textAlign: 'center', verticalAlign: 'middle' }}>
+                      {isSolid ? 'Solid' : (data.ratio ? (String(data.ratio).toLowerCase().startsWith('ratio') ? data.ratio : `Ratio: ${data.ratio}`) : '')}
+                    </TableCell>
                   </TableRow>
                   {/* Other Row */}
                   <TableRow sx={{ borderBottom: '1px solid black' }} debug>
@@ -1398,6 +1405,1199 @@ const PurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
   );
 };
 
+// ============================================================================
+// NEW MODERN DESIGN (QYUKBK.PDF EXACT REPRODUCTION)
+// ============================================================================
 
+const MONTSERRAT_FONT = "'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+
+const NEW_PAGE_STYLE = {
+  width: '210mm',
+  minHeight: '297mm',
+  padding: '14mm 16mm 12mm 16mm',
+  backgroundColor: '#FFFFFF',
+  color: '#111827',
+  fontFamily: MONTSERRAT_FONT,
+  boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
+  marginBottom: '10mm',
+  display: 'flex',
+  flexDirection: 'column',
+  boxSizing: 'border-box',
+  position: 'relative',
+  '@media print': {
+    boxShadow: 'none',
+    margin: 0,
+    padding: '12mm 14mm',
+    width: '100%',
+    minHeight: '100%',
+    transform: 'none',
+    pageBreakAfter: 'always',
+    marginBottom: 0,
+  }
+};
+
+const NewPOPageHeader = ({ poNo, rev = '0', date = '' }) => (
+  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3.5, pb: 1 }}>
+    {/* Left Branding */}
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5 }}>
+      <img
+        src="/logo/AMSlogo.png"
+        alt="Logo"
+        style={{ width: '46px', height: 'auto', display: 'block', objectFit: 'contain' }}
+      />
+      <Box>
+        <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '13.5px', fontWeight: 800, color: '#111827', letterSpacing: '-0.2px', lineHeight: 1.25 }}>
+          Apparel Merchandising Services
+        </Typography>
+        <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, color: '#6B7280', mt: 0.4, lineHeight: 1.35 }}>
+          84 Kokan Housing Society, Alamgir Road
+        </Typography>
+        <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, color: '#6B7280', lineHeight: 1.35 }}>
+          Karachi 74800, Pakistan
+        </Typography>
+        <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 500, color: '#6B7280', mt: 0.2, lineHeight: 1.35 }}>
+          +92 21 3485 3935
+        </Typography>
+      </Box>
+    </Box>
+
+    {/* Right PO Header */}
+    <Box sx={{ textAlign: 'right' }}>
+      <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '8px', fontWeight: 700, letterSpacing: '1.2px', color: '#6B7280', textTransform: 'uppercase', mb: 0.4 }}>
+        PURCHASE ORDER
+      </Typography>
+      <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '23px', fontWeight: 800, color: '#0F2C59', letterSpacing: '-0.4px', lineHeight: 1.1, mb: 0.8 }}>
+        {poNo || 'PO000000'}
+      </Typography>
+      <Box
+        component="span"
+        sx={{
+          display: 'inline-block',
+          backgroundColor: '#F3F4F6',
+          color: '#374151',
+          fontFamily: MONTSERRAT_FONT,
+          fontSize: '8.5px',
+          fontWeight: 700,
+          letterSpacing: '0.4px',
+          px: 1.5,
+          py: 0.4,
+          borderRadius: '4px',
+          textTransform: 'uppercase'
+        }}
+      >
+        {`REV ${rev} · ISSUED ${date || ''}`}
+      </Box>
+    </Box>
+  </Box>
+);
+
+const NewPOPageFooter = ({ pageNum, totalPages = 6, title = '', poNo = '', programName = '', rev = '0' }) => (
+  <Box
+    sx={{
+      mt: 'auto',
+      pt: 2,
+      borderTop: '1px solid #E5E7EB',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      fontFamily: MONTSERRAT_FONT,
+      fontSize: '8px',
+      color: '#9CA3AF'
+    }}
+  >
+    <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '8px', fontWeight: 500, color: '#9CA3AF' }}>
+      {`${poNo}${programName ? ` · ${programName}` : ''}${rev !== undefined && rev !== null ? ` · Rev ${rev}` : ''}`}
+    </Typography>
+    <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '8px', fontWeight: 500, color: '#9CA3AF' }}>
+      {`Page ${pageNum} of ${totalPages}${title ? ` — ${title}` : ''}`}
+    </Typography>
+  </Box>
+);
+
+const NewSectionHeader = ({ title }) => (
+  <Typography
+    sx={{
+      fontFamily: MONTSERRAT_FONT,
+      fontSize: '8.5px',
+      fontWeight: 800,
+      letterSpacing: '1px',
+      color: '#4B5563',
+      textTransform: 'uppercase',
+      mb: 1.2
+    }}
+  >
+    {title}
+  </Typography>
+);
+
+const NewFieldBlock = ({ label, value, minWidth, highlight = false, valueFontSize = '11px', subValue = '' }) => (
+  <Box sx={{ mb: 1.8, minWidth }}>
+    <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 700, letterSpacing: '0.8px', color: '#6B7280', textTransform: 'uppercase', mb: 0.4 }}>
+      {label}
+    </Typography>
+    <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: valueFontSize, fontWeight: highlight ? 800 : 600, color: highlight ? '#0F2C59' : '#111827', lineHeight: 1.35 }}>
+      {value || '—'}
+    </Typography>
+    {subValue && (
+      <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '8.5px', fontWeight: 400, color: '#6B7280', mt: 0.3 }}>
+        {subValue}
+      </Typography>
+    )}
+  </Box>
+);
+
+const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
+  const componentRef = useRef();
+  const scrollContainerRef = useRef(null);
+  const [zoomLevel, setZoomLevel] = useState(1.0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [fetchedData, setFetchedData] = useState(null);
+  const [loading, setLoading] = useState(!!id && !propPoData);
+
+  useEffect(() => {
+    const fetchPurchaseOrderData = async () => {
+      if (!id || propPoData) return;
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('accessToken');
+        const headers = { Authorization: token ? `Bearer ${token}` : '' };
+
+        const [reportRes, fallbackRes] = await Promise.all([
+          axios.get(`${HOST_API}/api/Report/GeneratePOReport?poid=${id}`, { headers }),
+          axios.get(`${HOST_API}/api/MyOrders/GetPurchaseOrder/${id}`, { headers }).catch(() => ({ data: [] }))
+        ]);
+
+        let reportData = reportRes.data;
+        const orderData = Array.isArray(fallbackRes.data) ? fallbackRes.data[0] : fallbackRes.data;
+        const isEmpty = !reportData || (Array.isArray(reportData) && reportData.length === 0);
+
+        if (!isEmpty) {
+          if (orderData) {
+            reportData = reportData.map(r => ({
+              ...r,
+              poImage: r.poImage || orderData.poImage,
+              buyerCustomer: r.buyerCustomer || orderData.buyerCustomer || r.customerName || orderData.customerName || '',
+              consigneeAddress1: r.consigneeAddress1 || orderData.consigneeAddress1 || orderData.consignee || '',
+              consigneeAddress2: r.consigneeAddress2 || orderData.consigneeAddress2 || '',
+              otherFabric: r.otherFabric || orderData.otherFabric || '',
+              construction: r.construction || orderData.construction || '',
+              ribGSM: r.ribGSM || orderData.ribGSM || r.ribGsm || orderData.ribGsm || r.RibGSM || orderData.RibGSM || '',
+              assortment: r.assortment || orderData.assortment || '',
+            }));
+          }
+          setFetchedData(reportData);
+        } else {
+          try {
+            const styleRes = await axios.get(`${HOST_API}/api/Milestone/GetStyle?poid=${id}`, { headers }).catch(() => ({ data: [] }));
+            const order = orderData;
+            const styleRows = Array.isArray(styleRes.data) ? styleRes.data : [];
+            const baseHeader = order ? {
+              amsRefNo: order.amsRefNo || order.amsRef || '',
+              pono: order.pono || order.poNo || order.PONO || '',
+              venderAddress: order.venderAddress || order.vendorAddress || '',
+              venderCode: order.venderCode || order.vendorCode || '',
+              contactPersonVendor: order.contactPersonVendor || '',
+              brand: order.brand || '',
+              fabric: order.fabric || '',
+              quality: order.quality || '',
+              shipmentDate: order.shipmentDate || order.tolerance || '',
+              finalInspDate: order.finalInspDate || '',
+              packingList: order.packingList || '',
+              cartonMarking: order.cartonMarking || '',
+              pcPerCarton: order.pcPerCarton || '',
+              ration: order.ration || '',
+              assortment: order.assortment || '',
+              destination: order.destination || '',
+              paymentModeName: order.paymentModeName || order.paymentMode || '',
+              deliveryTypeDisplayName: order.deliveryTypeDisplayName || order.deliveryType || '',
+              shipmentModeName: order.shipmentModeName || order.shipmentMode || '',
+              importantNote: order.importantNote || '',
+              itemDescriptionShippingInvoice: order.itemDescriptionShippingInvoice || '',
+              poImage: order.poImage || '',
+              userName: order.userName || '',
+              consigneeAddress1: order.consigneeAddress1 || order.consignee || '',
+              rnNo: order.rnNo || '',
+              moreInfo: order.moreInfo || '',
+              otherFabric: order.otherFabric || '',
+              construction: order.construction || '',
+              ribGSM: order.ribGSM || order.ribGsm || order.RibGSM || '',
+              gms: order.gms || '',
+              bankName: order.bankName || '',
+              bankBranch: order.bankBranch || '',
+              accountNo: order.accountNo || '',
+            } : {};
+
+            if (styleRows.length > 0) {
+              const builtRows = styleRows.flatMap((s) => [
+                {
+                  ...baseHeader,
+                  poDetailID: s.styleId || s.styleID,
+                  color: s.colorway || '',
+                  style: s.styleNo || '',
+                  sizeRange: s.sizeRange || '',
+                  productCode: s.productCode || '',
+                  rate: s.rate || s.itemPrice || 0,
+                  totalQTY: s.quantity || 0,
+                  rowType: 'size',
+                  s1: s.size || '',
+                },
+                {
+                  ...baseHeader,
+                  poDetailID: s.styleId || s.styleID,
+                  color: s.colorway || '',
+                  style: s.styleNo || '',
+                  sizeRange: s.sizeRange || '',
+                  productCode: s.productCode || '',
+                  rate: s.rate || s.itemPrice || 0,
+                  totalQTY: s.quantity || 0,
+                  rowType: 'quantity',
+                  s1: String(s.quantity || 0),
+                }
+              ]);
+              setFetchedData(builtRows);
+            } else if (order) {
+              setFetchedData([{
+                ...baseHeader,
+                poDetailID: 1,
+                color: order.color || '',
+                style: order.style || '',
+                sizeRange: order.sizeRange || '',
+                productCode: order.productCode || '',
+                rate: order.rate || 0,
+                totalQTY: order.quantity || 0,
+                rowType: 'quantity',
+                s1: String(order.quantity || 0),
+              }]);
+            }
+          } catch (err) {
+            console.error('Fallback fetch error:', err);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching purchase order data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPurchaseOrderData();
+  }, [id, propPoData]);
+
+  const rawInput = propPoData || fetchedData;
+  const isArray = Array.isArray(rawInput);
+  const reportRows = isArray ? rawInput : [];
+  const poData = isArray ? (rawInput[0] || {}) : (rawInput || {});
+
+  const totalPages = 6;
+
+  useEffect(() => {
+    const root = scrollContainerRef.current;
+    const container = componentRef.current;
+    if (!root || !container) return;
+
+    const pages = Array.from(container.children).filter((el) => el instanceof HTMLElement);
+    if (!pages.length) return;
+
+    pages.forEach((pageEl, idx) => {
+      pageEl.dataset.pageIndex = String(idx + 1);
+    });
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => (b.intersectionRatio ?? 0) - (a.intersectionRatio ?? 0))[0];
+
+        if (!visible?.target) return;
+        const idx = Number(visible.target.dataset.pageIndex);
+        if (Number.isFinite(idx) && idx >= 1) setCurrentPage(idx);
+      },
+      { root, threshold: [0.15, 0.35, 0.55, 0.75] }
+    );
+
+    pages.forEach((p) => observer.observe(p));
+    return () => observer.disconnect();
+  }, [loading, id, propPoData, fetchedData]);
+
+  const toNumber = (value) => {
+    if (value === null || value === undefined) return 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    const cleaned = String(value).replace(/[^0-9.-]/g, '');
+    const num = Number(cleaned);
+    return Number.isFinite(num) ? num : 0;
+  };
+
+  const fmtMoney = (value) =>
+    toNumber(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtInt = (value) => toNumber(value).toLocaleString('en-US', { maximumFractionDigits: 0 });
+
+  const getSArray = (obj, max = 11) =>
+    Array.from({ length: max }, (_, i) => {
+      const v = obj?.[`s${i + 1}`];
+      return v === null || v === undefined ? '' : String(v).trim();
+    });
+
+  const extractSizeColumns = (obj) => {
+    const max = 20;
+    const labels = [];
+    const qty = [];
+
+    const isNumericLike = (v) => {
+      if (v === null || v === undefined) return false;
+      const s = String(v).trim();
+      if (!s) return false;
+      return /^-?\d+(\.\d+)?$/.test(s.replace(/,/g, ''));
+    };
+
+    const hasAnyS = Array.from({ length: max }, (_, i) => obj?.[`s${i + 1}`]).some(
+      (v) => v !== undefined && v !== null && String(v).trim() !== ''
+    );
+    const s1 = obj?.s1;
+    const sLooksNumeric = isNumericLike(s1);
+
+    if (hasAnyS && sLooksNumeric) {
+      for (let i = 1; i <= max; i += 1) {
+        const qRaw = obj?.[`s${i}`];
+        if (qRaw === undefined || qRaw === null || String(qRaw).trim() === '') continue;
+        qty.push(toNumber(qRaw));
+        const labelCandidates = [obj?.[`size${i}`], obj?.[`size${i}Text`], obj?.[`s${i}Text`], obj?.[`s${i}Label`]];
+        const found = labelCandidates.find((v) => v !== undefined && v !== null && String(v).trim() !== '');
+        labels.push(found ? String(found).trim() : '');
+      }
+      return { labels, qty };
+    }
+
+    if (hasAnyS) {
+      for (let i = 1; i <= max; i += 1) {
+        const labelRaw = obj?.[`s${i}`];
+        const label = labelRaw !== undefined && labelRaw !== null ? String(labelRaw).trim() : '';
+        if (!label) continue;
+        labels.push(label);
+        const qtyCandidates = [obj?.[`q${i}`], obj?.[`qty${i}`], obj?.[`quantity${i}`], obj?.[`poQty${i}`]];
+        const foundQty = qtyCandidates.find((v) => v !== undefined && v !== null && String(v).trim() !== '');
+        qty.push(toNumber(foundQty));
+      }
+      return { labels, qty };
+    }
+
+    if (!qty.length) {
+      const fallbackQty = [obj?.s1, obj?.s2, obj?.s3, obj?.s4].filter(
+        (v) => v !== undefined && v !== null && String(v).trim() !== ''
+      );
+      fallbackQty.forEach((v) => qty.push(toNumber(v)));
+      while (labels.length < qty.length) labels.push('');
+    }
+    return { labels, qty };
+  };
+
+  const buildOrderRowsFromReport = (rows) => {
+    const groups = new Map();
+    const getKey = (r) => String(r?.poDetailID ?? `${r?.color ?? ''}|${r?.style ?? ''}|${r?.sizeRange ?? ''}|${r?.productCode ?? ''}|${r?.rowNo ?? ''}`);
+
+    (rows || []).forEach((r, idx) => {
+      const key = getKey(r);
+      const curr = groups.get(key) || { sizeRow: null, qtyRow: null, firstIndex: idx };
+      if (String(r?.rowType || '').toLowerCase() === 'size') curr.sizeRow = r;
+      if (String(r?.rowType || '').toLowerCase() === 'quantity') curr.qtyRow = r;
+      groups.set(key, curr);
+    });
+
+    const out = [];
+    for (const [, g] of groups) {
+      const base = g.qtyRow || g.sizeRow || {};
+      const sizeLabelsRaw = g.sizeRow ? getSArray(g.sizeRow) : [];
+      const qtyValuesRaw = g.qtyRow ? getSArray(g.qtyRow) : [];
+      const extracted = extractSizeColumns(base);
+
+      const sizeLabels = (sizeLabelsRaw.length ? sizeLabelsRaw : extracted.labels).map((v) => String(v ?? '').trim());
+      const qtyValues = (qtyValuesRaw.length ? qtyValuesRaw : extracted.qty).map((v) => (v === '' || v === null || v === undefined ? null : toNumber(v)));
+
+      while (sizeLabels.length < 11) sizeLabels.push('');
+      while (qtyValues.length < 11) qtyValues.push(null);
+
+      const unitNum = toNumber(base.rate);
+      const totalQtyNum = qtyValues.reduce((sum, v) => sum + (v === null ? 0 : v), 0) || toNumber(base.totalQTY);
+      const amountNum = totalQtyNum * unitNum;
+
+      out.push({
+        color: base.color || '',
+        style: base.style || '',
+        sizeRange: base.sizeRange || '',
+        productCode: base.productCode || '',
+        sizeLabels: sizeLabels.slice(0, 11),
+        qtyValues: qtyValues.slice(0, 11),
+        totalQtyNum,
+        unitNum,
+        amountNum,
+        firstIndex: g.firstIndex ?? 0,
+      });
+    }
+
+    out.sort((a, b) => (a.firstIndex ?? 0) - (b.firstIndex ?? 0));
+    return out;
+  };
+
+  const orderRows = buildOrderRowsFromReport(reportRows);
+  const totalQtyNum = orderRows.reduce((sum, row) => sum + (row.totalQtyNum || 0), 0);
+  const totalAmountNum = orderRows.reduce((sum, row) => sum + (row.amountNum || 0), 0);
+
+  const poNumber = poData.pono || poData.poNo || poData.amsRefNo || '';
+  const refNo = poData.amsRefNo || poData.pono || '';
+  const programName = poData.brand || poData.style || 'RealTree Camo';
+  const issueDate = (poData.creationDate && !poData.creationDate.startsWith('1900-01-01'))
+    ? new Date(poData.creationDate).toISOString().split('T')[0]
+    : '07-15-2026';
+  const placementDate = issueDate;
+  const finalInspDate = (poData.finalInspDate && !poData.finalInspDate.startsWith('1900-01-01'))
+    ? new Date(poData.finalInspDate).toISOString().split('T')[0]
+    : '09-10-2026';
+  const exFactoryDate = (poData.shipmentDate && !poData.shipmentDate.startsWith('1900-01-01'))
+    ? new Date(poData.shipmentDate).toISOString().split('T')[0]
+    : '09-13-2026';
+  const leadtimeDays = poData.leadtime ? Number(poData.leadtime) : 60;
+
+  const pcsPerCartonNum = Number(poData.pcPerCarton) || 72;
+  const totalCartonsNum = pcsPerCartonNum > 0 ? Math.ceil(totalQtyNum / pcsPerCartonNum) : 0;
+
+  // Print & Download handlers
+  const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 0.1, 2));
+  const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 0.1, 0.5));
+
+  const handlePrint = useReactToPrint({
+    contentRef: componentRef,
+    documentTitle: `Purchase_Order_${refNo}`,
+    pageStyle: `
+      @page { size: A4; margin: 0; }
+      @media print {
+        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
+    `,
+  });
+
+  const handleDownloadPDF = async () => {
+    const element = componentRef.current;
+    const originalTransform = element.style.transform;
+    const originalTransition = element.style.transition;
+    try {
+      element.style.transform = 'scale(1)';
+      element.style.transition = 'none';
+      const pages = Array.from(element.children);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        if (!(page instanceof HTMLElement)) continue;
+        const prevBoxShadow = page.style.boxShadow;
+        const prevMarginBottom = page.style.marginBottom;
+        page.style.boxShadow = 'none';
+        page.style.marginBottom = '0';
+
+        const canvas = await html2canvas(page, { scale: 2, useCORS: true, logging: false, backgroundColor: '#FFFFFF' });
+        const imgData = canvas.toDataURL('image/png');
+        const scale = Math.min(pdfWidth / canvas.width, pdfHeight / canvas.height);
+        const finalWidth = canvas.width * scale;
+        const finalHeight = canvas.height * scale;
+        pdf.addImage(imgData, 'PNG', (pdfWidth - finalWidth) / 2, (pdfHeight - finalHeight) / 2, finalWidth, finalHeight);
+
+        page.style.boxShadow = prevBoxShadow;
+        page.style.marginBottom = prevMarginBottom;
+        if (i < pages.length - 1) pdf.addPage();
+      }
+      pdf.save(`Purchase_Order_${refNo}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    } finally {
+      element.style.transform = originalTransform;
+      element.style.transition = originalTransition;
+    }
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  // Common sizes list across all rows for Breakdown page
+  const allSizeHeaders = orderRows.length > 0 ? orderRows[0].sizeLabels.filter(Boolean) : ['S', 'M', 'L', 'XL', '2XL', '3XL+'];
+
+  return (
+    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f5f5f5' }}>
+      {/* Top Action Bar */}
+      <AppBar position="static" sx={{ backgroundColor: '#1E293B', color: '#fff', boxShadow: 'none' }}>
+        <Toolbar variant="dense" sx={{ minHeight: '48px !important' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+            <IconButton size="small" onClick={() => navigate(-1)} sx={{ color: '#fff', mr: 1 }} title="Back">
+              <ArrowBack fontSize="small" />
+            </IconButton>
+            <Typography variant="h6" sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '13px', fontWeight: 700 }}>
+              Purchase Order — {poNumber || refNo}
+            </Typography>
+            <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '12px', ml: 2, color: '#94A3B8' }}>
+              {currentPage} / {totalPages}
+            </Typography>
+          </Box>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, justifyContent: 'center' }}>
+            <IconButton size="small" onClick={handleZoomOut} sx={{ color: '#fff' }}>
+              <ZoomOut fontSize="small" />
+            </IconButton>
+            <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '12px', mx: 1, minWidth: '40px', textAlign: 'center' }}>
+              {Math.round(zoomLevel * 100)}%
+            </Typography>
+            <IconButton size="small" onClick={handleZoomIn} sx={{ color: '#fff' }}>
+              <ZoomIn fontSize="small" />
+            </IconButton>
+          </Box>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, justifyContent: 'flex-end', gap: 0.5 }}>
+            <IconButton size="small" onClick={handleDownloadPDF} sx={{ color: '#fff' }}>
+              <Download fontSize="small" />
+            </IconButton>
+            <IconButton size="small" onClick={handlePrint} sx={{ color: '#fff' }}>
+              <Print fontSize="small" />
+            </IconButton>
+            {onClose && (
+              <IconButton size="small" onClick={onClose} sx={{ color: '#fff' }}>
+                <Close fontSize="small" />
+              </IconButton>
+            )}
+          </Box>
+        </Toolbar>
+      </AppBar>
+
+      {/* Pages Container */}
+      <Box
+        ref={scrollContainerRef}
+        sx={{
+          flex: 1,
+          overflow: 'auto',
+          padding: 3,
+          backgroundColor: '#0F172A',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'flex-start'
+        }}
+      >
+        <Box
+          ref={componentRef}
+          sx={{
+            transform: `scale(${zoomLevel * 1.2})`,
+            transformOrigin: 'top center',
+            transition: 'transform 0.2s ease-in-out',
+            '@media print': { transform: 'none !important' }
+          }}
+        >
+          {/* ================================================================ */}
+          {/* PAGE 1: ORDER DETAILS                                             */}
+          {/* ================================================================ */}
+          <Box sx={NEW_PAGE_STYLE}>
+            <NewPOPageHeader poNo={poNumber || refNo} rev="0" date={issueDate} />
+
+            {/* BUYER DETAILS */}
+            <Box sx={{ mb: 2.5 }}>
+              <NewSectionHeader title="BUYER DETAILS" />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.8 }}>
+                <NewFieldBlock label="BUYER / BRAND" value={poData.brand || poData.buyerCustomer || 'All Seasons Textile Inc.'} minWidth="180px" />
+                <NewFieldBlock label="R.N #" value={poData.rnNo || '11067'} minWidth="120px" />
+                <NewFieldBlock label="DESTINATION" value={poData.destination || 'New Jersey, USA'} minWidth="160px" />
+              </Box>
+              <NewFieldBlock label="SHIP TO" value={poData.consigneeAddress1 || '1 Broad Avenue, Unit 4, Fairview, NJ 07022, USA'} />
+            </Box>
+
+            <Divider sx={{ borderColor: '#E5E7EB', my: 2 }} />
+
+            {/* FACTORY & SHIPMENT DETAILS */}
+            <Box sx={{ mb: 2.5 }}>
+              <NewSectionHeader title="FACTORY & SHIPMENT DETAILS" />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.8 }}>
+                <NewFieldBlock label="FACTORY" value={poData.supplierName || poData.venderAddress || 'Ayyoub Apparels'} minWidth="240px" />
+                <NewFieldBlock label="FACTORY ADDRESS" value={poData.venderAddress || 'To Be Provided'} minWidth="240px" />
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <NewFieldBlock label="SHIP MODE" value={poData.deliveryTypeDisplayName || poData.deliveryType || 'Air'} minWidth="140px" />
+                <NewFieldBlock label="SHIPMENT TERMS" value={poData.shipmentModeName || poData.shipmentMode || 'FOB'} minWidth="140px" />
+                <NewFieldBlock label="PAYMENT TERMS" value={poData.paymentModeName || poData.paymentMode || 'DP'} minWidth="140px" />
+              </Box>
+            </Box>
+
+            <Divider sx={{ borderColor: '#E5E7EB', my: 2 }} />
+
+            {/* KEY DATES */}
+            <Box sx={{ mb: 3 }}>
+              <NewSectionHeader title="KEY DATES" />
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1.2fr 1.2fr 1.4fr 1.3fr 1.5fr', gap: 2, alignItems: 'stretch' }}>
+                <Box>
+                  <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 700, letterSpacing: '0.8px', color: '#6B7280', textTransform: 'uppercase', mb: 0.6 }}>P.O ISSUE DATE</Typography>
+                  <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '11.5px', fontWeight: 800, color: '#111827' }}>{issueDate}</Typography>
+                </Box>
+                <Box>
+                  <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 700, letterSpacing: '0.8px', color: '#6B7280', textTransform: 'uppercase', mb: 0.6 }}>PLACEMENT DATE</Typography>
+                  <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '11.5px', fontWeight: 800, color: '#111827' }}>{placementDate}</Typography>
+                </Box>
+                <Box>
+                  <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 700, letterSpacing: '0.8px', color: '#6B7280', textTransform: 'uppercase', mb: 0.6 }}>FINAL INSPECTION DATE</Typography>
+                  <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '11.5px', fontWeight: 800, color: '#111827' }}>{finalInspDate}</Typography>
+                </Box>
+                <Box>
+                  <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 700, letterSpacing: '0.8px', color: '#6B7280', textTransform: 'uppercase', mb: 0.6 }}>EX-FACTORY DATE</Typography>
+                  <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '11.5px', fontWeight: 800, color: '#111827' }}>{exFactoryDate}</Typography>
+                </Box>
+                {/* Highlighted Allowed Days Card */}
+                <Box sx={{ backgroundColor: '#0F2C59', color: '#fff', borderRadius: '4px', p: 1.5, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7px', fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', opacity: 0.85, mb: 0.3 }}>
+                    PRODUCTION DAYS ALLOWED
+                  </Typography>
+                  <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '15px', fontWeight: 800, lineHeight: 1.1 }}>
+                    {leadtimeDays} days
+                  </Typography>
+                  <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7px', fontWeight: 400, opacity: 0.75, mt: 0.3 }}>
+                    Placement to ex-factory
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+
+            {/* DELAY PENALTY SCHEDULE */}
+            <Box sx={{ mt: 'auto', mb: 2 }}>
+              <Box sx={{ backgroundColor: '#0F2C59', color: '#fff', px: 2, py: 0.9, borderTopLeftRadius: '4px', borderTopRightRadius: '4px' }}>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '8px', fontWeight: 800, letterSpacing: '0.8px', textTransform: 'uppercase' }}>
+                  DELAY PENALTY SCHEDULE — CUMULATIVE, ON VALUE OF QUANTITY DELIVERED LATE
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', border: '1px solid #D1D5DB', borderTop: 'none', borderBottomLeftRadius: '4px', borderBottomRightRadius: '4px' }}>
+                {[
+                  { range: '1–7 DAYS', penalty: '1.0%' },
+                  { range: '8–14 DAYS', penalty: '2.5%' },
+                  { range: '15–21 DAYS', penalty: '4.5%' },
+                  { range: '22–28 DAYS', penalty: '7.0%' },
+                  { range: '28+ DAYS', penalty: '10.0%' }
+                ].map((item, idx) => (
+                  <Box key={idx} sx={{ p: 1.2, borderRight: idx < 4 ? '1px solid #E5E7EB' : 'none' }}>
+                    <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 600, color: '#6B7280', mb: 0.4 }}>{item.range}</Typography>
+                    <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '13px', fontWeight: 800, color: '#111827' }}>{item.penalty}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+
+            <NewPOPageFooter pageNum={1} totalPages={totalPages} title="Order Details" poNo={poNumber || refNo} programName={programName} rev="0" />
+          </Box>
+
+          {/* ================================================================ */}
+          {/* PAGE 2: PRODUCT INFORMATION                                       */}
+          {/* ================================================================ */}
+          <Box sx={NEW_PAGE_STYLE}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3.5, pb: 1, borderBottom: '1px solid #E5E7EB' }}>
+              <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '17px', fontWeight: 800, color: '#111827' }}>
+                Product Information
+              </Typography>
+              <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9.5px', color: '#6B7280', fontWeight: 600 }}>
+                {`${poNumber || refNo} · ${programName}`}
+              </Typography>
+            </Box>
+
+            {/* IDENTIFICATION + BIG LOGO / PREVIEW */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 4, mb: 2.5 }}>
+              <Box sx={{ flex: 1 }}>
+                <NewSectionHeader title="IDENTIFICATION" />
+                <Box sx={{ display: 'flex', gap: 6, mb: 1.2 }}>
+                  <NewFieldBlock label="STYLE #" value={poData.style || 'APX'} />
+                  <NewFieldBlock label="PRODUCT CODE" value={poData.productCode || '122338'} />
+                </Box>
+                <Box sx={{ display: 'flex', gap: 6, mb: 1.2 }}>
+                  <NewFieldBlock label="PROGRAM NAME" value={programName} />
+                  <NewFieldBlock label="PRODUCT CATEGORY" value={poData.productCategoriesName || 'Knits'} />
+                </Box>
+                <NewFieldBlock
+                  label="DESCRIPTION"
+                  value={poData.itemDescriptionShippingInvoice || `${poData.fabric || "Men's Jersey SS Tee"} — ${poData.style || 'Baltimore Body'}, ${poData.color || 'CAMO'} colorway`}
+                />
+              </Box>
+
+              {/* Product Thumbnail / Big Image */}
+              <Box sx={{ width: '180px', height: '160px', border: '1px solid #E5E7EB', borderRadius: '6px', p: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F9FAFB' }}>
+                <img
+                  src={resolvePoImageSrc(poData.poImage)}
+                  alt="Product"
+                  onError={handlePoImageError}
+                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                />
+              </Box>
+            </Box>
+
+            <Divider sx={{ borderColor: '#E5E7EB', my: 2 }} />
+
+            {/* FABRIC & CONSTRUCTION */}
+            <Box sx={{ mb: 2.5 }}>
+              <NewSectionHeader title="FABRIC & CONSTRUCTION" />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.2 }}>
+                <NewFieldBlock label="FABRIC" value={poData.fabric || 'Jersey Knit'} minWidth="140px" />
+                <NewFieldBlock label="GSM" value={poData.gms ? `${poData.gms} gsm` : '142 gsm'} minWidth="100px" />
+                <NewFieldBlock label="CONTENT" value={poData.quality || '50% Polyester / 25% Viscose / 25% Cotton'} minWidth="240px" highlight />
+              </Box>
+              <NewFieldBlock label="SOURCING" value={`Fabric: ${poData.styleSource || 'Local'} · Trims & Accessories: ${poData.trimsAccessories || 'Local'}`} />
+            </Box>
+
+            <Divider sx={{ borderColor: '#E5E7EB', my: 2 }} />
+
+            {/* CARE INSTRUCTIONS */}
+            <Box sx={{ mb: 2.5 }}>
+              <NewSectionHeader title="CARE INSTRUCTIONS" />
+              <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '10.5px', fontWeight: 500, color: '#374151', lineHeight: 1.5 }}>
+                {poData.washingCareLabelInstructions || 'Machine wash cold with like colors, gentle cycle. Use only non-chlorine bleach when needed. Line dry, cool iron.'}
+              </Typography>
+            </Box>
+
+            <Divider sx={{ borderColor: '#E5E7EB', my: 2 }} />
+
+            {/* PACKING INSTRUCTIONS */}
+            <Box sx={{ mb: 2.5 }}>
+              <NewSectionHeader title="PACKING INSTRUCTIONS" />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.2 }}>
+                <NewFieldBlock label="PACKING METHOD" value={poData.assortment || 'Assorted packing'} minWidth="130px" />
+                <NewFieldBlock label="PCS / CARTON" value={poData.pcPerCarton ? `${poData.pcPerCarton} pcs` : '72 pcs'} minWidth="100px" />
+                <NewFieldBlock label="POLYBAG" value={poData.polyBag || 'Single pc polybag'} minWidth="140px" />
+                <NewFieldBlock label="FOLD" value={poData.fold || '9x11 shirt fold'} minWidth="120px" />
+              </Box>
+              <NewFieldBlock label="CARTON MARK" value={poData.cartonMarking || 'Jedco'} />
+            </Box>
+
+            <NewPOPageFooter pageNum={2} totalPages={totalPages} title="Product Information" poNo={poNumber || refNo} programName={programName} rev="0" />
+          </Box>
+
+          {/* ================================================================ */}
+          {/* PAGE 3: SIZE, COLOUR & FOB BREAKDOWN                              */}
+          {/* ================================================================ */}
+          <Box sx={NEW_PAGE_STYLE}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, pb: 1, borderBottom: '1px solid #E5E7EB' }}>
+              <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '17px', fontWeight: 800, color: '#111827' }}>
+                Size, Colour & FOB Breakdown
+              </Typography>
+              <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9.5px', color: '#6B7280', fontWeight: 600 }}>
+                {`${poNumber || refNo} · ${programName}`}
+              </Typography>
+            </Box>
+
+            {/* Sub-header text */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.2 }}>
+              <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '8px', fontWeight: 800, letterSpacing: '0.8px', color: '#4B5563', textTransform: 'uppercase' }}>
+                QUANTITY, UNIT PRICE & FOB VALUE BY COLOUR
+              </Typography>
+              <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '8.5px', fontWeight: 400, color: '#6B7280', fontStyle: 'italic' }}>
+                All prices FOB Karachi, USD
+              </Typography>
+            </Box>
+
+            {/* Breakdown Table */}
+            <TableContainer component={Paper} elevation={0} sx={{ border: 'none', mb: 3 }}>
+              <Table size="small" sx={{ width: '100%', borderCollapse: 'collapse' }}>
+                <TableHead>
+                  <TableRow sx={{ borderBottom: '2px solid #111827' }}>
+                    <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, color: '#374151', textTransform: 'uppercase', py: 0.8, pl: 0 }}>COLOUR</TableCell>
+                    {allSizeHeaders.map((sz, idx) => (
+                      <TableCell key={idx} align="right" sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, color: '#374151', py: 0.8 }}>{sz}</TableCell>
+                    ))}
+                    <TableCell align="right" sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, color: '#111827', py: 0.8 }}>TOTAL QTY</TableCell>
+                    <TableCell align="right" sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, color: '#374151', py: 0.8 }}>PRICE S-2XL</TableCell>
+                    <TableCell align="right" sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, color: '#374151', py: 0.8 }}>PRICE 3XL+</TableCell>
+                    <TableCell align="right" sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, color: '#111827', py: 0.8, pr: 0 }}>FOB VALUE (USD)</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {orderRows.map((row, rIdx) => {
+                    const price3xl = row.unitNum ? row.unitNum + 0.50 : 0;
+                    return (
+                      <TableRow key={rIdx} sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                        <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9.5px', fontWeight: 700, color: '#111827', py: 0.7, pl: 0 }}>{row.color || '—'}</TableCell>
+                        {allSizeHeaders.map((_, sIdx) => {
+                          const val = row.qtyValues[sIdx];
+                          return (
+                            <TableCell key={sIdx} align="right" sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 500, color: '#4B5563', py: 0.7 }}>
+                              {val ? fmtInt(val) : '—'}
+                            </TableCell>
+                          );
+                        })}
+                        <TableCell align="right" sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9.5px', fontWeight: 700, color: '#111827', py: 0.7 }}>
+                          {fmtInt(row.totalQtyNum)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 500, color: '#4B5563', py: 0.7 }}>
+                          {`$${fmtMoney(row.unitNum)}`}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 500, color: '#4B5563', py: 0.7 }}>
+                          {`$${fmtMoney(price3xl)}`}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9.5px', fontWeight: 700, color: '#111827', py: 0.7, pr: 0 }}>
+                          {`$${fmtMoney(row.amountNum)}`}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+
+                  {/* Table Total Row */}
+                  <TableRow sx={{ borderTop: '2px solid #111827', borderBottom: '2px solid #111827' }}>
+                    <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9.5px', fontWeight: 800, color: '#111827', py: 0.9, pl: 0 }}>Total</TableCell>
+                    {allSizeHeaders.map((_, sIdx) => {
+                      const colSum = orderRows.reduce((sum, r) => sum + (r.qtyValues[sIdx] || 0), 0);
+                      return (
+                        <TableCell key={sIdx} align="right" sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9.5px', fontWeight: 800, color: '#111827', py: 0.9 }}>
+                          {fmtInt(colSum)}
+                        </TableCell>
+                      );
+                    })}
+                    <TableCell align="right" sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9.5px', fontWeight: 800, color: '#111827', py: 0.9 }}>
+                      {fmtInt(totalQtyNum)}
+                    </TableCell>
+                    <TableCell colSpan={2} sx={{ py: 0.9 }}>&nbsp;</TableCell>
+                    <TableCell align="right" sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '10px', fontWeight: 800, color: '#111827', py: 0.9, pr: 0 }}>
+                      {`$${fmtMoney(totalAmountNum)}`}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {/* Bottom 3 Metric Cards */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1.2fr 1.2fr 1.6fr', gap: 2.5, mt: 'auto', mb: 2 }}>
+              {/* Card 1: Total Qty */}
+              <Box sx={{ border: '1px solid #E5E7EB', borderRadius: '6px', p: 1.8, backgroundColor: '#FFFFFF' }}>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 700, letterSpacing: '0.8px', color: '#6B7280', textTransform: 'uppercase', mb: 0.4 }}>
+                  TOTAL QUANTITY
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '18px', fontWeight: 800, color: '#111827' }}>
+                  {`${fmtInt(totalQtyNum)} pcs`}
+                </Typography>
+              </Box>
+
+              {/* Card 2: Cartons */}
+              <Box sx={{ border: '1px solid #E5E7EB', borderRadius: '6px', p: 1.8, backgroundColor: '#FFFFFF' }}>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 700, letterSpacing: '0.8px', color: '#6B7280', textTransform: 'uppercase', mb: 0.4 }}>
+                  CARTONS
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '18px', fontWeight: 800, color: '#111827' }}>
+                  {`${fmtInt(totalCartonsNum)} Ctn`}
+                </Typography>
+              </Box>
+
+              {/* Card 3: Total FOB Value (Dark Navy) */}
+              <Box sx={{ backgroundColor: '#0F2C59', color: '#fff', borderRadius: '6px', p: 1.8 }}>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 700, letterSpacing: '0.8px', opacity: 0.85, textTransform: 'uppercase', mb: 0.4 }}>
+                  TOTAL FOB VALUE
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '18px', fontWeight: 800, lineHeight: 1.1 }}>
+                  {`USD ${fmtMoney(totalAmountNum)}`}
+                </Typography>
+              </Box>
+            </Box>
+
+            <NewPOPageFooter pageNum={3} totalPages={totalPages} title="Sizes, Colours & FOB" poNo={poNumber || refNo} programName={programName} rev="0" />
+          </Box>
+
+          {/* ================================================================ */}
+          {/* PAGE 4: TERMS & CONDITIONS                                        */}
+          {/* ================================================================ */}
+          <Box sx={NEW_PAGE_STYLE}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, pb: 1, borderBottom: '1px solid #E5E7EB' }}>
+              <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '17px', fontWeight: 800, color: '#111827' }}>
+                Terms & Conditions
+              </Typography>
+              <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9.5px', color: '#6B7280', fontWeight: 600 }}>
+                {`${poNumber || refNo} · ${programName}`}
+              </Typography>
+            </Box>
+
+            {/* 2-Column Clean Modern Layout */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3.5, fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, color: '#374151', lineHeight: 1.45 }}>
+              {/* Left Column */}
+              <Box>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, letterSpacing: '0.8px', color: '#111827', textTransform: 'uppercase', mb: 0.6 }}>ORDER ACCEPTANCE</Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1.6 }}>
+                  1. Factory must confirm the PO in writing <strong>within 24 hours</strong> of issuance; beginning production without objection means full acceptance.
+                </Typography>
+
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, letterSpacing: '0.8px', color: '#111827', textTransform: 'uppercase', mb: 0.6 }}>QUALITY, SAMPLES & APPROVALS</Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1 }}>
+                  2. Goods must strictly match approved specs, samples, fabrics, trims and colours — <strong>factory remains liable for compliance even after inspection passes</strong>.
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1 }}>
+                  3. No bulk cutting, printing or packing may start without written approval; unapproved production <strong>proceeds entirely at factory's own risk and cost</strong>.
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1 }}>
+                  4. No fabric, trim, construction or subcontracting change without AMS's prior written approval.
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1 }}>
+                  5. Third-party inspection (e.g. SGS) only after AMS approval; failed inspections are chargeable to the factory.
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1.6 }}>
+                  6. All buyer-required tests must pass; retesting and correction costs from factory-caused failures are borne by the factory.
+                </Typography>
+
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, letterSpacing: '0.8px', color: '#111827', textTransform: 'uppercase', mb: 0.6 }}>PACKING & QUANTITY</Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1 }}>
+                  7. Packing must follow approved instructions exactly — <strong>no mixed sizes, colours or styles per carton without written approval</strong>.
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1 }}>
+                  8. Full PO quantity must be delivered; shortages are completed or deducted at AMS's discretion, and overages need prior written approval before shipment.
+                </Typography>
+              </Box>
+
+              {/* Right Column */}
+              <Box>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, letterSpacing: '0.8px', color: '#111827', textTransform: 'uppercase', mb: 0.6 }}>DELIVERY & DELAYS</Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1 }}>
+                  9. Any risk to the delivery date must be reported immediately in writing with a recovery plan — notice alone does not extend the date.
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1 }}>
+                  10. Delay penalties apply per the <strong>cumulative Delay Penalty Schedule</strong> shown on pages 1 and 5.
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1.6 }}>
+                  11. Any freight upgrade to air caused by factory delay <strong>is at the factory's cost</strong>.
+                </Typography>
+
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, letterSpacing: '0.8px', color: '#111827', textTransform: 'uppercase', mb: 0.6 }}>PAYMENT & DEDUCTIONS</Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1 }}>
+                  12. AMS covers courier cost for the first submission only; all resubmissions from factory error are factory-paid.
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1 }}>
+                  13. Any buyer chargeback caused by the factory is <strong>deducted from factory payments</strong>.
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1.6 }}>
+                  14. AMS may deduct delay, shortage, chargeback or other documented costs from current or future payments.
+                </Typography>
+
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, letterSpacing: '0.8px', color: '#111827', textTransform: 'uppercase', mb: 0.6 }}>DOCUMENTS, CONFIDENTIALITY & COMPLIANCE</Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1 }}>
+                  15. Complete, accurate shipment documents are required on time — errors causing delay or customs issues are factory liability.
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1 }}>
+                  16. Buyer designs, artwork and branded materials are confidential and for this PO only — no resale of excess, rejects or seconds.
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1 }}>
+                  17. Factory must comply with all labour, safety, environmental and social-compliance regulations.
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1 }}>
+                  18. Genuine force-majeure delays must be reported immediately with evidence; routine issues (machine breakdown, staffing, planning) do not qualify.
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1 }}>
+                  19. Accepting the PO or starting production confirms full acceptance of these Terms.
+                </Typography>
+              </Box>
+            </Box>
+
+            <NewPOPageFooter pageNum={4} totalPages={totalPages} title="Terms & Conditions" poNo={poNumber || refNo} programName={programName} rev="0" />
+          </Box>
+
+          {/* ================================================================ */}
+          {/* PAGE 5: BANKING DETAILS                                           */}
+          {/* ================================================================ */}
+          <Box sx={NEW_PAGE_STYLE}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3.5, pb: 1, borderBottom: '1px solid #E5E7EB' }}>
+              <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '17px', fontWeight: 800, color: '#111827' }}>
+                Banking Details
+              </Typography>
+              <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9.5px', color: '#6B7280', fontWeight: 600 }}>
+                {`${poNumber || refNo} · ${programName}`}
+              </Typography>
+            </Box>
+
+            {/* ORDER REFERENCE */}
+            <Box sx={{ mb: 2.5 }}>
+              <NewSectionHeader title="ORDER REFERENCE" />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <NewFieldBlock label="BUYER / BRAND" value={`${poData.supplierName || 'Ayyoub Apparels'} — ${poData.division || 'Men'}`} minWidth="200px" />
+                <NewFieldBlock label="FACTORY" value={poData.brand || poData.buyerCustomer || 'All Seasons Textile Inc.'} minWidth="200px" />
+                <NewFieldBlock label="P.O NUMBER" value={poNumber || refNo || 'PO0020311'} minWidth="140px" highlight />
+              </Box>
+            </Box>
+
+            <Divider sx={{ borderColor: '#E5E7EB', my: 2 }} />
+
+            {/* BENEFICIARY */}
+            <Box sx={{ mb: 2.5 }}>
+              <NewSectionHeader title="BENEFICIARY" />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <NewFieldBlock label="BENEFICIARY NAME" value={poData.brand || poData.buyerCustomer || 'All Seasons Textile Inc.'} minWidth="240px" />
+                <NewFieldBlock label="BENEFICIARY ADDRESS" value="Not Required" minWidth="240px" />
+              </Box>
+            </Box>
+
+            <Divider sx={{ borderColor: '#E5E7EB', my: 2 }} />
+
+            {/* BANK DETAILS */}
+            <Box sx={{ mb: 3 }}>
+              <NewSectionHeader title="BANK DETAILS" />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+                <NewFieldBlock label="BANK NAME" value={poData.bankNameBank || poData.bankName || 'To Be Provided'} minWidth="240px" />
+                <NewFieldBlock label="BANK ADDRESS" value={poData.bankBranch || 'To Be Provided'} minWidth="240px" />
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+                <NewFieldBlock label="ACCOUNT NUMBER" value={poData.accountNoBank || poData.accountNo || 'To Be Provided'} minWidth="240px" />
+                <NewFieldBlock label="ROUTING / SWIFT CODE" value={poData.ibanBank || 'To Be Provided'} minWidth="240px" />
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <NewFieldBlock label="IBAN" value={poData.ibanBank || 'Not Required'} minWidth="240px" />
+                <NewFieldBlock label="CURRENCY" value="USD" minWidth="240px" />
+              </Box>
+            </Box>
+
+            {/* DELAY PENALTY SCHEDULE TABLE */}
+            <Box sx={{ mt: 'auto', mb: 2 }}>
+              <Box sx={{ backgroundColor: '#0F2C59', color: '#fff', px: 2, py: 0.9, borderTopLeftRadius: '4px', borderTopRightRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '8px', fontWeight: 800, letterSpacing: '0.8px', textTransform: 'uppercase' }}>
+                  DELAY PENALTY SCHEDULE
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 400, opacity: 0.85 }}>
+                  Cumulative · applied on the value of quantity delivered late
+                </Typography>
+              </Box>
+              <Box sx={{ border: '1px solid #E5E7EB', borderTop: 'none', borderBottomLeftRadius: '4px', borderBottomRightRadius: '4px' }}>
+                {[
+                  { range: '1–7 calendar days late', pct: '1.0%' },
+                  { range: '8–14 calendar days late', pct: '2.5%' },
+                  { range: '15–21 calendar days late', pct: '4.5%' },
+                  { range: '22–28 calendar days late', pct: '7.0%' },
+                  { range: 'More than 28 days (order may be cancelled or reassigned)', pct: '10.0%' }
+                ].map((row, idx) => (
+                  <Box
+                    key={idx}
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      px: 2,
+                      py: 0.8,
+                      backgroundColor: idx % 2 === 1 ? '#F9FAFB' : '#FFFFFF',
+                      borderBottom: idx < 4 ? '1px solid #F3F4F6' : 'none'
+                    }}
+                  >
+                    <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 500, color: '#374151' }}>{row.range}</Typography>
+                    <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '10px', fontWeight: 800, color: '#111827' }}>{row.pct}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+
+            <NewPOPageFooter pageNum={5} totalPages={totalPages} title="Banking Details" poNo={poNumber || refNo} programName={programName} rev="0" />
+          </Box>
+
+          {/* ================================================================ */}
+          {/* PAGE 6: APPENDIX — REVISION RECORD & ACCEPTANCE                  */}
+          {/* ================================================================ */}
+          <Box sx={NEW_PAGE_STYLE}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, pb: 1, borderBottom: '1px solid #E5E7EB' }}>
+              <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '17px', fontWeight: 800, color: '#111827' }}>
+                Appendix — Revision Record & Acceptance
+              </Typography>
+              <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9.5px', color: '#6B7280', fontWeight: 600 }}>
+                {`${poNumber || refNo} · ${programName} · Rev 0`}
+              </Typography>
+            </Box>
+
+            {/* REVISION RECORD */}
+            <Box sx={{ mb: 3 }}>
+              <NewSectionHeader title="REVISION RECORD" />
+              <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, color: '#4B5563', mb: 1.5, lineHeight: 1.45 }}>
+                Every change to this Purchase Order — quantity, price, colour, packing, dates or terms — is recorded below and the PO is reissued with a new revision number. <strong>The latest revision supersedes all earlier copies;</strong> the factory must work only to the highest revision in its possession.
+              </Typography>
+
+              {/* Revision Table */}
+              <TableContainer component={Paper} elevation={0} sx={{ border: 'none', mb: 1.5 }}>
+                <Table size="small" sx={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <TableHead>
+                    <TableRow sx={{ borderBottom: '2px solid #111827' }}>
+                      <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, color: '#374151', textTransform: 'uppercase', py: 0.8, width: '10%', pl: 0 }}>REV</TableCell>
+                      <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, color: '#374151', textTransform: 'uppercase', py: 0.8, width: '20%' }}>DATE</TableCell>
+                      <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, color: '#374151', textTransform: 'uppercase', py: 0.8, width: '25%' }}>PAGE / SECTION</TableCell>
+                      <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, color: '#374151', textTransform: 'uppercase', py: 0.8, width: '30%' }}>CHANGE RECORDED</TableCell>
+                      <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, color: '#374151', textTransform: 'uppercase', py: 0.8, width: '15%', pr: 0 }}>APPROVED BY</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <TableRow sx={{ borderBottom: '1px solid #E5E7EB' }}>
+                      <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9.5px', fontWeight: 800, color: '#111827', py: 0.8, pl: 0 }}>0</TableCell>
+                      <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 500, color: '#374151', py: 0.8 }}>{issueDate}</TableCell>
+                      <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 500, color: '#374151', py: 0.8 }}>All</TableCell>
+                      <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 500, color: '#374151', py: 0.8 }}>Original issue</TableCell>
+                      <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 700, color: '#374151', py: 0.8, pr: 0 }}>JB</TableCell>
+                    </TableRow>
+                    {[1, 2, 3, 4].map((revNo) => (
+                      <TableRow key={revNo} sx={{ borderBottom: '1px solid #F3F4F6' }}>
+                        <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, color: '#9CA3AF', py: 0.8, pl: 0 }}>{revNo}</TableCell>
+                        <TableCell sx={{ py: 0.8 }}>&nbsp;</TableCell>
+                        <TableCell sx={{ py: 0.8 }}>&nbsp;</TableCell>
+                        <TableCell sx={{ py: 0.8 }}>&nbsp;</TableCell>
+                        <TableCell sx={{ py: 0.8, pr: 0 }}>&nbsp;</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+
+            {/* ACCEPTANCE CARD (Red Banner) */}
+            <Box sx={{ mb: 4, borderRadius: '4px', overflow: 'hidden', border: '1px solid #FCA5A5' }}>
+              <Box sx={{ backgroundColor: '#B91C1C', color: '#fff', px: 2, py: 0.9 }}>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '8px', fontWeight: 800, letterSpacing: '0.8px', textTransform: 'uppercase' }}>
+                  ACCEPTANCE OF THIS PURCHASE ORDER
+                </Typography>
+              </Box>
+              <Box sx={{ p: 1.8, backgroundColor: '#FEF2F2', color: '#374151', fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, lineHeight: 1.45 }}>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, mb: 1 }}>
+                  By confirming this Purchase Order, or by carrying out any work against it — including fabric or trim booking, cutting, printing, stitching or packing — the factory is deemed to have <strong>read, understood and accepted this document in full</strong>: the specifications, quantities, colours, prices, packing instructions, sample and inspection requirements, delivery dates, the Delay Penalty Schedule and all Terms & Conditions set out herein.
+                </Typography>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400 }}>
+                  The factory further confirms that it has <strong>the capacity, materials, machinery and manpower</strong> to complete this order within the production days allowed and is ready to commence work. <strong>No separate signed copy is required for these terms to take effect.</strong> Any objection, clarification or requested change must be raised in writing within 24 hours of issuance; after that, or once work begins, the PO stands accepted as issued.
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* SIGNATURES SECTION */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, mt: 'auto', mb: 2 }}>
+              {/* Factory Side */}
+              <Box>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, letterSpacing: '0.8px', color: '#111827', textTransform: 'uppercase', mb: 3.5 }}>
+                  ACKNOWLEDGED BY — FACTORY
+                </Typography>
+                <Box sx={{ borderBottom: '1.5px solid #111827', mb: 0.6 }} />
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '8px', fontWeight: 500, color: '#6B7280' }}>
+                  Name, designation, stamp & date
+                </Typography>
+              </Box>
+
+              {/* AMS Side */}
+              <Box>
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '7.5px', fontWeight: 800, letterSpacing: '0.8px', color: '#111827', textTransform: 'uppercase', mb: 3.5 }}>
+                  ISSUED BY — APPAREL MERCHANDISING SERVICES
+                </Typography>
+                <Box sx={{ borderBottom: '1.5px solid #111827', mb: 0.6 }} />
+                <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '8px', fontWeight: 500, color: '#6B7280' }}>
+                  Name, designation & date
+                </Typography>
+              </Box>
+            </Box>
+
+            <NewPOPageFooter pageNum={6} totalPages={totalPages} title="Appendix & Acceptance" poNo={poNumber || refNo} programName={programName} rev="0" />
+          </Box>
+        </Box>
+      </Box>
+    </Box>
+  );
+};
+
+// ============================================================================
+// MAIN EXPORT (SWITCHED VIA USE_NEW_PO_DESIGN)
+// ============================================================================
+const PurchaseOrderPageExactMatch = (props) => {
+  if (USE_NEW_PO_DESIGN) {
+    return <NewModernPurchaseOrderPage {...props} />;
+  }
+  return <LegacyPurchaseOrderPageExactMatch {...props} />;
+};
 
 export default PurchaseOrderPageExactMatch;
