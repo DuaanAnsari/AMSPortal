@@ -189,6 +189,15 @@ const LegacyPurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               construction: r.construction || orderData.construction || '',
               ribGSM: r.ribGSM || orderData.ribGSM || r.ribGsm || orderData.ribGsm || r.RibGSM || orderData.RibGSM || '',
               assortment: r.assortment || orderData.assortment || '',
+              productCode: r.productCode || orderData.productCode || '',
+              programName: r.programName || orderData.programName || '',
+              sourcing: r.sourcing || orderData.sourcing || '',
+              polybag: r.polybag || orderData.polybag || r.polyBag || orderData.polyBag || '',
+              fold: r.fold || orderData.fold || '',
+              packingMethod: r.packingMethod || orderData.packingMethod || '',
+              beneficiaryAddress: r.beneficiaryAddress || orderData.beneficiaryAddress || '',
+              shipTo: r.shipTo || orderData.shipTo || r.consigneeAddress1 || orderData.consigneeAddress1 || orderData.consignee || '',
+              factoryAddress: r.factoryAddress || orderData.factoryAddress || r.venderAddress || orderData.venderAddress || orderData.vendorAddress || '',
             }));
           }
           setFetchedData(reportData);
@@ -234,6 +243,15 @@ const LegacyPurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
               bankName: order.bankName || '',
               bankBranch: order.bankBranch || '',
               accountNo: order.accountNo || '',
+              productCode: order.productCode || '',
+              programName: order.programName || '',
+              sourcing: order.sourcing || '',
+              polybag: order.polybag || order.polyBag || '',
+              fold: order.fold || '',
+              packingMethod: order.packingMethod || '',
+              beneficiaryAddress: order.beneficiaryAddress || '',
+              shipTo: order.shipTo || order.consigneeAddress1 || order.consignee || '',
+              factoryAddress: order.factoryAddress || order.venderAddress || order.vendorAddress || '',
             } : {};
 
             if (styleRows.length > 0) {
@@ -507,12 +525,20 @@ const LegacyPurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
       ? new Date(poData.creationDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
       : '',
     attn: poData.supplierName || '',
-    addressLeft: poData.venderAddress || '',
+    addressLeft: poData.factoryAddress || poData.venderAddress || '',
     trackingCode: poData.venderCode || '',
     brand: poData.brand || '',
     division: poData.ecpDivistion || '',
     rn: poData.rnNo || '',
-    shipTo: poData.consigneeAddress1 || '',
+    shipTo: poData.shipTo || poData.consigneeAddress1 || '',
+    factoryAddress: poData.factoryAddress || poData.venderAddress || '',
+    productCode: poData.productCode || '',
+    programName: poData.programName || '',
+    sourcing: poData.sourcing || '',
+    polybag: poData.polybag || poData.polyBag || '',
+    fold: poData.fold || '',
+    packingMethod: poData.packingMethod || poData.assortment || '',
+    beneficiaryAddress: poData.beneficiaryAddress || '',
     itemDescription: poData.itemDescriptionShippingInvoice || '',
     exFactory: (poData.shipmentDate && !poData.shipmentDate.startsWith('1900-01-01')) ? new Date(poData.shipmentDate).toLocaleDateString('en-US') : '',
     finalInspection: (poData.finalInspDate && !poData.finalInspDate.startsWith('1900-01-01')) ? new Date(poData.finalInspDate).toLocaleDateString('en-US') : '',
@@ -551,7 +577,7 @@ const LegacyPurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
     styleNumber: poData.style || '',
     productCategory: poData.productCategoriesName || '',
     specialInstructions: poData.pO_Special_Instructions || '',
-    source: poData.styleSource || 'Local',
+    source: poData.sourcing || poData.styleSource || 'Local',
     embellishment: poData.embAndEmbellishment || 'Not Required',
     trimsAccessories: poData.trimsAccessories || '',
     specialOperation: poData.pO_Special_Operation || '',
@@ -1585,6 +1611,15 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
               construction: r.construction || orderData.construction || '',
               ribGSM: r.ribGSM || orderData.ribGSM || r.ribGsm || orderData.ribGsm || r.RibGSM || orderData.RibGSM || '',
               assortment: r.assortment || orderData.assortment || '',
+              productCode: r.productCode || orderData.productCode || '',
+              programName: r.programName || orderData.programName || '',
+              sourcing: r.sourcing || orderData.sourcing || '',
+              polybag: r.polybag || orderData.polybag || r.polyBag || orderData.polyBag || '',
+              fold: r.fold || orderData.fold || '',
+              packingMethod: r.packingMethod || orderData.packingMethod || '',
+              beneficiaryAddress: r.beneficiaryAddress || orderData.beneficiaryAddress || '',
+              shipTo: r.shipTo || orderData.shipTo || r.consigneeAddress1 || orderData.consigneeAddress1 || orderData.consignee || '',
+              factoryAddress: r.factoryAddress || orderData.factoryAddress || r.venderAddress || orderData.venderAddress || orderData.vendorAddress || '',
             }));
           }
           setFetchedData(reportData);
@@ -1627,6 +1662,15 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
               bankName: order.bankName || '',
               bankBranch: order.bankBranch || '',
               accountNo: order.accountNo || '',
+              productCode: order.productCode || '',
+              programName: order.programName || '',
+              sourcing: order.sourcing || '',
+              polybag: order.polybag || order.polyBag || '',
+              fold: order.fold || '',
+              packingMethod: order.packingMethod || '',
+              beneficiaryAddress: order.beneficiaryAddress || '',
+              shipTo: order.shipTo || order.consigneeAddress1 || order.consignee || '',
+              factoryAddress: order.factoryAddress || order.venderAddress || order.vendorAddress || '',
             } : {};
 
             if (styleRows.length > 0) {
@@ -1845,7 +1889,7 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
 
   const poNumber = poData.pono || poData.poNo || poData.amsRefNo || '';
   const refNo = poData.amsRefNo || poData.pono || '';
-  const programName = poData.brand || poData.style || 'RealTree Camo';
+  const programName = poData.programName || poData.brand || poData.style || 'RealTree Camo';
   const issueDate = (poData.creationDate && !poData.creationDate.startsWith('1900-01-01'))
     ? new Date(poData.creationDate).toISOString().split('T')[0]
     : '07-15-2026';
@@ -2008,7 +2052,7 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
                 <NewFieldBlock label="R.N #" value={poData.rnNo || '11067'} minWidth="120px" />
                 <NewFieldBlock label="DESTINATION" value={poData.destination || 'New Jersey, USA'} minWidth="160px" />
               </Box>
-              <NewFieldBlock label="SHIP TO" value={poData.consigneeAddress1 || '1 Broad Avenue, Unit 4, Fairview, NJ 07022, USA'} />
+              <NewFieldBlock label="SHIP TO" value={poData.shipTo || poData.consigneeAddress1 || '1 Broad Avenue, Unit 4, Fairview, NJ 07022, USA'} />
             </Box>
 
             <Divider sx={{ borderColor: '#E5E7EB', my: 2 }} />
@@ -2018,7 +2062,7 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
               <NewSectionHeader title="FACTORY & SHIPMENT DETAILS" />
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.8 }}>
                 <NewFieldBlock label="FACTORY" value={poData.supplierName || poData.venderAddress || 'Ayyoub Apparels'} minWidth="240px" />
-                <NewFieldBlock label="FACTORY ADDRESS" value={poData.venderAddress || 'To Be Provided'} minWidth="240px" />
+                <NewFieldBlock label="FACTORY ADDRESS" value={poData.factoryAddress || poData.venderAddress || 'To Be Provided'} minWidth="240px" />
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <NewFieldBlock label="SHIP MODE" value={poData.deliveryTypeDisplayName || poData.deliveryType || 'Air'} minWidth="140px" />
@@ -2112,7 +2156,7 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
                   <NewFieldBlock label="PRODUCT CODE" value={poData.productCode || '122338'} />
                 </Box>
                 <Box sx={{ display: 'flex', gap: 6, mb: 1.2 }}>
-                  <NewFieldBlock label="PROGRAM NAME" value={programName} />
+                  <NewFieldBlock label="PROGRAM NAME" value={poData.programName || programName} />
                   <NewFieldBlock label="PRODUCT CATEGORY" value={poData.productCategoriesName || 'Knits'} />
                 </Box>
                 <NewFieldBlock
@@ -2142,7 +2186,7 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
                 <NewFieldBlock label="GSM" value={poData.gms ? `${poData.gms} gsm` : '142 gsm'} minWidth="100px" />
                 <NewFieldBlock label="CONTENT" value={poData.quality || '50% Polyester / 25% Viscose / 25% Cotton'} minWidth="240px" highlight />
               </Box>
-              <NewFieldBlock label="SOURCING" value={`Fabric: ${poData.styleSource || 'Local'} · Trims & Accessories: ${poData.trimsAccessories || 'Local'}`} />
+              <NewFieldBlock label="SOURCING" value={poData.sourcing || `Fabric: ${poData.styleSource || 'Local'} · Trims & Accessories: ${poData.trimsAccessories || 'Local'}`} />
             </Box>
 
             <Divider sx={{ borderColor: '#E5E7EB', my: 2 }} />
@@ -2161,9 +2205,9 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
             <Box sx={{ mb: 2.5 }}>
               <NewSectionHeader title="PACKING INSTRUCTIONS" />
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.2 }}>
-                <NewFieldBlock label="PACKING METHOD" value={poData.assortment || 'Assorted packing'} minWidth="130px" />
+                <NewFieldBlock label="PACKING METHOD" value={poData.packingMethod || poData.assortment || 'Assorted packing'} minWidth="130px" />
                 <NewFieldBlock label="PCS / CARTON" value={poData.pcPerCarton ? `${poData.pcPerCarton} pcs` : '72 pcs'} minWidth="100px" />
-                <NewFieldBlock label="POLYBAG" value={poData.polyBag || 'Single pc polybag'} minWidth="140px" />
+                <NewFieldBlock label="POLYBAG" value={poData.polybag || poData.polyBag || 'Single pc polybag'} minWidth="140px" />
                 <NewFieldBlock label="FOLD" value={poData.fold || '9x11 shirt fold'} minWidth="120px" />
               </Box>
               <NewFieldBlock label="CARTON MARK" value={poData.cartonMarking || 'Jedco'} />
@@ -2423,7 +2467,7 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
               <NewSectionHeader title="BENEFICIARY" />
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <NewFieldBlock label="BENEFICIARY NAME" value={poData.brand || poData.buyerCustomer || 'All Seasons Textile Inc.'} minWidth="240px" />
-                <NewFieldBlock label="BENEFICIARY ADDRESS" value="Not Required" minWidth="240px" />
+                <NewFieldBlock label="BENEFICIARY ADDRESS" value={poData.beneficiaryAddress || "Not Required"} minWidth="240px" />
               </Box>
             </Box>
 

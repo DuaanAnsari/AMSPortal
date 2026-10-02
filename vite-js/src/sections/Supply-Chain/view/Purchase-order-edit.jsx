@@ -1242,6 +1242,12 @@ export default function CompletePurchaseOrderFormEdit() {
       productPortfolio: '',
       productCategory: '',
       productGroup: '',
+      productCode: '',
+      programName: '',
+      sourcing: '',
+      polybag: '',
+      fold: '',
+      packingMethod: '',
       season: '',
       tolQuantity: '',
       set: '',
@@ -1282,12 +1288,15 @@ export default function CompletePurchaseOrderFormEdit() {
       shipmentTerm: 'CNF',
       destination: 'New York',
       shipmentMode: '',
+      shipTo: '',
+      factoryAddress: '',
       bankName: '',
       routingNo: '',
       bankBranch: '',
       bankID: '',
       titleOfAccount: '',
       accountNo: '',
+      beneficiaryAddress: '',
     },
   });
 
@@ -1774,6 +1783,12 @@ export default function CompletePurchaseOrderFormEdit() {
             vendorShipLast: orderData.vendorExIndiaShipmentDate ? orderData.vendorExIndiaShipmentDate.split('T')[0] : '',
 
             // Product Information
+            productCode: orderData.productCode || '',
+            programName: orderData.programName || '',
+            sourcing: orderData.sourcing || '',
+            polybag: orderData.polybag || '',
+            fold: orderData.fold || '',
+            packingMethod: orderData.packingMethod || '',
             season: orderData.season || '',
             fabric: orderData.fabric || '',
             item: orderData.item || '',
@@ -1816,6 +1831,8 @@ export default function CompletePurchaseOrderFormEdit() {
             shipmentTerm: orderData.shipmentMode || '',
             destination: orderData.destination || 'New York',
             shipmentMode: orderData.deliveryType || '',
+            shipTo: orderData.shipTo || '',
+            factoryAddress: orderData.factoryAddress || '',
 
 
             // Reference & Attachment — GetPOFiles URLs only (no legacy poImage/specsimage fallbacks)
@@ -1829,6 +1846,7 @@ export default function CompletePurchaseOrderFormEdit() {
             bankBranch: orderData.bankBranch || '',
             titleOfAccount: orderData.titleOfAccount || '',
             accountNo: orderData.accountNo || '',
+            beneficiaryAddress: orderData.beneficiaryAddress || '',
 
             // Keep existing values for fields not in API
             // Costing Ref: API sends costingMstID; our select uses IDs as string values.
@@ -2282,6 +2300,12 @@ export default function CompletePurchaseOrderFormEdit() {
     payload[vendorRevisedKey] = vendorRevisedIso;
 
     // Product Information
+    payload.productCode = form.productCode || apiData.productCode || '';
+    payload.programName = form.programName || apiData.programName || '';
+    payload.sourcing = form.sourcing || apiData.sourcing || '';
+    payload.polybag = form.polybag || apiData.polybag || '';
+    payload.fold = form.fold || apiData.fold || '';
+    payload.packingMethod = form.packingMethod || apiData.packingMethod || '';
     payload.season = form.season || apiData.season || '';
     payload.fabric = form.fabric || apiData.fabric || '';
     payload.item = form.item || apiData.item || '';
@@ -2320,6 +2344,8 @@ export default function CompletePurchaseOrderFormEdit() {
     payload.shipmentMode = form.shipmentTerm || apiData.shipmentMode || '';
     payload.deliveryType = form.shipmentMode || apiData.deliveryType || '';
     payload.destination = form.destination || apiData.destination || '';
+    payload.shipTo = form.shipTo || apiData.shipTo || '';
+    payload.factoryAddress = form.factoryAddress || apiData.factoryAddress || '';
 
     // Bank Details
     payload.titleOfAccount = form.titleOfAccount || apiData.titleOfAccount || '';
@@ -2327,6 +2353,7 @@ export default function CompletePurchaseOrderFormEdit() {
     payload.bankBranch = form.bankBranch || apiData.bankBranch || '';
     payload.accountNo = form.accountNo || apiData.accountNo || '';
     payload.iban = form.routingNo || apiData.iban || '';
+    payload.beneficiaryAddress = form.beneficiaryAddress || apiData.beneficiaryAddress || '';
     payload.bankID =
       form.bankID !== undefined && form.bankID !== null && form.bankID !== ''
         ? safeParseInt(form.bankID)
@@ -3456,6 +3483,49 @@ export default function CompletePurchaseOrderFormEdit() {
                       render={({ field }) => <TextField {...field} fullWidth label="Buyer Customer" disabled={isFormViewLocked} />}
                     />
                   </Grid>
+
+                  <Grid item xs={12} sm={4}>
+                    <Controller
+                      name="productCode"
+                      control={control}
+                      render={({ field }) => <TextField {...field} fullWidth label="Product Code" disabled={isFormViewLocked} />}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Controller
+                      name="programName"
+                      control={control}
+                      render={({ field }) => <TextField {...field} fullWidth label="Program Name" disabled={isFormViewLocked} />}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Controller
+                      name="sourcing"
+                      control={control}
+                      render={({ field }) => <TextField {...field} fullWidth label="Sourcing" disabled={isFormViewLocked} />}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Controller
+                      name="polybag"
+                      control={control}
+                      render={({ field }) => <TextField {...field} fullWidth label="Polybag" disabled={isFormViewLocked} />}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Controller
+                      name="fold"
+                      control={control}
+                      render={({ field }) => <TextField {...field} fullWidth label="Fold" disabled={isFormViewLocked} />}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Controller
+                      name="packingMethod"
+                      control={control}
+                      render={({ field }) => <TextField {...field} fullWidth label="Packing Method" disabled={isFormViewLocked} />}
+                    />
+                  </Grid>
                 </Grid>
               </Box>
             )}
@@ -3768,7 +3838,7 @@ export default function CompletePurchaseOrderFormEdit() {
                         )}
                       />
                     </Grid>
-                    <Grid item xs={12} sm={3}>
+                    <Grid item xs={12} sm={4}>
                       <Controller
                         name="naField"
                         control={control}
@@ -3777,6 +3847,34 @@ export default function CompletePurchaseOrderFormEdit() {
                             {...field}
                             fullWidth
                             label="N/A"
+                            disabled={isFormViewLocked}
+                          />
+                        )}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <Controller
+                        name="shipTo"
+                        control={control}
+                        render={({ field }) => (
+                          <TextField
+                            {...field}
+                            fullWidth
+                            label="Ship To"
+                            disabled={isFormViewLocked}
+                          />
+                        )}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <Controller
+                        name="factoryAddress"
+                        control={control}
+                        render={({ field }) => (
+                          <TextField
+                            {...field}
+                            fullWidth
+                            label="Factory Address"
                             disabled={isFormViewLocked}
                           />
                         )}
@@ -3890,6 +3988,21 @@ export default function CompletePurchaseOrderFormEdit() {
                       <Controller
                         name="routingNo"
                         render={({ field }) => <TextField {...field} label="Routing No." fullWidth disabled={isFormViewLocked} />}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={8}>
+                      <Controller
+                        name="beneficiaryAddress"
+                        control={control}
+                        render={({ field }) => (
+                          <TextField
+                            {...field}
+                            label="Beneficiary Address"
+                            fullWidth
+                            disabled={isFormViewLocked}
+                          />
+                        )}
                       />
                     </Grid>
                   </Grid>

@@ -1262,6 +1262,13 @@ const Schema = Yup.object().shape({
   buyerCustomer: Yup.string(),
   itemDescriptionShippingInvoice: Yup.string(),
 
+  productCode: Yup.string(),
+  programName: Yup.string(),
+  sourcing: Yup.string(),
+  polybag: Yup.string(),
+  fold: Yup.string(),
+  packingMethod: Yup.string(),
+
   currency: Yup.string(),
   exchangeRate: Yup.string(),
   style: Yup.string(),
@@ -1270,6 +1277,8 @@ const Schema = Yup.object().shape({
   shipmentTerm: Yup.string(),
   destination: Yup.string(),
   shipmentMode: Yup.string(),
+  shipTo: Yup.string(),
+  factoryAddress: Yup.string(),
 
   bankName: Yup.string(),
   routingNo: Yup.string(),
@@ -1277,6 +1286,7 @@ const Schema = Yup.object().shape({
   bankID: Yup.string(),
   titleOfAccount: Yup.string(),
   accountNo: Yup.string(),
+  beneficiaryAddress: Yup.string(),
 });
 
 // -------------------- Default Values --------------------
@@ -1312,6 +1322,12 @@ const defaultValues = {
   productPortfolio: '',
   productCategory: '',
   productGroup: '',
+  productCode: '',
+  programName: '',
+  sourcing: '',
+  polybag: '',
+  fold: '',
+  packingMethod: '',
   season: '',
   tolQuantity: '',
   set: '',
@@ -1354,6 +1370,8 @@ const defaultValues = {
   shipmentTerm: 'CNF',
   destination: 'New York',
   shipmentMode: '',
+  shipTo: '',
+  factoryAddress: '',
   naField: '',
 
   bankName: '',
@@ -1362,6 +1380,7 @@ const defaultValues = {
   bankID: '',
   titleOfAccount: '',
   accountNo: '',
+  beneficiaryAddress: '',
 
   // Reference & Attachment
   originalPurchaseOrder: null,
@@ -1843,6 +1862,12 @@ export default function CompletePurchaseOrderForm() {
           productPortfolio: order.productPortfolioID ?? defaultValues.productPortfolio,
           productCategory: order.productCategoriesID ?? defaultValues.productCategory,
           productGroup: order.productGroupID ?? defaultValues.productGroup,
+          productCode: order.productCode || '',
+          programName: order.programName || '',
+          sourcing: order.sourcing || '',
+          polybag: order.polybag || '',
+          fold: order.fold || '',
+          packingMethod: order.packingMethod || '',
           season: order.season || '',
           fabric: order.fabric || '',
           item: order.item || '',
@@ -1883,12 +1908,15 @@ export default function CompletePurchaseOrderForm() {
           shipmentTerm: order.shipmentMode || order.shipmentTerm || defaultValues.shipmentTerm,
           destination: order.destination || defaultValues.destination,
           shipmentMode: order.deliveryType || order.shipmentMode || defaultValues.shipmentMode,
+          shipTo: order.shipTo || '',
+          factoryAddress: order.factoryAddress || '',
 
           // Bank Details
           bankName: order.bankName || '',
           bankBranch: order.bankBranch || '',
           titleOfAccount: order.titleOfAccount || '',
           accountNo: order.accountNo || '',
+          beneficiaryAddress: order.beneficiaryAddress || '',
           bankID:
             order.bankID !== undefined && order.bankID !== null
               ? String(order.bankID)
@@ -2834,6 +2862,17 @@ export default function CompletePurchaseOrderForm() {
       prodImgFileName: data.productImage instanceof File ? data.productImage.name : (typeof data.productImage === 'string' ? 'existing_product_image.jpg' : ''),
       originalPDFName: data.originalPurchaseOrder instanceof File ? data.originalPurchaseOrder.name : (typeof data.originalPurchaseOrder === 'string' ? 'existing_po_doc.pdf' : ''),
       buyerCustomer: data.buyerCustomer || '',
+
+      // 9 New Fields
+      productCode: data.productCode || '',
+      programName: data.programName || '',
+      sourcing: data.sourcing || '',
+      polybag: data.polybag || '',
+      fold: data.fold || '',
+      packingMethod: data.packingMethod || '',
+      beneficiaryAddress: data.beneficiaryAddress || '',
+      shipTo: data.shipTo || '',
+      factoryAddress: data.factoryAddress || '',
     };
 
     console.log('🚀 FINAL API DATA - Images:', {
@@ -3858,6 +3897,49 @@ export default function CompletePurchaseOrderForm() {
                   render={({ field }) => <TextField {...field} fullWidth label="Buyer Customer" disabled={isFormViewLocked} />}
                 />
               </Grid>
+
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="productCode"
+                  control={control}
+                  render={({ field }) => <TextField {...field} fullWidth label="Product Code" disabled={isFormViewLocked} />}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="programName"
+                  control={control}
+                  render={({ field }) => <TextField {...field} fullWidth label="Program Name" disabled={isFormViewLocked} />}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="sourcing"
+                  control={control}
+                  render={({ field }) => <TextField {...field} fullWidth label="Sourcing" disabled={isFormViewLocked} />}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="polybag"
+                  control={control}
+                  render={({ field }) => <TextField {...field} fullWidth label="Polybag" disabled={isFormViewLocked} />}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="fold"
+                  control={control}
+                  render={({ field }) => <TextField {...field} fullWidth label="Fold" disabled={isFormViewLocked} />}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller
+                  name="packingMethod"
+                  control={control}
+                  render={({ field }) => <TextField {...field} fullWidth label="Packing Method" disabled={isFormViewLocked} />}
+                />
+              </Grid>
             </Grid>
           </Box>
           )}
@@ -4278,10 +4360,38 @@ export default function CompletePurchaseOrderForm() {
                     )}
                   />
                 </Grid>
-                <Grid item xs={12} sm={3}>
+                <Grid item xs={12} sm={4}>
                   <Controller
                     name="naField"
                     render={({ field }) => <TextField {...field} fullWidth label="N/A" disabled={isFormViewLocked} />}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="shipTo"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        fullWidth
+                        label="Ship To"
+                        disabled={isFormViewLocked}
+                      />
+                    )}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Controller
+                    name="factoryAddress"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        fullWidth
+                        label="Factory Address"
+                        disabled={isFormViewLocked}
+                      />
+                    )}
                   />
                 </Grid>
               </Grid>
@@ -4387,6 +4497,21 @@ export default function CompletePurchaseOrderForm() {
                   <Controller
                     name="routingNo"
                     render={({ field }) => <TextField {...field} label="Routing No." fullWidth disabled={isFormViewLocked} />}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={8}>
+                  <Controller
+                    name="beneficiaryAddress"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Beneficiary Address"
+                        fullWidth
+                        disabled={isFormViewLocked}
+                      />
+                    )}
                   />
                 </Grid>
               </Grid>
