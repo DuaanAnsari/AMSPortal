@@ -119,6 +119,7 @@ function readHideEditForRole() {
   const r = localStorage.getItem('roleId');
   if (r == null || r === '') return false;
   const n = parseInt(r, 10);
+  if (n === 50) return false;
   return n === 1;
 }
 

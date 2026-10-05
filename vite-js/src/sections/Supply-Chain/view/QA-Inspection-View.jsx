@@ -44,7 +44,7 @@ const getUserRoleId = () => {
 
 const isEditColumnHiddenByRole = () => {
   const roleId = getUserRoleId();
-  if (roleId == null) return false;
+  if (roleId == null || roleId === 50) return false;
   return EDIT_HIDDEN_ROLE_IDS.includes(roleId);
 };
 

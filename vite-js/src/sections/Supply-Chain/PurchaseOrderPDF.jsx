@@ -1469,7 +1469,7 @@ const NewPOPageHeader = ({ poNo, rev = '0', date = '' }) => (
       <img
         src="/logo/AMSlogo.png"
         alt="Logo"
-        style={{ width: '46px', height: 'auto', display: 'block', objectFit: 'contain' }}
+        style={{ width: '130px', height: 'auto', maxHeight: '56px', display: 'block', objectFit: 'contain' }}
       />
       <Box>
         <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '13.5px', fontWeight: 800, color: '#111827', letterSpacing: '-0.2px', lineHeight: 1.25 }}>
@@ -2049,7 +2049,7 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
               <NewSectionHeader title="BUYER DETAILS" />
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.8 }}>
                 <NewFieldBlock label="BUYER / BRAND" value={poData.brand || poData.buyerCustomer || 'All Seasons Textile Inc.'} minWidth="180px" />
-                <NewFieldBlock label="R.N #" value={poData.rnNo || '11067'} minWidth="120px" />
+                <NewFieldBlock label="R.N #" value={poData.rnNo} minWidth="120px" />
                 <NewFieldBlock label="DESTINATION" value={poData.destination || 'New Jersey, USA'} minWidth="160px" />
               </Box>
               <NewFieldBlock label="SHIP TO" value={poData.shipTo || poData.consigneeAddress1 || '1 Broad Avenue, Unit 4, Fairview, NJ 07022, USA'} />

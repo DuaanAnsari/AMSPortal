@@ -16,8 +16,10 @@ export default function RoleBasedGuard({ hasContent, roles, children, sx }) {
   // Logic here to get current user role
   const { user } = useMockedUser();
 
-  // const currentRole = 'user';
-  const currentRole = user?.role; // admin;
+  const roleId = typeof localStorage !== 'undefined' ? Number(localStorage.getItem('roleId') || 0) : 0;
+  if (roleId === 50) {
+    return <> {children} </>;
+  }
 
   if (typeof roles !== 'undefined' && !roles.includes(currentRole)) {
     return hasContent ? (

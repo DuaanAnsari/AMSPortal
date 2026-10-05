@@ -9,6 +9,7 @@ export function isRole3LimitedMenu() {
   const raw = localStorage.getItem('roleId');
   if (raw == null || raw === '') return false;
   const roleId = Number(raw);
+  if (roleId === 50) return false;
   return ROLE_IDS_LIMITED_MENU.includes(roleId);
 }
 

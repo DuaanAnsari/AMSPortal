@@ -41,7 +41,11 @@ const getUserRoleId = () => {
   return Number.isNaN(n) ? null : n;
 };
 
-const isAddShipmentHidden = () => getUserRoleId() === 48;
+const isAddShipmentHidden = () => {
+  const roleId = getUserRoleId();
+  if (roleId === 50) return false;
+  return roleId === 48;
+};
 
 const TABLE_HEAD = [
   { id: 'shipDate', label: 'Ship.Date', width: 150 },

@@ -55,7 +55,9 @@ const ROLE48_STILL_EDITABLE = new Set([
 ]);
 
 const isRole48FieldLocked = (field) => {
-  if (getUserRoleId() !== 48) return false;
+  const roleId = getUserRoleId();
+  if (roleId === 50) return false;
+  if (roleId !== 48) return false;
   return !ROLE48_STILL_EDITABLE.has(field);
 };
 
@@ -170,7 +172,7 @@ const extractSupplierId = (row) => {
 export default function ShipmentEditView() {
   const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
-  const isRole48Locked = getUserRoleId() === 48;
+  const isRole48Locked = getUserRoleId() === 48 && getUserRoleId() !== 50;
   const { id } = useParams();
 
   const [loading, setLoading] = useState(false);

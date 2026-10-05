@@ -155,13 +155,13 @@ const ADD_HIDDEN_ROLE_IDS = [21, 44, 45, 30, 41, 43];
 
 const hasRestrictedAccess = () => {
   const userRoleId = getUserRoleId();
-  if (!userRoleId) return false;
+  if (!userRoleId || userRoleId === 50) return false;
   return GRID_RESTRICTED_ROLE_IDS.includes(userRoleId);
 };
 
 const isAddOrderHidden = () => {
   const userRoleId = getUserRoleId();
-  if (!userRoleId) return false;
+  if (!userRoleId || userRoleId === 50) return false;
   return ADD_HIDDEN_ROLE_IDS.includes(userRoleId);
 };
 

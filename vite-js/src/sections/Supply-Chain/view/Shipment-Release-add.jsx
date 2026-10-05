@@ -54,7 +54,9 @@ const ROLE48_STILL_EDITABLE = new Set([
 ]);
 
 const isRole48FieldLocked = (field) => {
-  if (getUserRoleId() !== 48) return false;
+  const roleId = getUserRoleId();
+  if (roleId === 50) return false;
+  if (roleId !== 48) return false;
   return !ROLE48_STILL_EDITABLE.has(field);
 };
 
@@ -188,7 +190,7 @@ const extractSupplierIdDeep = (input) => {
 export default function ShipmentReleaseAddPage() {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  const isRole48Locked = getUserRoleId() === 48;
+  const isRole48Locked = getUserRoleId() === 48 && getUserRoleId() !== 50;
   const [form, setForm] = useState(defaultFormValues);
   const [poDialogOpen, setPoDialogOpen] = useState(false);
   const [poSearch, setPoSearch] = useState('');

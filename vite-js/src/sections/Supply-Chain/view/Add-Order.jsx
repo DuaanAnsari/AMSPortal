@@ -55,10 +55,10 @@ import { fetchPoFilesOnce } from '../utils/purchase-order-po-files-api';
 
 // Old AMS PurchaseOrderAdd.aspx.vb — active permission helpers (UserID + RoleID)
 const PRIVILEGED_USER_IDS = [1, 42];
-const PRIVILEGED_ROLE_IDS = [1, 49];
-const COMMISSION_ROLE_IDS = [1, 49];
+const PRIVILEGED_ROLE_IDS = [1, 49, 50];
+const COMMISSION_ROLE_IDS = [1, 49, 50];
 const RATE_EDIT_USER_IDS = [1, 3, 6, 16, 55];
-const RATE_EDIT_ROLE_IDS = [1, 49];
+const RATE_EDIT_ROLE_IDS = [1, 49, 50];
 const GRID_PARTIAL_LOCK_ROLE_IDS = [3, 43];
 
 const getUserRoleId = () => {
