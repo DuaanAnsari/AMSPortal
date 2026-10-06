@@ -1435,7 +1435,29 @@ const LegacyPurchaseOrderPageExactMatch = ({ poData: propPoData, onClose }) => {
 // NEW MODERN DESIGN (QYUKBK.PDF EXACT REPRODUCTION)
 // ============================================================================
 
-const MONTSERRAT_FONT = "'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+const MONTSERRAT_FONT = "'Montserrat', sans-serif";
+
+const MONTSERRAT_FONT_LINK = "https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap";
+
+const ensureMontserratFontsLoaded = async () => {
+  if (typeof document === 'undefined') return;
+  const existing = document.getElementById('montserrat-pdf-font');
+  if (!existing) {
+    const link = document.createElement('link');
+    link.id = 'montserrat-pdf-font';
+    link.rel = 'stylesheet';
+    link.href = MONTSERRAT_FONT_LINK;
+    document.head.appendChild(link);
+  }
+
+  if (document.fonts && document.fonts.load) {
+    const weights = ['400', '500', '600', '700', '800'];
+    await Promise.all(
+      weights.map((w) => document.fonts.load(`${w} 12px Montserrat`))
+    );
+    await document.fonts.ready;
+  }
+};
 
 const NEW_PAGE_STYLE = {
   width: '210mm',
@@ -1444,6 +1466,11 @@ const NEW_PAGE_STYLE = {
   backgroundColor: '#FFFFFF',
   color: '#111827',
   fontFamily: MONTSERRAT_FONT,
+  WebkitFontSmoothing: 'antialiased',
+  MozOsxFontSmoothing: 'grayscale',
+  '& *': {
+    fontFamily: `${MONTSERRAT_FONT} !important`,
+  },
   boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
   marginBottom: '10mm',
   display: 'flex',
@@ -1581,6 +1608,10 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
   const navigate = useNavigate();
   const [fetchedData, setFetchedData] = useState(null);
   const [loading, setLoading] = useState(!!id && !propPoData);
+
+  useEffect(() => {
+    ensureMontserratFontsLoaded().catch(() => {});
+  }, []);
 
   useEffect(() => {
     const fetchPurchaseOrderData = async () => {
@@ -1912,6 +1943,9 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
     documentTitle: `Purchase_Order_${refNo}`,
+    onBeforeGetContent: async () => {
+      await ensureMontserratFontsLoaded();
+    },
     pageStyle: `
       @page { size: A4; margin: 0; }
       @media print {
@@ -1925,6 +1959,7 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
     const originalTransform = element.style.transform;
     const originalTransition = element.style.transition;
     try {
+      await ensureMontserratFontsLoaded();
       element.style.transform = 'scale(1)';
       element.style.transition = 'none';
       const pages = Array.from(element.children);
@@ -2038,6 +2073,10 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
             '@media print': { transform: 'none !important' }
           }}
         >
+          <style>
+            {`@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');`}
+          </style>
+
           {/* ================================================================ */}
           {/* PAGE 1: ORDER DETAILS                                             */}
           {/* ================================================================ */}
