@@ -101,6 +101,10 @@ export const paths = {
   dashboard: {
     root: ROOTS.DASHBOARD,
     containerLoading: `${ROOTS.DASHBOARD}/container-loading`,
+    newContainerLoading: `${ROOTS.DASHBOARD}/new-container-loading`,
+    containerLoadingAdd: `${ROOTS.DASHBOARD}/container-loading/add`,
+    containerLoadingEdit: `${ROOTS.DASHBOARD}/container-loading/edit`,
+    containerLoadingCartonScan: `${ROOTS.DASHBOARD}/container-loading/carton-scan`,
     containerLoadingCartonMarking: `${ROOTS.DASHBOARD}/container-loading/carton-marking-qr`,
     masterOrderForQDSheet: `${ROOTS.DASHBOARD}/MasterOrderForQDSheet`,
     qdInspection: `${ROOTS.DASHBOARD}/qd-inspection`,
