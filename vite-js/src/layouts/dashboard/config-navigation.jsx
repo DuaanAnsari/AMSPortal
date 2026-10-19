@@ -53,8 +53,12 @@ const ROUTE_BY_NAME = createNameMap([
   ['Booking', paths.dashboard.general.booking],
   ['SOPs', paths.dashboard.general.file],
   ['File', paths.dashboard.general.file],
-  ['New Container Loading', paths.dashboard.containerLoading],
-  // Removed 'Container Loading' from here so it acts as a pure dropdown folder (no path)
+  ['New Container Loading', paths.dashboard.newContainerLoading],
+  ['new-container-loading', paths.dashboard.newContainerLoading],
+  ['Container Loading', paths.dashboard.containerLoading],
+  ['Container Loading View', paths.dashboard.containerLoading],
+  ['ContainerLoadingView', paths.dashboard.containerLoading],
+  ['ContainerLoading', paths.dashboard.containerLoading],
   ['Carton Marking QR Code', paths.dashboard.containerLoadingCartonMarking],
   ['carton-marking-qr', paths.dashboard.containerLoadingCartonMarking],
   ['Inspection', paths.dashboard.masterOrderForQDSheet],
@@ -238,7 +242,18 @@ function resolvePath(name, ancestors) {
     return REPORT_CATEGORY_PATHS[normalizedName];
   }
 
-  return ROUTE_BY_NAME[normalizedName] ?? REPORT_ITEM_PATHS[normalizedName] ?? NOT_FOUND_PATH;
+  if (ROUTE_BY_NAME[normalizedName]) return ROUTE_BY_NAME[normalizedName];
+  if (REPORT_ITEM_PATHS[normalizedName]) return REPORT_ITEM_PATHS[normalizedName];
+
+  // Role-based menu fallback
+  if (normalizedName.includes('new') && normalizedName.includes('container') && normalizedName.includes('loading')) {
+    return paths.dashboard.newContainerLoading;
+  }
+  if (normalizedName.includes('container') && normalizedName.includes('loading')) {
+    return paths.dashboard.containerLoading;
+  }
+
+  return NOT_FOUND_PATH;
 }
 
 function getMenuChildren(value) {

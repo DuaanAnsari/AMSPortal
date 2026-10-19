@@ -1,5 +1,5 @@
-import { UnderConstructionView } from 'src/sections/error';
+import { ContainerLoadingListView } from 'src/sections/container-loading';
 
 export default function ContainerLoadingViewPage() {
-  return <UnderConstructionView />;
+  return <ContainerLoadingListView />;
 }

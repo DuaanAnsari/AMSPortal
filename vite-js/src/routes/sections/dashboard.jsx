@@ -147,11 +147,20 @@ const ContainerHandlingViewPage = lazy(
 const ContainerLoadingViewPage = lazy(
   () => import('src/sections/power-tool/view/Container-loading-view')
 );
+const NewContainerLoadingViewPage = lazy(
+  () => import('src/sections/container-loading/New-container-loading-list-view')
+);
+const ContainerLoadingFormPage = lazy(
+  () => import('src/sections/container-loading/Container-loading-form-view')
+);
 const CartonMarkingQRCodePage = lazy(
   () => import('src/sections/container-loading/CartonMarkingQRCode')
 );
 const CartonMarkingQRCodePdfPage = lazy(
   () => import('src/sections/container-loading/CartonMarkingQRCodePdf')
+);
+const PackingListCartonScanPage = lazy(
+  () => import('src/sections/container-loading/PackingListCartonScanView')
 );
 const ContainerHandlingReportPage = lazy(
   () => import('src/sections/power-tool/view/Container-handling-report')
@@ -243,6 +252,10 @@ export const dashboardRoutes = [
     children: [
       { element: <IndexPage />, index: true },
       { path: 'container-loading', element: <ContainerLoadingViewPage /> },
+      { path: 'new-container-loading', element: <NewContainerLoadingViewPage /> },
+      { path: 'container-loading/add', element: <ContainerLoadingFormPage /> },
+      { path: 'container-loading/edit', element: <ContainerLoadingFormPage /> },
+      { path: 'container-loading/carton-scan', element: <PackingListCartonScanPage /> },
       { path: 'container-loading/carton-marking-qr', element: <CartonMarkingQRCodePage /> },
       { path: 'container-loading/carton-marking-qr-pdf', element: <CartonMarkingQRCodePdfPage /> },
       { path: 'MasterOrderForQDSheet', element: <MasterOrderForQDSheetPage /> },
