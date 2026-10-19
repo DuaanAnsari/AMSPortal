@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import SearchIcon from '@mui/icons-material/Search';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { alpha } from '@mui/material/styles';
 import { DataGrid } from '@mui/x-data-grid';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -54,13 +55,14 @@ function mapContainerLoadingRow(raw, index) {
     id,
     _raw: r,
     containerLoadingID: id,
+    containerNo: String(pick(r, 'containerNo', 'ContainerNo', 'autoNo', 'AutoNo') || '—'),
     userName: String(pick(r, 'userName', 'UserName', 'merchandiser', 'Merchandiser') || '—'),
     venderName: String(pick(r, 'venderName', 'VenderName', 'vendorName', 'VendorName', 'supplier', 'Supplier') || '—'),
     bookingNo: String(pick(r, 'bookingNo', 'BookingNo') || '—'),
     pono: String(pick(r, 'pono', 'PONO', 'poNo', 'PoNo', 'poNumber', 'PONumber') || '—'),
-    planQtyLoad: String(pick(r, 'planQtyLoad', 'PlanQtyLoad') || '0'),
+    planQtyLoad: r.planQtyLoad != null && r.planQtyLoad !== '' ? String(r.planQtyLoad) : '0',
     loadingDate: String(pick(r, 'loadingDate', 'LoadingDate') || '—'),
-    cbm: String(pick(r, 'cbm', 'CBM') || '0'),
+    cbm: r.cbm != null && r.cbm !== '' ? String(r.cbm) : '0',
     loadingDestination: String(pick(r, 'loadingDestination', 'LoadingDestination', 'destination', 'Destination') || '—'),
   };
 }
@@ -77,117 +79,41 @@ function NoRowsOverlay() {
 
 // ----------------------------------------------------------------------
 
-// Mock data matching legacy AMS ContainerLoadingView.aspx
-const DEFAULT_MOCK_ROWS = [
-  {
-    id: '45',
-    containerLoadingID: '45',
-    userName: 'Owais Khan',
-    venderName: 'Artistic Milliners (Pvt) Ltd',
-    bookingNo: 'BK-99201',
-    pono: 'PO-2024-9871, PO-2024-9872',
-    planQtyLoad: '12,500',
-    loadingDate: '2024-03-15',
-    cbm: '68.5',
-    loadingDestination: 'New York (JFK / NY)',
-  },
-  {
-    id: '44',
-    containerLoadingID: '44',
-    userName: 'Kashif Ali',
-    venderName: 'Crescent Bahuman Limited',
-    bookingNo: 'BK-99180',
-    pono: 'PO-2024-9760',
-    planQtyLoad: '8,400',
-    loadingDate: '2024-03-12',
-    cbm: '45.0',
-    loadingDestination: 'Los Angeles (LAX)',
-  },
-  {
-    id: '43',
-    containerLoadingID: '43',
-    userName: 'Zeeshan Ahmed',
-    venderName: 'US Apparel & Textiles',
-    bookingNo: 'BK-98920',
-    pono: 'PO-2024-9655, PO-2024-9658',
-    planQtyLoad: '15,200',
-    loadingDate: '2024-03-10',
-    cbm: '72.0',
-    loadingDestination: 'Hamburg Port',
-  },
-  {
-    id: '42',
-    containerLoadingID: '42',
-    userName: 'Muhammad Tariq',
-    venderName: 'Interloop Limited',
-    bookingNo: 'BK-98845',
-    pono: 'PO-2024-9540',
-    planQtyLoad: '9,800',
-    loadingDate: '2024-03-05',
-    cbm: '52.4',
-    loadingDestination: 'Rotterdam Port',
-  },
-  {
-    id: '41',
-    containerLoadingID: '41',
-    userName: 'Farhan Siddiqui',
-    venderName: 'Naveena Denim Mills',
-    bookingNo: 'BK-98710',
-    pono: 'PO-2024-9430',
-    planQtyLoad: '11,100',
-    loadingDate: '2024-02-28',
-    cbm: '60.2',
-    loadingDestination: 'Savannah Port',
-  },
-  {
-    id: '40',
-    containerLoadingID: '40',
-    userName: 'Owais Khan',
-    venderName: 'Artistic Milliners (Pvt) Ltd',
-    bookingNo: 'BK-98650',
-    pono: 'PO-2024-9310',
-    planQtyLoad: '7,500',
-    loadingDate: '2024-02-22',
-    cbm: '38.0',
-    loadingDestination: 'Southampton Port',
-  },
-];
-
-function getStoredOrMockRows() {
-  try {
-    const stored = localStorage.getItem('mock_container_loading_records');
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((item, idx) => mapContainerLoadingRow(item, idx));
-      }
-    }
-  } catch (e) {
-    console.error(e);
-  }
-  return DEFAULT_MOCK_ROWS;
-}
-
 export default function ContainerLoadingListView() {
   const navigate = useNavigate();
   const location = useLocation();
   const { enqueueSnackbar } = useSnackbar();
 
   const [poSearch, setPoSearch] = useState('');
-  const [allRows, setAllRows] = useState(() => getStoredOrMockRows());
+  const [allRows, setAllRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Load sample/mock records (with optional local storage refresh on edit)
-  const fetchData = useCallback(() => {
+  // Fetch data from API (/api/Container/GetContainerLoadingGrid) with optional poNo parameter
+  const fetchData = useCallback(async (searchQuery = '') => {
     setLoading(true);
     setError(null);
     try {
-      const rows = getStoredOrMockRows();
-      setAllRows(rows);
+      const params = {};
+      const trimmedQuery = typeof searchQuery === 'string' ? searchQuery.trim() : '';
+      if (trimmedQuery) {
+        params.poNo = trimmedQuery;
+      }
+
+      const response = await axiosInstance.get('/api/Container/GetContainerLoadingGrid', { params });
+      const list = normalizeApiResponse(response?.data ?? response);
+      const mapped = list.map((item, idx) => mapContainerLoadingRow(item, idx));
+      setAllRows(mapped);
     } catch (err) {
-      console.error('Error loading rows:', err);
-      setAllRows(DEFAULT_MOCK_ROWS);
+      console.error('Error loading container loading grid from API:', err);
+      const msg =
+        (typeof err?.response?.data === 'string' && err.response.data) ||
+        err?.response?.data?.message ||
+        err?.response?.data?.Message ||
+        err?.message ||
+        'Failed to load container loading records';
+      setError(typeof msg === 'string' ? msg : 'Failed to load container loading records');
+      setAllRows([]);
     } finally {
       setLoading(false);
     }
@@ -198,11 +124,12 @@ export default function ContainerLoadingListView() {
   }, [fetchData, location.state]);
 
   const handleSearch = () => {
-    // Search is handled via filtering on the loaded rows
+    fetchData(poSearch);
   };
 
   const handleClear = () => {
     setPoSearch('');
+    fetchData('');
   };
 
   const handleCartonScan = (row) => {
@@ -212,21 +139,27 @@ export default function ContainerLoadingListView() {
     });
   };
 
-  // Filter rows locally by PO #, booking, supplier or merchandiser
-  const displayedRows = useMemo(() => {
-    if (!poSearch.trim()) return allRows;
-    const q = poSearch.trim().toLowerCase();
-    return allRows.filter(
-      (r) =>
-        String(r.pono || '').toLowerCase().includes(q) ||
-        String(r.bookingNo || '').toLowerCase().includes(q) ||
-        String(r.venderName || '').toLowerCase().includes(q) ||
-        String(r.userName || '').toLowerCase().includes(q)
-    );
-  }, [allRows, poSearch]);
-
   const columns = useMemo(
     () => [
+      {
+        field: 'containerNo',
+        headerName: 'Container No.',
+        width: 130,
+        headerAlign: 'center',
+        align: 'center',
+        renderCell: (params) => (
+          <Box
+            sx={{
+              width: '100%',
+              textAlign: 'center',
+              fontWeight: 600,
+              fontSize: '0.85rem',
+            }}
+          >
+            {params.value}
+          </Box>
+        ),
+      },
       {
         field: 'userName',
         headerName: 'Merchandiser',
@@ -445,18 +378,18 @@ export default function ContainerLoadingListView() {
             <TextField
               fullWidth
               size="small"
-              label="PO # / Booking / Supplier"
+              label="PO #"
               value={poSearch}
               onChange={(e) => setPoSearch(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleSearch();
               }}
-              placeholder="Search by PO #, booking or supplier..."
+              placeholder="Search by PO #..."
             />
           </Grid>
 
           <Grid item xs={12} sm={6} md={4}>
-            <Stack direction="row" spacing={1.5}>
+            <Stack direction="row" spacing={1.5} alignItems="center">
               <Button
                 variant="contained"
                 color="primary"
@@ -472,11 +405,17 @@ export default function ContainerLoadingListView() {
                   variant="outlined"
                   color="inherit"
                   onClick={handleClear}
+                  disabled={loading}
                   sx={{ textTransform: 'none' }}
                 >
                   Clear
                 </Button>
               )}
+              <Tooltip title="Refresh Grid">
+                <IconButton onClick={() => fetchData(poSearch)} disabled={loading} color="inherit">
+                  <RefreshIcon />
+                </IconButton>
+              </Tooltip>
             </Stack>
           </Grid>
         </Grid>
@@ -510,7 +449,7 @@ export default function ContainerLoadingListView() {
             }}
           >
             <DataGrid
-              rows={displayedRows}
+              rows={allRows}
               columns={columns}
               autoHeight
               getRowHeight={() => 'auto'}

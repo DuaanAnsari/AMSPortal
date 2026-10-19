@@ -6668,6 +6668,11 @@ qrcode@^1.5.4:
     pngjs "^5.0.0"
     yargs "^15.3.1"
 
+qrcoder@^1.0.3:
+  version "1.0.3"
+  resolved "https://registry.npmjs.org/qrcoder/-/qrcoder-1.0.3.tgz"
+  integrity sha512-DUxzRtEMA6ZBydlS4PdIc7D9SSjuthd+/2AdGYdBI0ZVdlWFri8m3NTf3CY+dsFhaVA6j6HE/0M9DCRscDn9Ow==
+
 queue-microtask@^1.2.2:
   version "1.2.3"
   resolved "https://registry.npmjs.org/queue-microtask/-/queue-microtask-1.2.3.tgz"

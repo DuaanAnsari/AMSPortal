@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -60,61 +60,35 @@ const formatCount = (val) => {
   return Number.isNaN(num) ? val : num;
 };
 
-// Extract actual unique PO ID (numeric or GUID) strictly
-const getRowPoid = (row) => {
-  if (!row) return '';
-  const val =
-    row.poid ??
-    row.POID ??
-    row.poId ??
-    row.poID ??
-    row.lPOID ??
-    row.lpoid ??
-    row.purchaseOrderID ??
-    row.PurchaseOrderID ??
-    row.purchaseOrderId ??
-    row.orderID ??
-    row.OrderID ??
-    row._raw?.poid ??
-    row._raw?.POID ??
-    row._raw?.poId ??
-    row._raw?.poID ??
-    row._raw?.lPOID ??
-    row._raw?.lpoid ??
-    row._raw?.purchaseOrderID ??
-    row._raw?.PurchaseOrderID ??
-    row._raw?.orderID ??
-    row._raw?.OrderID;
-
-  return val != null && String(val).trim() !== '' && String(val).trim() !== '0'
-    ? String(val).trim().toLowerCase()
-    : '';
-};
-
-// Extract PO Number strictly
-const getRowPoNo = (row) => {
-  if (!row) return '';
-  const val =
-    row.poNo ??
-    row.PoNo ??
-    row.PONO ??
-    row.pono ??
-    row.poNumber ??
-    row.PONumber ??
-    row._raw?.poNo ??
-    row._raw?.PoNo ??
-    row._raw?.PONO ??
-    row._raw?.pono;
-
-  return val != null && String(val).trim() !== '' ? String(val).trim().toLowerCase() : '';
-};
-
 // Map raw API item into the standard 16 response fields required for grid binding
 const normalizeRow = (item, idx) => {
   if (!item || typeof item !== 'object') return null;
 
-  const resolvedPoid = getRowPoid(item);
-  const rawPoNo =
+  const resolvedPoid = String(
+    item.poid ??
+    item.POID ??
+    item.poId ??
+    item.poID ??
+    item.lPOID ??
+    item.lpoid ??
+    item._raw?.poid ??
+    item._raw?.POID ??
+    ''
+  ).trim();
+
+  const resolvedPoDetailId = String(
+    item.podetailid ??
+    item.poDetailID ??
+    item.PODetailID ??
+    item.poDetailId ??
+    item.PODetailId ??
+    item._raw?.PODetailID ??
+    item._raw?.poDetailID ??
+    item._raw?.podetailid ??
+    0
+  ).trim();
+
+  const rawPoNo = String(
     item.poNo ??
     item.PoNo ??
     item.PONO ??
@@ -124,14 +98,25 @@ const normalizeRow = (item, idx) => {
     item._raw?.poNo ??
     item._raw?.PoNo ??
     item._raw?.PONO ??
-    '';
+    ''
+  ).trim();
 
-  const rowKey = resolvedPoid || rawPoNo.toLowerCase() || `scan-${Date.now()}-${idx}`;
+  const styleNo = String(item.styleNo ?? item.StyleNo ?? item.style ?? item.Style ?? '').trim();
+  const color = String(item.color ?? item.Color ?? item.colorway ?? item.Colorway ?? '').trim();
+  const size = String(item.size ?? item.Size ?? '').trim();
+
+  // Create unique key for row: Solid has PODetailID, Ratio/Mix uses POID + style + color + size
+  const rowKey =
+    Number(resolvedPoDetailId) > 0
+      ? `pod-${resolvedPoDetailId}`
+      : `po-${resolvedPoid || rawPoNo}-${styleNo}-${color}-${size}`.replace(/\s+/g, '_');
 
   return {
-    id: `po-${rowKey}`,
+    id: rowKey || `scan-${Date.now()}-${idx}`,
     poid: resolvedPoid,
     poID: resolvedPoid,
+    poDetailId: resolvedPoDetailId,
+    PODetailID: resolvedPoDetailId,
     poNo: rawPoNo,
     customer: item.customer ?? item.Customer ?? item.customerName ?? item.CustomerName ?? '',
     supplier:
@@ -142,13 +127,14 @@ const normalizeRow = (item, idx) => {
       item.vendorName ??
       item.VendorName ??
       '',
-    shipmentDate: item.shipmentDate ?? item.ShipmentDate ?? '',
+    shipmentDate: item.shipmentDate ?? item.ShipmentDate ?? item.tolerance ?? item.Tolerance ?? '',
     inspectionDate: item.inspectionDate ?? item.InspectionDate ?? '',
-    styleNo: item.styleNo ?? item.StyleNo ?? item.style ?? item.Style ?? '',
-    color: item.color ?? item.Color ?? item.colorway ?? item.Colorway ?? '',
-    size: item.size ?? item.Size ?? '',
+    styleNo,
+    color,
+    size,
     poQuantity:
       item.poQuantity ??
+      item.POQuantity ??
       item.PoQuantity ??
       item.quantity ??
       item.Quantity ??
@@ -210,7 +196,7 @@ export default function PackingListCartonScanView() {
     location.state?.editId ||
     location.state?.containerLoadingID ||
     location.state?.id ||
-    '45';
+    '0';
 
   const [barcode, setBarcode] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -221,16 +207,42 @@ export default function PackingListCartonScanView() {
   const isScanningRef = useRef(false);
   const barcodeInputRef = useRef(null);
 
-  // Reset scan state and refocus when containerLoadingId changes or page mounts/re-opens
+  const fetchGridData = useCallback(async () => {
+    try {
+      const parsedId = Number(containerLoadingId);
+      const resolvedContainerLoadingId =
+        !Number.isNaN(parsedId) && parsedId > 0 ? parsedId : 0;
+
+      const endpoint = `/api/Container/GetCartonScanGrid?containerLoadingID=${resolvedContainerLoadingId}`;
+      const requestUrl = API_BASE_URL ? `${API_BASE_URL}${endpoint}` : endpoint;
+
+      const response = await axiosInstance.get(requestUrl);
+      const rawData =
+        response?.data?.data ??
+        response?.data?.Data ??
+        response?.data?.result ??
+        response?.data?.Result ??
+        response?.data;
+
+      if (Array.isArray(rawData)) {
+        const mapped = rawData.map((item, idx) => normalizeRow(item, idx)).filter(Boolean);
+        setRows(mapped);
+      }
+    } catch (err) {
+      console.error('Error fetching carton scan grid:', err);
+    }
+  }, [containerLoadingId]);
+
+  // Reset scan state, fetch grid data, and refocus when containerLoadingId changes or mounts
   useEffect(() => {
     isScanningRef.current = false;
-    setRows([]);
     setBarcode('');
     setErrorMsg('');
+    fetchGridData();
     setTimeout(() => {
       barcodeInputRef.current?.focus();
     }, 50);
-  }, [containerLoadingId]);
+  }, [containerLoadingId, fetchGridData]);
 
   const handleBack = () => {
     navigate(paths.dashboard.containerLoading);
@@ -353,108 +365,14 @@ export default function PackingListCartonScanView() {
         .map((item, idx) => normalizeRow(item, idx))
         .filter(Boolean);
 
-      if (normalizedNewRows.length > 0) {
-        // Step 1: Deduplicate incoming items by poid so a single scan response never creates duplicates
-        const uniqueIncomingMap = new Map();
-        normalizedNewRows.forEach((row) => {
-          const key = row.poid || row.poNo || row.id;
-          if (!uniqueIncomingMap.has(key)) {
-            uniqueIncomingMap.set(key, row);
-          } else {
-            // If the same scan response returned multiple items for the same PO, preserve the highest count
-            const existing = uniqueIncomingMap.get(key);
-            uniqueIncomingMap.set(key, {
-              ...existing,
-              totalCartonQRCounted: Math.max(
-                Number(existing.totalCartonQRCounted || 0),
-                Number(row.totalCartonQRCounted || 0)
-              ),
-              totalScanned: Math.max(
-                Number(existing.totalScanned || 0),
-                Number(row.totalScanned || 0)
-              ),
-              cartonBalance:
-                row.cartonBalance != null ? Number(row.cartonBalance) : existing.cartonBalance,
-            });
-          }
-        });
-        const uniqueIncomingRows = Array.from(uniqueIncomingMap.values());
+      // Directly update grid with accurate database counts returned from API
+      setRows(normalizedNewRows);
 
-        // Step 2: Update ONLY the matching PO row at targetIndex; leave all other rows untouched; add new row if different PO
-        setRows((prevRows) => {
-          const nextRows = [...prevRows];
-
-          uniqueIncomingRows.forEach((incoming) => {
-            const incomingPoid = incoming.poid;
-            const incomingPoNo = getRowPoNo(incoming);
-
-            const targetIndex = nextRows.findIndex((r) => {
-              // Priority 1: Match by unique PO ID if available on both
-              if (incomingPoid && r.poid) {
-                return r.poid === incomingPoid;
-              }
-              // Priority 2: Match by exact PO Number if available on both
-              const existPoNo = getRowPoNo(r);
-              if (incomingPoNo && existPoNo) {
-                return incomingPoNo === existPoNo;
-              }
-              return false;
-            });
-
-            if (targetIndex !== -1) {
-              // Same PO: update ONLY the matching row; leave all other rows untouched
-              const existing = nextRows[targetIndex];
-
-              const prevCount = Number(
-                incoming.totalPrevCartonScanned ?? existing.totalPrevCartonScanned ?? 0
-              );
-              const proposed = Number(
-                existing.proposedNoOfCarton ?? incoming.proposedNoOfCarton ?? 0
-              );
-
-              const existingToday = Number(existing.totalCartonQRCounted || 0);
-              const incomingToday = Number(incoming.totalCartonQRCounted || 0);
-
-              const updatedToday =
-                incomingToday > existingToday ? incomingToday : existingToday + 1;
-              const updatedTotal = Math.max(
-                Number(incoming.totalScanned || 0),
-                prevCount + updatedToday
-              );
-              const updatedBalance =
-                incomingToday > existingToday && incoming.cartonBalance != null
-                  ? Number(incoming.cartonBalance)
-                  : Math.max(0, proposed - updatedTotal);
-
-              nextRows[targetIndex] = {
-                ...existing,
-                totalPrevCartonScanned: prevCount,
-                totalCartonQRCounted: updatedToday,
-                totalScanned: updatedTotal,
-                cartonBalance: updatedBalance,
-                _raw: { ...existing._raw, ...incoming._raw },
-              };
-            } else {
-              // Different PO: add new separate row
-              nextRows.push(incoming);
-            }
-          });
-
-          return nextRows;
-        });
-
-        const successMessage =
-          response?.data?.message ||
-          response?.data?.Message ||
-          `Carton scanned successfully: ${cleanBarcode}`;
-        enqueueSnackbar(successMessage, { variant: 'success' });
-      } else {
-        const fallbackMsg =
-          response?.data?.message ||
-          response?.data?.Message ||
-          'Scan registered, but no carton details returned.';
-        enqueueSnackbar(fallbackMsg, { variant: 'warning' });
-      }
+      const successMessage =
+        response?.data?.message ||
+        response?.data?.Message ||
+        `Carton scanned successfully: ${cleanBarcode}`;
+      enqueueSnackbar(successMessage, { variant: 'success' });
 
       setBarcode('');
     } catch (err) {
