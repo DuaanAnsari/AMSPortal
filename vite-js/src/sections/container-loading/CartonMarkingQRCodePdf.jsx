@@ -193,7 +193,9 @@ export default function CartonMarkingQRCodePdf() {
       cartons.map((carton) => {
         const raw = carton.qrImgPOD ?? carton.QRImgPOD ?? carton.QrImgPOD ?? '';
         if (!raw) return '';
-        return String(raw).startsWith('data:') ? String(raw) : `data:image/png;base64,${raw}`;
+        const trimmed = String(raw).trim().replace(/^"|"$/g, '');
+        if (!trimmed) return '';
+        return trimmed.startsWith('data:') ? trimmed : `data:image/png;base64,${trimmed}`;
       }),
     [cartons]
   );

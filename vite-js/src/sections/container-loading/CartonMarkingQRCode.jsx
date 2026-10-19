@@ -555,8 +555,9 @@ export default function CartonMarkingQRCode() {
       for (let index = 0; index < responseRows.length; index += 1) {
         const row = responseRows[index];
         const rawQrImg = row.QRImgPOD ?? row.qrImgPOD ?? row.QrImgPOD ?? '';
-        const qrImgPOD = rawQrImg
-          ? (String(rawQrImg).startsWith('data:') ? String(rawQrImg) : `data:image/png;base64,${rawQrImg}`)
+        const trimmedQr = rawQrImg ? String(rawQrImg).trim().replace(/^"|"$/g, '') : '';
+        const qrImgPOD = trimmedQr
+          ? (trimmedQr.startsWith('data:') ? trimmedQr : `data:image/png;base64,${trimmedQr}`)
           : '';
         const carton = {
           ...SAMPLE_CARTON,
