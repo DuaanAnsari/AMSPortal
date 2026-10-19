@@ -1607,6 +1607,7 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [fetchedData, setFetchedData] = useState(null);
+  const [editHistory, setEditHistory] = useState([]);
   const [loading, setLoading] = useState(!!id && !propPoData);
 
   useEffect(() => {
@@ -1764,6 +1765,54 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
   const isArray = Array.isArray(rawInput);
   const reportRows = isArray ? rawInput : [];
   const poData = isArray ? (rawInput[0] || {}) : (rawInput || {});
+  const historyPOID = id || poData.poid || poData.POID || poData.purchaseOrderId || poData.purchaseorderid;
+
+  useEffect(() => {
+    if (!historyPOID) {
+      setEditHistory([]);
+      return;
+    }
+
+    let active = true;
+    const fetchEditHistory = async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const response = await axios.get(
+          `${HOST_API}/api/MyOrders/GetPurchaseOrderEditHistory/${historyPOID}`,
+          { headers: { Authorization: token ? `Bearer ${token}` : '' } }
+        );
+        if (active) setEditHistory(Array.isArray(response.data) ? response.data : []);
+      } catch (error) {
+        console.error('Error loading purchase order edit history:', error);
+        if (active) setEditHistory([]);
+      }
+    };
+
+    fetchEditHistory();
+    return () => { active = false; };
+  }, [historyPOID]);
+
+  const revisionRows = (() => {
+    const revisions = new Map();
+    editHistory.forEach((entry) => {
+      const changedAt = String(entry.changedAtUtc || entry.ChangedAtUtc || '');
+      const userId = entry.userID ?? entry.userId ?? entry.UserID ?? '';
+      const key = `${changedAt}|${userId}`;
+      if (!revisions.has(key)) {
+        revisions.set(key, {
+          changedAt,
+          approvedBy: entry.userName || entry.UserName || '',
+          changes: [],
+        });
+      }
+      revisions.get(key).changes.push({
+        columnName: entry.columnName || entry.ColumnName || '',
+        changedValue: entry.changedValue ?? entry.ChangedValue ?? '',
+      });
+    });
+    return Array.from(revisions.values());
+  })();
+  const latestRevision = revisionRows.length;
 
   const totalPages = 6;
 
@@ -2170,7 +2219,7 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
               </Box>
             </Box>
 
-            <NewPOPageFooter pageNum={1} totalPages={totalPages} title="Order Details" poNo={poNumber || refNo} programName={programName} rev="0" />
+            <NewPOPageFooter pageNum={1} totalPages={totalPages} title="Order Details" poNo={poNumber || refNo} programName={programName} rev={latestRevision} />
           </Box>
 
           {/* ================================================================ */}
@@ -2252,7 +2301,7 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
               <NewFieldBlock label="CARTON MARK" value={poData.cartonMarking || 'Jedco'} />
             </Box>
 
-            <NewPOPageFooter pageNum={2} totalPages={totalPages} title="Product Information" poNo={poNumber || refNo} programName={programName} rev="0" />
+            <NewPOPageFooter pageNum={2} totalPages={totalPages} title="Product Information" poNo={poNumber || refNo} programName={programName} rev={latestRevision} />
           </Box>
 
           {/* ================================================================ */}
@@ -2379,7 +2428,7 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
               </Box>
             </Box>
 
-            <NewPOPageFooter pageNum={3} totalPages={totalPages} title="Sizes, Colours & FOB" poNo={poNumber || refNo} programName={programName} rev="0" />
+            <NewPOPageFooter pageNum={3} totalPages={totalPages} title="Sizes, Colours & FOB" poNo={poNumber || refNo} programName={programName} rev={latestRevision} />
           </Box>
 
           {/* ================================================================ */}
@@ -2473,7 +2522,7 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
               </Box>
             </Box>
 
-            <NewPOPageFooter pageNum={4} totalPages={totalPages} title="Terms & Conditions" poNo={poNumber || refNo} programName={programName} rev="0" />
+            <NewPOPageFooter pageNum={4} totalPages={totalPages} title="Terms & Conditions" poNo={poNumber || refNo} programName={programName} rev={latestRevision} />
           </Box>
 
           {/* ================================================================ */}
@@ -2566,7 +2615,7 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
               </Box>
             </Box>
 
-            <NewPOPageFooter pageNum={5} totalPages={totalPages} title="Banking Details" poNo={poNumber || refNo} programName={programName} rev="0" />
+            <NewPOPageFooter pageNum={5} totalPages={totalPages} title="Banking Details" poNo={poNumber || refNo} programName={programName} rev={latestRevision} />
           </Box>
 
           {/* ================================================================ */}
@@ -2578,7 +2627,7 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
                 Appendix — Revision Record & Acceptance
               </Typography>
               <Typography sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9.5px', color: '#6B7280', fontWeight: 600 }}>
-                {`${poNumber || refNo} · ${programName} · Rev 0`}
+                {`${poNumber || refNo} · ${programName} · Rev ${latestRevision}`}
               </Typography>
             </Box>
 
@@ -2602,22 +2651,22 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    <TableRow sx={{ borderBottom: '1px solid #E5E7EB' }}>
-                      <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9.5px', fontWeight: 800, color: '#111827', py: 0.8, pl: 0 }}>0</TableCell>
-                      <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 500, color: '#374151', py: 0.8 }}>{issueDate}</TableCell>
-                      <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 500, color: '#374151', py: 0.8 }}>All</TableCell>
-                      <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 500, color: '#374151', py: 0.8 }}>Original issue</TableCell>
-                      <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 700, color: '#374151', py: 0.8, pr: 0 }}>JB</TableCell>
-                    </TableRow>
-                    {[1, 2, 3, 4].map((revNo) => (
-                      <TableRow key={revNo} sx={{ borderBottom: '1px solid #F3F4F6' }}>
-                        <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 400, color: '#9CA3AF', py: 0.8, pl: 0 }}>{revNo}</TableCell>
-                        <TableCell sx={{ py: 0.8 }}>&nbsp;</TableCell>
-                        <TableCell sx={{ py: 0.8 }}>&nbsp;</TableCell>
-                        <TableCell sx={{ py: 0.8 }}>&nbsp;</TableCell>
-                        <TableCell sx={{ py: 0.8, pr: 0 }}>&nbsp;</TableCell>
-                      </TableRow>
-                    ))}
+                    {revisionRows.map((revision, index) => {
+                      const changedDate = revision.changedAt.slice(0, 10);
+                      const columns = revision.changes.map((change) => change.columnName).join('\n');
+                      const values = revision.changes.map((change) => (
+                        change.changedValue === null || change.changedValue === '' ? '—' : String(change.changedValue)
+                      )).join('\n');
+                      return (
+                        <TableRow key={`${revision.changedAt}-${index}`} sx={{ borderBottom: '1px solid #E5E7EB' }}>
+                          <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 700, color: '#111827', py: 0.8, pl: 0, verticalAlign: 'top' }}>{index + 1}</TableCell>
+                          <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 500, color: '#374151', py: 0.8, verticalAlign: 'top' }}>{changedDate}</TableCell>
+                          <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 500, color: '#374151', py: 0.8, whiteSpace: 'pre-line', verticalAlign: 'top' }}>{columns}</TableCell>
+                          <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 500, color: '#374151', py: 0.8, whiteSpace: 'pre-line', overflowWrap: 'anywhere', verticalAlign: 'top' }}>{values}</TableCell>
+                          <TableCell sx={{ fontFamily: MONTSERRAT_FONT, fontSize: '9px', fontWeight: 700, color: '#374151', py: 0.8, pr: 0, verticalAlign: 'top' }}>{revision.approvedBy}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -2665,7 +2714,7 @@ const NewModernPurchaseOrderPage = ({ poData: propPoData, onClose }) => {
               </Box>
             </Box>
 
-            <NewPOPageFooter pageNum={6} totalPages={totalPages} title="Appendix & Acceptance" poNo={poNumber || refNo} programName={programName} rev="0" />
+            <NewPOPageFooter pageNum={6} totalPages={totalPages} title="Appendix & Acceptance" poNo={poNumber || refNo} programName={programName} rev={latestRevision} />
           </Box>
         </Box>
       </Box>
