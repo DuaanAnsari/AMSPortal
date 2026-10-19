@@ -207,42 +207,17 @@ export default function PackingListCartonScanView() {
   const isScanningRef = useRef(false);
   const barcodeInputRef = useRef(null);
 
-  const fetchGridData = useCallback(async () => {
-    try {
-      const parsedId = Number(containerLoadingId);
-      const resolvedContainerLoadingId =
-        !Number.isNaN(parsedId) && parsedId > 0 ? parsedId : 0;
 
-      const endpoint = `/api/Container/GetCartonScanGrid?containerLoadingID=${resolvedContainerLoadingId}`;
-      const requestUrl = API_BASE_URL ? `${API_BASE_URL}${endpoint}` : endpoint;
-
-      const response = await axiosInstance.get(requestUrl);
-      const rawData =
-        response?.data?.data ??
-        response?.data?.Data ??
-        response?.data?.result ??
-        response?.data?.Result ??
-        response?.data;
-
-      if (Array.isArray(rawData)) {
-        const mapped = rawData.map((item, idx) => normalizeRow(item, idx)).filter(Boolean);
-        setRows(mapped);
-      }
-    } catch (err) {
-      console.error('Error fetching carton scan grid:', err);
-    }
-  }, [containerLoadingId]);
-
-  // Reset scan state, fetch grid data, and refocus when containerLoadingId changes or mounts
+  // Reset scan state and refocus when containerLoadingId changes or mounts (starts with blank grid like legacy)
   useEffect(() => {
     isScanningRef.current = false;
     setBarcode('');
     setErrorMsg('');
-    fetchGridData();
+    setRows([]);
     setTimeout(() => {
       barcodeInputRef.current?.focus();
     }, 50);
-  }, [containerLoadingId, fetchGridData]);
+  }, [containerLoadingId]);
 
   const handleBack = () => {
     navigate(paths.dashboard.containerLoading);
