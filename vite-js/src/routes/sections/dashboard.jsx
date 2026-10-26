@@ -162,6 +162,18 @@ const CartonMarkingQRCodePdfPage = lazy(
 const PackingListCartonScanPage = lazy(
   () => import('src/sections/container-loading/PackingListCartonScanView')
 );
+const CartonReceivingViewPage = lazy(
+  () => import('src/sections/carton-receiving/Carton-receiving-list-view')
+);
+const CartonReceivingViewGridPage = lazy(
+  () => import('src/sections/carton-receiving/Carton-receiving-view-grid')
+);
+const ReceivedPackingListPDFPage = lazy(
+  () => import('src/sections/carton-receiving/Received-packing-list-pdf-page')
+);
+const PackingListReceivingScanPage = lazy(
+  () => import('src/sections/carton-receiving/PackingListReceivingScanView')
+);
 const ContainerHandlingReportPage = lazy(
   () => import('src/sections/power-tool/view/Container-handling-report')
 );
@@ -258,6 +270,10 @@ export const dashboardRoutes = [
       { path: 'container-loading/carton-scan', element: <PackingListCartonScanPage /> },
       { path: 'container-loading/carton-marking-qr', element: <CartonMarkingQRCodePage /> },
       { path: 'container-loading/carton-marking-qr-pdf', element: <CartonMarkingQRCodePdfPage /> },
+      { path: 'carton-receiving', element: <CartonReceivingViewPage /> },
+      { path: 'carton-receiving-view', element: <CartonReceivingViewGridPage /> },
+      { path: 'carton-receiving-pdf/:containerNo', element: <ReceivedPackingListPDFPage /> },
+      { path: 'carton-receiving/carton-scan', element: <PackingListReceivingScanPage /> },
       { path: 'MasterOrderForQDSheet', element: <MasterOrderForQDSheetPage /> },
       { path: 'qd-inspection', element: <QualityDepartmentInspectionPage /> },
       { path: 'qd-po-preview', element: <QDPurchaseOrderPreviewPage /> },

@@ -28,6 +28,7 @@ import { useSnackbar } from 'src/components/snackbar';
 import { paths } from 'src/routes/paths';
 import axiosInstance from 'src/utils/axios';
 import { fDate } from 'src/utils/format-time';
+import { useDragScroll } from 'src/hooks/use-drag-scroll';
 
 // ----------------------------------------------------------------------
 
@@ -203,6 +204,8 @@ export default function PackingListCartonScanView() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
   const [rows, setRows] = useState([]);
+
+  const tableContainerRef = useDragScroll();
 
   const isScanningRef = useRef(false);
   const barcodeInputRef = useRef(null);
@@ -467,7 +470,7 @@ export default function PackingListCartonScanView() {
 
       {/* Scanned Table */}
       <Card variant="outlined">
-        <TableContainer component={Paper} elevation={0}>
+        <TableContainer ref={tableContainerRef} component={Paper} elevation={0} sx={{ overflowX: 'auto' }}>
           <Table size="small">
             <TableHead sx={{ bgcolor: 'grey.100' }}>
               <TableRow>

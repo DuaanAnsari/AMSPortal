@@ -25,6 +25,7 @@ import CustomBreadcrumbs from 'src/components/custom-breadcrumbs';
 import { useSnackbar } from 'src/components/snackbar';
 import { paths } from 'src/routes/paths';
 import axiosInstance from 'src/utils/axios';
+import { useDragScroll } from 'src/hooks/use-drag-scroll';
 
 // ----------------------------------------------------------------------
 
@@ -88,6 +89,8 @@ export default function ContainerLoadingListView() {
   const [allRows, setAllRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const gridContainerRef = useDragScroll({ scrollableSelector: '.MuiDataGrid-virtualScroller' });
 
   // Fetch data from API (/api/Container/GetContainerLoadingGrid) with optional poNo parameter
   const fetchData = useCallback(async (searchQuery = '') => {
@@ -439,7 +442,7 @@ export default function ContainerLoadingListView() {
             <CircularProgress size={40} />
           </Box>
         )}
-        <Box sx={{ width: '100%', overflow: 'auto' }}>
+        <Box ref={gridContainerRef} sx={{ width: '100%', overflow: 'auto' }}>
           <Paper
             variant="outlined"
             sx={{
