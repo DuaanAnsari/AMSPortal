@@ -190,7 +190,9 @@ export default function ReceivedPackingListPDFPage() {
   };
 
   const handlePrint = useReactToPrint({
+    contentRef: componentRef,
     content: () => componentRef.current,
+    documentTitle: `Received_Packing_List_${containerNo || 'Report'}`,
     pageStyle: `
       @page {
         size: A4 landscape;
@@ -289,7 +291,7 @@ export default function ReceivedPackingListPDFPage() {
             <Typography variant="h6" sx={{ fontSize: '14px', fontWeight: 'bold' }}>
               Received Packing List — {header.containerNo || containerNo}
             </Typography>
-            <Typography sx={{ fontSize: '12px', ml: 2 }}>1 / 1</Typography>
+            <Typography sx={{ fontSize: '12px', ml: 2 }}></Typography>
           </Box>
 
           <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, justifyContent: 'center' }}>
