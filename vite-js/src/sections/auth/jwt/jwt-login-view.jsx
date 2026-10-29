@@ -95,6 +95,8 @@ export default function JwtLoginView() {
         const userInfo = response.data?.userInfo;
         if (userInfo) {
           if (userInfo.roleId !== undefined) localStorage.setItem('roleId', String(userInfo.roleId));
+          if (userInfo.employeeId !== undefined)
+            localStorage.setItem('employeeId', String(userInfo.employeeId));
           if (userInfo.designation != null)
             localStorage.setItem('designation', String(userInfo.designation));
           if (userInfo.userCode != null && String(userInfo.userCode).trim() !== '') {

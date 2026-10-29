@@ -129,6 +129,7 @@ const AddSizePage = lazy(() => import('src/sections/power-tool/view/Add-Size'));
 const AdvancePaymentPage = lazy(() => import('src/sections/power-tool/view/Advance-payment'));
 const AddAdvancePage = lazy(() => import('src/sections/power-tool/view/Add-Advance'));
 const ICRFormPage = lazy(() => import('src/sections/power-tool/view/ICR-Form'));
+const ICREditPage = lazy(() => import('src/sections/power-tool/view/ICR-Edit'));
 const QRViewPage = lazy(() => import('src/sections/power-tool/view/qr-view'));
 const CostSheetViewPage = lazy(() => import('src/sections/power-tool/view/cost-sheet-view'));
 const CostSheetEntryPage = lazy(() => import('src/sections/power-tool/view/cost-sheet-entry'));
@@ -348,6 +349,7 @@ export const dashboardRoutes = [
           { path: 'advance-payment', element: <AdvancePaymentPage /> },
           { path: 'add-advance', element: <AddAdvancePage /> },
           { path: 'icr-form', element: <ICRFormPage /> },
+          { path: 'icr-edit/:id', element: <ICREditPage /> },
           { path: 'qr-view', element: <QRViewPage /> },
           { path: 'view-users', element: <ViewUsersPage /> },
           { path: 'cost-sheet-view', element: <CostSheetViewPage /> },

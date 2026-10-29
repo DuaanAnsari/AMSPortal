@@ -44,8 +44,20 @@ export default function AMSLogin() {
         const userInfo = response.data.userInfo;
         if (userInfo) {
           if (userInfo.roleId !== undefined) localStorage.setItem('roleId', userInfo.roleId);
+          const employeeId = userInfo.employeeId ?? userInfo.EmployeeId ?? userInfo.employeeID;
+          if (employeeId !== undefined && employeeId !== null) {
+            localStorage.setItem('employeeId', String(employeeId));
+          }
           if (userInfo.userCode) localStorage.setItem('userCode', userInfo.userCode);
           if (userInfo.designation) localStorage.setItem('designation', userInfo.designation);
+
+          // Safe diagnostic (no token/password): field presence + saved supplier flag
+          console.log(
+            '[AMS-LOGIN] userInfo keys:',
+            Object.keys(userInfo),
+            '| employeeId =>',
+            localStorage.getItem('employeeId')
+          );
         }
         if (!localStorage.getItem('userCode')?.trim() && username?.trim()) {
           localStorage.setItem('userCode', username.trim());
