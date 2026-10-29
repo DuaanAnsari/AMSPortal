@@ -309,7 +309,11 @@ export default function ICRFormPage() {
             ? res.data.data
             : Array.isArray(res?.data?.Data)
               ? res.data.Data
-              : [];
+              : Array.isArray(res?.data?.result)
+                ? res.data.result
+                : Array.isArray(res?.data?.Result)
+                  ? res.data.Result
+                  : [];
 
         if (mounted) {
           const mapped = raw.map((s) => ({
@@ -365,7 +369,11 @@ export default function ICRFormPage() {
             ? res.data.data
             : Array.isArray(res?.data?.Data)
               ? res.data.Data
-              : [];
+              : Array.isArray(res?.data?.result)
+                ? res.data.result
+                : Array.isArray(res?.data?.Result)
+                  ? res.data.Result
+                  : [];
 
         if (mounted) {
           const mapped = raw.map((c) => ({
@@ -437,7 +445,11 @@ export default function ICRFormPage() {
             ? res.data.data
             : Array.isArray(res?.data?.Data)
               ? res.data.Data
-              : [];
+              : Array.isArray(res?.data?.result)
+                ? res.data.result
+                : Array.isArray(res?.data?.Result)
+                  ? res.data.Result
+                  : [];
 
         if (mounted) {
           const mapped = raw.map((p) => ({
@@ -856,7 +868,11 @@ export default function ICRFormPage() {
                   ? custRes.data.data
                   : Array.isArray(custRes?.data?.Data)
                     ? custRes.data.Data
-                    : [];
+                    : Array.isArray(custRes?.data?.result)
+                      ? custRes.data.result
+                      : Array.isArray(custRes?.data?.Result)
+                        ? custRes.data.Result
+                        : [];
               fetchedCustomers = rawCust.map((c) => ({
                 id: c.customerID ?? c.CustomerID ?? c.id,
                 name: c.customerName ?? c.CustomerName ?? c.name ?? '',
@@ -894,7 +910,11 @@ export default function ICRFormPage() {
                   ? poRes.data.data
                   : Array.isArray(poRes?.data?.Data)
                     ? poRes.data.Data
-                    : [];
+                    : Array.isArray(poRes?.data?.result)
+                      ? poRes.data.result
+                      : Array.isArray(poRes?.data?.Result)
+                        ? poRes.data.Result
+                        : [];
               fetchedPOs = rawPOs.map((p) => ({
                 id: p.poid ?? p.POID ?? p.id,
                 poNo: String(p.pono ?? p.PONO ?? p.poNo ?? p.label ?? ''),
@@ -1087,10 +1107,7 @@ export default function ICRFormPage() {
               variant="contained"
               color="primary"
               startIcon={<Iconify icon="mingcute:add-line" />}
-              onClick={() => {
-                setFormData(INITIAL_FORM_STATE);
-                setActiveTab('add');
-              }}
+              onClick={() => navigate(paths.dashboard.powerTool.icrAdd)}
               sx={{ fontWeight: 600 }}
             >
               Add ICR
@@ -1295,10 +1312,7 @@ export default function ICRFormPage() {
                           <Button
                             variant="outlined"
                             size="small"
-                            onClick={() => {
-                              setFormData(INITIAL_FORM_STATE);
-                              setActiveTab('add');
-                            }}
+                            onClick={() => navigate(paths.dashboard.powerTool.icrAdd)}
                             sx={{ mt: 1.5 }}
                           >
                             Create First ICR Request
