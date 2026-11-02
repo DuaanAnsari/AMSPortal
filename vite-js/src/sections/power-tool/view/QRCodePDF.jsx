@@ -96,13 +96,7 @@ function SingleQrLabel({ label }) {
               alt="Carton QR Code"
               className="qr-pdf-img"
             />
-          ) : (
-            <Box className="qr-pdf-fallback-box">
-              <Typography variant="caption" sx={{ color: '#94A3B8', fontSize: '9px' }}>
-                NO QR IMAGE
-              </Typography>
-            </Box>
-          )}
+          ) : null}
         </Box>
 
         {/* RIGHT: colorName (Rotated) */}
@@ -556,16 +550,6 @@ export default function QRCodePDF() {
           image-rendering: -webkit-optimize-contrast;
           image-rendering: crisp-edges;
           display: block;
-        }
-
-        .qr-pdf-fallback-box {
-          width: ${QR_BOX_SIZE}px;
-          height: ${QR_BOX_SIZE}px;
-          border: 1px dashed #CBD5E1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: #F8FAFC;
         }
 
         .qr-pdf-bottom-style {

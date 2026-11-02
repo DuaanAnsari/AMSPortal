@@ -299,21 +299,24 @@ QRLabelPDF.propTypes = {
 
 // ----------------------------------------------------------------------
 
+let qrEntryCache = null;
+
 export default function QRCodeEntryPage() {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
 
   const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 
-  const [poOptions, setPoOptions] = useState([]);
-  const [poLoaded, setPoLoaded] = useState(false);
+  const [poOptions, setPoOptions] = useState(() => qrEntryCache?.poOptions ?? []);
+  const [poLoaded, setPoLoaded] = useState(() => qrEntryCache?.poLoaded ?? false);
   const [poLoading, setPoLoading] = useState(false);
-  const [selectedPoIds, setSelectedPoIds] = useState([]);
-  const [rows, setRows] = useState([]);
+  const [selectedPoIds, setSelectedPoIds] = useState(() => qrEntryCache?.selectedPoIds ?? []);
+  const [rows, setRows] = useState(() => qrEntryCache?.rows ?? []);
   const [gridLoading, setGridLoading] = useState(false);
   const [fetchError, setFetchError] = useState('');
   const [printing, setPrinting] = useState(false);
   const tableContainerRef = useRef(null);
+  const restoredRef = useRef(Boolean(qrEntryCache));
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [scrollLeftState, setScrollLeftState] = useState(0);
@@ -355,6 +358,11 @@ export default function QRCodeEntryPage() {
   }, [baseUrl, poLoaded, poLoading]);
 
   useEffect(() => {
+    if (restoredRef.current) {
+      restoredRef.current = false;
+      return () => {};
+    }
+
     if (selectedPoIds.length === 0) {
       setRows([]);
       return () => {};
@@ -537,6 +545,8 @@ export default function QRCodeEntryPage() {
       if (labels.length === 0) {
         throw new Error('No QR labels generated');
       }
+
+      qrEntryCache = { poOptions, poLoaded, selectedPoIds, rows };
 
       navigate(paths.dashboard.powerTool.qrCodePdf, {
         state: {
