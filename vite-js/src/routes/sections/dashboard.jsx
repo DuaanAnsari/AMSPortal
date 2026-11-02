@@ -132,6 +132,8 @@ const ICRFormPage = lazy(() => import('src/sections/power-tool/view/ICR-Form'));
 const ICRAddPage = lazy(() => import('src/sections/power-tool/view/ICR-Add'));
 const ICREditPage = lazy(() => import('src/sections/power-tool/view/ICR-Edit'));
 const QRViewPage = lazy(() => import('src/sections/power-tool/view/qr-view'));
+const QRCodeEntryPage = lazy(() => import('src/sections/power-tool/view/qr-code-entry'));
+const QRCodePDFPage = lazy(() => import('src/sections/power-tool/view/QRCodePDF'));
 const CostSheetViewPage = lazy(() => import('src/sections/power-tool/view/cost-sheet-view'));
 const CostSheetEntryPage = lazy(() => import('src/sections/power-tool/view/cost-sheet-entry'));
 const CourierPackagingViewPage = lazy(
@@ -353,6 +355,8 @@ export const dashboardRoutes = [
           { path: 'icr-add', element: <ICRAddPage /> },
           { path: 'icr-edit/:id', element: <ICREditPage /> },
           { path: 'qr-view', element: <QRViewPage /> },
+          { path: 'qr-code-entry', element: <QRCodeEntryPage /> },
+          { path: 'qr-code-pdf', element: <QRCodePDFPage /> },
           { path: 'view-users', element: <ViewUsersPage /> },
           { path: 'cost-sheet-view', element: <CostSheetViewPage /> },
           { path: 'cost-sheet-entry', element: <CostSheetEntryPage /> },

@@ -193,6 +193,8 @@ export const paths = {
       icrAdd: `${ROOTS.DASHBOARD}/power-tool/icr-add`,
       icrEdit: (id) => `${ROOTS.DASHBOARD}/power-tool/icr-edit/${id}`,
       qrView: `${ROOTS.DASHBOARD}/power-tool/qr-view`,
+      qrCodeEntry: `${ROOTS.DASHBOARD}/power-tool/qr-code-entry`,
+      qrCodePdf: `${ROOTS.DASHBOARD}/power-tool/qr-code-pdf`,
       mixCartonEntry: `${ROOTS.DASHBOARD}/power-tool/mix-carton-entry`,
       viewUsers: `${ROOTS.DASHBOARD}/power-tool/view-users`,
       addUser: `${ROOTS.DASHBOARD}/power-tool/add-user`,
