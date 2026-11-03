@@ -589,7 +589,7 @@ export default function CartonMarkingQRCode() {
         }
       }
 
-      navigate('/dashboard/container-loading/carton-marking-qr-pdf', {
+      navigate('/dashboard/new-container-loading/carton-marking-qr-pdf', {
         state: { cartons: previewCartons },
       });
     } catch (err) {
