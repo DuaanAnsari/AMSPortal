@@ -603,16 +603,10 @@ export default function TNAChartPage() {
   const setDataRequestIdRef = useRef(0);
 
   const [assignPoIds, setAssignPoIds] = useState([]); // PO IDs to update via SetDataUpdate
-  const [assignForm, setAssignForm] = useState({
-    merchandiserAssistant: [],
-    qa: [],
-    printQa: 'N/A',
-    productionFollowup: '',
-    prodPersonID: null,
-    shippingPerson: 'MEHWISH RIAZ',
-    shipPersonID: null,
-    productionStatus: 'N/A',
-  });
+  const [assignColors, setAssignColors] = useState([]); // color options for the assign modal
+  const [selectedAssignColors, setSelectedAssignColors] = useState([]); // colors being assigned
+  const [assignFormByColor, setAssignFormByColor] = useState({}); // { [color]: teamForm }
+  const [assignProductionStatus, setAssignProductionStatus] = useState('N/A');
 
   const [merchAssistantOptions, setMerchAssistantOptions] = useState([]);
   const [qaList, setQaList] = useState([]);
@@ -679,6 +673,23 @@ export default function TNAChartPage() {
       .filter((id) => Number.isFinite(id) && Number(id) > 0)
       .map((id) => Number(id));
     return [...new Set(ids)];
+  };
+
+  const createEmptyColorTeam = () => ({
+    merchandiserAssistant: [],
+    qa: [],
+    printQa: 'N/A',
+    productionFollowup: '',
+    prodPersonID: null,
+    shippingPerson: 'MEHWISH RIAZ',
+    shipPersonID: null,
+  });
+
+  const updateColorForm = (color, patch) => {
+    setAssignFormByColor((prev) => ({
+      ...prev,
+      [color]: { ...(prev[color] || createEmptyColorTeam()), ...patch },
+    }));
   };
 
   const getVisiblePoIds = useCallback(() => {
@@ -2335,65 +2346,78 @@ export default function TNAChartPage() {
       return Number.isFinite(n) && n > 0 ? [n] : [];
     };
 
-    const qaIds = parseIds(respData?.qaid ?? respData?.qaiDs);
-    const printQaIds = parseIds(respData?.printQAID ?? respData?.printQAIDs);
-    const prodPersonIds = parseIds(respData?.prodPersonID ?? respData?.prodPersonIDs);
-    const shipPersonIds = parseIds(respData?.shipPersonID ?? respData?.shipPersonIDs);
-    const marchandIds = parseIds(respData?.marchandID ?? respData?.marchandIDs);
-    const productionStatusFromApi =
-      respData?.productionstatus ??
-      respData?.productionStatus ??
-      respData?.ProductionStatus ??
-      'N/A';
-
-    // eslint-disable-next-line no-console
-    console.log('[TNA Chart] Mapped IDs from SetData:', {
-      qaIds,
-      printQaIds,
-      prodPersonIds,
-      shipPersonIds,
-      marchandIds,
-      productionStatusFromApi,
-    });
-
     const findNameById = (list, id) => {
       if (!Number.isFinite(id) || id <= 0) return '';
       const hit = (list || []).find((x) => extractNumericId(x) === id);
       return hit?.userName || hit?.name || '';
     };
 
-    const qaNames = qaIds.map((id) => findNameById(qaOptionsList, id)).filter(Boolean);
-    const printQaName = findNameById(printQaOptionsList, printQaIds[0]) || 'N/A';
-    const prodName = findNameById(productionOptionsList, prodPersonIds[0]) || '';
-    const shipName = findNameById(shippingOptionsList, shipPersonIds[0]) || 'MEHWISH RIAZ';
-    const merchNames = marchandIds.map((id) => findNameById(merchList, id)).filter(Boolean);
+    const assignments = Array.isArray(respData?.assignments) ? respData.assignments : [];
+    const poInfo = respData?.poInfo || {};
 
-    // eslint-disable-next-line no-console
-    console.log('[TNA Chart] Names resolved from SetData IDs:', {
-      qaNames,
-      printQaName,
-      prodName,
-      shipName,
-      merchNames,
+    const colorsFromApi = (Array.isArray(respData?.colors) ? respData.colors : [])
+      .map((c) => (typeof c === 'string' ? c : c?.color))
+      .filter(Boolean);
+    const colorsFromAssignments = assignments.map((a) => a?.color).filter(Boolean);
+    const colors = [...new Set([...colorsFromApi, ...colorsFromAssignments])];
+
+    const productionStatusFromApi =
+      respData?.productionstatus ??
+      respData?.productionStatus ??
+      respData?.ProductionStatus ??
+      poInfo?.productionstatus ??
+      poInfo?.productionStatus ??
+      'N/A';
+
+    const buildTeamForm = (assignment) => {
+      const qaIds = parseIds(assignment?.qaid ?? assignment?.qaiDs ?? assignment?.qaIds);
+      const printQaIds = parseIds(assignment?.printQAID ?? assignment?.printQAIDs ?? assignment?.printQaIds);
+      const prodPersonIds = parseIds(assignment?.prodPersonID ?? assignment?.prodPersonIDs ?? assignment?.prodPersonIds);
+      const shipPersonIds = parseIds(assignment?.shipPersonID ?? assignment?.shipPersonIDs ?? assignment?.shipPersonIds);
+      const marchandIds = parseIds(assignment?.marchandID ?? assignment?.marchandIDs ?? assignment?.marchandIds);
+
+      const qaNames = qaIds.map((id) => findNameById(qaOptionsList, id)).filter(Boolean);
+      const printQaName = findNameById(printQaOptionsList, printQaIds[0]) || 'N/A';
+      const prodName = findNameById(productionOptionsList, prodPersonIds[0]) || '';
+      const shipName = findNameById(shippingOptionsList, shipPersonIds[0]) || 'MEHWISH RIAZ';
+      const merchNames = marchandIds.map((id) => findNameById(merchList, id)).filter(Boolean);
+
+      return {
+        merchandiserAssistant: merchNames,
+        qa: qaNames,
+        printQa: printQaName,
+        productionFollowup: prodName,
+        prodPersonID: prodPersonIds[0] > 0 ? prodPersonIds[0] : null,
+        shippingPerson: shipName,
+        shipPersonID: shipPersonIds[0] > 0 ? shipPersonIds[0] : null,
+      };
+    };
+
+    const formsByColor = {};
+    colors.forEach((color) => {
+      const assignment = assignments.find(
+        (a) => String(a?.color ?? '').toUpperCase() === String(color).toUpperCase()
+      );
+      formsByColor[color] = buildTeamForm(assignment || poInfo);
     });
 
-    const resolvedProdId =
-      Number.isFinite(prodPersonIds[0]) && prodPersonIds[0] > 0 ? prodPersonIds[0] : null;
-    const resolvedShipId =
-      Number.isFinite(shipPersonIds[0]) && shipPersonIds[0] > 0 ? shipPersonIds[0] : null;
+    // Fallback: if the API returned no colors, use the grid's color list so the
+    // modal still renders an assign box per color.
+    const finalColors = colors.length > 0 ? colors : allColors;
 
-    setAssignForm((prev) => ({
-      ...prev,
-      merchandiserAssistant: merchNames.length > 0 ? merchNames : [],
-      qa: qaNames.length > 0 ? qaNames : [],
-      printQa: printQaName,
-      productionFollowup: prodName,
-      prodPersonID: resolvedProdId,
-      shippingPerson: shipName,
-      shipPersonID: resolvedShipId,
-      productionStatus: productionStatusFromApi || 'N/A',
-    }));
-  }, [merchAssistantOptions, qaList, printQaList, productionList, shippingList]);
+    // eslint-disable-next-line no-console
+    console.log('[TNA Chart] Color-wise forms resolved:', formsByColor, 'colors:', finalColors);
+
+    const nextForms = {};
+    finalColors.forEach((c) => {
+      nextForms[c] = formsByColor[c] || createEmptyColorTeam();
+    });
+
+    setAssignColors(finalColors);
+    setSelectedAssignColors(finalColors);
+    setAssignFormByColor(nextForms);
+    setAssignProductionStatus(productionStatusFromApi || 'N/A');
+  }, [merchAssistantOptions, qaList, printQaList, productionList, shippingList, allColors]);
 
   const handleOpenAsignTeam = async () => {
     const poIDs = getVisiblePoIds();
@@ -2402,18 +2426,16 @@ export default function TNAChartPage() {
       return;
     }
 
+    const colors = allColors.length > 0 ? allColors : [];
+    const initialForms = {};
+    colors.forEach((c) => { initialForms[c] = createEmptyColorTeam(); });
+
     setAssignPoIds(poIDs);
     setAssignViewOnly(false);
-    setAssignForm({
-      merchandiserAssistant: [],
-      qa: [],
-      printQa: 'N/A',
-      productionFollowup: '',
-      prodPersonID: null,
-      shippingPerson: 'MEHWISH RIAZ',
-      shipPersonID: null,
-      productionStatus: 'N/A',
-    });
+    setAssignColors(colors);
+    setSelectedAssignColors(colors);
+    setAssignFormByColor(initialForms);
+    setAssignProductionStatus('N/A');
     setAssignTeamModalOpen(true);
     await fetchAssignTeamOptions();
   };
@@ -2428,16 +2450,10 @@ export default function TNAChartPage() {
 
     setAssignPoIds([poidNum]);
     setAssignViewOnly(true);
-    setAssignForm({
-      merchandiserAssistant: [],
-      qa: [],
-      printQa: 'N/A',
-      productionFollowup: '',
-      prodPersonID: null,
-      shippingPerson: 'MEHWISH RIAZ',
-      shipPersonID: null,
-      productionStatus: 'N/A',
-    });
+    setAssignColors([]);
+    setSelectedAssignColors([]);
+    setAssignFormByColor({});
+    setAssignProductionStatus('N/A');
     setAssignTeamModalOpen(true);
 
     try {
@@ -2476,32 +2492,38 @@ export default function TNAChartPage() {
       return;
     }
 
+    const buildColorAssignment = (color) => {
+      const form = assignFormByColor[color] || createEmptyColorTeam();
+      const prodId =
+        form.prodPersonID != null && Number(form.prodPersonID) > 0
+          ? Number(form.prodPersonID)
+          : getUserIdByName(productionList, form.productionFollowup);
+      const printQaId = getUserIdByName(printQaList, form.printQa);
+      const shipId = getUserIdByName(shippingList, form.shippingPerson);
+      return {
+        color,
+        qaIds: getUserIdsByNames(qaList, form.qa),
+        printQaIds: printQaId ? [printQaId] : [],
+        prodPersonIds: prodId ? [prodId] : [],
+        shipPersonIds: shipId ? [shipId] : [],
+        marchandIds: getUserIdsByNames(merchAssistantOptions, form.merchandiserAssistant),
+      };
+    };
+
+    const assignments = [];
+    poIDs.forEach((poId) => {
+      selectedAssignColors.forEach((color) => {
+        assignments.push({ poId, ...buildColorAssignment(color) });
+      });
+    });
+
     const payload = {
-      poiDs: poIDs,
-      qaiDs: getUserIdsByNames(qaList, assignForm.qa),
-      printQAIDs: (() => {
-        const id = getUserIdByName(printQaList, assignForm.printQa);
-        return id ? [id] : [];
-      })(),
-      prodPersonIDs: (() => {
-        const id =
-          (assignForm.prodPersonID != null && Number(assignForm.prodPersonID) > 0
-            ? Number(assignForm.prodPersonID)
-            : getUserIdByName(productionList, assignForm.productionFollowup));
-        return id ? [id] : [];
-      })(),
-      shipPersonIDs: (() => {
-        const id = getUserIdByName(shippingList, assignForm.shippingPerson);
-        return id ? [id] : [];
-      })(),
-      marchandIDs: getUserIdsByNames(merchAssistantOptions, assignForm.merchandiserAssistant),
-      productionstatus: assignForm.productionStatus || 'N/A',
+      assignments,
+      productionstatus: assignProductionStatus || 'N/A',
     };
 
     setAssigning(true);
     try {
-      // eslint-disable-next-line no-console
-      console.log('[TNA Chart] Assign form values:', assignForm);
       // eslint-disable-next-line no-console
       console.log('[TNA Chart] SetDataUpdate payload:', payload);
       // eslint-disable-next-line no-console
@@ -3131,35 +3153,35 @@ export default function TNAChartPage() {
                 </Typography>
               </Stack>
             </Box>
+
             <Autocomplete
               multiple
               disableCloseOnSelect
-              options={merchAssistantOptionsWithNA}
-              value={assignForm.merchandiserAssistant}
-              disabled={assignViewOnly || !canEditAssignMerchant}
-              loading={assignOptionsLoading}
+              options={assignColors}
+              value={selectedAssignColors}
+              disabled={assignViewOnly}
               onChange={(event, newValue) => {
-                // If user selects N/A, keep only N/A; otherwise remove N/A.
-                let next = Array.isArray(newValue) ? newValue : [];
-                next = next.filter(Boolean);
-                if (next.includes('N/A')) next = ['N/A'];
-                else next = next.filter((v) => v !== 'N/A');
-                setAssignForm((prev) => ({ ...prev, merchandiserAssistant: next }));
+                const next = (Array.isArray(newValue) ? newValue : []).filter(Boolean);
+                setSelectedAssignColors(next);
+                setAssignFormByColor((prev) => {
+                  const updated = { ...prev };
+                  next.forEach((c) => {
+                    if (!updated[c]) updated[c] = createEmptyColorTeam();
+                  });
+                  return updated;
+                });
               }}
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="Merchandiser Assistant"
-                  placeholder="Please select"
+                  label={`Colors ${selectedAssignColors.length > 0 ? `(${selectedAssignColors.length})` : ''}`}
+                  placeholder={selectedAssignColors.length === 0 ? 'Select colors...' : ''}
                   size="medium"
                 />
               )}
               renderOption={(props, option, { selected }) => (
                 <li {...props}>
-                  <Checkbox
-                    checked={selected}
-                    style={{ marginRight: 8 }}
-                  />
+                  <Checkbox checked={selected} style={{ marginRight: 8 }} />
                   {option}
                 </li>
               )}
@@ -3182,138 +3204,211 @@ export default function TNAChartPage() {
                   </Typography>
                 );
               }}
-            />
-
-            <Autocomplete
-              multiple
-              disableCloseOnSelect
-              options={qaOptions}
-              value={assignForm.qa}
-              disabled={assignViewOnly}
-              loading={assignOptionsLoading}
-              onChange={(event, newValue) => {
-                // Keep `N/A` exclusive (if selected, remove others)
-                let next = Array.isArray(newValue) ? newValue.filter(Boolean) : [];
-                if (next.includes('N/A')) next = ['N/A'];
-                else next = next.filter((v) => v !== 'N/A');
-                setAssignForm((prev) => ({ ...prev, qa: next }));
-              }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="QA"
-                  placeholder="Please select"
-                  size="medium"
-                />
-              )}
-              renderOption={(props, option, { selected }) => (
-                <li {...props}>
-                  <Checkbox
-                    checked={selected}
-                    style={{ marginRight: 8 }}
-                  />
-                  {option}
-                </li>
-              )}
-              renderTags={(value) => {
-                if (value.length === 0) return null;
-                return (
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontSize: '0.875rem',
-                      fontWeight: 500,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      maxWidth: '100%',
-                    }}
-                    title={value.join(', ')}
-                  >
-                    {value.join(', ')}
-                  </Typography>
-                );
-              }}
-            />
-
-            <TextField
-              select
-              label="Print QA"
-              size="medium"
-              value={assignForm.printQa || 'N/A'}
-              disabled={assignViewOnly}
-              onChange={(e) => setAssignForm((prev) => ({ ...prev, printQa: e.target.value }))}
-            >
-              {printQaOptionsWithNA.map((name) => (
-                <MenuItem key={name} value={name}>
-                  {name}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <Autocomplete
-              options={productionList}
-              getOptionLabel={(option) => option?.userName || ''}
-              value={
-                productionList.find(
-                  (x) => extractNumericId(x) === Number(assignForm.prodPersonID)
-                ) ||
-                productionList.find(
-                  (x) => normalizeText(x?.userName) === normalizeText(assignForm.productionFollowup)
-                ) ||
-                null
-              }
-              loading={assignOptionsLoading}
-              disabled={
-                assignViewOnly ||
-                (Number(assignForm.prodPersonID) > 0 && !canEditAssignProdOrShip)
-              }
-              onChange={(event, newValue) => {
-                setAssignForm((prev) => ({
-                  ...prev,
-                  productionFollowup: newValue?.userName || '',
-                  prodPersonID: extractNumericId(newValue),
-                }));
-              }}
-              renderInput={(params) => (
-                <TextField {...params} label="Production Followup" size="medium" />
-              )}
-              isOptionEqualToValue={(a, b) => extractNumericId(a) === extractNumericId(b)}
-              clearOnEscape
-            />
-
-            <Autocomplete
-              options={shippingList.map((x) => x.userName)}
-              value={assignForm.shippingPerson || null}
-              disabled={
-                assignViewOnly ||
-                (Number(assignForm.shipPersonID) > 0 && !canEditAssignProdOrShip)
-              }
-              loading={assignOptionsLoading}
-              onChange={(event, newValue) => {
-                const hit = shippingList.find(
-                  (x) => normalizeText(x?.userName) === normalizeText(newValue)
-                );
-                setAssignForm((prev) => ({
-                  ...prev,
-                  shippingPerson: newValue || '',
-                  shipPersonID: extractNumericId(hit),
-                }));
-              }}
-              renderInput={(params) => <TextField {...params} label="Shipping Person" size="medium" />}
-              isOptionEqualToValue={(option, value) => option === value}
-              clearOnEscape
             />
 
             <TextField
               fullWidth
               label="Production Status"
-              value={assignForm.productionStatus}
+              value={assignProductionStatus}
               disabled={assignViewOnly}
-              onChange={(e) => setAssignForm((prev) => ({ ...prev, productionStatus: e.target.value }))}
+              onChange={(e) => setAssignProductionStatus(e.target.value)}
               size="medium"
             />
           </Box>
+
+          {selectedAssignColors.map((color) => {
+            const form = assignFormByColor[color] || createEmptyColorTeam();
+            return (
+              <Box
+                key={color}
+                sx={{
+                  mt: 2.5,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  p: 2,
+                }}
+              >
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 700, mb: 1.5, color: 'primary.main' }}
+                >
+                  Color: {color}
+                </Typography>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gap: 2.5,
+                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                    '& .MuiFormControl-root, & .MuiAutocomplete-root, & .MuiTextField-root': {
+                      width: '100%',
+                    },
+                  }}
+                >
+                  <Autocomplete
+                    multiple
+                    disableCloseOnSelect
+                    options={merchAssistantOptionsWithNA}
+                    value={form.merchandiserAssistant}
+                    disabled={assignViewOnly || !canEditAssignMerchant}
+                    loading={assignOptionsLoading}
+                    onChange={(event, newValue) => {
+                      let next = Array.isArray(newValue) ? newValue : [];
+                      next = next.filter(Boolean);
+                      if (next.includes('N/A')) next = ['N/A'];
+                      else next = next.filter((v) => v !== 'N/A');
+                      updateColorForm(color, { merchandiserAssistant: next });
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Merchandiser Assistant"
+                        placeholder="Please select"
+                        size="medium"
+                      />
+                    )}
+                    renderOption={(props, option, { selected }) => (
+                      <li {...props}>
+                        <Checkbox checked={selected} style={{ marginRight: 8 }} />
+                        {option}
+                      </li>
+                    )}
+                    renderTags={(value) => {
+                      if (value.length === 0) return null;
+                      return (
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontSize: '0.875rem',
+                            fontWeight: 500,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            maxWidth: '100%',
+                          }}
+                          title={value.join(', ')}
+                        >
+                          {value.join(', ')}
+                        </Typography>
+                      );
+                    }}
+                  />
+
+                  <Autocomplete
+                    multiple
+                    disableCloseOnSelect
+                    options={qaOptions}
+                    value={form.qa}
+                    disabled={assignViewOnly}
+                    loading={assignOptionsLoading}
+                    onChange={(event, newValue) => {
+                      let next = Array.isArray(newValue) ? newValue.filter(Boolean) : [];
+                      if (next.includes('N/A')) next = ['N/A'];
+                      else next = next.filter((v) => v !== 'N/A');
+                      updateColorForm(color, { qa: next });
+                    }}
+                    renderInput={(params) => (
+                      <TextField {...params} label="QA" placeholder="Please select" size="medium" />
+                    )}
+                    renderOption={(props, option, { selected }) => (
+                      <li {...props}>
+                        <Checkbox checked={selected} style={{ marginRight: 8 }} />
+                        {option}
+                      </li>
+                    )}
+                    renderTags={(value) => {
+                      if (value.length === 0) return null;
+                      return (
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontSize: '0.875rem',
+                            fontWeight: 500,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            maxWidth: '100%',
+                          }}
+                          title={value.join(', ')}
+                        >
+                          {value.join(', ')}
+                        </Typography>
+                      );
+                    }}
+                  />
+
+                  <TextField
+                    select
+                    label="Print QA"
+                    size="medium"
+                    value={form.printQa || 'N/A'}
+                    disabled={assignViewOnly}
+                    onChange={(e) => updateColorForm(color, { printQa: e.target.value })}
+                  >
+                    {printQaOptionsWithNA.map((name) => (
+                      <MenuItem key={name} value={name}>
+                        {name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+
+                  <Autocomplete
+                    options={productionList}
+                    getOptionLabel={(option) => option?.userName || ''}
+                    value={
+                      productionList.find(
+                        (x) => extractNumericId(x) === Number(form.prodPersonID)
+                      ) ||
+                      productionList.find(
+                        (x) => normalizeText(x?.userName) === normalizeText(form.productionFollowup)
+                      ) ||
+                      null
+                    }
+                    loading={assignOptionsLoading}
+                    disabled={
+                      assignViewOnly ||
+                      (Number(form.prodPersonID) > 0 && !canEditAssignProdOrShip)
+                    }
+                    onChange={(event, newValue) => {
+                      updateColorForm(color, {
+                        productionFollowup: newValue?.userName || '',
+                        prodPersonID: extractNumericId(newValue),
+                      });
+                    }}
+                    renderInput={(params) => (
+                      <TextField {...params} label="Production Followup" size="medium" />
+                    )}
+                    isOptionEqualToValue={(a, b) => extractNumericId(a) === extractNumericId(b)}
+                    clearOnEscape
+                  />
+
+                  <Autocomplete
+                    options={shippingList.map((x) => x.userName)}
+                    value={form.shippingPerson || null}
+                    disabled={
+                      assignViewOnly ||
+                      (Number(form.shipPersonID) > 0 && !canEditAssignProdOrShip)
+                    }
+                    loading={assignOptionsLoading}
+                    onChange={(event, newValue) => {
+                      const hit = shippingList.find(
+                        (x) => normalizeText(x?.userName) === normalizeText(newValue)
+                      );
+                      updateColorForm(color, {
+                        shippingPerson: newValue || '',
+                        shipPersonID: extractNumericId(hit),
+                      });
+                    }}
+                    renderInput={(params) => (
+                      <TextField {...params} label="Shipping Person" size="medium" />
+                    )}
+                    isOptionEqualToValue={(option, value) => option === value}
+                    clearOnEscape
+                  />
+                </Box>
+              </Box>
+            );
+          })}
         </DialogContent>
 
         <DialogActions
