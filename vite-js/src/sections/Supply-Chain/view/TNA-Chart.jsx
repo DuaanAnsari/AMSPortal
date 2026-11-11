@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import PropTypes from 'prop-types';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import {
@@ -492,7 +493,7 @@ const ProcessGroupHeader = (params) => {
 
 // ----------------------------------------------------------------------
 
-export default function TNAChartPage() {
+export default function TNAChartPage({ embedded = false, initialCustomerId = null, initialPoid = null }) {
   const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -1404,6 +1405,37 @@ export default function TNAChartPage() {
       setLoading(false);
     }
   };
+
+  // ----------------------------------------------------------------------
+  // Embedded mode (used by Milestone page): auto-load data for a specific
+  // customer, then narrow the grid down to a single PO.
+  // ----------------------------------------------------------------------
+  const embeddedInitRef = useRef(false);
+  useEffect(() => {
+    if (!embedded || embeddedInitRef.current) return;
+    const custId = Number(initialCustomerId);
+    if (!Number.isFinite(custId) || custId <= 0) return;
+    embeddedInitRef.current = true;
+    handleSearch(custId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embedded, initialCustomerId]);
+
+  const embeddedPoFilterRef = useRef(false);
+  useEffect(() => {
+    if (!embedded || !initialPoid || embeddedPoFilterRef.current) return;
+    if (!fullData || fullData.length === 0) return;
+    const poidNum = Number(initialPoid);
+    const matchedPoNos = [...new Set(
+      fullData
+        .filter((r) => Number(r?.poid) === poidNum)
+        .map((r) => r?.poNo)
+        .filter(Boolean)
+    )];
+    if (matchedPoNos.length > 0) {
+      embeddedPoFilterRef.current = true;
+      setSelectedPoNumbers(matchedPoNos);
+    }
+  }, [embedded, initialPoid, fullData]);
 
   const handleCustomerChange = (event) => {
     const value = event.target.value;
@@ -2551,7 +2583,9 @@ export default function TNAChartPage() {
   };
 
   return (
-    <Container maxWidth="xl" sx={{ py: 3 }}>
+    <Container maxWidth="xl" sx={{ py: embedded ? 0 : 3 }}>
+      {!embedded && (
+      <>
       <CustomBreadcrumbs
         heading="TNA Chart"
         links={[
@@ -2562,7 +2596,6 @@ export default function TNAChartPage() {
         sx={{ mb: { xs: 2, md: 3 } }}
       />
 
-      {/* Filters */}
       <Card sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -2786,6 +2819,8 @@ export default function TNAChartPage() {
 
         </Box>
       </Card>
+      </>
+      )}
 
       {/* Grid card */}
       <Card sx={{ p: 2 }}>
@@ -3467,4 +3502,10 @@ export default function TNAChartPage() {
     </Container>
   );
 }
+
+TNAChartPage.propTypes = {
+  embedded: PropTypes.bool,
+  initialCustomerId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  initialPoid: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+};
 

@@ -734,11 +734,14 @@ export default function PurchaseOrderView() {
 
   // New handlers for text links
   const handleMilestoneClick = useCallback(
-    (id) => {
+    (row) => {
+      const id = row?.id ?? row;
+      const customerId = row?.customerID ?? row?.customerId ?? '';
+      const query = customerId ? `?customerId=${customerId}` : '';
       enqueueSnackbar(`Opening Milestone for PO ID: ${id}`);
-      navigate(`/dashboard/supply-chain/milestone/${id}`);
+      navigate(`/dashboard/supply-chain/milestone/${id}${query}`);
     },
-    [enqueueSnackbar]
+    [enqueueSnackbar, navigate]
   );
 
   const handleRevisedClick = useCallback(
@@ -1995,7 +1998,7 @@ function PurchaseOrderTableRow({
             e.target.style.backgroundColor = '#FFFFFF';
             e.target.style.boxShadow = 'none';
           }}
-          onClick={() => onMilestoneClick(row.id)}
+          onClick={() => onMilestoneClick(row)}
         >
           Milestone
         </span>
@@ -2186,6 +2189,7 @@ function transformApiData(apiData) {
       styleNo: item.styleNo || '',
 
       customer: item.customer || '',
+      customerID: item.customerID ?? item.customerId ?? item.customerid ?? '',
 
       supplier: item.vendor || '',
 

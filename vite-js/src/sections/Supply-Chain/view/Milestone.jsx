@@ -11,33 +11,21 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  IconButton,
   Checkbox,
   LinearProgress,
-  TablePagination,
   Button,
   Stack,
   OutlinedInput,
   ListItemText,
 } from '@mui/material';
-import { History } from '@mui/icons-material';
 import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import dayjs from 'dayjs';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import TNAChart from './TNA-Chart';
 
 export default function MilestoneView() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
 
   const [form, setForm] = useState({
@@ -69,85 +57,13 @@ export default function MilestoneView() {
   const [printQaList, setPrintQaList] = useState([]);
   const [shippingList, setShippingList] = useState([]);
   const [productionList, setProductionList] = useState([]);
-  const [rows, setRows] = useState([]);
-  const [rowErrors, setRowErrors] = useState({}); // { [rowId]: errorMessage }
-
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [customerId, setCustomerId] = useState(searchParams.get('customerId') || '');
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-
-  // ✅ Fetch Process Data
-  useEffect(() => {
-    const fetchProcessData = async () => {
-      try {
-        setLoading(true);
-        const token = localStorage.getItem('accessToken');
-        if (!token) {
-          console.error('❌ Token not found in localStorage!');
-          setLoading(false);
-          return;
-        }
-
-        console.log('🔑 Fetching process data for POID:', id);
-
-        const response = await axios.get(
-          `${API_BASE_URL}/api/Milestone/GetProcessByTNAChartIdChange1?POID=${id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-
-        console.log('✅ API Response DATA:', response.data);
-
-        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
-          console.log('✅ First item keys:', Object.keys(response.data[0]));
-
-          // ✅ Fix: Use correct field name 'idealDate' instead of 'idealDateee'
-          const formattedData = response.data.map((item, index) => {
-            const targetDateValue = item.idealDate || ''; // ✅ Correct key
-            return {
-              id: item.id || index + 1,
-              tnaChartID: item.tnaChartID ?? item.tnaChartId ?? null,
-              processRoute: item.processRoute || item.process || item.route || '',
-              targetDate: targetDateValue,
-              factoryCommitmentDate: targetDateValue ? dayjs(targetDateValue) : null,
-              submissionDate: item.submissionDate ? dayjs(item.submissionDate) : null,
-              approvalDate: null,
-              quantityCompleted: item.quantityCompleted || item.quantity || '',
-              unit: item.units || '',
-              status: item.status || '',
-              remarks: item.remarks || '',
-            };
-          });
-
-          setRows(formattedData);
-          console.log('✅ Rows set successfully, length:', formattedData.length);
-        } else {
-          console.log('❌ No data or empty array received');
-          setRows([]);
-        }
-      } catch (error) {
-        console.error('❌ Error fetching process data:', error);
-        console.error('❌ Error details:', error.response?.data);
-        setRows([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (id) {
-      fetchProcessData();
-    } else {
-      setLoading(false);
-    }
-  }, [id]);
 
   // ✅ Fetch PO Data
   const getApiResponse = async () => {
     try {
+      setLoading(true);
       const token = localStorage.getItem('accessToken');
       const response = await fetch(`${API_BASE_URL}/api/Milestone/GetPOData/${id}`, {
         headers: {
@@ -184,8 +100,32 @@ export default function MilestoneView() {
       }));
     } catch (error) {
       console.error('❌ Error fetching PO data:', error);
+    } finally {
+      setLoading(false);
     }
   };
+
+  // ✅ Fetch CustomerID (needed by TNAChart grid)
+  useEffect(() => {
+    if (!id || customerId) return;
+    const fetchCustomerId = async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const response = await axios.get(`${API_BASE_URL}/api/MyOrders/GetPurchaseOrder/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = response.data;
+        const first = Array.isArray(data) ? data[0] : data;
+        const cid = first?.customerID ?? first?.CustomerID ?? first?.customerid ?? first?.CustomerId ?? '';
+        if (cid !== '' && cid !== null && cid !== undefined) {
+          setCustomerId(String(cid));
+        }
+      } catch (err) {
+        console.error('❌ Error fetching customerID:', err);
+      }
+    };
+    fetchCustomerId();
+  }, [id, customerId, API_BASE_URL]);
 
   // ✅ Other API Calls
   useEffect(() => {
@@ -266,63 +206,12 @@ export default function MilestoneView() {
 
   useEffect(() => {
     if (id) getApiResponse();
+    else setLoading(false);
   }, [id]);
 
   const handleDropdownChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
-
-  const handleDateChange = (id, field, value) => {
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
-  };
-
-  const handleChange = (id, field, value) => {
-    // ✅ Validate quantityCompleted based on unit
-    if (field === 'quantityCompleted') {
-      const row = rows.find((r) => r.id === id);
-      if (row) {
-        const unit = (row.unit || '').toLowerCase().trim();
-        const numVal = parseFloat(value);
-
-        if (value !== '' && !isNaN(numVal)) {
-          if (unit === 'pcs') {
-            const totalQty = parseFloat(form.totalQty) || 0;
-            const maxAllowed = totalQty * 1.05; // totalQty + 5%
-            if (numVal > maxAllowed) {
-              setRowErrors((prev) => ({
-                ...prev,
-                [id]: `Max allowed: ${maxAllowed.toFixed(0)} pcs (Total Qty + 5%)`,
-              }));
-              return; // Block the update
-            }
-          } else if (unit === '%' || unit === 'percent') {
-            if (numVal > 100) {
-              setRowErrors((prev) => ({
-                ...prev,
-                [id]: 'Max allowed: 100%',
-              }));
-              return; // Block the update
-            }
-          }
-        }
-        // Clear error if valid
-        setRowErrors((prev) => {
-          const updated = { ...prev };
-          delete updated[id];
-          return updated;
-        });
-      }
-    }
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
-  };
-
-  const handleChangePage = (event, newPage) => setPage(newPage);
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
-
-  const paginatedRows = rows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   if (loading) {
     return (
@@ -332,9 +221,8 @@ export default function MilestoneView() {
     );
   }
   return (
-    <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Box sx={{ p: 3 }}>
-        {/* 🔹 Page Heading */}
+    <Box sx={{ p: 3 }}>
+      {/* 🔹 Page Heading */}
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
           <ArrowBackIosIcon
             sx={{
@@ -744,232 +632,21 @@ export default function MilestoneView() {
 
         {/* 🔹 Buttons Section - Updated Layout */}
         <Card sx={{ mb: 3, borderRadius: 2, boxShadow: 3, p: 2 }}>
-          <Stack direction="column" spacing={2}>
-            {/* 🔹 Bottom Row: 4 buttons on left, Show Not Applicable Process on right */}
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-              flexWrap="wrap"
-              rowGap={2}
-            >
-              <Button
-                variant="outlined"
-                color="primary"
-                sx={{
-                  minWidth: 250,
-                  py: 1,
-                  fontWeight: 600,
-                  borderWidth: 2,
-                  textAlign: 'right',
-                  '&:hover': {
-                    borderWidth: 2,
-                  },
-                }}
-              >
-                Show Not Applicable Process
-              </Button>
-              {/* Left: 4 Buttons */}
-              <Stack
-                direction="row"
-                spacing={2.5}
-                flexWrap="wrap"
-                useFlexGap
-              >
-                <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1, mt: 2 }}>
-                  Not Applicable
-                </Button>
-                <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1, mt: 2 }}>
-                  Save This PO
-                </Button>
-                <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1, mt: 2 }}>
-                  Save All Child PO
-                </Button>
-                <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1, mt: 2 }}>
-                  Select All
-                </Button>
-              </Stack>
-            </Stack>
+          <Stack direction="row" spacing={2.5} flexWrap="wrap" useFlexGap>
+            <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1, mt: 2 }}>
+              Save This PO
+            </Button>
+            <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1, mt: 2 }}>
+              Save All Child PO
+            </Button>
+            <Button variant="contained" color="primary" sx={{ minWidth: 220, py: 1, mt: 2 }}>
+              Select All
+            </Button>
           </Stack>
         </Card>
 
-        {/* 🔹 Table Section with Pagination */}
-        <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
-          <CardContent sx={{ p: 0 }}>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: 'primary.main' }}>
-                    {[
-                      'Process Route',
-                      'Target Date',
-                      'Factory Commitment Date',
-                      'Submission Date',
-                      'Approval Date',
-                      'Quantity Completed',
-                      'Unit',
-                      'Status',
-                      'Remarks',
-                      'Select',
-                      'History',
-                    ].map((head, i) => (
-                      <TableCell
-                        key={i}
-                        sx={{
-                          fontWeight: 'bold',
-                          fontSize: '14px',
-                          textAlign: 'center',
-                          color: 'white',
-                        }}
-                      >
-                        {head}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                </TableHead>
-
-                <TableBody>
-                  {paginatedRows.length > 0 ? (
-                    paginatedRows.map((row) => (
-                      <TableRow key={row.id} hover>
-                        <TableCell>{row.processRoute}</TableCell>
-                        <TableCell sx={{ textAlign: 'center' }}>{row.targetDate}</TableCell>
-
-                        {/* ✅ Factory Commitment Date - Shows idealDateee from API */}
-                        <TableCell sx={{ textAlign: 'center', minWidth: '180px' }}>
-                          <DatePicker
-                            value={row.factoryCommitmentDate}
-                            onChange={(val) =>
-                              handleDateChange(row.id, 'factoryCommitmentDate', val)
-                            }
-                            slotProps={{
-                              textField: {
-                                size: 'small',
-                                sx: { width: '160px' },
-                              },
-                            }}
-                          />
-                        </TableCell>
-
-                        {/* ✅ Submission Date - Larger Field */}
-                        <TableCell sx={{ textAlign: 'center', minWidth: '180px' }}>
-                          <DatePicker
-                            value={row.submissionDate}
-                            onChange={(val) => handleDateChange(row.id, 'submissionDate', val)}
-                            slotProps={{
-                              textField: {
-                                size: 'small',
-                                sx: { width: '160px' },
-                              },
-                            }}
-                          />
-                        </TableCell>
-
-                        {/* ✅ Approval Date - Larger Field & Default Data Removed */}
-                        <TableCell sx={{ textAlign: 'center', minWidth: '180px' }}>
-                          <DatePicker
-                            value={row.approvalDate}
-                            onChange={(val) => handleDateChange(row.id, 'approvalDate', val)}
-                            slotProps={{
-                              textField: {
-                                size: 'small',
-                                sx: { width: '160px' },
-                              },
-                            }}
-                          />
-                        </TableCell>
-
-                        <TableCell sx={{ textAlign: 'center', minWidth: '120px' }}>
-                          <TextField
-                            value={row.quantityCompleted}
-                            size="small"
-                            type="number"
-                            inputProps={{ min: 0 }}
-                            onChange={(e) =>
-                              handleChange(row.id, 'quantityCompleted', e.target.value)
-                            }
-                            error={!!rowErrors[row.id]}
-                            helperText={rowErrors[row.id] || ''}
-                            sx={{ width: '110px' }}
-                            FormHelperTextProps={{
-                              sx: { fontSize: '10px', mx: 0 },
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell sx={{ textAlign: 'center' }}>{row.unit}</TableCell>
-                        <TableCell sx={{ textAlign: 'center' }}>
-                          <FormControl fullWidth size="small">
-                            <Select
-                              value={row.status}
-                              onChange={(e) => handleChange(row.id, 'status', e.target.value)}
-                              displayEmpty
-                            >
-                              <MenuItem value="">
-                                <em>Select</em>
-                              </MenuItem>
-                              <MenuItem value="Pending">Pending</MenuItem>
-                              <MenuItem value="In Progress">In Progress</MenuItem>
-                              <MenuItem value="Completed">Completed</MenuItem>
-                            </Select>
-                          </FormControl>
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            value={row.remarks}
-                            size="small"
-                            onChange={(e) => handleChange(row.id, 'remarks', e.target.value)}
-                          />
-                        </TableCell>
-                        <TableCell sx={{ textAlign: 'center' }}>
-                          <Checkbox color="secondary" />
-                        </TableCell>
-                        <TableCell sx={{ textAlign: 'center' }}>
-                          <IconButton
-                            color="primary"
-                            onClick={() =>
-                              navigate('/dashboard/supply-chain/tna-history', {
-                                state: {
-                                  tnaChartID: row.tnaChartID,
-                                  processName: row.processRoute,
-                                  portfolioName: '',
-                                },
-                              })
-                            }
-                          >
-                            <History fontSize="small" />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={11} align="center" sx={{ py: 3 }}>
-                        <Typography variant="h6" color="textSecondary">
-                          📭 No data found
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-
-            {/* ✅ Pagination Component */}
-            <TablePagination
-              rowsPerPageOptions={[5, 10, 25, 50]}
-              component="div"
-              count={rows.length}
-              rowsPerPage={rowsPerPage}
-              page={page}
-              onPageChange={handleChangePage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
-              sx={{
-                borderTop: '1px solid #e0e0e0',
-              }}
-            />
-          </CardContent>
-        </Card>
+        {/* 🔹 TNA Chart Grid */}
+        <TNAChart embedded initialCustomerId={customerId} initialPoid={id} />
       </Box>
-    </LocalizationProvider>
   );
 }
