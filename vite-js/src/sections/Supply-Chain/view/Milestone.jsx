@@ -10,7 +10,6 @@ import {
   Select,
   MenuItem,
   FormControl,
-  InputLabel,
   Checkbox,
   LinearProgress,
   Button,
@@ -52,9 +51,6 @@ export default function MilestoneView() {
     dropdown2: [],
   });
 
-  const [merchAssistantOptions, setMerchAssistantOptions] = useState([]);
-  const [shippingList, setShippingList] = useState([]);
-  const [productionList, setProductionList] = useState([]);
   const [customerId, setCustomerId] = useState(searchParams.get('customerId') || '');
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -124,57 +120,6 @@ export default function MilestoneView() {
     };
     fetchCustomerId();
   }, [id, customerId, API_BASE_URL]);
-
-  // ✅ Other API Calls
-  useEffect(() => {
-    const fetchProductionList = async () => {
-      try {
-        const token = localStorage.getItem('accessToken');
-        const response = await axios.get(`${API_BASE_URL}/api/Milestone/GetProductionPerson`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setProductionList(response.data || []);
-      } catch (err) {
-        console.error('❌ Error fetching Production list:', err);
-      }
-    };
-
-    const fetchShippingList = async () => {
-      try {
-        const token = localStorage.getItem('accessToken');
-        const response = await axios.get(`${API_BASE_URL}/api/Milestone/GetShipPerson`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setShippingList(response.data || []);
-      } catch (err) {
-        console.error('❌ Error fetching Shipping list:', err);
-      }
-    };
-
-    const getMerchAssistantOptions = async () => {
-      try {
-        const token = localStorage.getItem('accessToken');
-        const response = await fetch(`${API_BASE_URL}/api/Milestone/GetMerchandiserAssistant`, {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token && { Authorization: `Bearer ${token}` }),
-          },
-        });
-        const data = await response.json();
-        if (Array.isArray(data)) {
-          setMerchAssistantOptions(data);
-        } else if (data.userId && data.userName) {
-          setMerchAssistantOptions([data]);
-        }
-      } catch (error) {
-        console.error('❌ Error fetching merchandiser assistant:', error);
-      }
-    };
-
-    fetchProductionList();
-    fetchShippingList();
-    getMerchAssistantOptions();
-  }, []);
 
   useEffect(() => {
     if (id) getApiResponse();
@@ -338,25 +283,6 @@ export default function MilestoneView() {
                 />
               </Grid>
               <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>Merchandiser Assistant</InputLabel>
-                  <Select
-                    label="Merchandiser Assistant"
-                    value={form.merchandiserAssistant}
-                    onChange={(e) => handleDropdownChange('merchandiserAssistant', e.target.value)}
-                  >
-                    <MenuItem value="">
-                      <em>Select</em>
-                    </MenuItem>
-                    {merchAssistantOptions.map((assistant) => (
-                      <MenuItem key={assistant.userId} value={assistant.userName}>
-                        {assistant.userName}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
                   label="Shipment Date"
@@ -402,64 +328,6 @@ export default function MilestoneView() {
                   label="PO Creation Date"
                   value={form.poCreationDate}
                   InputProps={{ readOnly: true, style: { color: 'red' } }}
-                />
-              </Grid>
-
-              {/* Row 6 */}
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>Production Followup</InputLabel>
-                  <Select
-                    label="Production Followup"
-                    value={form.productionFollowup}
-                    onChange={(e) => handleDropdownChange('productionFollowup', e.target.value)}
-                  >
-                    <MenuItem value="">
-                      <em>Select</em>
-                    </MenuItem>
-                    {productionList.length > 0 ? (
-                      productionList.map((person) => (
-                        <MenuItem key={person.userId} value={person.userName}>
-                          {person.userName}
-                        </MenuItem>
-                      ))
-                    ) : (
-                      <MenuItem disabled>No data</MenuItem>
-                    )}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>Shipping</InputLabel>
-                  <Select
-                    label="Shipping"
-                    value={form.shipping}
-                    onChange={(e) => handleDropdownChange('shipping', e.target.value)}
-                  >
-                    <MenuItem value="">
-                      <em>Select</em>
-                    </MenuItem>
-                    {shippingList.length > 0 ? (
-                      shippingList.map((person) => (
-                        <MenuItem key={person.userId} value={person.userName}>
-                          {person.userName}
-                        </MenuItem>
-                      ))
-                    ) : (
-                      <MenuItem disabled>No data</MenuItem>
-                    )}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="Production Status"
-                  value="N/A"
-                  InputProps={{ readOnly: true }}
                 />
               </Grid>
 
