@@ -53,8 +53,6 @@ export default function MilestoneView() {
   });
 
   const [merchAssistantOptions, setMerchAssistantOptions] = useState([]);
-  const [qaList, setQaList] = useState([]);
-  const [printQaList, setPrintQaList] = useState([]);
   const [shippingList, setShippingList] = useState([]);
   const [productionList, setProductionList] = useState([]);
   const [customerId, setCustomerId] = useState(searchParams.get('customerId') || '');
@@ -129,18 +127,6 @@ export default function MilestoneView() {
 
   // ✅ Other API Calls
   useEffect(() => {
-    const fetchQAList = async () => {
-      try {
-        const token = localStorage.getItem('accessToken');
-        const response = await axios.get(`${API_BASE_URL}/api/Milestone/GetQA`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setQaList(response.data || []);
-      } catch (err) {
-        console.error('❌ Error fetching QA list:', err);
-      }
-    };
-
     const fetchProductionList = async () => {
       try {
         const token = localStorage.getItem('accessToken');
@@ -165,18 +151,6 @@ export default function MilestoneView() {
       }
     };
 
-    const fetchPrintQAList = async () => {
-      try {
-        const token = localStorage.getItem('accessToken');
-        const response = await axios.get(`${API_BASE_URL}/api/Milestone/GetPrintQA`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setPrintQaList(response.data || []);
-      } catch (err) {
-        console.error('❌ Error fetching Print QA list:', err);
-      }
-    };
-
     const getMerchAssistantOptions = async () => {
       try {
         const token = localStorage.getItem('accessToken');
@@ -197,10 +171,8 @@ export default function MilestoneView() {
       }
     };
 
-    fetchQAList();
     fetchProductionList();
     fetchShippingList();
-    fetchPrintQAList();
     getMerchAssistantOptions();
   }, []);
 
@@ -395,55 +367,12 @@ export default function MilestoneView() {
 
               {/* Row 4 */}
               <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>QA</InputLabel>
-                  <Select
-                    label="QA"
-                    value={form.qa}
-                    onChange={(e) => handleDropdownChange('qa', e.target.value)}
-                  >
-                    <MenuItem value="">
-                      <em>Select</em>
-                    </MenuItem>
-                    {qaList.map((item) => (
-                      <MenuItem key={item.userName} value={item.userName}>
-                        {item.userName}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
                   label="Lead Time"
                   value={form.leadTime}
                   InputProps={{ readOnly: true }}
                 />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth>
-                  <InputLabel>Print QA</InputLabel>
-                  <Select
-                    label="Print QA"
-                    value={form.printQa}
-                    onChange={(e) => handleDropdownChange('printQa', e.target.value)}
-                  >
-                    <MenuItem value="">
-                      <em>Select</em>
-                    </MenuItem>
-                    {printQaList.length > 0 ? (
-                      printQaList.map((qa) => (
-                        <MenuItem key={qa.userId} value={qa.userName}>
-                          {qa.userName}
-                        </MenuItem>
-                      ))
-                    ) : (
-                      <MenuItem disabled>No data</MenuItem>
-                    )}
-                  </Select>
-                </FormControl>
               </Grid>
 
               {/* Row 5 */}
