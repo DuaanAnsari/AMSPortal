@@ -2583,7 +2583,11 @@ export default function TNAChartPage({ embedded = false, initialCustomerId = nul
   };
 
   return (
-    <Container maxWidth="xl" sx={{ py: embedded ? 0 : 3 }}>
+    <Container
+      maxWidth={embedded ? false : 'xl'}
+      disableGutters={embedded}
+      sx={{ py: embedded ? 0 : 3 }}
+    >
       {!embedded && (
       <>
       <CustomBreadcrumbs
@@ -2823,7 +2827,7 @@ export default function TNAChartPage({ embedded = false, initialCustomerId = nul
       )}
 
       {/* Grid card */}
-      <Card sx={{ p: 2 }}>
+      <Card sx={{ p: 2, ...(embedded && { borderRadius: 2, boxShadow: 3 }) }}>
         <Box
           style={containerStyle}
           sx={{
