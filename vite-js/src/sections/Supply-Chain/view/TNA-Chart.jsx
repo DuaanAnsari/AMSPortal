@@ -448,7 +448,7 @@ const ProcessGroupHeader = (params) => {
           font: 'inherit',
           fontWeight: 600,
           fontSize: 12,
-          lineHeight: 1,
+          lineHeight: 1.4,
           whiteSpace: 'nowrap',
           '&:hover': {
             bgcolor: 'rgba(0, 0, 0, 0.06)',
